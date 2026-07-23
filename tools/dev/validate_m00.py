@@ -43,13 +43,13 @@ REQUIRED_FILES = (
 )
 
 EXPECTED_AGENTS = {
-    "architecture-contracts.toml": ("architecture_contracts", "gpt-5.5", "xhigh", "read-only"),
+    "architecture-contracts.toml": ("architecture_contracts", "gpt-5.5", "high", "read-only"),
     "oss-researcher.toml": ("oss_researcher", "gpt-5.4", "medium", "read-only"),
-    "module-builder.toml": ("module_builder", "gpt-5.5", "high", "workspace-write"),
-    "qa-designer.toml": ("qa_designer", "gpt-5.4", "high", "read-only"),
-    "qa-runner.toml": ("qa_runner", "gpt-5.4", "high", "workspace-write"),
-    "safety-reviewer.toml": ("safety_reviewer", "gpt-5.5", "xhigh", "read-only"),
-    "integration-release.toml": ("integration_release", "gpt-5.5", "high", "workspace-write"),
+    "module-builder.toml": ("module_builder", "gpt-5.5", "medium", "workspace-write"),
+    "qa-designer.toml": ("qa_designer", "gpt-5.4", "medium", "read-only"),
+    "qa-runner.toml": ("qa_runner", "gpt-5.4", "medium", "workspace-write"),
+    "safety-reviewer.toml": ("safety_reviewer", "gpt-5.5", "high", "read-only"),
+    "integration-release.toml": ("integration_release", "gpt-5.5", "medium", "workspace-write"),
 }
 
 MODULE_BRANCH_PATTERN = re.compile(
@@ -132,8 +132,10 @@ def validate_project_config(errors: list[str]) -> None:
         errors.append("primary model must be gpt-5.6-sol")
     if config.get("model_reasoning_effort") != "high":
         errors.append("primary reasoning effort must be high")
-    if config.get("sandbox_mode") != "workspace-write":
-        errors.append("project sandbox default must be workspace-write")
+    if config.get("sandbox_mode") != "danger-full-access":
+        errors.append("primary project sandbox must be danger-full-access")
+    if config.get("approval_policy") != "never":
+        errors.append("primary approval policy must be never")
 
     agents = config.get("agents", {})
     expected_names = {values[0] for values in EXPECTED_AGENTS.values()}

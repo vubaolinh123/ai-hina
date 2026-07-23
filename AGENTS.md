@@ -10,11 +10,24 @@ spine**. Slice đang mở: **M01-S1 — contract catalog và event envelope v1**
 ## Orchestration
 
 - Primary orchestrator dùng `gpt-5.6-sol`.
+- Primary 5.6 Sol dùng project default `danger-full-access` và `approval_policy =
+  "never"` theo quyết định của owner; không dừng để xin approval cho shell,
+  network hoặc ghi ngoài workspace khi runtime cho phép.
+- Quyền unrestricted của primary không truyền ngầm cho subagent. Mỗi custom
+  agent vẫn phải dùng `sandbox_mode` được pin trong role file.
 - Chỉ primary orchestrator được spawn, steer hoặc stop subagent.
 - Subagent không spawn agent khác.
 - Mỗi task phải có `MODULE_BRIEF` đã validate.
-- Mặc định tối đa ba spawned agents đồng thời.
-- Research/review/test-design có thể song song; write-heavy phải serialize.
+- Primary là builder và integration owner mặc định; không spawn agent cho việc
+  mà primary có thể hoàn thành nhanh hơn chi phí handoff.
+- Mặc định không spawn agent. Tối đa hai subagent đồng thời và chỉ khi công
+  việc độc lập, bounded, chạy song song thật sự và có đầu ra được dùng ngay.
+- Mỗi agent chỉ nhận context packet gồm brief, diff và tối đa các file trực
+  tiếp liên quan; không yêu cầu đọc toàn repository hoặc toàn master plan.
+- Advisory agent hoàn thành trong một lượt, trả kết quả ngắn; không tự mở vòng
+  nghiên cứu tiếp theo. Chỉ frozen-SHA gate mới cần `AGENT_RESULT` đầy đủ.
+- Research/review/test-design có thể song song; write-heavy chỉ song song khi
+  worktree và `owned_paths` không giao nhau.
 
 ## Ownership
 
@@ -23,13 +36,24 @@ spine**. Slice đang mở: **M01-S1 — contract catalog và event envelope v1**
 - Parallel writer chỉ được dùng trong Codex task/session và managed worktree riêng.
 - Chỉ main/integration owner sửa root lockfile, `.codex/`, `packages/contracts`, release manifest và generated code.
 - Không reset, rebase, merge hoặc xóa thay đổi của agent/người dùng khác.
+- Quyền không cần approval không thay đổi target/scope: lệnh phá hủy chỉ chạy
+  khi yêu cầu hiện tại đã xác định rõ target và có kiểm tra read-only trước.
 
-## Module waves
+## Lean module flow
 
-1. Wave A: architecture, OSS research và QA design chạy read-only.
-2. Wave B: `module_builder` là writer duy nhất.
-3. Wave C: QA, safety và contract review trên frozen SHA.
-4. Wave D: assemble/evidence; nếu tracked tree đổi thì quay lại Wave B/C.
+1. Primary chốt brief, acceptance tests và scope.
+2. Chỉ mở tối đa hai advisory agent nếu có trigger rõ:
+   - architecture cho boundary/schema mới có blast radius lớn;
+   - OSS cho dependency/source mới;
+   - QA design cho hành vi khó kiểm thử hoặc safety-critical.
+3. Primary triển khai vertical slice và chạy test hẹp trong lúc code.
+4. Trên candidate sạch, primary chạy full suite một lần rồi freeze SHA.
+5. Chọn đúng một independent reviewer theo rủi ro và một QA runner nếu module
+   yêu cầu benchmark/repeat gate. Không chạy mọi role theo mặc định.
+6. Chỉ P0/P1 hoặc vi phạm acceptance criterion làm quay lại write phase. P2/P3
+   được ghi backlog trừ khi primary chứng minh nó chặn release.
+7. Chạy flake/repeat/soak đúng một lần trên frozen SHA cuối, sau đó ghi evidence
+   và push. Review lại chỉ phần diff sửa blocker, không đọc lại toàn module.
 
 Không mở write phase module kế tiếp trước Gate 6.
 
@@ -39,6 +63,11 @@ Không mở write phase module kế tiếp trước Gate 6.
 - Agent không tự review code của chính mình.
 - Nếu primary orchestrator sửa tracked file, diff phải được agent độc lập review.
 - Must-pass deterministic suite phải chạy 20 lần liên tiếp không lỗi khi module yêu cầu.
+- Không để nhiều agent chạy cùng một full suite hoặc cùng tạo một loại evidence.
+- Agent prompt tối đa hóa tham chiếu file/diff và tối thiểu hóa nội dung lặp lại;
+  không paste master plan hoặc research report vào prompt implementation.
+- Nếu agent không tạo giá trị trong một lượt, primary tiếp quản thay vì spawn
+  agent thay thế hoặc tạo chuỗi correction session.
 - Safety, privacy, consent, license, rollback failure và unknown provenance không được waiver.
 
 ## Open source

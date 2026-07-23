@@ -1,32 +1,32 @@
 model = "gpt-5.6-sol"
 model_reasoning_effort = "high"
-sandbox_mode = "workspace-write"
-approval_policy = "on-request"
+sandbox_mode = "danger-full-access"
+approval_policy = "never"
 
 [agents.architecture_contracts]
-description = "Defines architecture, boundaries, contracts, ADRs, and migration constraints."
+description = "Opt-in review for high-blast-radius boundaries, contracts, and migrations."
 config_file = "agents/architecture-contracts.toml"
 
 [agents.oss_researcher]
-description = "Researches upstream projects, licenses, revisions, and reusable implementation patterns."
+description = "Opt-in verification for named upstream dependencies and provenance."
 config_file = "agents/oss-researcher.toml"
 
 [agents.module_builder]
-description = "Implements one approved module inside an exclusive write lease."
+description = "Implements one bounded delegated slice inside an exclusive write lease."
 config_file = "agents/module-builder.toml"
 
 [agents.qa_designer]
-description = "Designs independent acceptance, regression, and failure-injection coverage."
+description = "Opt-in design for ambiguous, adversarial, or safety-critical acceptance."
 config_file = "agents/qa-designer.toml"
 
 [agents.qa_runner]
-description = "Runs verification on a frozen commit in a dedicated validation worktree."
+description = "Runs supplied repeat, benchmark, replay, or fault commands on a frozen commit."
 config_file = "agents/qa-runner.toml"
 
 [agents.safety_reviewer]
-description = "Reviews privacy, security, safety, provenance, and public-output risks."
+description = "Reviews frozen diffs that affect trust, actions, privacy, provenance, or public output."
 config_file = "agents/safety-reviewer.toml"
 
 [agents.integration_release]
-description = "Assembles reviewed changes and records gate evidence without changing product code."
+description = "Opt-in assembly for large release evidence sets without product changes."
 config_file = "agents/integration-release.toml"

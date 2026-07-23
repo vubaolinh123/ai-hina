@@ -24,6 +24,7 @@
 | M00-T05 | Sensitive artifact tracked | Artifact allowlist and ignore rules | Git ignore tests |
 | M00-T06 | Unsafe service exposure | Loopback default | Config validation |
 | M00-T07 | Evidence applies to wrong commit | SHA/tree hash and integrity manifest | Gate validator |
+| M00-T08 | Unattended primary command has unrestricted host/network impact | Owner-explicit primary-only policy, bounded task scope, read-only target resolution before destructive actions, protected subagent sandboxes, Git rollback | Config/governance tests and Git history |
 
 ## Fail-closed
 

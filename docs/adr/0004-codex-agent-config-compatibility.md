@@ -16,7 +16,7 @@ the project config at all.
 - Declare all seven roles explicitly as `[agents.<role>]` tables.
 - Point each declaration to a project-scoped `.codex/agents/*.toml` config file.
 - Pin model and reasoning effort inside every role file.
-- Enforce the three-worker operating limit in `AGENTS.md` and the orchestrator
+- Enforce the two-worker opt-in operating limit in `AGENTS.md` and the orchestrator
   protocol instead of an incompatible scalar config key.
 - Require `codex doctor` plus exact-model smoke tests before accepting any future
   config syntax migration.

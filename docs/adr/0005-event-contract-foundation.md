@@ -48,13 +48,13 @@ Wire field names follow the master plan exactly:
 | `turnId` | UUID or null; required only for turn scope |
 | `correlationId` | canonical lowercase RFC 4122 UUID |
 | `causationId` | canonical lowercase RFC 4122 UUID or null |
-| `source` | 1-128 printable non-control Unicode code points |
+| `source` | 1-128 Unicode code points excluding C0/C1 controls, DEL, soft hyphen, zero-width/invisible formatting, and bidi override/isolate controls |
 | `trustLevel` | `owner`, `trusted_local`, `authenticated`, `public`, or `untrusted` |
-| `occurredAt` | UTC RFC3339 ending in `Z`, with zero to six fractional digits |
+| `occurredAt` | real UTC RFC3339 calendar timestamp ending in `Z`, with zero to six fractional digits |
 | `expiresAt` | the same timestamp form or null |
 | `deadline` | the same timestamp form or null |
-| `idempotencyKey` | 1-128 characters or null |
-| `streamId` | 1-128 characters or null |
+| `idempotencyKey` | 1-128 characters using the same safe bounded token class as `source`, or null |
+| `streamId` | 1-128 characters using the same safe bounded token class as `source`, or null |
 | `sequence` | integer from 0 through JavaScript's safe maximum, or null |
 | `media` | zero to 32 strict `MediaReference` metadata objects |
 | `payload` | strict object selected by the registered event type |
@@ -72,6 +72,13 @@ and base64 fields are not allowed.
 ### Boundary validation
 
 - Reject raw UTF-8 input larger than 1,048,576 bytes before JSON parsing.
+- Reject JSON object duplicate member names before any last-key-wins runtime
+  parsing can occur.
+- Reject object/array nesting deeper than 128 levels. This deterministic limit
+  is well above the reviewed EventEnvelope v1 shape and prevents parser,
+  canonicalizer and validator recursion failures inside the 1 MiB boundary.
+- Reject unpaired UTF-16 surrogate code units in every parsed string while
+  preserving valid paired astral characters exactly.
 - Parse JSON with no coercion, defaults, unknown-field removal, or mutation.
 - Validate the parsed value against the catalog-selected draft 2020-12 schema.
 - Re-serialize as compact UTF-8 JSON with non-ASCII characters preserved and

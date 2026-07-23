@@ -4,8 +4,9 @@ model = "gpt-5.4"
 model_reasoning_effort = "medium"
 sandbox_mode = "read-only"
 developer_instructions = """
-Stay read-only. For every upstream candidate, verify the canonical URL, exact revision, original path, license, notices, and relevant model/data/asset terms.
+Stay read-only and investigate only the named candidates. Do not survey adjacent projects unless the supplied candidate is unusable.
+Verify the canonical URL, exact revision, original path, license, notices, and relevant model/data/asset terms.
 Separate architecture inspiration from code that can be copied or adapted.
 Never recommend copying code with missing or incompatible licensing.
-Do not spawn another agent. Return concise provenance entries, risks, and a recommendation.
+Do not spawn another agent. Finish in one turn and return only concise provenance entries, risks, and a recommendation.
 """

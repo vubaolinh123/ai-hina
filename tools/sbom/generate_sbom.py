@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import tomllib
 import uuid
@@ -11,6 +12,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 OUTPUT = ROOT / "artifacts" / "verification" / "M00" / "sbom.cdx.json"
+NPM_EVIDENCE = ROOT / "packages" / "contracts" / "npm-license-evidence.v1.json"
 
 
 def git_sha() -> str:
@@ -86,6 +88,199 @@ def python_lock_components() -> list[dict[str, Any]]:
     return components
 
 
+def parse_pnpm_lock() -> dict[str, Any]:
+    text = (ROOT / "pnpm-lock.yaml").read_text(encoding="utf-8")
+    packages: dict[str, dict[str, Any]] = {}
+    snapshots: dict[str, list[str]] = {}
+    current_section = ""
+    current_key: str | None = None
+    in_snapshot_dependencies = False
+
+    for line in text.splitlines():
+        if line and not line.startswith(" "):
+            current_section = line.rstrip(":")
+            current_key = None
+            in_snapshot_dependencies = False
+            continue
+        if current_section == "packages":
+            match = re.match(r"^  (.+@[^:]+):$", line)
+            if match:
+                current_key = match.group(1)
+                name, version = split_pnpm_key(current_key)
+                packages[current_key] = {"name": name, "version": version, "integrity": ""}
+                continue
+            integrity = re.search(r"integrity: ([^}]+)", line)
+            if current_key is not None and integrity:
+                packages[current_key]["integrity"] = integrity.group(1)
+        elif current_section == "snapshots":
+            match = re.match(r"^  (.+@[^:]+):", line)
+            if match:
+                current_key = match.group(1)
+                snapshots.setdefault(current_key, [])
+                in_snapshot_dependencies = False
+                continue
+            if current_key is not None and re.match(r"^    dependencies:$", line):
+                in_snapshot_dependencies = True
+                continue
+            if in_snapshot_dependencies:
+                dep = re.match(r"^      ([^:]+): (.+)$", line)
+                if dep:
+                    snapshots[current_key].append(f"{dep.group(1)}@{dep.group(2)}")
+                    continue
+                if line.startswith("    ") and not line.startswith("      "):
+                    in_snapshot_dependencies = False
+    return {"packages": packages, "snapshots": snapshots}
+
+
+def split_pnpm_key(key: str) -> tuple[str, str]:
+    name, version = key.rsplit("@", 1)
+    return name, version
+
+
+def npm_lock_scopes(lock: dict[str, Any]) -> dict[str, str]:
+    roots = parse_pnpm_importer_roots()
+    scopes: dict[str, str] = {}
+    queue = sorted(roots.items())
+    while queue:
+        key, scope = queue.pop(0)
+        if key in scopes:
+            continue
+        scopes[key] = scope
+        for child in lock["snapshots"].get(key, []):
+            queue.append((child, scope))
+    return scopes
+
+
+def parse_pnpm_importer_roots() -> dict[str, str]:
+    text = (ROOT / "pnpm-lock.yaml").read_text(encoding="utf-8")
+    roots: dict[str, str] = {}
+    in_contracts = False
+    current_scope: str | None = None
+    current_name: str | None = None
+    for line in text.splitlines():
+        if line == "  packages/contracts:":
+            in_contracts = True
+            current_scope = None
+            current_name = None
+            continue
+        if in_contracts and line.startswith("  ") and not line.startswith("    ") and line != "  packages/contracts:":
+            break
+        if not in_contracts:
+            continue
+        if line == "    dependencies:":
+            current_scope = "runtime"
+            current_name = None
+            continue
+        if line == "    devDependencies:":
+            current_scope = "build"
+            current_name = None
+            continue
+        name = re.match(r"^      ([^:]+):$", line)
+        if name:
+            current_name = name.group(1)
+            continue
+        version = re.match(r"^        version: (.+)$", line)
+        if version and current_scope is not None and current_name is not None:
+            roots[f"{current_name}@{version.group(1)}"] = current_scope
+    return roots
+
+
+def load_npm_evidence() -> dict[str, Any]:
+    return json.loads(NPM_EVIDENCE.read_text(encoding="utf-8"))
+
+
+def validate_npm_evidence(
+    lock: dict[str, Any],
+    scopes: dict[str, str],
+    evidence: dict[str, Any] | None = None,
+) -> dict[str, dict[str, Any]]:
+    if evidence is None:
+        evidence = load_npm_evidence()
+    if evidence.get("schemaVersion") != "1.0":
+        raise ValueError("npm license evidence schemaVersion must be 1.0")
+    required_fields = {
+        "name",
+        "version",
+        "purl",
+        "integrity",
+        "licenseSpdx",
+        "scope",
+        "sourceUrl",
+        "licenseEvidence",
+    }
+    by_key: dict[str, dict[str, Any]] = {}
+    for item in evidence.get("packages", []):
+        if not isinstance(item, dict) or set(item) != required_fields:
+            raise ValueError("npm license evidence entry fields do not match the reviewed contract")
+        if any(not isinstance(item[field], str) or not item[field] for field in required_fields):
+            raise ValueError("npm license evidence fields must be non-empty strings")
+        key = f"{item.get('name')}@{item.get('version')}"
+        if key in by_key:
+            raise ValueError(f"duplicate npm license evidence entry: {key}")
+        by_key[key] = item
+    expected_keys = set(scopes)
+    if set(by_key) != expected_keys:
+        missing = sorted(expected_keys - set(by_key))
+        extra = sorted(set(by_key) - expected_keys)
+        raise ValueError(f"npm license evidence mismatch missing={missing} extra={extra}")
+    for key, item in by_key.items():
+        package = lock["packages"].get(key)
+        if package is None:
+            raise ValueError(f"npm evidence package is not in pnpm-lock.yaml: {key}")
+        if item.get("scope") != scopes[key]:
+            raise ValueError(f"npm evidence scope mismatch for {key}: {item.get('scope')} != {scopes[key]}")
+        if not package.get("integrity"):
+            raise ValueError(f"pnpm lock entry lacks integrity: {key}")
+        if item["integrity"] != package["integrity"]:
+            raise ValueError(f"npm evidence integrity mismatch for {key}")
+        expected_purl = f"pkg:npm/{package['name']}@{package['version']}"
+        if item["purl"] != expected_purl:
+            raise ValueError(f"npm evidence purl mismatch for {key}")
+        if item["scope"] not in {"runtime", "build"}:
+            raise ValueError(f"npm evidence scope is invalid for {key}")
+    return by_key
+
+
+def npm_lock_components() -> list[dict[str, Any]]:
+    lock = parse_pnpm_lock()
+    scopes = npm_lock_scopes(lock)
+    evidence = validate_npm_evidence(lock, scopes)
+    components: list[dict[str, Any]] = []
+    for key in sorted(scopes):
+        package = lock["packages"][key]
+        item = evidence[key]
+        components.append(
+            {
+                "type": "library",
+                "name": package["name"],
+                "version": package["version"],
+                "purl": item["purl"],
+                "licenses": [{"license": {"id": item["licenseSpdx"]}}],
+                "externalReferences": [
+                    {
+                        "type": "vcs",
+                        "url": item["sourceUrl"],
+                    }
+                ],
+                "properties": [
+                    {
+                        "name": "hina:dependency-scope",
+                        "value": scopes[key],
+                    },
+                    {
+                        "name": "hina:pnpm-integrity",
+                        "value": package["integrity"],
+                    },
+                    {
+                        "name": "hina:license-evidence",
+                        "value": f"{NPM_EVIDENCE.relative_to(ROOT).as_posix()}#{item['licenseEvidence']}",
+                    },
+                ],
+            }
+        )
+    return components
+
+
 def main() -> int:
     code_lock = json.loads(
         (ROOT / "third_party" / "code.lock.json").read_text(encoding="utf-8")
@@ -125,6 +320,7 @@ def main() -> int:
                 for entry in code_lock.get("components", [])
             ],
             *python_lock_components(),
+            *npm_lock_components(),
         ],
     }
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)

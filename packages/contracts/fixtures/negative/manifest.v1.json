@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "1.0",
+  "fixtures": [
+    {
+      "path": "duplicate-event-id.json",
+      "expectedCode": "E_SCHEMA_WRONG_TYPE"
+    },
+    {
+      "path": "duplicate-media.json",
+      "expectedCode": "E_SCHEMA_WRONG_TYPE"
+    },
+    {
+      "path": "duplicate-metadata-key-escaped.json",
+      "expectedCode": "E_SCHEMA_WRONG_TYPE"
+    },
+    {
+      "path": "duplicate-payload.json",
+      "expectedCode": "E_SCHEMA_WRONG_TYPE"
+    },
+    {
+      "path": "duplicate-type.json",
+      "expectedCode": "E_SCHEMA_WRONG_TYPE"
+    },
+    {
+      "path": "duplicate-type-escaped.json",
+      "expectedCode": "E_SCHEMA_WRONG_TYPE"
+    },
+    {
+      "path": "inline-media.json",
+      "expectedCode": "E_SCHEMA_INLINE_BASE64"
+    },
+    {
+      "path": "invalid-source-bidi.json",
+      "expectedCode": "E_SCHEMA_WRONG_TYPE"
+    },
+    {
+      "path": "invalid-timestamp-day.json",
+      "expectedCode": "E_SCHEMA_INVALID_ID"
+    },
+    {
+      "path": "unknown-event.json",
+      "expectedCode": "E_SCHEMA_UNKNOWN_EVENT"
+    }
+  ]
+}

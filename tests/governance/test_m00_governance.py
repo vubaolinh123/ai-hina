@@ -40,6 +40,12 @@ class M00GovernanceTests(unittest.TestCase):
         self.assertEqual([], validator.collect_errors())
 
     def test_agent_roster_is_explicit(self) -> None:
+        with (ROOT / ".codex" / "config.toml").open("rb") as handle:
+            primary = tomllib.load(handle)
+        self.assertEqual("gpt-5.6-sol", primary["model"])
+        self.assertEqual("danger-full-access", primary["sandbox_mode"])
+        self.assertEqual("never", primary["approval_policy"])
+
         agent_files = sorted((ROOT / ".codex" / "agents").glob("*.toml"))
         self.assertEqual(7, len(agent_files))
         models = set()

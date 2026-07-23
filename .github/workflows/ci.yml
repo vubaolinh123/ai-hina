@@ -63,6 +63,7 @@ jobs:
           Invoke-Checked { node tools/dev/check-node-workspace.mjs } "Node workspace check"
           Invoke-Checked { pnpm test:contracts } "M01 contract gate"
           Invoke-Checked { uv run --frozen python tools/license/check_provenance.py } "provenance check"
+          Invoke-Checked { pnpm test:contracts:repeat } "M01 contract 20-run repeat gate"
           Invoke-Checked { uv run --frozen python -m compileall -q tools tests } "Python compile check"
           Invoke-Checked { git diff --check } "Git whitespace check"
 

@@ -10,7 +10,7 @@ from typing import Any
 from jsonschema import Draft202012Validator, RefResolver
 from jsonschema.exceptions import ValidationError
 
-from .generated import EVENT_SCHEMA_FILES, EVENT_TYPES, MAX_JSON_ENVELOPE_BYTES
+from .generated import EVENT_SCHEMA_FILES, EVENT_TYPES, MAX_JSON_ENVELOPE_BYTES, MAX_JSON_NESTING_DEPTH
 
 
 class ErrorCode(StrEnum):
@@ -47,6 +47,7 @@ _SCHEMA_ROOT = _ROOT / "schemas" / "v1"
 _INLINE_KEYS = {"base64", "bytes", "data", "dataUri", "file", "path", "raw", "uri", "url"}
 _MIN_JS_SAFE_INTEGER = -9_007_199_254_740_991
 _MAX_JS_SAFE_INTEGER = 9_007_199_254_740_991
+_MAX_INTEGER_TOKEN_DIGITS = 16
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -85,17 +86,28 @@ def validate_envelope_bytes(raw: bytes) -> ValidationResult:
     if len(raw) > MAX_JSON_ENVELOPE_BYTES:
         return ValidationResult(False, ErrorCode.E_SCHEMA_OVERSIZE, detail="raw JSON exceeds limit")
     try:
-        parsed = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        text = raw.decode("utf-8")
+        scan_error = _scan_json_text(text)
+        if scan_error is not None:
+            return ValidationResult(False, ErrorCode.E_SCHEMA_WRONG_TYPE, detail=scan_error)
+        parsed = json.loads(
+            text,
+            object_pairs_hook=_reject_duplicate_object_pairs,
+            parse_int=_parse_json_int_token,
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError, ValueError) as exc:
         return ValidationResult(False, ErrorCode.E_SCHEMA_WRONG_TYPE, detail=str(exc))
     return validate_envelope(parsed)
 
 
 def validate_envelope(value: Any) -> ValidationResult:
     try:
+        semantic_error = _find_structural_string_or_depth_error(value)
+        if semantic_error is not None:
+            return ValidationResult(False, ErrorCode.E_SCHEMA_WRONG_TYPE, detail=semantic_error)
         normalized = _normalize_json_numbers(value)
         canonical = _dump_canonical(normalized)
-    except (TypeError, ValueError) as exc:
+    except (RecursionError, TypeError, UnicodeEncodeError, ValueError) as exc:
         return ValidationResult(False, ErrorCode.E_SCHEMA_WRONG_TYPE, detail=str(exc))
     if len(canonical.encode("utf-8")) > MAX_JSON_ENVELOPE_BYTES:
         return ValidationResult(False, ErrorCode.E_SCHEMA_OVERSIZE, detail="canonical JSON exceeds limit")
@@ -125,8 +137,10 @@ def _dump_canonical(value: Any) -> str:
 
 
 def _normalize_json_numbers(value: Any) -> Any:
-    if isinstance(value, bool) or value is None or isinstance(value, str) or isinstance(value, int):
+    if isinstance(value, bool) or value is None or isinstance(value, int):
         return value
+    if isinstance(value, str):
+        return _normalize_surrogate_pairs(value)
     if isinstance(value, float):
         if not math.isfinite(value):
             raise TypeError("number must be finite")
@@ -138,8 +152,248 @@ def _normalize_json_numbers(value: Any) -> Any:
     if isinstance(value, tuple):
         return [_normalize_json_numbers(item) for item in value]
     if isinstance(value, dict):
-        return {key: _normalize_json_numbers(child) for key, child in value.items()}
+        return {
+            _normalize_surrogate_pairs(key) if isinstance(key, str) else key: _normalize_json_numbers(child)
+            for key, child in value.items()
+        }
     return value
+
+
+def _normalize_surrogate_pairs(value: str) -> str:
+    if not any(0xD800 <= ord(char) <= 0xDFFF for char in value):
+        return value
+    result: list[str] = []
+    index = 0
+    while index < len(value):
+        code = ord(value[index])
+        if 0xD800 <= code <= 0xDBFF:
+            if index + 1 >= len(value):
+                raise ValueError("string contains an unpaired UTF-16 surrogate")
+            next_code = ord(value[index + 1])
+            if not 0xDC00 <= next_code <= 0xDFFF:
+                raise ValueError("string contains an unpaired UTF-16 surrogate")
+            result.append(chr(0x10000 + ((code - 0xD800) << 10) + (next_code - 0xDC00)))
+            index += 2
+            continue
+        if 0xDC00 <= code <= 0xDFFF:
+            raise ValueError("string contains an unpaired UTF-16 surrogate")
+        result.append(value[index])
+        index += 1
+    return "".join(result)
+
+
+def _parse_json_int_token(token: str) -> int:
+    digits = token[1:] if token.startswith("-") else token
+    if len(digits.lstrip("0") or "0") > _MAX_INTEGER_TOKEN_DIGITS:
+        raise ValueError("integer token exceeds JavaScript-safe boundary")
+    return int(token)
+
+
+def _reject_duplicate_object_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON object member: {key}")
+        result[key] = value
+    return result
+
+
+def _find_structural_string_or_depth_error(value: Any) -> str | None:
+    stack: list[tuple[Any, int]] = [(value, 0)]
+    while stack:
+        item, depth = stack.pop()
+        if depth > MAX_JSON_NESTING_DEPTH:
+            return f"JSON nesting exceeds {MAX_JSON_NESTING_DEPTH}"
+        if isinstance(item, str):
+            if _has_unpaired_surrogate(item):
+                return "string contains an unpaired UTF-16 surrogate"
+            continue
+        if isinstance(item, dict):
+            for key, child in item.items():
+                if not isinstance(key, str):
+                    return "JSON object member names must be strings"
+                if _has_unpaired_surrogate(key):
+                    return "object member name contains an unpaired UTF-16 surrogate"
+                stack.append((child, depth + 1))
+        elif isinstance(item, (list, tuple)):
+            for child in item:
+                stack.append((child, depth + 1))
+    return None
+
+
+def _has_unpaired_surrogate(value: str) -> bool:
+    index = 0
+    while index < len(value):
+        code = ord(value[index])
+        if 0xD800 <= code <= 0xDBFF:
+            if index + 1 >= len(value):
+                return True
+            next_code = ord(value[index + 1])
+            if not 0xDC00 <= next_code <= 0xDFFF:
+                return True
+            index += 2
+            continue
+        if 0xDC00 <= code <= 0xDFFF:
+            return True
+        index += 1
+    return False
+
+
+def _scan_json_text(text: str) -> str | None:
+    index = 0
+
+    def skip_whitespace() -> None:
+        nonlocal index
+        while index < len(text) and text[index] in " \t\r\n":
+            index += 1
+
+    def parse_value(depth: int) -> str | None:
+        nonlocal index
+        if depth > MAX_JSON_NESTING_DEPTH:
+            return f"JSON nesting exceeds {MAX_JSON_NESTING_DEPTH}"
+        skip_whitespace()
+        if index >= len(text):
+            return "malformed JSON"
+        char = text[index]
+        if char == "{":
+            return parse_object(depth)
+        if char == "[":
+            return parse_array(depth)
+        if char == '"':
+            parsed_ok, parsed_value = parse_string()
+            return None if parsed_ok else parsed_value
+        if char == "-" or "0" <= char <= "9":
+            return parse_number()
+        for literal in ("true", "false", "null"):
+            if text.startswith(literal, index):
+                index += len(literal)
+                return None
+        return "malformed JSON"
+
+    def parse_object(depth: int) -> str | None:
+        nonlocal index
+        index += 1
+        keys: set[str] = set()
+        skip_whitespace()
+        if index < len(text) and text[index] == "}":
+            index += 1
+            return None
+        while index < len(text):
+            skip_whitespace()
+            key_ok, key = parse_string()
+            if not key_ok:
+                return key
+            if _has_unpaired_surrogate(key):
+                return "object member name contains an unpaired UTF-16 surrogate"
+            if key in keys:
+                return f"duplicate JSON object member: {key}"
+            keys.add(key)
+            skip_whitespace()
+            if index >= len(text) or text[index] != ":":
+                return "malformed JSON"
+            index += 1
+            value_error = parse_value(depth + 1)
+            if value_error is not None:
+                return value_error
+            skip_whitespace()
+            if index < len(text) and text[index] == "}":
+                index += 1
+                return None
+            if index >= len(text) or text[index] != ",":
+                return "malformed JSON"
+            index += 1
+        return "malformed JSON"
+
+    def parse_array(depth: int) -> str | None:
+        nonlocal index
+        index += 1
+        skip_whitespace()
+        if index < len(text) and text[index] == "]":
+            index += 1
+            return None
+        while index < len(text):
+            value_error = parse_value(depth + 1)
+            if value_error is not None:
+                return value_error
+            skip_whitespace()
+            if index < len(text) and text[index] == "]":
+                index += 1
+                return None
+            if index >= len(text) or text[index] != ",":
+                return "malformed JSON"
+            index += 1
+        return "malformed JSON"
+
+    def parse_string() -> tuple[bool, str]:
+        nonlocal index
+        start = index
+        if index >= len(text) or text[index] != '"':
+            return False, "malformed JSON"
+        index += 1
+        while index < len(text):
+            char = text[index]
+            if char == '"':
+                index += 1
+                try:
+                    parsed = json.loads(text[start:index])
+                except json.JSONDecodeError:
+                    return False, "malformed JSON"
+                return (True, parsed) if isinstance(parsed, str) else (False, "malformed JSON")
+            if char == "\\":
+                index += 1
+                if index >= len(text):
+                    return False, "malformed JSON"
+                if text[index] == "u":
+                    hex_digits = text[index + 1 : index + 5]
+                    if len(hex_digits) != 4 or any(digit not in "0123456789abcdefABCDEF" for digit in hex_digits):
+                        return False, "malformed JSON"
+                    index += 5
+                elif text[index] in '"\\/bfnrt':
+                    index += 1
+                else:
+                    return False, "malformed JSON"
+            else:
+                if ord(char) <= 0x1F:
+                    return False, "malformed JSON"
+                index += 1
+        return False, "malformed JSON"
+
+    def parse_number() -> str | None:
+        nonlocal index
+        start = index
+        if text[index] == "-":
+            index += 1
+        if index < len(text) and text[index] == "0":
+            index += 1
+        elif index < len(text) and "1" <= text[index] <= "9":
+            while index < len(text) and "0" <= text[index] <= "9":
+                index += 1
+        else:
+            return "malformed JSON"
+        integer_digits = text[start:index].replace("-", "")
+        if len(integer_digits.lstrip("0") or "0") > _MAX_INTEGER_TOKEN_DIGITS:
+            return "integer token exceeds JavaScript-safe boundary"
+        if index < len(text) and text[index] == ".":
+            index += 1
+            if index >= len(text) or not "0" <= text[index] <= "9":
+                return "malformed JSON"
+            while index < len(text) and "0" <= text[index] <= "9":
+                index += 1
+        if index < len(text) and text[index] in "eE":
+            index += 1
+            if index < len(text) and text[index] in "+-":
+                index += 1
+            if index >= len(text) or not "0" <= text[index] <= "9":
+                return "malformed JSON"
+            while index < len(text) and "0" <= text[index] <= "9":
+                index += 1
+        return None
+
+    error = parse_value(1)
+    if error is not None:
+        return error
+    skip_whitespace()
+    return None if index == len(text) else "malformed JSON"
 
 
 def _find_inline_media(value: dict[str, Any]) -> str | None:

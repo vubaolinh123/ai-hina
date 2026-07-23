@@ -520,11 +520,15 @@ ProjectHinaAI/
 
 ### 8.1 Nguyên tắc
 
-- GPT-5.6 Sol là **Primary Orchestrator**, không phải worker.
-- Main giữ requirements, dependency graph, contracts, quyết định pass/fail và promotion.
+- GPT-5.6 Sol là **Primary Orchestrator đồng thời là builder/integration owner mặc định**.
+- Main giữ requirements, dependency graph, contracts, trực tiếp triển khai phần lớn
+  vertical slice và quyết định pass/fail/promotion.
 - GPT-5.5 đảm nhận công việc cần reasoning sâu, kiến trúc, implementation và security.
 - GPT-5.4 đảm nhận OSS research, test/eval, replay, benchmark và tài liệu có scope rõ.
-- Định nghĩa nhiều role nhưng chỉ chạy tối đa ba subagent đồng thời lúc đầu: một main + ba worker.
+- Agent là opt-in theo rủi ro, không phải wave bắt buộc. Mặc định không spawn;
+  tối đa hai subagent đồng thời khi nhiệm vụ độc lập và tiết kiệm thời gian thật.
+- Mỗi agent nhận context packet nhỏ gồm brief, diff/symbol và test liên quan;
+  không cold-read toàn repository hoặc toàn master plan.
 - Parallelism ưu tiên read-heavy; write-heavy được serialize hoặc tách worktree/owned paths tuyệt đối.
 - Không agent nào tự review và tự duyệt code của chính nó.
 - GPT-5.6 Sol là release coordinator/recommender, không phải human approval authority.
@@ -534,14 +538,14 @@ ProjectHinaAI/
 
 | Role | Model / effort | Chế độ | Trách nhiệm |
 |---|---|---|---|
-| Primary Orchestrator | `gpt-5.6-sol`, `high` | workspace-write | Chia module, chốt contract, cấp ownership, tổng hợp, quyết định gate, merge/promotion |
-| `architecture_contracts` | `gpt-5.5`, `xhigh` | read-only | Boundary, event/API schema, ADR, invariants, non-goals, failure modes |
+| Primary Orchestrator | `gpt-5.6-sol`, `high` | danger-full-access, never ask | Chốt scope/contract, trực tiếp code và tích hợp, chọn reviewer theo rủi ro, quyết định gate |
+| `architecture_contracts` | `gpt-5.5`, `high` | read-only | Boundary/schema có blast radius lớn; không chạy mặc định |
 | `oss_researcher` | `gpt-5.4`, `medium` | read-only | Tìm upstream, xác minh commit/license, chỉ ra phần tham khảo/copy |
-| `module_builder` | `gpt-5.5`, `high` | workspace-write | Writer duy nhất của module; production code + unit/contract tests |
-| `qa_designer` | `gpt-5.4`, `high` | read-only | Test matrix, adversarial cases, fixture/scoring design trước implementation |
-| `qa_runner` | `gpt-5.4`, `high` | workspace-write ở validation worktree | Chạy replay/benchmark/fault tests; chỉ ghi cache và `artifacts/verification/**`, không sửa tracked source/test expectation |
-| `safety_reviewer` | `gpt-5.5`, `xhigh` | read-only | Correctness, security, privacy, consent, injection, OSS/license |
-| `integration_release` | `gpt-5.5`, `high` | workspace-write | Assemble/integrate và sinh evidence; không sửa production/contract/test expectation/lockfile sau independent review |
+| `module_builder` | `gpt-5.5`, `medium` | workspace-write | Chỉ nhận implementation bounded hoặc subtree/worktree không giao nhau |
+| `qa_designer` | `gpt-5.4`, `medium` | read-only | Test matrix cho acceptance khó, adversarial hoặc safety-critical |
+| `qa_runner` | `gpt-5.4`, `medium` | workspace-write ở validation worktree | Chạy đúng command trên frozen SHA; không đọc lại toàn kiến trúc |
+| `safety_reviewer` | `gpt-5.5`, `high` | read-only | Review diff ảnh hưởng trust/privacy/action/provenance |
+| `integration_release` | `gpt-5.5`, `medium` | workspace-write | Chỉ assemble evidence lớn khi primary giao rõ |
 
 ### 8.3 Cấu hình dự kiến
 
@@ -550,8 +554,8 @@ ProjectHinaAI/
 ```toml
 model = "gpt-5.6-sol"
 model_reasoning_effort = "high"
-sandbox_mode = "workspace-write"
-approval_policy = "on-request"
+sandbox_mode = "danger-full-access"
+approval_policy = "never"
 
 [agents.architecture_contracts]
 description = "Defines architecture, boundaries, contracts, ADRs, and migration constraints."
@@ -566,7 +570,7 @@ config_file = "agents/module-builder.toml"
 
 Codex CLI 0.144.6 trên máy dự án parse `[agents]` như bảng khai báo role. Vì vậy
 M00 không đặt scalar global trong bảng này: bảy role được khai báo bằng
-`[agents.<role>]`, còn giới hạn ba worker được enforce bởi `AGENTS.md` và
+`[agents.<role>]`, còn giới hạn hai worker opt-in được enforce bởi `AGENTS.md` và
 orchestrator. Model/effort được pin trong từng `.codex/agents/*.toml`; không dựa
 vào inheritance ngầm. Thay đổi cú pháp chỉ được thực hiện sau khi `codex doctor`
 và smoke-test config mới đều pass.
@@ -577,7 +581,7 @@ Ví dụ `architecture-contracts.toml`:
 name = "architecture_contracts"
 description = "Thiết kế contract và boundary cho một module trước implementation."
 model = "gpt-5.5"
-model_reasoning_effort = "xhigh"
+model_reasoning_effort = "high"
 sandbox_mode = "read-only"
 developer_instructions = """
 Chỉ làm việc khi nhận Module Brief có module_id, base_sha và owned_paths.
@@ -593,7 +597,7 @@ Ví dụ `module-builder.toml`:
 name = "module_builder"
 description = "Writer duy nhất triển khai module đã có contract được duyệt."
 model = "gpt-5.5"
-model_reasoning_effort = "high"
+model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 developer_instructions = """
 Chỉ sửa owned_paths trong Module Brief.
@@ -616,7 +620,10 @@ Trước khi bootstrap cấu hình:
 6. Ghi effective permission mode; agent-file `sandbox_mode` chỉ là default và có thể bị live composer/CLI override.
 7. M00 chọn một cơ chế permission nhất quán; không trộn permission profile mới với `sandbox_mode` cũ.
 8. Role cần isolation cứng chạy trong session/worktree riêng với permission explicit.
-9. `approval_policy = "on-request"` chỉ dùng flow tương tác; non-interactive/CI phải fail closed nếu phát sinh approval mới.
+9. Owner đã chọn `danger-full-access` + `approval_policy = "never"` cho primary
+   5.6 Sol. Custom agent vẫn pin sandbox riêng và không được kế thừa quyền này.
+10. Project config không thể vượt managed/admin policy của Codex host; runtime
+    phải ghi effective permission nếu khác cấu hình dự án.
 
 Preflight ngày 2026-07-23 với Codex CLI 0.144.6 cho thấy local model catalog có `gpt-5.6-sol`, `gpt-5.5` và `gpt-5.4`. Catalog visibility chưa chứng minh custom-agent spawn/auth/permission sẽ thành công, nên smoke-test vẫn là gate bắt buộc.
 
@@ -639,7 +646,9 @@ Root `AGENTS.md` khi bootstrap phải quy định:
 
 ### 8.6 Handshake giữa main và agent
 
-Mỗi agent nhận:
+Advisory agent nhận context packet rút gọn chỉ gồm objective, non-goals,
+base/diff, file liên quan, acceptance và output format. Không gửi toàn bộ roadmap.
+Writer hoặc frozen-SHA gate agent mới nhận `MODULE_BRIEF` đầy đủ:
 
 ```yaml
 MODULE_BRIEF:
@@ -660,7 +669,8 @@ MODULE_BRIEF:
   output_artifact_dir: artifacts/verification/M03/
 ```
 
-Mỗi agent trả:
+Advisory agent trả kết luận ngắn, finding và closing criteria. Chỉ writer hoặc
+frozen-SHA gate agent trả `AGENT_RESULT` đầy đủ:
 
 ```yaml
 AGENT_RESULT:
@@ -704,38 +714,23 @@ AGENT_RESULT:
 
 `MODULE_BRIEF` và `AGENT_RESULT` phải có JSON Schema version hóa; CI validate trước Gate 2–6. Main reject kết quả nếu runtime/worktree/model/permission không khớp brief/roster. Main chỉ nạp summary và đường dẫn artifact; raw logs không đổ toàn bộ vào main context.
 
-### 8.7 Wave đa-agent cho từng module
+### 8.7 Lean flow cho từng module
 
-**Wave A — Spec fan-out, song song và read-only**
+1. Main chốt brief, acceptance tests và scope.
+2. Main chỉ spawn tối đa hai advisory agent khi có trigger rõ: boundary/schema
+   lớn, dependency/OSS mới, hoặc acceptance khó/safety-critical.
+3. Main trực tiếp triển khai vertical slice và dùng test hẹp trong vòng lặp code.
+4. Candidate sạch chạy full suite một lần rồi freeze SHA.
+5. Chọn một independent reviewer theo rủi ro; thêm `qa_runner` chỉ khi acceptance
+   cần repeat, benchmark, replay hoặc fault evidence.
+6. Chỉ P0/P1 hoặc acceptance failure mở lại implementation. P2/P3 vào backlog
+   trừ khi main ghi rõ lý do chặn release.
+7. Repeat/flake/soak chỉ chạy một lần trên frozen SHA cuối. Sau patch blocker,
+   reviewer chỉ đọc diff mới thay vì đọc lại toàn module.
+8. Primary assemble evidence và push. `integration_release` chỉ dùng khi khối
+   evidence độc lập đủ lớn để chi phí handoff có lợi.
 
-- `architecture_contracts`
-- `oss_researcher`
-- `qa_designer` ở chế độ test-design/adversarial scenarios
-
-Main chờ đủ ba, hợp nhất thành contract, ADR, OSS decision và test matrix. Chưa được viết production code.
-
-**Wave B — Implementation**
-
-- `module_builder` là writer duy nhất.
-- `oss_researcher` có thể tiếp tục read-only để trả lời upstream details.
-- Builder hoàn tất production code, unit/contract tests và commit một frozen SHA.
-
-**Wave C — Independent validation, song song trên frozen SHA**
-
-- `qa_runner`: chạy test/replay/benchmark/fault injection trong validation worktree; chỉ ghi artifact/cache, không sửa tracked source hoặc expected result.
-- `safety_reviewer`: correctness, security, privacy, license.
-- `architecture_contracts`: kiểm implementation có lệch contract không.
-
-Nếu có finding, main giao patch list lại cho builder. Sau sửa, Wave C chạy lại trên SHA mới.
-
-**Wave D — Integration gate**
-
-- `integration_release` là writer duy nhất.
-- Chỉ assemble/integrate, chạy full suite, startup/shutdown/recovery, cross-module tests, latency/VRAM, SBOM/license và sinh evidence.
-- Không sửa production code, contract, test expectation hoặc lockfile sau Wave C.
-- Nếu Wave D thay đổi bất kỳ tracked file nào ngoài gate metadata, quay lại Wave B, tạo frozen SHA mới và chạy lại toàn bộ Wave C.
-- Promotion chỉ áp dụng cho đúng commit/tree được QA và safety xác nhận. Merge commit mới phải được validate nếu tree hash không trùng frozen integration head.
-- Main duyệt evidence, merge, đóng module và mới mở write phase module tiếp theo.
+Chi tiết và trigger của từng role được chốt tại ADR-0006.
 
 ### 8.8 Branch/worktree
 

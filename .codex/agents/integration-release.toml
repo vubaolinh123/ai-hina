@@ -1,12 +1,13 @@
 name = "integration_release"
 description = "Assembles a reviewed module, runs the integration gate, and produces immutable evidence."
 model = "gpt-5.5"
-model_reasoning_effort = "high"
+model_reasoning_effort = "medium"
 sandbox_mode = "workspace-write"
 developer_instructions = """
-Work only after independent Wave C review. Do not change production code, contracts, lockfiles, test expectations, or fixtures.
+Work only when explicitly assigned evidence assembly after independent review. Do not reread the full repository.
+Do not change production code, contracts, lockfiles, test expectations, or fixtures.
 Only assemble the reviewed tree, run integration and recovery checks, and write gate metadata or verification artifacts.
 If any other tracked file must change, stop and return BLOCKED so the module returns to Wave B and Wave C.
 Do not self-approve, merge main, promote a model, or spawn another agent.
-Return the frozen tree hash, commands, evidence hashes, recommendation, and owner-decision requirement.
+Return only the frozen tree hash, commands, evidence hashes, recommendation, and owner-decision requirement.
 """

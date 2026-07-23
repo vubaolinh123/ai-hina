@@ -27,12 +27,17 @@ from hina_contracts import (  # noqa: E402
     validate_envelope,
     validate_envelope_bytes,
 )
+from tools.contracts.generate_models import render_outputs, validate_and_project_catalog  # noqa: E402
 
 PNPM = "pnpm.cmd" if os.name == "nt" else "pnpm"
 
 
 def load_fixture(name: str) -> dict:
     return json.loads((CONTRACTS / "fixtures" / "golden" / name).read_text(encoding="utf-8"))
+
+
+def load_negative_manifest() -> dict:
+    return json.loads((CONTRACTS / "fixtures" / "negative" / "manifest.v1.json").read_text(encoding="utf-8"))
 
 
 def run_typescript_validation(value: object) -> dict:
@@ -64,6 +69,26 @@ class EventContractTests(unittest.TestCase):
                 self.assertEqual(result.code, ErrorCode.OK, result.detail)
                 self.assertIsNotNone(result.canonical_json)
 
+    def test_negative_manifest_fixtures_fail_with_exact_codes_in_both_runtimes(self) -> None:
+        subprocess.run([PNPM, "--filter", "@hina/contracts", "build"], cwd=ROOT, check=True)
+        manifest = load_negative_manifest()
+        expected = {item["path"]: item["expectedCode"] for item in manifest["fixtures"]}
+        actual_files = {
+            path.name
+            for path in (CONTRACTS / "fixtures" / "negative").glob("*.json")
+            if path.name != "manifest.v1.json"
+        }
+        self.assertEqual(actual_files, set(expected))
+        for name, code in sorted(expected.items()):
+            raw = (CONTRACTS / "fixtures" / "negative" / name).read_bytes()
+            with self.subTest(runtime="python", fixture=name):
+                result = validate_envelope_bytes(raw)
+                self.assertEqual(result.code.value, code, result.detail)
+                self.assertFalse(result.ok)
+            with self.subTest(runtime="typescript", fixture=name):
+                result = run_typescript_validation_bytes(raw)
+                self.assertEqual(result["code"], code, result.get("detail"))
+
     def test_catalog_schemas_are_draft_2020_12_valid(self) -> None:
         for path in sorted((CONTRACTS / "schemas" / "v1").rglob("*.schema.json")):
             with self.subTest(path=path.relative_to(CONTRACTS).as_posix()):
@@ -89,6 +114,16 @@ class EventContractTests(unittest.TestCase):
         duplicate_event["events"].append(copy.deepcopy(duplicate_event["events"][0]))
         with self.assertRaises(ValidationError):
             validators["catalog.v1.json"].validate(duplicate_event)
+
+        duplicate_changed_metadata = copy.deepcopy(instances["catalog.v1.json"])
+        duplicate_changed_metadata["events"].append(
+            {
+                **copy.deepcopy(duplicate_changed_metadata["events"][0]),
+                "description": "Duplicate name with changed metadata must fail semantically.",
+            }
+        )
+        with self.assertRaisesRegex(ValueError, "duplicate catalog event name"):
+            validate_and_project_catalog(CONTRACTS, duplicate_changed_metadata)
 
         catalog_extra_field = copy.deepcopy(instances["catalog.v1.json"])
         catalog_extra_field["events"][0]["owner"] = "not in schema"
@@ -152,13 +187,17 @@ class EventContractTests(unittest.TestCase):
         self.assert_code(payload_field, ErrorCode.E_SCHEMA_UNKNOWN_FIELD)
 
     def test_identifiers_and_scope_relationships_fail(self) -> None:
+        subprocess.run([PNPM, "--filter", "@hina/contracts", "build"], cwd=ROOT, check=True)
         fixture = load_fixture("turn.media.echo.json")
         cases = [
             ("uppercase UUID", lambda item: item.__setitem__("causationId", item["causationId"].upper())),
             ("malformed UUID", lambda item: item.__setitem__("correlationId", "bad")),
             ("global with sessionId", lambda item: (item.__setitem__("scope", "global"), item.__setitem__("sessionId", fixture["sessionId"]))),
+            ("global with turnId", lambda item: (item.__setitem__("scope", "global"), item.__setitem__("sessionId", None), item.__setitem__("turnId", fixture["turnId"]))),
             ("session without sessionId", lambda item: (item.__setitem__("scope", "session"), item.__setitem__("sessionId", None), item.__setitem__("turnId", None))),
             ("session with turnId", lambda item: (item.__setitem__("scope", "session"), item.__setitem__("turnId", fixture["turnId"]))),
+            ("turn without sessionId", lambda item: (item.__setitem__("scope", "turn"), item.__setitem__("sessionId", None))),
+            ("turn without turnId", lambda item: (item.__setitem__("scope", "turn"), item.__setitem__("turnId", None))),
             ("turn without ids", lambda item: (item.__setitem__("scope", "turn"), item.__setitem__("sessionId", None), item.__setitem__("turnId", None))),
         ]
         for label, mutate in cases:
@@ -166,6 +205,51 @@ class EventContractTests(unittest.TestCase):
             mutate(mutated)
             with self.subTest(label=label):
                 self.assert_code(mutated, ErrorCode.E_SCHEMA_INVALID_ID)
+                typescript_result = run_typescript_validation(mutated)
+                self.assertEqual(typescript_result["code"], "E_SCHEMA_INVALID_ID", typescript_result.get("detail"))
+
+    def test_timestamp_calendar_validity_matches_in_both_runtimes(self) -> None:
+        subprocess.run([PNPM, "--filter", "@hina/contracts", "build"], cwd=ROOT, check=True)
+        fixture = load_fixture("global.echo.json")
+        for field in ["occurredAt", "expiresAt", "deadline"]:
+            valid = copy.deepcopy(fixture)
+            valid[field] = "2024-02-29T23:59:59.123456Z"
+            with self.subTest(field=field, value="valid leap day"):
+                python_result = validate_envelope(valid)
+                self.assertEqual(python_result.code, ErrorCode.OK, python_result.detail)
+                self.assertEqual(run_typescript_validation(valid)["code"], "OK")
+            for timestamp in [
+                "2026-00-01T00:00:00Z",
+                "2026-13-01T00:00:00Z",
+                "2026-02-29T00:00:00Z",
+                "2024-02-30T00:00:00Z",
+                "2026-04-31T00:00:00Z",
+                "2026-01-01T24:00:00Z",
+                "2026-01-01T00:60:00Z",
+                "2026-01-01T00:00:60Z",
+            ]:
+                mutated = copy.deepcopy(fixture)
+                mutated[field] = timestamp
+                with self.subTest(field=field, value=timestamp):
+                    self.assertEqual(validate_envelope(mutated).code, ErrorCode.E_SCHEMA_INVALID_ID)
+                    typescript_result = run_typescript_validation(mutated)
+                    self.assertEqual(typescript_result["code"], "E_SCHEMA_INVALID_ID", typescript_result.get("detail"))
+
+    def test_bounded_tokens_reject_controls_and_unsafe_formatting(self) -> None:
+        subprocess.run([PNPM, "--filter", "@hina/contracts", "build"], cwd=ROOT, check=True)
+        fixture = load_fixture("global.echo.json")
+        for field, value in [
+            ("source", "contracts\u0085test"),
+            ("source", "contracts\u202etest"),
+            ("idempotencyKey", "idem\u200b1"),
+            ("streamId", "stream\u20661"),
+        ]:
+            mutated = copy.deepcopy(fixture)
+            mutated[field] = value
+            with self.subTest(field=field, value=ascii(value)):
+                self.assertFalse(validate_envelope(mutated).ok)
+                self.assertNotEqual(validate_envelope(mutated).code, ErrorCode.OK)
+                self.assertNotEqual(run_typescript_validation(mutated)["code"], "OK")
 
     def test_size_boundaries_check_raw_and_canonical_utf8(self) -> None:
         fixture = load_fixture("global.echo.json")
@@ -271,6 +355,52 @@ class EventContractTests(unittest.TestCase):
                 result = run_typescript_validation_bytes(raw)
                 self.assertEqual(result["code"], "E_SCHEMA_WRONG_TYPE", result.get("detail"))
 
+    def test_raw_boundary_malformed_hazards_fail_closed_in_both_runtimes(self) -> None:
+        subprocess.run([PNPM, "--filter", "@hina/contracts", "build"], cwd=ROOT, check=True)
+        fixture = load_fixture("global.echo.json")
+        huge_number = self._raw_with_numeric_token(fixture, "sequence", "1" * 5000)
+        over_depth = ("[" * 129 + "0" + "]" * 129).encode("utf-8")
+        cases = [
+            ("huge integer", huge_number),
+            ("excessive nesting", over_depth),
+            ("invalid utf8", b"\xff"),
+            ("malformed json", b'{"type":'),
+            ("escaped lone high surrogate", self._raw_with_message_token(fixture, '"\\ud800"')),
+            ("escaped lone low surrogate", self._raw_with_message_token(fixture, '"\\ude00"')),
+        ]
+        for label, raw in cases:
+            with self.subTest(runtime="python", label=label):
+                result = validate_envelope_bytes(raw)
+                self.assertEqual(result.code, ErrorCode.E_SCHEMA_WRONG_TYPE, result.detail)
+                self.assertFalse(result.ok)
+            with self.subTest(runtime="typescript", label=label):
+                result = run_typescript_validation_bytes(raw)
+                self.assertEqual(result["code"], "E_SCHEMA_WRONG_TYPE", result.get("detail"))
+
+        valid_pair = self._raw_with_message_token(fixture, '"\\ud83d\\ude00"')
+        python_result = validate_envelope_bytes(valid_pair)
+        self.assertEqual(python_result.code, ErrorCode.OK, python_result.detail)
+        typescript_result = run_typescript_validation_bytes(valid_pair)
+        self.assertEqual(typescript_result["code"], "OK", typescript_result.get("detail"))
+        self.assertEqual(json.loads(python_result.canonical_json or "{}")["payload"]["message"], "\U0001f600")
+        self.assertEqual(json.loads(typescript_result["canonicalJson"])["payload"]["message"], "\U0001f600")
+
+        raw_bad_key = self._raw_with_metadata_literal(fixture, '{"\\ud800":"bad"}')
+        self.assertEqual(validate_envelope_bytes(raw_bad_key).code, ErrorCode.E_SCHEMA_WRONG_TYPE)
+        self.assertEqual(run_typescript_validation_bytes(raw_bad_key)["code"], "E_SCHEMA_WRONG_TYPE")
+
+        direct_bad_key = copy.deepcopy(fixture)
+        direct_bad_key["payload"]["metadata"] = {"\ud800": "bad"}
+        self.assertEqual(validate_envelope(direct_bad_key).code, ErrorCode.E_SCHEMA_WRONG_TYPE)
+
+        valid_astral_key = copy.deepcopy(fixture)
+        valid_astral_key["payload"]["metadata"] = {"\U0001f600": "valid"}
+        python_astral = validate_envelope(valid_astral_key)
+        self.assertEqual(python_astral.code, ErrorCode.OK, python_astral.detail)
+        typescript_astral = run_typescript_validation(valid_astral_key)
+        self.assertEqual(typescript_astral["code"], "OK", typescript_astral.get("detail"))
+        self.assertEqual(typescript_astral["canonicalJson"], python_astral.canonical_json)
+
     def test_canonicalize_envelope_normalizes_without_mutating_input(self) -> None:
         value = {"sequence": 1.0, "payload": {"metadata": {"number": 2.0}}, "nested": [3.0, {"four": 4.0}]}
         original = copy.deepcopy(value)
@@ -288,6 +418,18 @@ class EventContractTests(unittest.TestCase):
             raw = json.dumps(mutated, ensure_ascii=False, separators=(",", ":")).replace('"sequence":0', f'"sequence":{token}')
         else:
             raise ValueError(field)
+        return raw.encode("utf-8")
+
+    def _raw_with_message_token(self, fixture: dict, token: str) -> bytes:
+        mutated = copy.deepcopy(fixture)
+        mutated["payload"]["message"] = "placeholder"
+        raw = json.dumps(mutated, ensure_ascii=False, separators=(",", ":")).replace('"message":"placeholder"', f'"message":{token}')
+        return raw.encode("utf-8")
+
+    def _raw_with_metadata_literal(self, fixture: dict, literal: str) -> bytes:
+        mutated = copy.deepcopy(fixture)
+        mutated["payload"]["metadata"] = {}
+        raw = json.dumps(mutated, ensure_ascii=False, separators=(",", ":")).replace('"metadata":{}', f'"metadata":{literal}')
         return raw.encode("utf-8")
 
     def test_unicode_preserves_codepoints(self) -> None:
@@ -328,19 +470,83 @@ class EventContractTests(unittest.TestCase):
 
     def test_generation_drift_detection_uses_temp_projection(self) -> None:
         temp_root = DRIFT_WORK_ROOT / "case"
-        if temp_root.exists():
-            shutil.rmtree(temp_root)
-        shutil.copytree(CONTRACTS, temp_root / "packages" / "contracts")
-        generated = temp_root / "packages" / "contracts" / "src" / "hina_contracts" / "generated.py"
-        generated.write_text(generated.read_text(encoding="utf-8") + "\n# drift\n", encoding="utf-8", newline="\n")
-        completed = subprocess.run(
-            [sys.executable, str(ROOT / "tools" / "contracts" / "generate_models.py"), "--check", "--root", str(temp_root)],
-            cwd=ROOT,
-            text=True,
-            capture_output=True,
-        )
-        self.assertNotEqual(completed.returncode, 0)
-        self.assertIn("E_GEN_DRIFT", completed.stderr)
+        try:
+            if temp_root.exists():
+                shutil.rmtree(temp_root)
+            shutil.copytree(
+                CONTRACTS,
+                temp_root / "packages" / "contracts",
+                ignore=shutil.ignore_patterns("node_modules", "dist", "__pycache__", "*.pyc"),
+            )
+            generated = temp_root / "packages" / "contracts" / "src" / "hina_contracts" / "generated.py"
+            generated.write_text(generated.read_text(encoding="utf-8") + "\n# drift\n", encoding="utf-8", newline="\n")
+            completed = subprocess.run(
+                [sys.executable, str(ROOT / "tools" / "contracts" / "generate_models.py"), "--check", "--root", str(temp_root)],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+            )
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("E_GEN_DRIFT", completed.stderr)
+        finally:
+            if temp_root.exists():
+                shutil.rmtree(temp_root)
+
+    def test_generator_projects_second_catalog_event_and_schema_type_changes(self) -> None:
+        temp_root = DRIFT_WORK_ROOT / "second-event"
+        try:
+            if temp_root.exists():
+                shutil.rmtree(temp_root)
+            temp_contracts = temp_root / "packages" / "contracts"
+            shutil.copytree(
+                CONTRACTS,
+                temp_contracts,
+                ignore=shutil.ignore_patterns("node_modules", "dist", "__pycache__", "*.pyc"),
+            )
+
+            catalog_path = temp_contracts / "catalog.v1.json"
+            catalog = load_json_schema(catalog_path)
+            catalog["events"].append(
+                {
+                    "description": "Temporary generator extensibility event.",
+                    "name": "hina.contract.ping.v1",
+                    "schema": "schemas/v1/events/hina.contract.ping.v1.schema.json",
+                    "scope": ["global"],
+                }
+            )
+            catalog_path.write_text(json.dumps(catalog, indent=2) + "\n", encoding="utf-8", newline="\n")
+
+            echo_payload = load_json_schema(temp_contracts / "schemas/v1/payloads/hina.contract.echo.v1.payload.schema.json")
+            ping_payload = copy.deepcopy(echo_payload)
+            ping_payload["$id"] = "https://ai-hina.local/contracts/v1/payloads/hina.contract.ping.v1.payload.schema.json"
+            ping_payload["title"] = "HinaContractPingV1Payload"
+            ping_payload["properties"]["message"]["type"] = "integer"
+            ping_payload_path = temp_contracts / "schemas/v1/payloads/hina.contract.ping.v1.payload.schema.json"
+            ping_payload_path.write_text(json.dumps(ping_payload, indent=2) + "\n", encoding="utf-8", newline="\n")
+
+            echo_event = load_json_schema(temp_contracts / "schemas/v1/events/hina.contract.echo.v1.schema.json")
+            ping_event = copy.deepcopy(echo_event)
+            ping_event["$id"] = "https://ai-hina.local/contracts/v1/events/hina.contract.ping.v1.schema.json"
+            ping_event["title"] = "HinaContractPingV1Envelope"
+            ping_event["allOf"][1]["properties"]["type"]["const"] = "hina.contract.ping.v1"
+            ping_event["allOf"][1]["properties"]["payload"]["$ref"] = ping_payload["$id"]
+            ping_event_path = temp_contracts / "schemas/v1/events/hina.contract.ping.v1.schema.json"
+            ping_event_path.write_text(json.dumps(ping_event, indent=2) + "\n", encoding="utf-8", newline="\n")
+
+            rendered = render_outputs(temp_root)
+            generated_ts = rendered["packages/contracts/src/generated.ts"]
+            generated_py = rendered["packages/contracts/src/hina_contracts/generated.py"]
+            self.assertIn('export const HINA_CONTRACT_PING_V1 = "hina.contract.ping.v1" as const;', generated_ts)
+            self.assertIn('import eventSchemaHinaContractPingV1 from "../schemas/v1/events/hina.contract.ping.v1.schema.json";', generated_ts)
+            self.assertIn('"hina.contract.ping.v1": eventSchemaHinaContractPingV1', generated_ts)
+            self.assertIn("export interface HinaContractPingV1Payload", generated_ts)
+            self.assertIn("message: number;", generated_ts)
+            self.assertIn("HINA_CONTRACT_PING_V1 = 'hina.contract.ping.v1'", generated_py)
+            self.assertIn("class HinaContractPingV1Payload", generated_py)
+            self.assertIn("    message: int", generated_py)
+        finally:
+            if temp_root.exists():
+                shutil.rmtree(temp_root)
 
     def test_python_typescript_roundtrip_matches_canonical_json(self) -> None:
         subprocess.run([PNPM, "--filter", "@hina/contracts", "build"], cwd=ROOT, check=True)
@@ -389,3 +595,7 @@ class EventContractTests(unittest.TestCase):
         p95 = ordered[int(len(ordered) * 0.95)]
         maximum = ordered[-1]
         self.assertLessEqual(p95, 5.0, {"p50": p50, "p95": p95, "max": maximum})
+
+
+def load_json_schema(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
