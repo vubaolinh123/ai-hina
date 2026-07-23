@@ -1,0 +1,212 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-hina.local/schemas/agent-result.schema.json",
+  "title": "Hina AI Agent Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "task_id",
+    "brief_sha256",
+    "role",
+    "module_id",
+    "status",
+    "base_sha",
+    "head_sha",
+    "tree_hash",
+    "git_status",
+    "runtime",
+    "changed_files",
+    "decisions",
+    "commands_run",
+    "tests",
+    "provenance",
+    "risks",
+    "blockers",
+    "recommended_next_action"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "brief_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "role": {
+      "type": "string",
+      "minLength": 1
+    },
+    "module_id": {
+      "type": "string",
+      "pattern": "^M[0-9]{2}$"
+    },
+    "status": {
+      "enum": [
+        "passed",
+        "failed",
+        "blocked"
+      ]
+    },
+    "base_sha": {
+      "$ref": "#/$defs/git_sha"
+    },
+    "head_sha": {
+      "$ref": "#/$defs/git_sha"
+    },
+    "tree_hash": {
+      "$ref": "#/$defs/git_sha"
+    },
+    "git_status": {
+      "type": "string"
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "codex_version",
+        "model_slug",
+        "reasoning_effort",
+        "sandbox_mode",
+        "permission_source",
+        "cwd",
+        "worktree_root",
+        "branch",
+        "observed_base_sha"
+      ],
+      "properties": {
+        "codex_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model_slug": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reasoning_effort": {
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max",
+            "ultra"
+          ]
+        },
+        "sandbox_mode": {
+          "enum": [
+            "read-only",
+            "workspace-write",
+            "danger-full-access"
+          ]
+        },
+        "permission_source": {
+          "enum": [
+            "project_config",
+            "agent_file",
+            "live_override"
+          ]
+        },
+        "cwd": {
+          "type": "string",
+          "minLength": 1
+        },
+        "worktree_root": {
+          "type": "string",
+          "minLength": 1
+        },
+        "branch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "observed_base_sha": {
+          "$ref": "#/$defs/git_sha"
+        }
+      }
+    },
+    "changed_files": {
+      "$ref": "#/$defs/string_list"
+    },
+    "decisions": {
+      "$ref": "#/$defs/string_list"
+    },
+    "commands_run": {
+      "$ref": "#/$defs/string_list"
+    },
+    "tests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "passed",
+        "failed"
+      ],
+      "properties": {
+        "passed": {
+          "$ref": "#/$defs/string_list"
+        },
+        "failed": {
+          "$ref": "#/$defs/string_list"
+        }
+      }
+    },
+    "provenance": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source_url",
+          "revision",
+          "license",
+          "copied_or_adapted_files"
+        ],
+        "properties": {
+          "source_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "revision": {
+            "type": "string",
+            "minLength": 1
+          },
+          "license": {
+            "type": "string",
+            "minLength": 1
+          },
+          "copied_or_adapted_files": {
+            "$ref": "#/$defs/string_list"
+          }
+        }
+      }
+    },
+    "risks": {
+      "$ref": "#/$defs/string_list"
+    },
+    "blockers": {
+      "$ref": "#/$defs/string_list"
+    },
+    "recommended_next_action": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "$defs": {
+    "git_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{7,40}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "string_list": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

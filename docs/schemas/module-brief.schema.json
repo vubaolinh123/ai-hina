@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-hina.local/schemas/module-brief.schema.json",
+  "title": "Hina AI Module Brief",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "task_id",
+    "module_id",
+    "objective",
+    "non_goals",
+    "base_sha",
+    "branch",
+    "worktree",
+    "owned_paths",
+    "forbidden_paths",
+    "contracts",
+    "allowed_dependencies",
+    "oss_candidates",
+    "acceptance_criteria",
+    "required_test_commands",
+    "output_artifact_dir"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "module_id": {
+      "type": "string",
+      "pattern": "^M[0-9]{2}$"
+    },
+    "objective": {
+      "type": "string",
+      "minLength": 1
+    },
+    "non_goals": {
+      "$ref": "#/$defs/string_list"
+    },
+    "base_sha": {
+      "$ref": "#/$defs/git_sha"
+    },
+    "branch": {
+      "type": "string",
+      "minLength": 1
+    },
+    "worktree": {
+      "type": "string",
+      "minLength": 1
+    },
+    "owned_paths": {
+      "$ref": "#/$defs/string_list"
+    },
+    "forbidden_paths": {
+      "$ref": "#/$defs/string_list"
+    },
+    "contracts": {
+      "$ref": "#/$defs/string_list"
+    },
+    "allowed_dependencies": {
+      "$ref": "#/$defs/string_list"
+    },
+    "oss_candidates": {
+      "$ref": "#/$defs/string_list"
+    },
+    "acceptance_criteria": {
+      "$ref": "#/$defs/string_list_non_empty"
+    },
+    "required_test_commands": {
+      "$ref": "#/$defs/string_list_non_empty"
+    },
+    "latency_or_quality_budget": {
+      "type": "object"
+    },
+    "output_artifact_dir": {
+      "type": "string",
+      "pattern": "^artifacts/verification/M[0-9]{2}/$"
+    }
+  },
+  "$defs": {
+    "git_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{7,40}$"
+    },
+    "string_list": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "string_list_non_empty": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    }
+  }
+}

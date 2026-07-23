@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M00-bootstrap",
+  "brief_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "role": "qa_runner",
+  "module_id": "M00",
+  "status": "passed",
+  "base_sha": "f5bfa98",
+  "head_sha": "f5bfa98",
+  "tree_hash": "f5bfa98",
+  "git_status": "",
+  "runtime": {
+    "codex_version": "codex-cli 0.144.6",
+    "model_slug": "gpt-5.4",
+    "reasoning_effort": "high",
+    "sandbox_mode": "workspace-write",
+    "permission_source": "agent_file",
+    "cwd": "D:/ProjectHinaAI",
+    "worktree_root": "D:/ProjectHinaAI",
+    "branch": "module/M00-governance",
+    "observed_base_sha": "f5bfa98"
+  },
+  "changed_files": [],
+  "decisions": [],
+  "commands_run": [],
+  "tests": {
+    "passed": [],
+    "failed": []
+  },
+  "provenance": [],
+  "risks": [],
+  "blockers": [],
+  "recommended_next_action": "Run the next gate."
+}

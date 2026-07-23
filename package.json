@@ -1,0 +1,16 @@
+{
+  "name": "hina-ai",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Local-first Vietnamese AI VTuber",
+  "license": "MIT",
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=22 <25",
+    "pnpm": ">=11 <12"
+  },
+  "scripts": {
+    "check:m00": "python tools/dev/validate_m00.py && python -m unittest discover -s tests -p \"test_*.py\" && node tools/dev/check-node-workspace.mjs",
+    "sbom": "python tools/sbom/generate_sbom.py"
+  }
+}

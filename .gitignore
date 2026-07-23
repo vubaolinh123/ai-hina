@@ -1,0 +1,58 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+dist/
+build/
+*.egg-info/
+
+# Node
+node_modules/
+.pnpm-store/
+coverage/
+playwright-report/
+test-results/
+
+# IDE and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Runtime/model/data
+var/
+ml/datasets/raw/
+ml/datasets/staged/
+ml/datasets/curated/
+assets/voices/*
+!assets/voices/.gitkeep
+*.gguf
+*.safetensors
+*.onnx
+*.bin
+*.pt
+*.pth
+
+# Verification outputs: track only integrity summary and decision
+artifacts/verification/**/*
+!artifacts/verification/**/
+!artifacts/verification/**/artifact-manifest.json
+!artifacts/verification/**/gate-decision.md
+
+# Worktrees and temporary files
+.worktrees/
+*.tmp
+*.bak
+*.log

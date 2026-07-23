@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - "module/**"
+      - "integration/**"
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  m00-windows:
+    name: M00 governance (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.30"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: "11.9.0"
+          run_install: false
+
+      - name: Validate locks
+        shell: pwsh
+        run: |
+          uv lock --check
+          pnpm install --lockfile-only --frozen-lockfile
+
+      - name: Run M00 gate
+        shell: pwsh
+        run: |
+          python tools/dev/validate_m00.py
+          python -m unittest discover -s tests -p "test_*.py"
+          node tools/dev/check-node-workspace.mjs
+          python tools/license/check_provenance.py
+          python tools/sbom/generate_sbom.py
+
+      - name: Upload M00 SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: m00-sbom
+          path: artifacts/verification/M00/sbom.cdx.json
+          if-no-files-found: error

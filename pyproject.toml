@@ -1,0 +1,20 @@
+[project]
+name = "hina-ai"
+version = "0.0.0"
+description = "Local-first Vietnamese AI VTuber"
+readme = "README.md"
+requires-python = ">=3.12,<3.15"
+license = "MIT"
+authors = [
+  { name = "Linh Vu" },
+]
+dependencies = []
+
+[dependency-groups]
+dev = []
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = []

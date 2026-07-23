@@ -1,0 +1,7 @@
+host = "127.0.0.1"
+allow_remote = false
+execute_model_generated_code = false
+public_chat_trust = "untrusted"
+screen_capture_default = false
+raw_audio_retention_default = false
+minimum_free_vram_mib = 2048

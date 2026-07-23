@@ -1,0 +1,24 @@
+{
+  "schema_version": "1.0",
+  "module_id": "M00",
+  "commit_sha": null,
+  "tree_hash": null,
+  "started_at": null,
+  "finished_at": null,
+  "environment": {
+    "os": null,
+    "cpu": null,
+    "ram_gib": null,
+    "gpu": null,
+    "vram_mib": null,
+    "driver": null,
+    "python": null,
+    "node": null
+  },
+  "fixture_hash": null,
+  "warmup_runs": 0,
+  "measured_runs": 0,
+  "metrics": {},
+  "errors": [],
+  "notes": []
+}

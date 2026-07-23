@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M00-bootstrap",
+  "module_id": "M00",
+  "objective": "Create governance, agent configuration, reproducible workspaces, CI, evidence templates, and provenance controls.",
+  "non_goals": [
+    "Do not implement model, speech, memory, avatar, perception, game, or stream behavior."
+  ],
+  "base_sha": "f5bfa98",
+  "branch": "module/M00-governance",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    ".codex/",
+    ".github/",
+    "docs/",
+    "tools/",
+    "tests/",
+    "third_party/",
+    "assets/manifests/",
+    "ml/models/manifests/",
+    "root governance and workspace files"
+  ],
+  "forbidden_paths": [
+    "var/",
+    "ml/datasets/raw/",
+    "assets/voices/"
+  ],
+  "contracts": [
+    "docs/schemas/module-brief.schema.json",
+    "docs/schemas/agent-result.schema.json"
+  ],
+  "allowed_dependencies": [],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "M00 validation passes on Windows.",
+    "Custom agent files pin the approved model roster.",
+    "Provenance and SBOM artifacts are generated without third-party runtime dependencies."
+  ],
+  "required_test_commands": [
+    "python tools/dev/validate_m00.py",
+    "python -m unittest discover -s tests -p test_*.py",
+    "node tools/dev/check-node-workspace.mjs",
+    "python tools/sbom/generate_sbom.py"
+  ],
+  "latency_or_quality_budget": {},
+  "output_artifact_dir": "artifacts/verification/M00/"
+}

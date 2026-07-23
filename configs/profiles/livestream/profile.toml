@@ -1,0 +1,5 @@
+name = "livestream"
+public_output_enabled = false
+game_actions_enabled = false
+memory_promotion_enabled = false
+requires_owner_release_decision = true
