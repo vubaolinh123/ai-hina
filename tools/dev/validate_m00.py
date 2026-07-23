@@ -52,6 +52,12 @@ EXPECTED_AGENTS = {
     "integration-release.toml": ("integration_release", "gpt-5.5", "high", "workspace-write"),
 }
 
+ALLOWED_M00_BRANCHES = {
+    "main",
+    "module/M00-governance",
+    "integration/M00-governance",
+}
+
 MODULE_BRIEF_REQUIRED = {
     "schema_version",
     "task_id",
@@ -327,12 +333,18 @@ def canonical_repository(value: str) -> str:
     return raw.removesuffix(".git").lower()
 
 
+def is_allowed_m00_checkout(branch: str) -> bool:
+    # Independent validation and CI intentionally check out a frozen commit in
+    # detached-HEAD state. An empty branch is therefore valid for M00.
+    return branch == "" or branch in ALLOWED_M00_BRANCHES
+
+
 def validate_git(errors: list[str]) -> None:
     try:
         if git_output("rev-parse", "--is-inside-work-tree") != "true":
             errors.append("workspace is not a Git worktree")
         branch = git_output("branch", "--show-current")
-        if branch not in {"main", "module/M00-governance", "integration/M00-governance"}:
+        if not is_allowed_m00_checkout(branch):
             errors.append(f"unexpected M00 branch: {branch}")
         remotes = git_output("remote", "get-url", "origin")
         if canonical_repository(remotes) != "github.com/vubaolinh123/ai-hina":

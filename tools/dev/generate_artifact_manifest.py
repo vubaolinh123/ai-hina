@@ -38,10 +38,27 @@ def git_timestamp() -> str:
     ).isoformat()
 
 
+def load_runtime_versions() -> dict:
+    inventory_path = ARTIFACT_DIR / "hardware-inventory.json"
+    if not inventory_path.is_file():
+        raise FileNotFoundError(
+            "hardware-inventory.json must exist before generating the manifest"
+        )
+    inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
+    return {
+        "captured_at": inventory.get("captured_at"),
+        "platform": inventory.get("platform"),
+        "cpu": inventory.get("cpu"),
+        "ram_gib": inventory.get("ram_gib"),
+        "gpus": inventory.get("gpus"),
+        "tools": inventory.get("tools"),
+    }
+
+
 def main() -> int:
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
     files = []
-    for path in sorted(ARTIFACT_DIR.iterdir()):
+    for path in sorted(ARTIFACT_DIR.rglob("*")):
         if not path.is_file() or path == OUTPUT:
             continue
         files.append(
@@ -56,7 +73,8 @@ def main() -> int:
         "module_id": "M00",
         "generated_at": git_timestamp(),
         "commit_sha": git_value("rev-parse", "HEAD"),
-        "tree_hash": git_value("write-tree"),
+        "tree_hash": git_value("rev-parse", "HEAD^{tree}"),
+        "runtime": load_runtime_versions(),
         "files": files,
     }
     OUTPUT.write_text(

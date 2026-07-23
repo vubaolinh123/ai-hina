@@ -114,6 +114,14 @@ class M00GovernanceTests(unittest.TestCase):
                 validator.canonical_repository(remote),
             )
 
+    def test_validator_accepts_frozen_detached_checkout(self) -> None:
+        validator = load_validator()
+        self.assertTrue(validator.is_allowed_m00_checkout(""))
+        self.assertTrue(
+            validator.is_allowed_m00_checkout("module/M00-governance")
+        )
+        self.assertFalse(validator.is_allowed_m00_checkout("feature/unrelated"))
+
     def test_hardware_inventory_shape(self) -> None:
         module = load_hardware_inventory()
         payload = module.inventory()
