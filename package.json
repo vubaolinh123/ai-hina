@@ -11,6 +11,7 @@
   },
   "scripts": {
     "check:m00": "uv run --frozen python tools/dev/validate_m00.py && uv run --frozen python -m unittest discover -s tests -p \"test_*.py\" && node tools/dev/check-node-workspace.mjs",
+    "test:contracts": "uv run --frozen python tools/contracts/generate_models.py --check && pnpm --filter @hina/contracts check:generated && uv run --frozen python -m unittest discover -s tests/contracts -p \"test_*.py\" && pnpm --filter @hina/contracts test",
     "sbom": "uv run --frozen python tools/sbom/generate_sbom.py"
   }
 }

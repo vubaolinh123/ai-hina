@@ -1,0 +1,27 @@
+{
+  "name": "@hina/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hina AI versioned contract catalog and EventEnvelope validators",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "catalog.v1.json",
+    "compatibility-policy.v1.json",
+    "dist/",
+    "fixtures/",
+    "schemas/"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check:generated": "uv run --frozen python ../../tools/contracts/generate_models.py --check --root ../..",
+    "test": "pnpm run build && node test/contracts.test.mjs"
+  },
+  "dependencies": {
+    "ajv": "8.17.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0"
+  }
+}

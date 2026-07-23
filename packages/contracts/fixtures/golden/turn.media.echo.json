@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "1.0",
+  "eventId": "66666666-6666-4666-8666-666666666666",
+  "type": "hina.contract.echo.v1",
+  "scope": "turn",
+  "sessionId": "77777777-7777-4777-8777-777777777777",
+  "turnId": "88888888-8888-4888-8888-888888888888",
+  "correlationId": "99999999-9999-4999-8999-999999999999",
+  "causationId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  "source": "contracts.test",
+  "trustLevel": "owner",
+  "occurredAt": "2026-07-24T00:00:02Z",
+  "expiresAt": "2026-07-24T00:01:02Z",
+  "deadline": null,
+  "idempotencyKey": "idem-turn-1",
+  "streamId": "stream-turn-1",
+  "sequence": 0,
+  "media": [
+    {
+      "mediaId": "media_echo_1",
+      "kind": "audio",
+      "mimeType": "audio/wav",
+      "byteLength": 4096,
+      "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "transportCorrelationId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+    }
+  ],
+  "payload": {
+    "message": "Turn echo with media reference only",
+    "locale": "en-US",
+    "tags": [
+      "turn",
+      "media"
+    ],
+    "metadata": {
+      "fixture": "turn"
+    }
+  }
+}

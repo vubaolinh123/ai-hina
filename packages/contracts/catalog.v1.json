@@ -1,0 +1,17 @@
+{
+  "$schema": "https://ai-hina.local/contracts/v1/catalog.schema.json",
+  "catalogVersion": "1.0",
+  "events": [
+    {
+      "description": "Compatibility-test echo event with no product behavior or side effect.",
+      "name": "hina.contract.echo.v1",
+      "schema": "schemas/v1/events/hina.contract.echo.v1.schema.json",
+      "scope": [
+        "global",
+        "session",
+        "turn"
+      ]
+    }
+  ],
+  "namespace": "https://ai-hina.local/contracts/v1/"
+}

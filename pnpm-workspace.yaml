@@ -1,4 +1,5 @@
 packages:
   - "apps/*"
   - "adapters/*"
+  - "packages/contracts"
   - "packages/typescript/*"

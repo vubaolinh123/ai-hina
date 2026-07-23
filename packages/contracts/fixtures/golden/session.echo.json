@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "1.0",
+  "eventId": "33333333-3333-4333-8333-333333333333",
+  "type": "hina.contract.echo.v1",
+  "scope": "session",
+  "sessionId": "44444444-4444-4444-8444-444444444444",
+  "turnId": null,
+  "correlationId": "55555555-5555-4555-8555-555555555555",
+  "causationId": null,
+  "source": "contracts.test",
+  "trustLevel": "authenticated",
+  "occurredAt": "2026-07-24T00:00:01.123456Z",
+  "expiresAt": null,
+  "deadline": "2026-07-24T00:00:03Z",
+  "idempotencyKey": "idem-session-1",
+  "streamId": null,
+  "sequence": null,
+  "media": [],
+  "payload": {
+    "message": "Tieng Viet co dau: toi dang kiem thu hop dong",
+    "locale": "vi-VN",
+    "tags": [
+      "session"
+    ],
+    "metadata": {
+      "fixture": "session"
+    }
+  }
+}
