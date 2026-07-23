@@ -1,6 +1,7 @@
 # M00 — Governance, Git and multi-agent operating system
 
-- Status: Gate 6 passed locally; remote Windows CI required before opening M01
+- Status: complete — Gate 6 and remote Windows CI passed
+- Remote CI: [run #30027929565](https://github.com/vubaolinh123/ai-hina/actions/runs/30027929565)
 - Branch: `module/M00-governance`
 - Baseline: `f5bfa98`
 - Product code: none
