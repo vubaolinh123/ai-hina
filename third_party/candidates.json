@@ -1,0 +1,137 @@
+{
+  "schema_version": "0.1",
+  "status": "research_only",
+  "frozen": false,
+  "observed_at": "2026-07-23",
+  "policy": {
+    "usable_in_production": false,
+    "requires_exact_revision_before_import": true,
+    "requires_file_level_provenance_for_copied_code": true
+  },
+  "candidates": [
+    {
+      "id": "moeru-ai-airi",
+      "name": "Project AIRI",
+      "kind": "reference_and_selective_copy_candidate",
+      "source_url": "https://github.com/moeru-ai/airi",
+      "revision": null,
+      "observed_default_branch": "main",
+      "license": {
+        "spdx": "MIT",
+        "evidence_url": "https://github.com/moeru-ai/airi/blob/main/LICENSE"
+      },
+      "intended_use": [
+        "architecture_reference",
+        "stage_ipc_voice_minecraft_patterns"
+      ],
+      "freeze_blockers": [
+        "pin_exact_commit",
+        "select_exact_upstream_paths",
+        "hash_imported_files",
+        "audit_assets_and_transitive_dependencies"
+      ]
+    },
+    {
+      "id": "vedalai-neuro-sdk",
+      "name": "VedalAI Neuro SDK",
+      "kind": "protocol_reference_and_selective_copy_candidate",
+      "source_url": "https://github.com/VedalAI/neuro-sdk",
+      "revision": null,
+      "observed_default_branch": "main",
+      "license": {
+        "spdx": "MIT",
+        "evidence_url": "https://github.com/VedalAI/neuro-sdk/blob/main/LICENSE.md"
+      },
+      "intended_use": [
+        "websocket_compatibility_adapter",
+        "action_lifecycle_patterns",
+        "mock_tester_patterns"
+      ],
+      "freeze_blockers": [
+        "pin_exact_commit",
+        "select_protocol_version",
+        "record_copied_paths_and_modifications"
+      ]
+    },
+    {
+      "id": "prismarinejs-mineflayer",
+      "name": "Mineflayer",
+      "kind": "runtime_dependency_candidate",
+      "source_url": "https://github.com/PrismarineJS/mineflayer",
+      "revision": null,
+      "observed_default_branch": "master",
+      "license": {
+        "spdx": "MIT",
+        "evidence_url": "https://github.com/PrismarineJS/mineflayer/blob/master/LICENSE"
+      },
+      "intended_use": [
+        "minecraft_low_level_bot_state_and_actions"
+      ],
+      "freeze_blockers": [
+        "pin_release_and_lockfile_integrity",
+        "verify_supported_minecraft_version",
+        "audit_pathfinder_and_other_plugins_separately"
+      ]
+    },
+    {
+      "id": "systran-faster-whisper",
+      "name": "faster-whisper",
+      "kind": "runtime_dependency_candidate",
+      "source_url": "https://github.com/SYSTRAN/faster-whisper",
+      "revision": null,
+      "observed_default_branch": "master",
+      "license": {
+        "spdx": "MIT",
+        "evidence_url": "https://github.com/SYSTRAN/faster-whisper/blob/master/LICENSE"
+      },
+      "intended_use": [
+        "local_stt_provider"
+      ],
+      "freeze_blockers": [
+        "pin_release_and_ctranslate2_version",
+        "select_and_manifest_whisper_weights_separately",
+        "benchmark_windows_cuda_cpu_and_vietnamese_wer"
+      ]
+    },
+    {
+      "id": "qdrant-qdrant",
+      "name": "Qdrant",
+      "kind": "service_dependency_candidate",
+      "source_url": "https://github.com/qdrant/qdrant",
+      "revision": null,
+      "observed_default_branch": "master",
+      "license": {
+        "spdx": "Apache-2.0",
+        "evidence_url": "https://github.com/qdrant/qdrant/blob/master/LICENSE"
+      },
+      "intended_use": [
+        "derived_semantic_memory_index"
+      ],
+      "freeze_blockers": [
+        "pin_release_and_container_digest",
+        "define_sqlite_as_authoritative_store",
+        "prove_rebuild_delete_and_reconciliation"
+      ]
+    },
+    {
+      "id": "livekit-agents",
+      "name": "LiveKit Agents",
+      "kind": "deferred_runtime_dependency_candidate",
+      "source_url": "https://github.com/livekit/agents",
+      "revision": null,
+      "observed_default_branch": "main",
+      "license": {
+        "spdx": "Apache-2.0",
+        "evidence_url": "https://github.com/livekit/agents/blob/main/LICENSE"
+      },
+      "intended_use": [
+        "future_multi_user_voice_and_realtime_participant"
+      ],
+      "freeze_blockers": [
+        "defer_until_multi_user_use_case",
+        "pin_release",
+        "audit_server_sdk_and_plugins_separately"
+      ]
+    }
+  ]
+}

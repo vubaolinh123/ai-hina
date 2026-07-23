@@ -8,6 +8,8 @@ import tomllib
 import unittest
 from pathlib import Path
 
+from jsonschema import Draft202012Validator, FormatChecker
+
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -17,6 +19,16 @@ def load_validator():
     spec = importlib.util.spec_from_file_location("validate_m00", path)
     if spec is None or spec.loader is None:
         raise RuntimeError("could not load validate_m00")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_hardware_inventory():
+    path = ROOT / "tools" / "dev" / "hardware_inventory.py"
+    spec = importlib.util.spec_from_file_location("hardware_inventory", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("could not load hardware_inventory")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -49,6 +61,27 @@ class M00GovernanceTests(unittest.TestCase):
                 "https://json-schema.org/draft/2020-12/schema", data["$schema"]
             )
 
+    def test_handoff_examples_validate_with_draft_2020_12(self) -> None:
+        pairs = (
+            ("module-brief.schema.json", "MODULE_BRIEF.example.json"),
+            ("agent-result.schema.json", "AGENT_RESULT.example.json"),
+        )
+        for schema_name, example_name in pairs:
+            schema = json.loads(
+                (ROOT / "docs" / "schemas" / schema_name).read_text(encoding="utf-8")
+            )
+            example = json.loads(
+                (ROOT / "docs" / "templates" / example_name).read_text(
+                    encoding="utf-8"
+                )
+            )
+            Draft202012Validator.check_schema(schema)
+            validator = Draft202012Validator(
+                schema,
+                format_checker=FormatChecker(),
+            )
+            self.assertEqual([], list(validator.iter_errors(example)))
+
     def test_security_profiles_fail_closed(self) -> None:
         for profile in ("development", "private", "livestream"):
             with (
@@ -66,10 +99,30 @@ class M00GovernanceTests(unittest.TestCase):
             text=True,
             encoding="utf-8",
         )
+        validator = load_validator()
         self.assertEqual(
-            "https://github.com/vubaolinh123/ai-hina.git",
-            result.stdout.strip().rstrip("/"),
+            "github.com/vubaolinh123/ai-hina",
+            validator.canonical_repository(result.stdout),
         )
+        for remote in (
+            "https://github.com/vubaolinh123/ai-hina.git",
+            "git@github.com:vubaolinh123/ai-hina.git",
+            "ssh://git@github.com/vubaolinh123/ai-hina.git",
+        ):
+            self.assertEqual(
+                "github.com/vubaolinh123/ai-hina",
+                validator.canonical_repository(remote),
+            )
+
+    def test_hardware_inventory_shape(self) -> None:
+        module = load_hardware_inventory()
+        payload = module.inventory()
+        self.assertEqual("1.0", payload["schema_version"])
+        self.assertIsInstance(payload["platform"], dict)
+        self.assertIsInstance(payload["gpus"], list)
+        self.assertIsInstance(payload["tools"], dict)
+        self.assertIn("python", payload["tools"])
+        self.assertIn("codex", payload["tools"])
 
     def test_sensitive_runtime_paths_are_ignored(self) -> None:
         candidates = (

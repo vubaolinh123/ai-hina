@@ -14,6 +14,8 @@
     "model_slug": "gpt-5.4",
     "reasoning_effort": "high",
     "sandbox_mode": "workspace-write",
+    "effective_sandbox_mode": "workspace-write",
+    "approval_policy": "on-request",
     "permission_source": "agent_file",
     "cwd": "D:/ProjectHinaAI",
     "worktree_root": "D:/ProjectHinaAI",

@@ -553,15 +553,23 @@ model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"
 
-[agents]
-enabled = true
-max_concurrent_threads_per_session = 3
-default_subagent_model = "gpt-5.4"
-default_subagent_reasoning_effort = "medium"
-interrupt_message = true
+[agents.architecture_contracts]
+description = "Defines architecture, boundaries, contracts, ADRs, and migration constraints."
+config_file = "agents/architecture-contracts.toml"
+
+[agents.module_builder]
+description = "Implements one approved module inside an exclusive write lease."
+config_file = "agents/module-builder.toml"
+
+# Các role còn lại được khai báo cùng dạng và trỏ tới `.codex/agents/*.toml`.
 ```
 
-Model được pin lại trong từng `.codex/agents/*.toml`; không dựa vào inheritance ngầm.
+Codex CLI 0.144.6 trên máy dự án parse `[agents]` như bảng khai báo role. Vì vậy
+M00 không đặt scalar global trong bảng này: bảy role được khai báo bằng
+`[agents.<role>]`, còn giới hạn ba worker được enforce bởi `AGENTS.md` và
+orchestrator. Model/effort được pin trong từng `.codex/agents/*.toml`; không dựa
+vào inheritance ngầm. Thay đổi cú pháp chỉ được thực hiện sau khi `codex doctor`
+và smoke-test config mới đều pass.
 
 Ví dụ `architecture-contracts.toml`:
 
@@ -671,6 +679,8 @@ AGENT_RESULT:
     model_slug: ...
     reasoning_effort: ...
     sandbox_mode: ...
+    effective_sandbox_mode: ...
+    approval_policy: untrusted | on-request | never
     permission_source: project_config | agent_file | live_override
     cwd: ...
     worktree_root: ...

@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 
 
@@ -32,6 +32,12 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def git_timestamp() -> str:
+    return datetime.fromisoformat(
+        git_value("show", "-s", "--format=%cI", "HEAD")
+    ).isoformat()
+
+
 def main() -> int:
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
     files = []
@@ -48,7 +54,7 @@ def main() -> int:
     manifest = {
         "schema_version": "1.0",
         "module_id": "M00",
-        "generated_at": datetime.now(UTC).isoformat(),
+        "generated_at": git_timestamp(),
         "commit_sha": git_value("rev-parse", "HEAD"),
         "tree_hash": git_value("write-tree"),
         "files": files,

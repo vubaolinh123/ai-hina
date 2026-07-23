@@ -7,6 +7,7 @@ import sys
 import tomllib
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -35,7 +36,9 @@ REQUIRED_FILES = (
     "docs/templates/AGENT_RESULT.example.json",
     "docs/modules/M00-governance.md",
     "third_party/code.lock.json",
+    "third_party/candidates.json",
     "third_party/THIRD_PARTY_NOTICES.md",
+    "ml/models/manifests/candidates.json",
     "configs/base/security.toml",
 )
 
@@ -129,16 +132,23 @@ def validate_project_config(errors: list[str]) -> None:
         errors.append("project sandbox default must be workspace-write")
 
     agents = config.get("agents", {})
-    expected = {
-        "enabled": True,
-        "max_concurrent_threads_per_session": 3,
-        "default_subagent_model": "gpt-5.4",
-        "default_subagent_reasoning_effort": "medium",
-        "interrupt_message": True,
-    }
-    for key, value in expected.items():
-        if agents.get(key) != value:
-            errors.append(f"invalid [agents].{key}: expected {value!r}")
+    expected_names = {values[0] for values in EXPECTED_AGENTS.values()}
+    if set(agents) != expected_names:
+        errors.append(
+            "project agent declarations differ: "
+            f"expected {sorted(expected_names)}, got {sorted(agents)}"
+        )
+    for filename, (name, *_rest) in EXPECTED_AGENTS.items():
+        declaration = agents.get(name, {})
+        if not isinstance(declaration, dict):
+            errors.append(f"agents.{name} must be a table")
+            continue
+        if not str(declaration.get("description", "")).strip():
+            errors.append(f"agents.{name}.description must be non-empty")
+        if declaration.get("config_file") != f"agents/{filename}":
+            errors.append(
+                f"agents.{name}.config_file must reference agents/{filename}"
+            )
 
 
 def validate_custom_agents(errors: list[str]) -> None:
@@ -208,6 +218,8 @@ def validate_handoff_contracts(errors: list[str]) -> None:
         "model_slug",
         "reasoning_effort",
         "sandbox_mode",
+        "effective_sandbox_mode",
+        "approval_policy",
         "permission_source",
         "cwd",
         "worktree_root",
@@ -217,6 +229,11 @@ def validate_handoff_contracts(errors: list[str]) -> None:
     runtime = result.get("runtime", {})
     if set(runtime) != runtime_required:
         errors.append("agent result runtime fields differ from required contract")
+    if result.get("status") == "passed":
+        if runtime.get("effective_sandbox_mode") == "danger-full-access":
+            errors.append("passed agent result cannot use danger-full-access")
+        if runtime.get("permission_source") == "live_override":
+            errors.append("passed agent result cannot rely on a live permission override")
 
 
 def validate_security_defaults(errors: list[str]) -> None:
@@ -274,6 +291,41 @@ def validate_provenance(errors: list[str]) -> None:
         if missing:
             errors.append(f"code lock component {index} missing {sorted(missing)}")
 
+    for candidate_path in (
+        "third_party/candidates.json",
+        "ml/models/manifests/candidates.json",
+    ):
+        registry = load_json(candidate_path)
+        if registry.get("status") != "research_only":
+            errors.append(f"{candidate_path}: status must be research_only")
+        if registry.get("frozen") is not False:
+            errors.append(f"{candidate_path}: frozen must be false in M00")
+        candidates = registry.get("candidates")
+        if not isinstance(candidates, list) or not candidates:
+            errors.append(f"{candidate_path}: candidates must be a non-empty array")
+            continue
+        for index, candidate in enumerate(candidates):
+            if candidate.get("revision") is not None:
+                errors.append(
+                    f"{candidate_path}: candidate {index} must remain unfrozen"
+                )
+            if not candidate.get("source_url"):
+                errors.append(
+                    f"{candidate_path}: candidate {index} missing source_url"
+                )
+
+
+def canonical_repository(value: str) -> str:
+    raw = value.strip().rstrip("/")
+    if raw.startswith("git@github.com:"):
+        path = raw.removeprefix("git@github.com:")
+        return f"github.com/{path.removesuffix('.git').lower()}"
+    parsed = urlparse(raw)
+    if parsed.scheme in {"http", "https", "ssh"} and parsed.hostname:
+        path = parsed.path.lstrip("/").removesuffix(".git")
+        return f"{parsed.hostname.lower()}/{path.lower()}"
+    return raw.removesuffix(".git").lower()
+
 
 def validate_git(errors: list[str]) -> None:
     try:
@@ -283,7 +335,7 @@ def validate_git(errors: list[str]) -> None:
         if branch not in {"main", "module/M00-governance", "integration/M00-governance"}:
             errors.append(f"unexpected M00 branch: {branch}")
         remotes = git_output("remote", "get-url", "origin")
-        if remotes.rstrip("/") != "https://github.com/vubaolinh123/ai-hina.git":
+        if canonical_repository(remotes) != "github.com/vubaolinh123/ai-hina":
             errors.append(f"unexpected origin: {remotes}")
     except (subprocess.CalledProcessError, FileNotFoundError) as exc:
         errors.append(f"Git validation failed: {exc}")

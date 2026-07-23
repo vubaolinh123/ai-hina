@@ -20,6 +20,19 @@ class ProvenanceTests(unittest.TestCase):
         self.assertTrue((ROOT / "ml" / "models" / "manifests" / "README.md").is_file())
         self.assertTrue((ROOT / "assets" / "manifests" / "README.md").is_file())
 
+    def test_research_candidates_are_explicitly_unfrozen(self) -> None:
+        for path in (
+            ROOT / "third_party" / "candidates.json",
+            ROOT / "ml" / "models" / "manifests" / "candidates.json",
+        ):
+            data = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual("research_only", data["status"])
+            self.assertFalse(data["frozen"])
+            self.assertGreater(len(data["candidates"]), 0)
+            for candidate in data["candidates"]:
+                self.assertIsNone(candidate["revision"])
+                self.assertTrue(candidate["source_url"].startswith("https://"))
+
 
 if __name__ == "__main__":
     unittest.main()

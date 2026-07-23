@@ -71,6 +71,8 @@
         "model_slug",
         "reasoning_effort",
         "sandbox_mode",
+        "effective_sandbox_mode",
+        "approval_policy",
         "permission_source",
         "cwd",
         "worktree_root",
@@ -101,6 +103,20 @@
             "read-only",
             "workspace-write",
             "danger-full-access"
+          ]
+        },
+        "effective_sandbox_mode": {
+          "enum": [
+            "read-only",
+            "workspace-write",
+            "danger-full-access"
+          ]
+        },
+        "approval_policy": {
+          "enum": [
+            "untrusted",
+            "on-request",
+            "never"
           ]
         },
         "permission_source": {
@@ -193,6 +209,40 @@
       "minLength": 1
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "passed"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "runtime": {
+            "properties": {
+              "effective_sandbox_mode": {
+                "enum": [
+                  "read-only",
+                  "workspace-write"
+                ]
+              },
+              "permission_source": {
+                "enum": [
+                  "project_config",
+                  "agent_file"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "git_sha": {
       "type": "string",

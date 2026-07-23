@@ -39,12 +39,23 @@ def main() -> int:
 
     required_registries = (
         ROOT / "ml" / "models" / "manifests" / "README.md",
+        ROOT / "ml" / "models" / "manifests" / "candidates.json",
         ROOT / "assets" / "manifests" / "README.md",
+        ROOT / "third_party" / "candidates.json",
         ROOT / "third_party" / "THIRD_PARTY_NOTICES.md",
     )
     for path in required_registries:
         if not path.is_file():
             errors.append(f"missing registry: {path.relative_to(ROOT)}")
+
+    for path in required_registries:
+        if path.suffix != ".json" or not path.is_file():
+            continue
+        registry = json.loads(path.read_text(encoding="utf-8"))
+        if registry.get("status") != "research_only":
+            errors.append(f"{path.relative_to(ROOT)} must be research_only")
+        if registry.get("frozen") is not False:
+            errors.append(f"{path.relative_to(ROOT)} must remain unfrozen in M00")
 
     if errors:
         print("Provenance validation failed:")

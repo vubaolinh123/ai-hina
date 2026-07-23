@@ -25,10 +25,10 @@ Trạng thái hiện tại: **M00 — governance và scaffolding**. Chưa có mo
 ```powershell
 uv lock --check
 pnpm install --lockfile-only --frozen-lockfile
-python tools/dev/validate_m00.py
-python -m unittest discover -s tests -p "test_*.py"
+uv run --frozen python tools/dev/validate_m00.py
+uv run --frozen python -m unittest discover -s tests -p "test_*.py"
 node tools/dev/check-node-workspace.mjs
-python tools/sbom/generate_sbom.py
+uv run --frozen python tools/sbom/generate_sbom.py
 ```
 
 Hoặc:

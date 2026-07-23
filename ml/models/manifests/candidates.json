@@ -1,0 +1,85 @@
+{
+  "schema_version": "0.1",
+  "status": "research_only",
+  "frozen": false,
+  "observed_at": "2026-07-23",
+  "policy": {
+    "download_or_promotion_authorized": false,
+    "requires_exact_upstream_revision": true,
+    "requires_weight_hashes": true,
+    "requires_runtime_distribution_digest": true,
+    "requires_eval_and_human_promotion": true
+  },
+  "candidates": [
+    {
+      "id": "qwen-qwen3.5-4b",
+      "model_id": "Qwen/Qwen3.5-4B",
+      "artifact_kind": "model_weights_and_configuration",
+      "source_url": "https://huggingface.co/Qwen/Qwen3.5-4B",
+      "revision": null,
+      "observed_revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
+      "license": {
+        "spdx": "Apache-2.0",
+        "evidence_url": "https://huggingface.co/Qwen/Qwen3.5-4B/blob/main/LICENSE"
+      },
+      "intended_role": "primary_runtime_and_future_lora_base_candidate",
+      "runtime_distribution_candidates": [
+        {
+          "kind": "ollama_tag",
+          "locator": "qwen3.5:4b",
+          "source_url": "https://ollama.com/library/qwen3.5:4b",
+          "digest": null,
+          "status": "unfrozen"
+        }
+      ],
+      "constraints": {
+        "base_frozen_during_normal_conversation": true,
+        "production_ready": false,
+        "training_labels_from_unreviewed_outputs_allowed": false
+      },
+      "freeze_blockers": [
+        "pin_huggingface_commit",
+        "record_every_weight_and_config_sha256",
+        "pin_ollama_digest_or_build_recipe",
+        "verify_chat_template_and_runtime_compatibility",
+        "pass_vietnamese_safety_latency_vram_eval"
+      ]
+    },
+    {
+      "id": "qwen-qwen3.5-9b",
+      "model_id": "Qwen/Qwen3.5-9B",
+      "artifact_kind": "model_weights_and_configuration",
+      "source_url": "https://huggingface.co/Qwen/Qwen3.5-9B",
+      "revision": null,
+      "observed_revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+      "license": {
+        "spdx": "Apache-2.0",
+        "evidence_url": "https://huggingface.co/Qwen/Qwen3.5-9B/blob/main/LICENSE"
+      },
+      "intended_role": "manual_fallback_and_benchmark_only_candidate",
+      "runtime_distribution_candidates": [
+        {
+          "kind": "ollama_tag",
+          "locator": "qwen3.5:9b",
+          "source_url": "https://ollama.com/library/qwen3.5:9b",
+          "digest": null,
+          "status": "unfrozen"
+        }
+      ],
+      "constraints": {
+        "default_runtime_allowed": false,
+        "automatic_fallback_allowed": false,
+        "training_label_source_allowed": false,
+        "distillation_teacher_allowed": false,
+        "production_ready": false
+      },
+      "freeze_blockers": [
+        "pin_huggingface_commit",
+        "record_every_weight_and_config_sha256",
+        "pin_ollama_digest_or_build_recipe",
+        "benchmark_against_4b_under_same_context_and_workload",
+        "prove_2gb_vram_headroom"
+      ]
+    }
+  ]
+}

@@ -49,6 +49,7 @@ assets/voices/*
 artifacts/verification/**/*
 !artifacts/verification/**/
 !artifacts/verification/**/artifact-manifest.json
+!artifacts/verification/**/codex-smoke.json
 !artifacts/verification/**/gate-decision.md
 
 # Worktrees and temporary files

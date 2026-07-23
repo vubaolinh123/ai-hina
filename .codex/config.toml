@@ -3,9 +3,30 @@ model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"
 
-[agents]
-enabled = true
-max_concurrent_threads_per_session = 3
-default_subagent_model = "gpt-5.4"
-default_subagent_reasoning_effort = "medium"
-interrupt_message = true
+[agents.architecture_contracts]
+description = "Defines architecture, boundaries, contracts, ADRs, and migration constraints."
+config_file = "agents/architecture-contracts.toml"
+
+[agents.oss_researcher]
+description = "Researches upstream projects, licenses, revisions, and reusable implementation patterns."
+config_file = "agents/oss-researcher.toml"
+
+[agents.module_builder]
+description = "Implements one approved module inside an exclusive write lease."
+config_file = "agents/module-builder.toml"
+
+[agents.qa_designer]
+description = "Designs independent acceptance, regression, and failure-injection coverage."
+config_file = "agents/qa-designer.toml"
+
+[agents.qa_runner]
+description = "Runs verification on a frozen commit in a dedicated validation worktree."
+config_file = "agents/qa-runner.toml"
+
+[agents.safety_reviewer]
+description = "Reviews privacy, security, safety, provenance, and public-output risks."
+config_file = "agents/safety-reviewer.toml"
+
+[agents.integration_release]
+description = "Assembles reviewed changes and records gate evidence without changing product code."
+config_file = "agents/integration-release.toml"
