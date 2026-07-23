@@ -19,6 +19,7 @@
     "packages/testkit/",
     "tests/contracts/",
     "tools/contracts/",
+    ".github/workflows/ci.yml",
     "package.json",
     "pnpm-lock.yaml",
     "pnpm-workspace.yaml",
@@ -44,13 +45,15 @@
     "Generated Python and TypeScript models are deterministic projections of the reviewed catalog."
   ],
   "allowed_dependencies": [
-    "Existing Python jsonschema development dependency.",
-    "Ajv 8.x as the TypeScript runtime JSON Schema validator if Wave A approves it."
+    "Python jsonschema >=4.25,<5 as the Python runtime JSON Schema validator.",
+    "Ajv 8.17.x as the TypeScript runtime JSON Schema validator.",
+    "TypeScript 5.x as a build-only dependency for the generated TypeScript projection."
   ],
   "oss_candidates": [
     "json-schema-to-typescript for generation-pattern research only.",
     "datamodel-code-generator for generation-pattern research only.",
-    "CloudEvents specification for envelope semantics research; do not claim conformance without tests."
+    "CloudEvents specification for envelope semantics research; do not claim conformance without tests.",
+    "No upstream production source is approved for copying in M01-S1."
   ],
   "acceptance_criteria": [
     "Every catalog schema validates against JSON Schema draft 2020-12 and every process-boundary fixture is runtime validated.",

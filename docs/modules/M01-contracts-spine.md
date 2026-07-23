@@ -20,7 +20,7 @@
 ## M01-S1 gate
 
 - [x] Module brief created from the M00 contract.
-- [ ] Wave A architecture, OSS and QA design reviewed.
+- [x] Wave A architecture, OSS and QA design reviewed.
 - [ ] Contract schemas frozen.
 - [ ] Python and TypeScript projections generated deterministically.
 - [ ] Runtime boundary validation implemented in both languages.

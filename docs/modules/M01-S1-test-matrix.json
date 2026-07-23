@@ -1,0 +1,167 @@
+{
+  "schema_version": "1.0",
+  "module_id": "M01",
+  "slice_id": "M01-S1",
+  "contract": "EventEnvelope v1",
+  "failure_codes": {
+    "OK": "The envelope is valid.",
+    "E_SCHEMA_MISSING_REQUIRED": "A required field is missing.",
+    "E_SCHEMA_WRONG_TYPE": "A field has the wrong JSON type or enum value.",
+    "E_SCHEMA_UNKNOWN_EVENT": "The event type is not registered in the catalog.",
+    "E_SCHEMA_UNKNOWN_FIELD": "A closed object contains an unknown property.",
+    "E_SCHEMA_OVERSIZE": "Raw or canonical UTF-8 JSON exceeds 1048576 bytes.",
+    "E_SCHEMA_INVALID_ID": "An identifier or scope identifier relationship is invalid.",
+    "E_SCHEMA_INLINE_BASE64": "Media bytes, base64, or a data URI appears in JSON.",
+    "E_ROUNDTRIP_UNICODE_LOSS": "A cross-language round trip changed string content.",
+    "E_GEN_DRIFT": "Generated source differs from the deterministic projection.",
+    "E_FUZZ_ACCEPTED_INVALID": "A deterministic mutation expected to fail was accepted.",
+    "E_FUZZ_REJECTED_VALID": "A deterministic valid case was rejected.",
+    "E_FUZZ_RUNTIME_CRASH": "A validator crashed instead of returning a result.",
+    "E_XLANG_ROUNDTRIP_MISMATCH": "Python and TypeScript produced different canonical values.",
+    "E_COMPAT_N_MINUS_1_UNSPECIFIED": "The compatibility policy does not explicitly address n-1.",
+    "E_FLAKY_SUITE": "Repeated runs produced inconsistent results.",
+    "E_GATE_20_RUN_FAIL": "At least one of twenty consecutive full runs failed.",
+    "E_PERF_P95_BUDGET": "Local runtime validation p95 exceeded 5 ms."
+  },
+  "groups": [
+    {
+      "id": "golden",
+      "cases": [
+        "valid global echo envelope",
+        "valid session echo envelope",
+        "valid turn echo envelope",
+        "valid media metadata reference"
+      ],
+      "expected": "OK"
+    },
+    {
+      "id": "required-and-types",
+      "cases": [
+        "remove each required envelope field independently",
+        "replace each scalar with an incompatible JSON type",
+        "use an invalid enum value"
+      ],
+      "expected": [
+        "E_SCHEMA_MISSING_REQUIRED",
+        "E_SCHEMA_WRONG_TYPE"
+      ]
+    },
+    {
+      "id": "catalog-and-closed-objects",
+      "cases": [
+        "unknown event type",
+        "unknown envelope field",
+        "unknown media field",
+        "unknown echo payload field"
+      ],
+      "expected": [
+        "E_SCHEMA_UNKNOWN_EVENT",
+        "E_SCHEMA_UNKNOWN_FIELD"
+      ]
+    },
+    {
+      "id": "identifiers-and-scope",
+      "cases": [
+        "uppercase UUID",
+        "malformed UUID",
+        "global scope with sessionId",
+        "session scope without sessionId",
+        "session scope with turnId",
+        "turn scope without sessionId or turnId"
+      ],
+      "expected": "E_SCHEMA_INVALID_ID"
+    },
+    {
+      "id": "size-boundary",
+      "cases": [
+        "raw UTF-8 JSON at or below 1048576 bytes",
+        "raw UTF-8 JSON above 1048576 bytes",
+        "canonical UTF-8 JSON above 1048576 bytes"
+      ],
+      "expected": [
+        "OK",
+        "E_SCHEMA_OVERSIZE"
+      ]
+    },
+    {
+      "id": "unicode",
+      "cases": [
+        "Vietnamese NFC",
+        "Vietnamese NFD",
+        "emoji",
+        "combining marks",
+        "astral-plane code points",
+        "right-to-left text"
+      ],
+      "expected": "OK with exact code-point preservation"
+    },
+    {
+      "id": "inline-media",
+      "cases": [
+        "base64 field",
+        "data URI",
+        "raw bytes array",
+        "filesystem path",
+        "remote URL"
+      ],
+      "expected": "E_SCHEMA_INLINE_BASE64"
+    },
+    {
+      "id": "deterministic-mutation",
+      "cases": [
+        "seeded valid envelope generation",
+        "seeded one-fault invalid mutation",
+        "validator never throws on JSON-compatible input"
+      ],
+      "expected": [
+        "OK",
+        "E_FUZZ_ACCEPTED_INVALID",
+        "E_FUZZ_REJECTED_VALID",
+        "E_FUZZ_RUNTIME_CRASH"
+      ]
+    },
+    {
+      "id": "generation-and-cross-language",
+      "cases": [
+        "generator check on clean outputs",
+        "generator detects a modified projection",
+        "Python to TypeScript to Python",
+        "TypeScript to Python to TypeScript"
+      ],
+      "expected": [
+        "OK",
+        "E_GEN_DRIFT",
+        "E_XLANG_ROUNDTRIP_MISMATCH"
+      ]
+    },
+    {
+      "id": "compatibility-repetition-performance",
+      "cases": [
+        "machine-readable initial n-1 disposition",
+        "twenty consecutive deterministic full-suite runs",
+        "validation benchmark reports p50 p95 and max"
+      ],
+      "expected": [
+        "OK",
+        "E_COMPAT_N_MINUS_1_UNSPECIFIED",
+        "E_GATE_20_RUN_FAIL",
+        "E_PERF_P95_BUDGET"
+      ]
+    }
+  ],
+  "stop_conditions": [
+    "Unknown event or field is accepted.",
+    "Inline media content is accepted.",
+    "Any Unicode or cross-language data loss occurs.",
+    "Generated drift is not detected.",
+    "Any of twenty deterministic runs fails.",
+    "Validation p95 exceeds 5 ms without an accepted ADR."
+  ],
+  "required_commands": [
+    "uv run --frozen python tools/contracts/generate_models.py --check",
+    "pnpm --filter @hina/contracts check:generated",
+    "uv run --frozen python -m unittest discover -s tests/contracts -p test_*.py",
+    "pnpm --filter @hina/contracts test",
+    "pnpm test:contracts"
+  ]
+}
