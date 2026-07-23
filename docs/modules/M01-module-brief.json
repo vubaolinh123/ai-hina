@@ -19,6 +19,7 @@
     "packages/testkit/",
     "tests/contracts/",
     "tools/contracts/",
+    "tools/sbom/generate_sbom.py",
     ".github/workflows/ci.yml",
     "package.json",
     "pnpm-lock.yaml",
