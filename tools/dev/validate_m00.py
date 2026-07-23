@@ -52,11 +52,9 @@ EXPECTED_AGENTS = {
     "integration-release.toml": ("integration_release", "gpt-5.5", "high", "workspace-write"),
 }
 
-ALLOWED_M00_BRANCHES = {
-    "main",
-    "module/M00-governance",
-    "integration/M00-governance",
-}
+MODULE_BRANCH_PATTERN = re.compile(
+    r"^(?:module|integration)/M[0-9]{2}-[A-Za-z0-9._/-]+$"
+)
 
 MODULE_BRIEF_REQUIRED = {
     "schema_version",
@@ -335,8 +333,9 @@ def canonical_repository(value: str) -> str:
 
 def is_allowed_m00_checkout(branch: str) -> bool:
     # Independent validation and CI intentionally check out a frozen commit in
-    # detached-HEAD state. An empty branch is therefore valid for M00.
-    return branch == "" or branch in ALLOWED_M00_BRANCHES
+    # detached-HEAD state. The M00 invariants also remain active on every later
+    # versioned module/integration branch.
+    return branch == "" or branch == "main" or bool(MODULE_BRANCH_PATTERN.fullmatch(branch))
 
 
 def validate_git(errors: list[str]) -> None:

@@ -1,0 +1,77 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M01-S1-contract-foundation",
+  "module_id": "M01",
+  "objective": "Create the versioned contract catalog and EventEnvelope v1 vertical slice with deterministic Python and TypeScript models, runtime boundary validation, and cross-language compatibility tests.",
+  "non_goals": [
+    "Do not implement the control-plane server, WebSocket transport, durable journal, supervisor, resource scheduler, observability backend, or product conversation behavior in this slice.",
+    "Do not copy upstream production source or add model weights, datasets, voices, avatar assets, game adapters, or livestream integrations.",
+    "Do not silently accept unknown event types, unknown top-level fields, oversized JSON payloads, inline base64 media, or invalid identifiers."
+  ],
+  "base_sha": "aa7138eafa709e13ad5dc0a228c26cf145685220",
+  "branch": "module/M01-spine",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "AGENTS.md",
+    "docs/adr/",
+    "docs/modules/M01-*",
+    "packages/contracts/",
+    "packages/testkit/",
+    "tests/contracts/",
+    "tools/contracts/",
+    "package.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    "pyproject.toml",
+    "uv.lock",
+    "artifacts/verification/M01/"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "configs/profiles/",
+    "apps/",
+    "adapters/",
+    "workers/",
+    "ml/datasets/",
+    "ml/models/",
+    "assets/voices/",
+    "third_party/code.lock.json"
+  ],
+  "contracts": [
+    "JSON Schema draft 2020-12 is the wire-contract source of truth.",
+    "EventEnvelope v1 is strict, versioned, bounded, Unicode-safe, and rejects unknown event types.",
+    "Binary media is referenced by metadata and transport correlation; it is never embedded as base64 in JSON.",
+    "Generated Python and TypeScript models are deterministic projections of the reviewed catalog."
+  ],
+  "allowed_dependencies": [
+    "Existing Python jsonschema development dependency.",
+    "Ajv 8.x as the TypeScript runtime JSON Schema validator if Wave A approves it."
+  ],
+  "oss_candidates": [
+    "json-schema-to-typescript for generation-pattern research only.",
+    "datamodel-code-generator for generation-pattern research only.",
+    "CloudEvents specification for envelope semantics research; do not claim conformance without tests."
+  ],
+  "acceptance_criteria": [
+    "Every catalog schema validates against JSON Schema draft 2020-12 and every process-boundary fixture is runtime validated.",
+    "Missing fields, wrong types, unknown event types, unknown top-level fields, oversized JSON, malformed identifiers, and inline base64 media fail closed.",
+    "Vietnamese and mixed Unicode payloads round-trip without data loss between Python and TypeScript.",
+    "Generated Python and TypeScript models are deterministic and a check command fails on drift.",
+    "Golden v1 fixtures pass in both runtimes and the compatibility policy for future n-1 fixtures is documented.",
+    "The M01-S1 deterministic test suite passes 20 consecutive times on a frozen commit."
+  ],
+  "required_test_commands": [
+    "uv run --frozen python tools/contracts/generate_models.py --check",
+    "pnpm --filter @hina/contracts check:generated",
+    "uv run --frozen python -m unittest discover -s tests/contracts -p test_*.py",
+    "pnpm --filter @hina/contracts test",
+    "pnpm test:contracts"
+  ],
+  "latency_or_quality_budget": {
+    "maximum_json_envelope_bytes": 1048576,
+    "runtime_validation_p95_ms_local": 5,
+    "deterministic_repetitions": 20,
+    "allowed_data_loss_round_trip": 0
+  },
+  "output_artifact_dir": "artifacts/verification/M01/"
+}

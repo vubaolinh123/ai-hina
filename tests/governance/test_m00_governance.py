@@ -120,6 +120,10 @@ class M00GovernanceTests(unittest.TestCase):
         self.assertTrue(
             validator.is_allowed_m00_checkout("module/M00-governance")
         )
+        self.assertTrue(validator.is_allowed_m00_checkout("module/M01-spine"))
+        self.assertTrue(
+            validator.is_allowed_m00_checkout("integration/M12-release")
+        )
         self.assertFalse(validator.is_allowed_m00_checkout("feature/unrelated"))
 
     def test_hardware_inventory_shape(self) -> None:

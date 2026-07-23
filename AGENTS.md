@@ -4,7 +4,8 @@
 
 Đọc `HINA_AI_MASTER_PLAN_VI.md` trước khi thay đổi kiến trúc hoặc mở module mới. Chỉ một module sản phẩm được ở write phase tại một thời điểm.
 
-Module active hiện tại: **M00 — Governance, Git và hệ điều hành đa-agent**.
+Module active hiện tại: **M01 — Contracts, config, lifecycle và observability
+spine**. Slice đang mở: **M01-S1 — contract catalog và event envelope v1**.
 
 ## Orchestration
 
