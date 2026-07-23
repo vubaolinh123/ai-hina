@@ -1,6 +1,6 @@
 # M00 — Governance, Git and multi-agent operating system
 
-- Status: in progress
+- Status: Gate 6 passed locally; remote Windows CI required before opening M01
 - Branch: `module/M00-governance`
 - Baseline: `f5bfa98`
 - Product code: none
@@ -26,20 +26,20 @@
 
 ## Gate checklist
 
-- [ ] Required files and directories validated.
-- [ ] TOML/JSON parsed.
-- [ ] Agent roster and sandbox defaults validated.
-- [ ] Module brief and agent result examples validated.
-- [ ] Python and pnpm lockfiles generated and checked.
-- [ ] Node/Python smoke tests pass.
-- [ ] Loopback and ignore rules validated.
-- [ ] Provenance registry validated.
-- [ ] CycloneDX SBOM generated.
-- [ ] Hardware inventory recorded.
-- [ ] GPT-5.5 and GPT-5.4 smoke tests pass.
-- [ ] Independent QA/safety review passes on frozen SHA.
-- [ ] Gate evidence integrity manifest generated.
-- [ ] Owner-approved push to `origin/main`.
+- [x] Required files and directories validated.
+- [x] TOML/JSON parsed.
+- [x] Agent roster and sandbox defaults validated.
+- [x] Module brief and agent result examples validated.
+- [x] Python and pnpm lockfiles generated and checked.
+- [x] Node/Python smoke tests pass.
+- [x] Loopback and ignore rules validated.
+- [x] Provenance registry validated.
+- [x] CycloneDX SBOM generated.
+- [x] Hardware inventory recorded.
+- [x] GPT-5.5 and GPT-5.4 smoke tests pass.
+- [x] Independent QA/safety review passes on frozen SHA.
+- [x] Gate evidence integrity manifest generated.
+- [x] Owner-approved push to `origin/main`.
 
 ## Next module
 

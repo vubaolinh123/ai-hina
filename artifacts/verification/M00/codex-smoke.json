@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0",
+  "module_id": "M00",
+  "frozen_commit_sha": "b89ec28c13f6ce76c6deff827547a087a7810216",
+  "frozen_tree_hash": "188e572faa9617243dc2f06b5356ac7b04c585d3",
+  "codex_version": "codex-cli 0.144.6",
+  "project_config": {
+    "command": "codex doctor --summary --no-color",
+    "status": "passed",
+    "observed": "config loaded",
+    "role_declarations": 7
+  },
+  "model_smokes": [
+    {
+      "model_slug": "gpt-5.4",
+      "reasoning_effort": "high",
+      "approval_policy": "never",
+      "effective_sandbox_mode": "read-only",
+      "strict_project_config": true,
+      "exit_code": 0,
+      "response": "SMOKE_OK gpt-5.4 high read-only"
+    },
+    {
+      "model_slug": "gpt-5.5",
+      "reasoning_effort": "xhigh",
+      "approval_policy": "never",
+      "effective_sandbox_mode": "read-only",
+      "strict_project_config": true,
+      "exit_code": 0,
+      "response": "SMOKE_OK gpt-5.5 xhigh read-only"
+    }
+  ],
+  "independent_reviews": [
+    {
+      "role": "qa_runner",
+      "model_slug": "gpt-5.4",
+      "reasoning_effort": "high",
+      "effective_sandbox_mode": "workspace-write",
+      "worktree_root": "D:/ProjectHinaAI-wt-M00-qa",
+      "observed_head_sha": "b89ec28c13f6ce76c6deff827547a087a7810216",
+      "verdict": "passed",
+      "tests_passed": 12,
+      "tests_failed": 0
+    },
+    {
+      "role": "safety_reviewer",
+      "model_slug": "gpt-5.5",
+      "reasoning_effort": "xhigh",
+      "effective_sandbox_mode": "read-only",
+      "worktree_root": "D:/ProjectHinaAI-wt-M00-qa",
+      "observed_head_sha": "b89ec28c13f6ce76c6deff827547a087a7810216",
+      "verdict": "passed",
+      "blocking_findings": 0
+    }
+  ],
+  "known_non_blocking_warnings": [
+    "The local Codex model cache reports a missing supports_reasoning_summaries field, but exact model, effort, sandbox, response, and exit code were observed successfully.",
+    "PowerShell shell snapshots are not supported by this Codex CLI build."
+  ]
+}

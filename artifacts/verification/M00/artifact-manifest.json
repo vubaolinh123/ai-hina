@@ -1,0 +1,58 @@
+{
+  "schema_version": "1.0",
+  "module_id": "M00",
+  "generated_at": "2026-07-23T23:51:41+07:00",
+  "commit_sha": "b89ec28c13f6ce76c6deff827547a087a7810216",
+  "tree_hash": "188e572faa9617243dc2f06b5356ac7b04c585d3",
+  "runtime": {
+    "captured_at": "2026-07-23T17:03:27.134056+00:00",
+    "platform": {
+      "system": "Windows",
+      "release": "11",
+      "version": "10.0.26200",
+      "machine": "AMD64"
+    },
+    "cpu": "AMD64 Family 26 Model 68 Stepping 0, AuthenticAMD",
+    "ram_gib": 31.11,
+    "gpus": [
+      {
+        "name": "NVIDIA GeForce RTX 5070 Ti",
+        "memory_total_mib": 16303,
+        "driver_version": "610.74",
+        "pci_bus_id": "00000000:01:00.0",
+        "compute_capability": "12.0",
+        "pstate": "P0"
+      }
+    ],
+    "tools": {
+      "python": "3.12.13 (main, Jul 18 2026, 17:08:38) [MSC v.1944 64 bit (AMD64)]",
+      "git": "git version 2.55.0.windows.3",
+      "node": "v24.18.0",
+      "pnpm": "11.9.0",
+      "uv": "uv 0.11.30 (4cb3d0366 2026-07-20 x86_64-pc-windows-msvc)",
+      "codex": "codex-cli 0.144.6"
+    }
+  },
+  "files": [
+    {
+      "path": "artifacts/verification/M00/codex-smoke.json",
+      "sha256": "07492c706645961f6cf869eccf86f3f17991e8bf4d7f79b5cf116f8b2afc694c",
+      "bytes": 1966
+    },
+    {
+      "path": "artifacts/verification/M00/gate-decision.md",
+      "sha256": "051bc01ffc68b9aa79fddd9b305cd3580f92d06d130f3ba87db4f6c113e6c416",
+      "bytes": 3049
+    },
+    {
+      "path": "artifacts/verification/M00/hardware-inventory.json",
+      "sha256": "5d7277e4d148c23a63cc33d1381138308099be101c48d35caeb3e23637271150",
+      "bytes": 814
+    },
+    {
+      "path": "artifacts/verification/M00/sbom.cdx.json",
+      "sha256": "67560c736f3bb7c1bef010cbd201263cc25262ebc555c26be6d4f8503e49f924",
+      "bytes": 2421
+    }
+  ]
+}
