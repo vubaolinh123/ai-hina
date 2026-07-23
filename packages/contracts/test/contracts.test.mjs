@@ -71,6 +71,7 @@ test("unknown event, fields, identifiers, and inline media fail closed", () => {
 test("scope relationship failures use E_SCHEMA_INVALID_ID for every scope case", () => {
   const base = fixture("turn.media.echo.json");
   const cases = [
+    { ...base, correlationId: `${base.correlationId}\n` },
     { ...base, scope: "global", sessionId: base.sessionId },
     { ...base, scope: "global", sessionId: null, turnId: base.turnId },
     { ...base, scope: "session", sessionId: null, turnId: null },
@@ -97,6 +98,7 @@ test("timestamp calendar validity rejects impossible UTC dates and times", () =>
       "2026-01-01T24:00:00Z",
       "2026-01-01T00:60:00Z",
       "2026-01-01T00:00:60Z",
+      "2026-07-24T00:00:00Z\n",
     ]) {
       assert.equal(validateEnvelope({ ...base, [field]: timestamp }).code, "E_SCHEMA_INVALID_ID", `${field} ${timestamp}`);
     }
@@ -108,8 +110,11 @@ test("bounded boundary tokens reject controls and unsafe formatting", () => {
   for (const [field, value] of [
     ["source", "contracts\u0085test"],
     ["source", "contracts\u202etest"],
+    ["source", "contracts\n"],
     ["idempotencyKey", "idem\u200b1"],
+    ["idempotencyKey", "idem\n"],
     ["streamId", "stream\u20661"],
+    ["streamId", "stream\n"],
   ]) {
     assert.notEqual(validateEnvelope({ ...base, [field]: value }).code, "OK", field);
   }
@@ -153,6 +158,9 @@ test("metadata numeric values are JavaScript-safe integers only", () => {
       "utf8",
     ),
     Buffer.from(JSON.stringify({ ...base, sequence: 0 }).replace('"sequence":0', '"sequence":1.25'), "utf8"),
+    Buffer.from(JSON.stringify({ ...base, sequence: 0 }).replace('"sequence":0', '"sequence":1e-400'), "utf8"),
+    Buffer.from(JSON.stringify({ ...base, sequence: 0 }).replace('"sequence":0', '"sequence":1.0000000000000001'), "utf8"),
+    Buffer.from(JSON.stringify({ ...base, sequence: 0 }).replace('"sequence":0', '"sequence":9007199254740991.1'), "utf8"),
     Buffer.from(JSON.stringify({ ...base, sequence: 0 }).replace('"sequence":0', `"sequence":${MAX_JS_SAFE_INTEGER + 1}`), "utf8"),
   ]) {
     assert.equal(validateEnvelopeBytes(raw).code, "E_SCHEMA_WRONG_TYPE");

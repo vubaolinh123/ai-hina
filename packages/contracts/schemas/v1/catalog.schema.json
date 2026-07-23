@@ -16,7 +16,7 @@
     },
     "catalogVersion": {
       "type": "string",
-      "pattern": "^[1-9][0-9]*\\.[0-9]+$"
+      "pattern": "^[1-9][0-9]*\\.[0-9]+(?![\\s\\S])"
     },
     "events": {
       "type": "array",
@@ -37,16 +37,16 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 512,
-            "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+            "pattern": "^[^\\u0000-\\u001f\\u007f]+(?![\\s\\S])"
           },
           "name": {
             "type": "string",
-            "pattern": "^hina\\.[a-z0-9_.]+\\.v[1-9][0-9]*$"
+            "pattern": "^hina\\.[a-z0-9_.]+\\.v[1-9][0-9]*(?![\\s\\S])"
           },
           "schema": {
             "type": "string",
             "maxLength": 256,
-            "pattern": "^schemas/v1/events/[a-z0-9_.]+\\.schema\\.json$"
+            "pattern": "^schemas/v1/events/[a-z0-9_.]+\\.schema\\.json(?![\\s\\S])"
           },
           "scope": {
             "type": "array",
@@ -67,7 +67,7 @@
     "namespace": {
       "type": "string",
       "maxLength": 128,
-      "pattern": "^https://ai-hina\\.local/contracts/v[1-9][0-9]*/$"
+      "pattern": "^https://ai-hina\\.local/contracts/v[1-9][0-9]*/(?![\\s\\S])"
     }
   }
 }

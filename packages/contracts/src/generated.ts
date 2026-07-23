@@ -5,7 +5,7 @@ import payloadSchemaHinaContractEchoV1 from "../schemas/v1/payloads/hina.contrac
 import eventSchemaHinaContractEchoV1 from "../schemas/v1/events/hina.contract.echo.v1.schema.json";
 
 export const CATALOG_VERSION = "1.0" as const;
-export const CATALOG_DIGEST = "2aa4b921baad82e292d4d9e42c3e5d2dc42c84ffcd9c9b55f6dbaf0fb6a6ffdf" as const;
+export const CATALOG_DIGEST = "320c31860b82e0259909f2bdb705b88976aa67161bf36dade1df98d70fb043ed" as const;
 export const MAX_JSON_ENVELOPE_BYTES = 1048576 as const;
 export const MAX_JSON_NESTING_DEPTH = 128 as const;
 export const HINA_CONTRACT_ECHO_V1 = "hina.contract.echo.v1" as const;

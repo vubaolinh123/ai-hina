@@ -15,7 +15,7 @@
   "properties": {
     "mediaId": {
       "type": "string",
-      "pattern": "^media_[a-z0-9][a-z0-9_.-]{0,127}$"
+      "pattern": "^media_[a-z0-9][a-z0-9_.-]{0,127}(?![\\s\\S])"
     },
     "kind": {
       "enum": [
@@ -28,7 +28,7 @@
     "mimeType": {
       "type": "string",
       "maxLength": 129,
-      "pattern": "^[a-z0-9][a-z0-9!#$&^_.+-]{0,63}/[a-z0-9][a-z0-9!#$&^_.+-]{0,63}$"
+      "pattern": "^[a-z0-9][a-z0-9!#$&^_.+-]{0,63}/[a-z0-9][a-z0-9!#$&^_.+-]{0,63}(?![\\s\\S])"
     },
     "byteLength": {
       "type": "integer",
@@ -37,11 +37,11 @@
     },
     "sha256": {
       "type": "string",
-      "pattern": "^[0-9a-f]{64}$"
+      "pattern": "^[0-9a-f]{64}(?![\\s\\S])"
     },
     "transportCorrelationId": {
       "type": "string",
-      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?![\\s\\S])"
     }
   }
 }

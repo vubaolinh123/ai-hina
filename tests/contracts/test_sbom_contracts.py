@@ -28,6 +28,8 @@ class SbomContractTests(unittest.TestCase):
             ("integrity", "sha512-not-the-lock"),
             ("purl", "pkg:npm/ajv@0.0.0"),
             ("scope", "build"),
+            ("licenseSha256", "0" * 64),
+            ("licenseEvidence", "node_modules/.pnpm/ajv@8.17.1/node_modules/ajv/DOES-NOT-EXIST"),
         ]:
             evidence = copy.deepcopy(load_npm_evidence())
             evidence["packages"][0][field] = value
@@ -59,6 +61,7 @@ class SbomContractTests(unittest.TestCase):
                 self.assertIn(properties["hina:dependency-scope"], {"runtime", "build"})
                 self.assertTrue(properties["hina:pnpm-integrity"].startswith("sha512-"))
                 self.assertTrue(properties["hina:license-evidence"].startswith("packages/contracts/npm-license-evidence.v1.json#"))
+                self.assertRegex(properties["hina:license-evidence-sha256"], r"^[0-9a-f]{64}$")
 
         self.assertEqual(by_name["fast-uri"]["licenses"][0]["license"]["id"], "BSD-3-Clause")
 

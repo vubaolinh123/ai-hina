@@ -13,6 +13,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_EVIDENCE = ROOT / "artifacts" / "verification" / "M01" / "repeat-gate-last.json"
 PNPM = "pnpm.cmd" if os.name == "nt" else "pnpm"
+REQUIRED_RUNS = 20
 
 
 def git(*args: str) -> str:
@@ -41,14 +42,14 @@ def snapshot() -> dict[str, str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--runs", type=int, default=20, help="number of consecutive runs; M01 requires 20")
+    parser.add_argument("--runs", type=int, default=REQUIRED_RUNS, help="number of consecutive runs; must be exactly 20")
     parser.add_argument("--evidence", default=str(DEFAULT_EVIDENCE), help="machine-readable ignored evidence path")
     parser.add_argument("--require-clean", action="store_true", help="fail if tracked files are dirty before running")
     parser.add_argument("command", nargs=argparse.REMAINDER, help="optional command after --; defaults to pnpm test:contracts")
     args = parser.parse_args()
 
-    if args.runs < 1:
-        print("runs must be at least 1", file=sys.stderr)
+    if args.runs != REQUIRED_RUNS:
+        print(f"M01 repeat gate requires exactly {REQUIRED_RUNS} runs", file=sys.stderr)
         return 2
 
     command = args.command
@@ -59,7 +60,7 @@ def main() -> int:
 
     evidence: dict[str, Any] = {
         "schemaVersion": "1.0",
-        "requiredRuns": 20,
+        "requiredRuns": REQUIRED_RUNS,
         "requestedRuns": args.runs,
         "command": command,
         "cwd": str(ROOT),

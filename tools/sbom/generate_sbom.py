@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import subprocess
@@ -207,6 +208,7 @@ def validate_npm_evidence(
         "scope",
         "sourceUrl",
         "licenseEvidence",
+        "licenseSha256",
     }
     by_key: dict[str, dict[str, Any]] = {}
     for item in evidence.get("packages", []):
@@ -238,6 +240,17 @@ def validate_npm_evidence(
             raise ValueError(f"npm evidence purl mismatch for {key}")
         if item["scope"] not in {"runtime", "build"}:
             raise ValueError(f"npm evidence scope is invalid for {key}")
+        evidence_relative = Path(item["licenseEvidence"])
+        if evidence_relative.is_absolute() or ".." in evidence_relative.parts:
+            raise ValueError(f"npm licenseEvidence path is unsafe for {key}")
+        evidence_path = (ROOT / evidence_relative).resolve()
+        if not evidence_path.is_relative_to(ROOT.resolve()) or not evidence_path.is_file():
+            raise ValueError(f"npm licenseEvidence file does not exist for {key}: {item['licenseEvidence']}")
+        if re.fullmatch(r"[0-9a-f]{64}", item["licenseSha256"]) is None:
+            raise ValueError(f"npm licenseSha256 is invalid for {key}")
+        actual_license_sha256 = hashlib.sha256(evidence_path.read_bytes()).hexdigest()
+        if actual_license_sha256 != item["licenseSha256"]:
+            raise ValueError(f"npm licenseSha256 mismatch for {key}")
     return by_key
 
 
@@ -274,6 +287,10 @@ def npm_lock_components() -> list[dict[str, Any]]:
                     {
                         "name": "hina:license-evidence",
                         "value": f"{NPM_EVIDENCE.relative_to(ROOT).as_posix()}#{item['licenseEvidence']}",
+                    },
+                    {
+                        "name": "hina:license-evidence-sha256",
+                        "value": item["licenseSha256"],
                     },
                 ],
             }

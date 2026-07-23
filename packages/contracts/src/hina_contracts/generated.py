@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any, Literal, NotRequired, TypedDict
 
 CATALOG_VERSION = '1.0'
-CATALOG_DIGEST = '2aa4b921baad82e292d4d9e42c3e5d2dc42c84ffcd9c9b55f6dbaf0fb6a6ffdf'
+CATALOG_DIGEST = '320c31860b82e0259909f2bdb705b88976aa67161bf36dade1df98d70fb043ed'
 MAX_JSON_ENVELOPE_BYTES = 1048576
 MAX_JSON_NESTING_DEPTH = 128
 HINA_CONTRACT_ECHO_V1 = 'hina.contract.echo.v1'

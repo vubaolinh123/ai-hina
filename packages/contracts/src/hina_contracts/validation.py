@@ -189,6 +189,51 @@ def _parse_json_int_token(token: str) -> int:
     return int(token)
 
 
+def _bounded_exponent(exponent_text: str, limit: int) -> int:
+    negative = exponent_text.startswith("-")
+    digits = exponent_text.lstrip("+-").lstrip("0")
+    if not digits:
+        return 0
+    limit_text = str(limit)
+    if len(digits) > len(limit_text) or (len(digits) == len(limit_text) and digits > limit_text):
+        return -(limit + 1) if negative else limit + 1
+    value = int(digits)
+    return -value if negative else value
+
+
+def _exact_safe_integer_token_error(token: str) -> str | None:
+    unsigned = token[1:] if token.startswith("-") else token
+    mantissa, separator, exponent_text = unsigned.lower().partition("e")
+    integer_part, decimal_separator, fraction_part = mantissa.partition(".")
+    if not decimal_separator:
+        fraction_part = ""
+    digits = integer_part + fraction_part
+    significant = digits.lstrip("0")
+    if not significant:
+        return None
+
+    exponent = _bounded_exponent(
+        exponent_text if separator else "0",
+        len(fraction_part) + _MAX_INTEGER_TOKEN_DIGITS + 1,
+    )
+    scale = exponent - len(fraction_part)
+    if scale < 0:
+        fractional_digits = -scale
+        if fractional_digits >= len(digits):
+            return "number token is not an exact integer"
+        if any(digit != "0" for digit in digits[-fractional_digits:]):
+            return "number token is not an exact integer"
+        exact_digits = digits[:-fractional_digits].lstrip("0") or "0"
+    else:
+        if len(significant) + scale > _MAX_INTEGER_TOKEN_DIGITS:
+            return "number token exceeds JavaScript-safe boundary"
+        exact_digits = significant + ("0" * scale)
+
+    if len(exact_digits) > _MAX_INTEGER_TOKEN_DIGITS or int(exact_digits) > _MAX_JS_SAFE_INTEGER:
+        return "number token exceeds JavaScript-safe boundary"
+    return None
+
+
 def _reject_duplicate_object_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
@@ -370,9 +415,6 @@ def _scan_json_text(text: str) -> str | None:
                 index += 1
         else:
             return "malformed JSON"
-        integer_digits = text[start:index].replace("-", "")
-        if len(integer_digits.lstrip("0") or "0") > _MAX_INTEGER_TOKEN_DIGITS:
-            return "integer token exceeds JavaScript-safe boundary"
         if index < len(text) and text[index] == ".":
             index += 1
             if index >= len(text) or not "0" <= text[index] <= "9":
@@ -387,7 +429,7 @@ def _scan_json_text(text: str) -> str | None:
                 return "malformed JSON"
             while index < len(text) and "0" <= text[index] <= "9":
                 index += 1
-        return None
+        return _exact_safe_integer_token_error(text[start:index])
 
     error = parse_value(1)
     if error is not None:

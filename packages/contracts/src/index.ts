@@ -468,10 +468,6 @@ function scanJsonText(text: string): string | undefined {
     } else {
       return "malformed JSON";
     }
-    const integerDigits = text.slice(start, index).replace("-", "").replace(/^0+$/u, "0");
-    if (!text.slice(start, index).includes(".") && integerDigits.length > maxIntegerTokenDigits) {
-      return "integer token exceeds JavaScript-safe boundary";
-    }
     if (text[index] === ".") {
       index += 1;
       if (!(text[index] !== undefined && text[index] >= "0" && text[index] <= "9")) {
@@ -493,7 +489,7 @@ function scanJsonText(text: string): string | undefined {
         index += 1;
       }
     }
-    return undefined;
+    return exactSafeIntegerTokenError(text.slice(start, index));
   }
 
   const error = parseValue(1);
@@ -502,4 +498,58 @@ function scanJsonText(text: string): string | undefined {
   }
   skipWhitespace();
   return index === text.length ? undefined : "malformed JSON";
+}
+
+function boundedExponent(exponentText: string, limit: number): number {
+  const negative = exponentText.startsWith("-");
+  const digits = exponentText.replace(/^[+-]/u, "").replace(/^0+/u, "");
+  if (digits.length === 0) {
+    return 0;
+  }
+  const limitText = String(limit);
+  if (digits.length > limitText.length || (digits.length === limitText.length && digits > limitText)) {
+    return negative ? -(limit + 1) : limit + 1;
+  }
+  const value = Number(digits);
+  return negative ? -value : value;
+}
+
+function exactSafeIntegerTokenError(token: string): string | undefined {
+  const unsigned = token.startsWith("-") ? token.slice(1) : token;
+  const exponentIndex = unsigned.search(/[eE]/u);
+  const mantissa = exponentIndex === -1 ? unsigned : unsigned.slice(0, exponentIndex);
+  const exponentText = exponentIndex === -1 ? "0" : unsigned.slice(exponentIndex + 1);
+  const decimalIndex = mantissa.indexOf(".");
+  const integerPart = decimalIndex === -1 ? mantissa : mantissa.slice(0, decimalIndex);
+  const fractionPart = decimalIndex === -1 ? "" : mantissa.slice(decimalIndex + 1);
+  const digits = integerPart + fractionPart;
+  const significant = digits.replace(/^0+/u, "");
+  if (significant.length === 0) {
+    return undefined;
+  }
+
+  const exponent = boundedExponent(exponentText, fractionPart.length + maxIntegerTokenDigits + 1);
+  const scale = exponent - fractionPart.length;
+  let exactDigits: string;
+  if (scale < 0) {
+    const fractionalDigits = -scale;
+    if (fractionalDigits >= digits.length) {
+      return "number token is not an exact integer";
+    }
+    const discarded = digits.slice(digits.length - fractionalDigits);
+    if (/[^0]/u.test(discarded)) {
+      return "number token is not an exact integer";
+    }
+    exactDigits = digits.slice(0, digits.length - fractionalDigits).replace(/^0+/u, "") || "0";
+  } else {
+    if (significant.length + scale > maxIntegerTokenDigits) {
+      return "number token exceeds JavaScript-safe boundary";
+    }
+    exactDigits = significant + "0".repeat(scale);
+  }
+
+  if (exactDigits.length > maxIntegerTokenDigits || BigInt(exactDigits) > BigInt(maxJsSafeInteger)) {
+    return "number token exceeds JavaScript-safe boundary";
+  }
+  return undefined;
 }

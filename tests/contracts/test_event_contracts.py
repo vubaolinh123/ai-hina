@@ -192,6 +192,7 @@ class EventContractTests(unittest.TestCase):
         cases = [
             ("uppercase UUID", lambda item: item.__setitem__("causationId", item["causationId"].upper())),
             ("malformed UUID", lambda item: item.__setitem__("correlationId", "bad")),
+            ("UUID with trailing LF", lambda item: item.__setitem__("correlationId", item["correlationId"] + "\n")),
             ("global with sessionId", lambda item: (item.__setitem__("scope", "global"), item.__setitem__("sessionId", fixture["sessionId"]))),
             ("global with turnId", lambda item: (item.__setitem__("scope", "global"), item.__setitem__("sessionId", None), item.__setitem__("turnId", fixture["turnId"]))),
             ("session without sessionId", lambda item: (item.__setitem__("scope", "session"), item.__setitem__("sessionId", None), item.__setitem__("turnId", None))),
@@ -227,6 +228,7 @@ class EventContractTests(unittest.TestCase):
                 "2026-01-01T24:00:00Z",
                 "2026-01-01T00:60:00Z",
                 "2026-01-01T00:00:60Z",
+                "2026-07-24T00:00:00Z\n",
             ]:
                 mutated = copy.deepcopy(fixture)
                 mutated[field] = timestamp
@@ -241,8 +243,11 @@ class EventContractTests(unittest.TestCase):
         for field, value in [
             ("source", "contracts\u0085test"),
             ("source", "contracts\u202etest"),
+            ("source", "contracts\n"),
             ("idempotencyKey", "idem\u200b1"),
+            ("idempotencyKey", "idem\n"),
             ("streamId", "stream\u20661"),
+            ("streamId", "stream\n"),
         ]:
             mutated = copy.deepcopy(fixture)
             mutated[field] = value
@@ -344,8 +349,13 @@ class EventContractTests(unittest.TestCase):
         fixture = load_fixture("global.echo.json")
         cases = [
             ("metadata fractional", "metadata", "1.25"),
+            ("metadata underflow coercion", "metadata", "1e-400"),
+            ("metadata precision coercion", "metadata", "1.0000000000000001"),
             ("metadata too large", "metadata", str(MAX_JS_SAFE_INTEGER + 1)),
             ("sequence fractional", "sequence", "1.25"),
+            ("sequence underflow coercion", "sequence", "1e-400"),
+            ("sequence precision coercion", "sequence", "1.0000000000000001"),
+            ("sequence boundary coercion", "sequence", "9007199254740991.1"),
             ("sequence too large", "sequence", str(MAX_JS_SAFE_INTEGER + 1)),
         ]
         for label, field, token in cases:
