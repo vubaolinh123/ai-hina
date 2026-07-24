@@ -417,6 +417,12 @@ class ControlPlaneServer:
             return self._safety_call("evaluate", payload)
         if path == "/v1/safety/control":
             return self._safety_call("apply_control", payload)
+        if path == "/v1/safety/sanitize":
+            return self._safety_call("sanitize_input", payload)
+        if path == "/v1/safety/context":
+            return self._safety_call("create_context", payload)
+        if path == "/v1/safety/moderate":
+            return self._safety_call("moderate", payload)
         raise PrimitiveError(RuntimeErrorCode.HTTP_BAD_REQUEST, "POST route was not found")
 
     def _safety_call(self, operation: str, *args: Any) -> dict[str, Any]:
@@ -426,7 +432,9 @@ class ControlPlaneServer:
             result = getattr(self.safety_policy, operation)(*args)
         except Exception as exc:
             code = getattr(exc, "code", "")
-            if not isinstance(code, str) or not code.startswith("E_SAFETY_"):
+            if not isinstance(code, str) or not (
+                code.startswith("E_SAFETY_") or code == "E_CONTEXT_BOUNDARY"
+            ):
                 raise
             unavailable = code in {
                 "E_SAFETY_AUDIT_INVALID",

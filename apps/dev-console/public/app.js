@@ -2,6 +2,7 @@ const state = {
   socket: null,
   lastEnvelope: null,
   safetyStatus: null,
+  lastSanitation: null,
   sessionId: localStorage.getItem("hina.console.session") || crypto.randomUUID(),
 };
 
@@ -38,6 +39,17 @@ const elements = Object.fromEntries(
     "revocationSelect",
     "revocationButton",
     "safetyAuditList",
+    "inputSourceSelect",
+    "sanitationInput",
+    "sanitizeButton",
+    "createContextButton",
+    "sanitationResult",
+    "moderationSurfaceSelect",
+    "moderationSourceSelect",
+    "moderationInput",
+    "moderationCapability",
+    "moderateButton",
+    "moderationResult",
     "messageInput",
     "streamInput",
     "sequenceInput",
@@ -243,6 +255,7 @@ function renderSafetyStatus(status) {
   const capabilities = status.manifest.capabilities.map((item) => item.name);
   replaceOptions(elements.capabilitySelect, capabilities);
   replaceOptions(elements.revocationSelect, capabilities);
+  replaceOptions(elements.moderationCapability, capabilities);
 
   elements.featureFlags.replaceChildren();
   for (const [feature, enabled] of Object.entries(safety.featureFlags)) {
@@ -344,6 +357,95 @@ async function applySafetyControl(action, extra = {}) {
     await refreshSafety();
   } catch (error) {
     addActivity(`Safety control lỗi: ${error.message}`, "error");
+  }
+}
+
+async function sanitizeInput() {
+  const correlationId = crypto.randomUUID();
+  try {
+    const result = await postJson("/v1/safety/sanitize", {
+      source: elements.inputSourceSelect.value,
+      text: elements.sanitationInput.value,
+      correlationId,
+      sessionId: state.sessionId,
+    });
+    state.lastSanitation = {
+      result,
+      correlationId,
+    };
+    elements.sanitationResult.classList.remove("empty");
+    elements.sanitationResult.textContent = JSON.stringify(result, null, 2);
+    elements.createContextButton.disabled = !result.contextEligible;
+    addActivity(
+      `Sanitation ${result.contextEligible ? "PASS" : "QUARANTINE"} · ${result.evidence.trustLevel}.`,
+      result.contextEligible ? "success" : "error",
+    );
+    await refreshSafety();
+  } catch (error) {
+    state.lastSanitation = null;
+    elements.createContextButton.disabled = true;
+    addActivity(`Sanitation lỗi: ${error.message}`, "error");
+  }
+}
+
+async function createContextBundle() {
+  if (!state.lastSanitation) return;
+  const { result, correlationId } = state.lastSanitation;
+  try {
+    const bundle = await postJson("/v1/safety/context", {
+      items: [
+        {
+          text: result.sanitizedText,
+          evidence: result.evidence,
+        },
+      ],
+      correlationId,
+      sessionId: state.sessionId,
+    });
+    elements.sanitationResult.textContent = JSON.stringify(
+      {
+        sanitation: result,
+        contextBundle: bundle,
+      },
+      null,
+      2,
+    );
+    addActivity(`ContextBundle ${bundle.bundleId} đã tạo từ evidence hợp lệ.`, "success");
+    await refreshSafety();
+  } catch (error) {
+    addActivity(`Context boundary từ chối: ${error.message}`, "error");
+  }
+}
+
+async function moderateContent() {
+  const surface = elements.moderationSurfaceSelect.value;
+  const capability = elements.moderationCapability.value || "tool.safe.echo";
+  const toolProposal = surface === "pre_tool"
+    ? {
+        capability,
+        intent: "console.preview",
+        arguments: { message: elements.moderationInput.value },
+      }
+    : null;
+  try {
+    const result = await postJson("/v1/safety/moderate", {
+      surface,
+      source: elements.moderationSourceSelect.value,
+      text: elements.moderationInput.value,
+      actorId: "owner.dev-console",
+      correlationId: crypto.randomUUID(),
+      sessionId: state.sessionId,
+      toolProposal,
+    });
+    elements.moderationResult.classList.remove("empty");
+    elements.moderationResult.textContent = JSON.stringify(result, null, 2);
+    addActivity(
+      `Moderation ${result.decision.toUpperCase()} · ${result.surface} (${result.reasonCode}).`,
+      result.decision === "allow" ? "success" : "error",
+    );
+    await refreshSafety();
+  } catch (error) {
+    addActivity(`Moderation lỗi: ${error.message}`, "error");
   }
 }
 
@@ -591,6 +693,9 @@ elements.revocationButton.addEventListener("click", () => {
   const enabled = elements.revocationButton.dataset.revoked !== "true";
   applySafetyControl("set_revocation", { capability, enabled });
 });
+elements.sanitizeButton.addEventListener("click", sanitizeInput);
+elements.createContextButton.addEventListener("click", createContextBundle);
+elements.moderateButton.addEventListener("click", moderateContent);
 elements.refreshMetricsButton.addEventListener("click", refreshMetrics);
 elements.refreshErrorsButton.addEventListener("click", refreshErrors);
 elements.sendEventButton.addEventListener("click", () => sendEvent());

@@ -209,6 +209,87 @@
           }
         }
       }
+    },
+    "/v1/safety/sanitize": {
+      "post": {
+        "operationId": "sanitizeInput",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SanitizeInputRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sanitized text and signed sanitation evidence.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SanitizeInputResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/safety/context": {
+      "post": {
+        "operationId": "createContextBundle",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContextBundleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Bounded context bundle containing verified sanitized text only.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContextBundle"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/safety/moderate": {
+      "post": {
+        "operationId": "moderateContent",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModerationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Fail-closed moderation decision for a named safety surface.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModerationDecision"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -603,7 +684,9 @@
         "required": [
           "manifest",
           "state",
-          "audit"
+          "audit",
+          "sanitation",
+          "moderation"
         ],
         "properties": {
           "manifest": {
@@ -633,6 +716,12 @@
             "$ref": "#/components/schemas/SafetyState"
           },
           "audit": {
+            "type": "object"
+          },
+          "sanitation": {
+            "type": "object"
+          },
+          "moderation": {
             "type": "object"
           }
         }
@@ -831,6 +920,387 @@
           "lastHash": {
             "type": "string",
             "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      },
+      "SanitizeInputRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source",
+          "text",
+          "correlationId",
+          "sessionId"
+        ],
+        "properties": {
+          "source": {
+            "enum": [
+              "owner.console",
+              "local.service",
+              "authenticated.user",
+              "public.chat",
+              "viewer.chat",
+              "web.research",
+              "game.text",
+              "screen.ocr"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "SanitationEvidence": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "evidenceId",
+          "policyVersion",
+          "source",
+          "trustLevel",
+          "correlationId",
+          "sessionId",
+          "contentHash",
+          "sanitizedHash",
+          "redactions",
+          "signals",
+          "safeForContext",
+          "signature"
+        ],
+        "properties": {
+          "evidenceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "policyVersion": {
+            "const": "hina.sanitation.v1"
+          },
+          "source": {
+            "type": "string"
+          },
+          "trustLevel": {
+            "type": "string"
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "contentHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "sanitizedHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "redactions": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "signals": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "safeForContext": {
+            "type": "boolean"
+          },
+          "signature": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      },
+      "SanitizeInputResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sanitizedText",
+          "evidence",
+          "contextEligible"
+        ],
+        "properties": {
+          "sanitizedText": {
+            "type": "string"
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/SanitationEvidence"
+          },
+          "contextEligible": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ContextBundleRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "correlationId",
+          "sessionId"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "text",
+                "evidence"
+              ],
+              "properties": {
+                "text": {
+                  "type": "string"
+                },
+                "evidence": {
+                  "$ref": "#/components/schemas/SanitationEvidence"
+                }
+              }
+            }
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "ModerationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "surface",
+          "source",
+          "text",
+          "actorId",
+          "correlationId",
+          "sessionId",
+          "toolProposal"
+        ],
+        "properties": {
+          "surface": {
+            "enum": [
+              "input",
+              "pre_tool",
+              "pre_tts",
+              "outbound"
+            ]
+          },
+          "source": {
+            "enum": [
+              "owner.console",
+              "local.service",
+              "authenticated.user",
+              "public.chat",
+              "viewer.chat",
+              "web.research",
+              "game.text",
+              "screen.ocr"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1
+          },
+          "actorId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "toolProposal": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ToolProposal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "ToolProposal": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "capability",
+          "intent",
+          "arguments"
+        ],
+        "properties": {
+          "capability": {
+            "type": "string"
+          },
+          "intent": {
+            "type": "string"
+          },
+          "arguments": {
+            "type": "object"
+          }
+        }
+      },
+      "ModerationDecision": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "policyVersion",
+          "surface",
+          "decision",
+          "reasonCode",
+          "categories",
+          "source",
+          "trustLevel",
+          "correlationId",
+          "sessionId",
+          "contentHash",
+          "sanitizedHash",
+          "sanitizedText",
+          "capability",
+          "policyDecision"
+        ],
+        "properties": {
+          "policyVersion": {
+            "const": "hina.moderation.v1"
+          },
+          "surface": {
+            "enum": [
+              "input",
+              "pre_tool",
+              "pre_tts",
+              "outbound"
+            ]
+          },
+          "decision": {
+            "enum": [
+              "allow",
+              "block",
+              "quarantine"
+            ]
+          },
+          "reasonCode": {
+            "type": "string"
+          },
+          "categories": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "source": {
+            "type": "string"
+          },
+          "trustLevel": {
+            "type": "string"
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "contentHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "sanitizedHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "sanitizedText": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "capability": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "policyDecision": {
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        }
+      },
+      "ContextBundle": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "bundleId",
+          "correlationId",
+          "sessionId",
+          "itemCount",
+          "totalBytes",
+          "items"
+        ],
+        "properties": {
+          "bundleId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "itemCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 32
+          },
+          "totalBytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65536
+          },
+          "items": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "type": "object"
+            }
           }
         }
       }

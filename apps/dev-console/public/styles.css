@@ -398,6 +398,22 @@ main {
   margin-top: 24px;
 }
 
+.sanitation-section {
+  margin-top: 24px;
+  padding-top: 22px;
+  border-top: 1px solid var(--border);
+}
+
+.sanitation-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.sanitation-grid label:not(:first-child) {
+  margin-top: 12px;
+}
+
 .compact-heading {
   margin-bottom: 10px;
 }
@@ -652,6 +668,10 @@ kbd {
   }
 
   .safety-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .sanitation-grid {
     grid-template-columns: 1fr;
   }
 }

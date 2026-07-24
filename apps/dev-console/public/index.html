@@ -161,6 +161,94 @@
             </div>
           </div>
 
+          <div class="sanitation-section">
+            <div class="panel-heading compact-heading">
+              <div>
+                <p class="eyebrow">TRUST BOUNDARY / M02-S2</p>
+                <h3>Input sanitation</h3>
+              </div>
+            </div>
+            <div class="sanitation-grid">
+              <div>
+                <label for="inputSourceSelect">Nguồn dữ liệu</label>
+                <select id="inputSourceSelect">
+                  <option value="owner.console">owner.console</option>
+                  <option value="viewer.chat" selected>viewer.chat</option>
+                  <option value="public.chat">public.chat</option>
+                  <option value="web.research">web.research</option>
+                  <option value="game.text">game.text</option>
+                  <option value="screen.ocr">screen.ocr</option>
+                  <option value="local.service">local.service</option>
+                  <option value="authenticated.user">authenticated.user</option>
+                </select>
+                <label for="sanitationInput">Raw input để kiểm tra</label>
+                <textarea id="sanitationInput" rows="4" maxlength="16384">Xin chào Hina. Email của tôi là owner@example.test.</textarea>
+                <div class="button-row">
+                  <button id="sanitizeButton" class="button button-primary" type="button">
+                    Sanitize input
+                  </button>
+                  <button id="createContextButton" class="button button-secondary" type="button" disabled>
+                    Tạo ContextBundle
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label>Kết quả từ safety backend</label>
+                <div id="sanitationResult" class="data-box empty">
+                  Chưa có sanitation evidence.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sanitation-section">
+            <div class="panel-heading compact-heading">
+              <div>
+                <p class="eyebrow">FAIL-CLOSED GATES / M02-S3</p>
+                <h3>Moderation lab</h3>
+              </div>
+            </div>
+            <div class="sanitation-grid">
+              <div>
+                <div class="field-grid">
+                  <div>
+                    <label for="moderationSurfaceSelect">Điểm chặn</label>
+                    <select id="moderationSurfaceSelect">
+                      <option value="input">input</option>
+                      <option value="pre_tool">pre_tool</option>
+                      <option value="pre_tts" selected>pre_tts</option>
+                      <option value="outbound">outbound</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="moderationSourceSelect">Nguồn</label>
+                    <select id="moderationSourceSelect">
+                      <option value="owner.console" selected>owner.console</option>
+                      <option value="local.service">local.service</option>
+                      <option value="authenticated.user">authenticated.user</option>
+                      <option value="viewer.chat">viewer.chat</option>
+                      <option value="public.chat">public.chat</option>
+                      <option value="web.research">web.research</option>
+                    </select>
+                  </div>
+                </div>
+                <label for="moderationInput">Nội dung cần duyệt</label>
+                <textarea id="moderationInput" rows="4" maxlength="16384">Xin chào, đây là một câu nói an toàn.</textarea>
+                <label for="moderationCapability">Capability cho pre_tool</label>
+                <select id="moderationCapability"></select>
+                <button id="moderateButton" class="button button-primary full-width" type="button">
+                  Gửi moderation thật
+                </button>
+              </div>
+              <div>
+                <label>Quyết định từ safety backend</label>
+                <div id="moderationResult" class="data-box empty">
+                  Chưa có moderation decision.
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="audit-section">
             <div class="panel-heading compact-heading">
               <div>

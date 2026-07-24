@@ -19,6 +19,8 @@ from .model import (
     SafetyPolicyError,
     TrustLevel,
 )
+from .moderation import ModerationEngine
+from .sanitation import InputSanitizer
 
 
 _ACTOR = re.compile(r"^[^\x00-\x1f\x7f]{1,128}$")
@@ -89,10 +91,14 @@ class SafetyPolicyService:
         *,
         clock: Callable[[], float] | None = None,
         now: Callable[[], datetime] | None = None,
+        sanitation_key: bytes | None = None,
+        moderation_engine: ModerationEngine | None = None,
     ) -> None:
         self.manifest = manifest
         self.audit = audit
         self.controller = SafetyController()
+        self.sanitizer = InputSanitizer(signing_key=sanitation_key)
+        self.moderator = moderation_engine or ModerationEngine(self.sanitizer)
         self._clock = clock or time.monotonic
         self._now = now or (lambda: datetime.now(UTC))
         self._rate_events: dict[tuple[str, str], deque[float]] = defaultdict(deque)
@@ -105,6 +111,8 @@ class SafetyPolicyService:
             "manifest": self.manifest.as_json(),
             "state": self.controller.snapshot(),
             "audit": self.audit.status(),
+            "sanitation": self.sanitizer.status(),
+            "moderation": self.moderator.status(),
         }
 
     def recent_audit(self, limit: int = 20) -> dict[str, Any]:
@@ -115,6 +123,65 @@ class SafetyPolicyService:
             "limit": limit,
             "lastHash": self.audit.last_hash,
         }
+
+    def sanitize_input(self, raw: Any) -> dict[str, Any]:
+        result = self.sanitizer.sanitize(raw)
+        evidence = result.evidence
+        self.audit.append(
+            event_type="input.sanitized",
+            correlation_id=evidence["correlationId"],
+            actor_hash=_hash_actor(evidence["source"]),
+            session_id=evidence["sessionId"],
+            capability=evidence["source"],
+            outcome="safe" if evidence["safeForContext"] else "quarantined",
+            reason_code=(
+                "sanitation_pass"
+                if evidence["safeForContext"]
+                else "injection_detected"
+            ),
+            state_revision=self.controller.snapshot()["revision"],
+        )
+        return result.as_json()
+
+    def create_context(self, raw: Any) -> dict[str, Any]:
+        bundle = self.sanitizer.create_context_bundle(raw)
+        self.audit.append(
+            event_type="context.created",
+            correlation_id=bundle["correlationId"],
+            actor_hash=_hash_actor("context.boundary"),
+            session_id=bundle["sessionId"],
+            outcome="allow",
+            reason_code="evidence_verified",
+            state_revision=self.controller.snapshot()["revision"],
+            target="context.bundle",
+        )
+        return bundle
+
+    def moderate(self, raw: Any) -> dict[str, Any]:
+        request = self.moderator.prepare(raw)
+        try:
+            result = self.moderator.evaluate(
+                request,
+                state=self.controller.snapshot(),
+                authorize=self.evaluate,
+            )
+        except Exception:
+            result = self.moderator.fail_closed(request, "moderation_unavailable")
+        try:
+            self.audit.append(
+                event_type="moderation.decision",
+                correlation_id=result["correlationId"],
+                actor_hash=_hash_actor(request.actor_id),
+                session_id=result["sessionId"],
+                capability=result["capability"],
+                outcome=result["decision"],
+                reason_code=result["reasonCode"],
+                state_revision=self.controller.snapshot()["revision"],
+                target=result["surface"],
+            )
+        except SafetyPolicyError:
+            result = self.moderator.fail_closed(request, "audit_unavailable")
+        return result
 
     def evaluate(self, raw: Any) -> dict[str, Any]:
         request = _parse_policy_request(raw)

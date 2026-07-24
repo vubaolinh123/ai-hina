@@ -1,0 +1,64 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M02-S2-trust-sanitation-redaction",
+  "module_id": "M02",
+  "objective": "Add a deterministic trust boundary that binds source identities to trust labels, normalizes hostile Unicode, redacts common secrets and PII, detects explicit Vietnamese/English prompt-injection signals, emits hash-bound sanitation evidence, and prevents unsafe or unevidenced untrusted text from entering a ContextBundle.",
+  "non_goals": [
+    "Do not claim semantic detection of every jailbreak, toxic statement, secret format or personally identifying datum.",
+    "Do not persist raw input, raw prompt text or redacted secret values in audit/error logs.",
+    "Do not call an external moderation API, model or network service.",
+    "Do not implement M03 conversation memory or model prompting in this slice."
+  ],
+  "base_sha": "8d7bfe2",
+  "branch": "codex/M02-safety",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "AGENTS.md",
+    "README.md",
+    "apps/core-runtime/",
+    "apps/dev-console/",
+    "docs/modules/M02-*",
+    "packages/contracts/openapi/control-plane.v1.json",
+    "packages/safety-policy/",
+    "tools/dev/"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "packages/contracts/schemas/v1/event-envelope.schema.json",
+    "workers/",
+    "adapters/",
+    "ml/",
+    "assets/",
+    "third_party/"
+  ],
+  "contracts": [
+    "Trust level is derived from a fixed source registry; a caller cannot upgrade viewer, web or game text by declaring owner trust.",
+    "Raw input is bounded before normalization and never written to the safety audit.",
+    "Sanitation evidence binds source, trust, policy version, original content hash and sanitized content hash without embedding the original secret.",
+    "Public and untrusted text with explicit injection signals is quarantined and cannot create a ContextBundle.",
+    "Public or untrusted context without valid sanitation evidence fails closed.",
+    "ContextBundle contains sanitized text only and has a strict item and byte budget."
+  ],
+  "allowed_dependencies": [
+    "Python 3.12+ standard library, browser platform APIs and existing Hina safety/runtime modules."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "Vietnamese and English explicit instruction-override attacks are flagged after NFKC and obfuscation-resistant matching.",
+    "API keys, bearer tokens, password assignments, email addresses and Vietnamese phone numbers are removed from sanitized output.",
+    "Evidence tampering, source/trust mismatch, oversize text and unevidenced untrusted context are rejected deterministically.",
+    "Owner can submit text in Dev Console, inspect the sanitized result and see whether it is eligible for future model context.",
+    "Focused safety and runtime tests pass before moving to M02-S3."
+  ],
+  "required_test_commands": [
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-SafetyUnit.ps1",
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-FastUnit.ps1"
+  ],
+  "latency_or_quality_budget": {
+    "max_raw_input_bytes": 16384,
+    "max_context_items": 32,
+    "max_context_bytes": 65536,
+    "sanitation_p95_milliseconds": 10
+  },
+  "output_artifact_dir": "artifacts/verification/M02/"
+}

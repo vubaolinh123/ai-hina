@@ -1,0 +1,65 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M02-S3-moderation-fail-closed-gates",
+  "module_id": "M02",
+  "objective": "Add deterministic moderation gates for input, pre-tool, pre-TTS and outbound surfaces, require typed tool proposals, block model-generated executable code and hidden reasoning from sensitive outputs, honor emergency stop and mute state, and fail closed when moderation or authorization cannot complete.",
+  "non_goals": [
+    "Do not claim comprehensive semantic moderation or replace a future configurable moderation model.",
+    "Do not execute shell, PowerShell, JavaScript, Python or other model-generated code.",
+    "Do not persist raw moderated text, hidden reasoning or detected secret values in audit/error logs.",
+    "Do not implement the M03 LLM provider or conversation loop in this slice."
+  ],
+  "base_sha": "8d7bfe2",
+  "branch": "codex/M02-safety",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "AGENTS.md",
+    "README.md",
+    "apps/core-runtime/",
+    "apps/dev-console/",
+    "docs/modules/M02-*",
+    "packages/contracts/openapi/control-plane.v1.json",
+    "packages/safety-policy/",
+    "tools/dev/"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "packages/contracts/schemas/v1/event-envelope.schema.json",
+    "workers/",
+    "adapters/",
+    "ml/",
+    "assets/",
+    "third_party/"
+  ],
+  "contracts": [
+    "Every moderation request is assigned exactly one surface: input, pre_tool, pre_tts or outbound.",
+    "Pre-tool requests require a typed capability proposal and never accept executable source or command fields.",
+    "Unknown, malformed, expired, revoked or unauthorized capability proposals are blocked through the existing policy authority.",
+    "Hidden reasoning markers and secret-bearing content are blocked before TTS and outbound delivery.",
+    "Emergency stop blocks every moderation surface and mute blocks pre-TTS and outbound surfaces.",
+    "An internal moderation, sanitation, authorization or audit failure returns a block decision instead of allowing output."
+  ],
+  "allowed_dependencies": [
+    "Python 3.12+ standard library, browser platform APIs and existing Hina safety/runtime modules."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "A table-driven critical corpus blocks generated shell, PowerShell, JavaScript and Python execution proposals.",
+    "Vietnamese and English hidden-reasoning markers cannot pass pre-TTS or outbound moderation.",
+    "Safe input and a known typed low-risk tool proposal can pass when policy permits them.",
+    "Injected policy adapter failures, emergency stop and mute return stable fail-closed reason codes.",
+    "The Dev Console sends real moderation requests to the backend and displays its decision.",
+    "Focused safety and runtime tests pass before M02 promotion."
+  ],
+  "required_test_commands": [
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-SafetyUnit.ps1",
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-FastUnit.ps1",
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Start-HinaDevConsole.ps1 -Port 0 -NoBrowser -StartupCheck"
+  ],
+  "latency_or_quality_budget": {
+    "max_text_bytes": 16384,
+    "critical_corpus_allowed_count": 0,
+    "moderation_p95_milliseconds": 20
+  },
+  "output_artifact_dir": "artifacts/verification/M02/"
+}
