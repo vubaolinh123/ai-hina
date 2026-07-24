@@ -130,6 +130,7 @@ class ConversationService:
         context_composer: ContextComposer | None = None,
         long_term_memory: Any | None = None,
         on_error: Callable[[dict[str, str]], None] | None = None,
+        on_state_change: Callable[[dict[str, str | None]], None] | None = None,
     ) -> None:
         if safety_policy is None:
             raise TextBrainError("E_CHAT_CONFIG", "safety policy is required")
@@ -143,6 +144,7 @@ class ConversationService:
             long_term_memory=long_term_memory,
         )
         self.on_error = on_error
+        self.on_state_change = on_state_change
         self._turns: dict[str, TurnRecord] = {}
         self._active_by_session: dict[str, str] = {}
         self._lock = asyncio.Lock()
@@ -179,7 +181,7 @@ class ConversationService:
                 machine=TurnMachine(),
                 created_at=_timestamp(),
             )
-            record.machine.transition(TurnState.LISTENING)
+            self._transition(record, TurnState.LISTENING)
             self._turns[turn_id] = record
             self._active_by_session[record.session_id] = turn_id
             record.task = asyncio.create_task(
@@ -224,7 +226,7 @@ class ConversationService:
                 TurnState.THINKING,
                 TurnState.SPEAKING,
             }:
-                record.machine.transition(TurnState.INTERRUPTED)
+                self._transition(record, TurnState.INTERRUPTED)
             record.outcome = "interrupted"
             self._active_by_session.pop(record.session_id, None)
             task = record.task
@@ -257,7 +259,7 @@ class ConversationService:
                         TurnState.THINKING,
                         TurnState.SPEAKING,
                     }:
-                        record.machine.transition(TurnState.INTERRUPTED)
+                        self._transition(record, TurnState.INTERRUPTED)
                     record.outcome = "interrupted"
                     record.task.cancel()
             self._active_by_session.clear()
@@ -286,7 +288,7 @@ class ConversationService:
             if not isinstance(sanitized_user, str) or not sanitized_user:
                 raise TextBrainError("E_CHAT_INPUT_BLOCKED", "sanitized chat input is empty")
             record.sanitized_user_text = sanitized_user
-            record.machine.transition(TurnState.THINKING)
+            self._transition(record, TurnState.THINKING)
             context = await self.context_composer.compose(
                 record.session_id,
                 sanitized_user,
@@ -336,7 +338,7 @@ class ConversationService:
                 raise TextBrainError("E_MODEL_EMPTY_RESPONSE", "model returned no safe text")
             if record.cancel_event.is_set():
                 raise asyncio.CancelledError
-            record.machine.transition(TurnState.SPEAKING)
+            self._transition(record, TurnState.SPEAKING)
             record.assistant_text = assistant
             await self.memory.append(
                 record.session_id,
@@ -344,7 +346,7 @@ class ConversationService:
                 sanitized_user,
                 assistant,
             )
-            record.machine.transition(TurnState.IDLE)
+            self._transition(record, TurnState.IDLE)
             record.outcome = "completed"
         except asyncio.CancelledError:
             if record.outcome == "running":
@@ -353,7 +355,7 @@ class ConversationService:
                     TurnState.THINKING,
                     TurnState.SPEAKING,
                 }:
-                    record.machine.transition(TurnState.INTERRUPTED)
+                    self._transition(record, TurnState.INTERRUPTED)
                 record.outcome = "interrupted"
             record.assistant_text = None
         except Exception as exc:
@@ -367,7 +369,7 @@ class ConversationService:
                 TurnState.THINKING,
                 TurnState.SPEAKING,
             }:
-                record.machine.transition(TurnState.ERROR)
+                self._transition(record, TurnState.ERROR)
             record.outcome = "error"
             record.assistant_text = None
             record.tool_proposal = None
@@ -412,6 +414,24 @@ class ConversationService:
                 }
             )
         except Exception:
+            pass
+
+    def _transition(self, record: TurnRecord, target: TurnState) -> None:
+        record.machine.transition(target)
+        if self.on_state_change is None:
+            return
+        try:
+            self.on_state_change(
+                {
+                    "state": str(target),
+                    "source": record.source,
+                    "turnId": record.turn_id,
+                    "sessionId": record.session_id,
+                    "correlationId": record.correlation_id,
+                }
+            )
+        except Exception:
+            # Presentation observers must never break a conversation turn.
             pass
 
     def _prune_turns_locked(self) -> None:

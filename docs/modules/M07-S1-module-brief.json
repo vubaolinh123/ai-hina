@@ -1,0 +1,87 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M07-S1-S2-avatar-runtime-stage",
+  "module_id": "M07",
+  "objective": "Deliver the first runnable M07 vertical slice: a typed avatar state machine and loopback control-plane API, direct observation of real conversation turn states, real TTS playback-driven mouth motion, and an owner-facing Avatar Stage dashboard page using an original code-native visual fallback while VRM/Electron asset and dependency provenance are prepared.",
+  "non_goals": [
+    "Do not claim that the code-native fallback is a VRM, Live2D model, finished production avatar or replacement for the later Electron/Vue stage shell.",
+    "Do not add an unlicensed avatar, motion, texture, voice likeness or copied frontend artwork.",
+    "Do not let the renderer read SQLite, Qdrant, model files or provider internals directly.",
+    "Do not accept avatar cues from public, viewer, web, OCR, VLM or other untrusted sources.",
+    "Do not invent phoneme alignment: TTS lip motion in this slice is driven by observed audio amplitude and is labeled accordingly.",
+    "Do not run repeat, soak, dropped-frame or eight-hour release workflows during this fast-development iteration.",
+    "Do not open M08."
+  ],
+  "base_sha": "ac29424e4dc58f42f9eeeb9f7a7f2408ad5c2f4f",
+  "branch": "codex/M07-avatar-stage",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "AGENTS.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "README.md",
+    "apps/core-runtime/",
+    "apps/dev-console/",
+    "assets/manifests/hina-code-avatar.v1.json",
+    "docs/modules/M07-*",
+    "package.json",
+    "packages/avatar/",
+    "packages/contracts/openapi/control-plane.v1.json",
+    "packages/text-brain/",
+    "tools/dev/"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "adapters/",
+    "packages/memory/",
+    "packages/safety-policy/",
+    "third_party/",
+    "workers/speech/"
+  ],
+  "contracts": [
+    "Avatar states are exactly idle, listening, thinking, speaking, interrupted and error; every accepted cue produces a monotonic bounded audit-safe snapshot without conversation text.",
+    "Invalid or missing emotion cues fall back to neutral; viseme and intensity inputs are allowlisted and bounded.",
+    "Conversation state is forwarded by the runtime service through a typed callback; the renderer never infers backend turn state by reading model, database or provider internals.",
+    "Only trusted local sources may mutate avatar state; public and untrusted sources fail closed with a stable error.",
+    "The code-native avatar manifest identifies original repository-owned artwork and the UI explicitly reports vrmLoaded false until a licensed VRM asset is installed.",
+    "The browser reports observed TTS playback start, pause and end through typed loopback cues; mouth magnitude is derived from real Web Audio samples and never represented as phoneme-accurate alignment.",
+    "Mute and emergency-stop controls use the existing safety control plane and remain visibly distinguishable from cosmetic avatar preview controls.",
+    "All M07 endpoints bind through the existing loopback server and return stable JSON error codes without raw user or model text."
+  ],
+  "allowed_dependencies": [
+    "Python 3.12+ standard library and existing Hina runtime, contracts, text-brain and speech packages.",
+    "Existing dependency-free HTML, CSS, SVG and JavaScript Dev Console.",
+    "Browser Web Audio API for local analysis of the WAV already returned by Hina's TTS endpoint."
+  ],
+  "oss_candidates": [
+    "https://github.com/pixiv/three-vrm",
+    "https://github.com/vrm-c/vrm-specification",
+    "https://github.com/electron/electron",
+    "https://github.com/vuejs/core"
+  ],
+  "acceptance_criteria": [
+    "Unit tests execute at least 1000 deterministic requested avatar state changes without a stuck terminal state and prove reset recovery.",
+    "Unit tests prove invalid emotion falls back to neutral, amplitude is clamped, history is bounded and untrusted sources are rejected.",
+    "Conversation tests prove listening, thinking, speaking, idle, interrupted and error changes reach the avatar callback without raw text.",
+    "Runtime tests cover avatar status, cue and reset endpoints with stable success and rejection semantics.",
+    "Dev Console exposes a dedicated Avatar Stage route with plain Vietnamese purpose, usage and limitation notes suitable for a non-developer.",
+    "The stage renders real runtime state and safety status; operator state preview is labeled as a manual preview rather than backend activity.",
+    "Playing a real TTS WAV drives mouth motion through Web Audio amplitude and sends speaking/idle playback cues to the runtime.",
+    "Fast avatar unit, text-brain unit, core runtime unit, JavaScript syntax and Dev Console startup smoke pass once.",
+    "Manual browser verification confirms fixed dashboard navigation, responsive stage layout, real API updates and no console errors."
+  ],
+  "required_test_commands": [
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-AvatarUnit.ps1",
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-TextBrainUnit.ps1",
+    "uv run --frozen python -m unittest discover -s apps/core-runtime/tests -p \"test_*.py\"",
+    "node --check apps/dev-console/public/app.js",
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Start-HinaDevConsole.ps1 -Port 0 -NoBrowser -StartupCheck"
+  ],
+  "latency_or_quality_budget": {
+    "avatar_history_limit": 256,
+    "status_poll_interval_milliseconds": 250,
+    "audio_analysis_fft_size": 256,
+    "state_render_target_milliseconds": 100,
+    "deep_lip_sync_p95_gate_deferred_milliseconds": 120
+  },
+  "output_artifact_dir": "artifacts/verification/M07/"
+}

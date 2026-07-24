@@ -705,6 +705,87 @@
         }
       }
     },
+    "/v1/avatar/status": {
+      "get": {
+        "operationId": "getAvatarStatus",
+        "responses": {
+          "200": {
+            "description": "Renderer-safe avatar state, cue identifiers and honest asset/lip-sync capability status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvatarStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/avatar/cues": {
+      "post": {
+        "operationId": "applyAvatarCue",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AvatarCueRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Accepted typed cue and resulting renderer-safe avatar status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvatarStatus"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Cue source is not trusted to control the avatar."
+          }
+        }
+      }
+    },
+    "/v1/avatar/reset": {
+      "post": {
+        "operationId": "resetAvatar",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["action"],
+                "properties": {
+                  "action": {
+                    "const": "reset"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Avatar returned to neutral idle state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AvatarStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/memory/status": {
       "get": {
         "operationId": "getMemoryStatus",
@@ -887,6 +968,253 @@
       }
     },
     "schemas": {
+      "AvatarCueRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source",
+          "state"
+        ],
+        "properties": {
+          "source": {
+            "enum": [
+              "owner.console",
+              "speech.output"
+            ]
+          },
+          "state": {
+            "enum": [
+              "idle",
+              "listening",
+              "thinking",
+              "speaking",
+              "interrupted",
+              "error"
+            ]
+          },
+          "expression": {
+            "type": "string"
+          },
+          "viseme": {
+            "type": "string"
+          },
+          "intensity": {
+            "type": "number"
+          },
+          "mode": {
+            "enum": [
+              "runtime",
+              "manual-preview",
+              "tts-playback"
+            ]
+          },
+          "correlationId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 128
+          },
+          "sessionId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 128
+          },
+          "turnId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 128
+          },
+          "utteranceId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 128
+          }
+        }
+      },
+      "AvatarStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schemaVersion",
+          "available",
+          "sequence",
+          "state",
+          "expression",
+          "viseme",
+          "intensity",
+          "source",
+          "mode",
+          "updatedAt",
+          "correlationId",
+          "sessionId",
+          "turnId",
+          "utteranceId",
+          "historyDepth",
+          "historyLimit",
+          "trustedSources",
+          "allowedStates",
+          "allowedExpressions",
+          "allowedVisemes",
+          "rendererContract",
+          "asset",
+          "lipSync"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": "1.0"
+          },
+          "available": {
+            "const": true
+          },
+          "sequence": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "state": {
+            "enum": [
+              "idle",
+              "listening",
+              "thinking",
+              "speaking",
+              "interrupted",
+              "error"
+            ]
+          },
+          "expression": {
+            "enum": [
+              "neutral",
+              "happy",
+              "curious",
+              "focused",
+              "concerned"
+            ]
+          },
+          "viseme": {
+            "enum": [
+              "sil",
+              "A",
+              "I",
+              "U",
+              "E",
+              "O"
+            ]
+          },
+          "intensity": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "source": {
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "runtime",
+              "manual-preview",
+              "tts-playback"
+            ]
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "correlationId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sessionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "turnId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "utteranceId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "historyDepth": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 256
+          },
+          "historyLimit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 256
+          },
+          "trustedSources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "allowedStates": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "allowedExpressions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "allowedVisemes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rendererContract": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "databaseAccess",
+              "modelAccess",
+              "providerAccess",
+              "controlPlaneOnly"
+            ],
+            "properties": {
+              "databaseAccess": {
+                "const": false
+              },
+              "modelAccess": {
+                "const": false
+              },
+              "providerAccess": {
+                "const": false
+              },
+              "controlPlaneOnly": {
+                "const": true
+              }
+            }
+          },
+          "asset": {
+            "type": "object"
+          },
+          "lipSync": {
+            "type": "object"
+          }
+        }
+      },
       "Health": {
         "type": "object",
         "additionalProperties": false,

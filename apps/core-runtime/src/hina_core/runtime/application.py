@@ -39,6 +39,7 @@ class HinaRuntimeApplication:
         speech_service: Any | None = None,
         tts_service: Any | None = None,
         memory_service: Any | None = None,
+        avatar_service: Any | None = None,
     ) -> None:
         self.config = config
         self.paths = paths
@@ -56,6 +57,7 @@ class HinaRuntimeApplication:
         self.speech_service: Any | None = speech_service
         self.tts_service: Any | None = tts_service
         self.memory_service: Any | None = memory_service
+        self.avatar_service: Any | None = avatar_service
 
     @property
     def address(self) -> tuple[str, int]:
@@ -90,7 +92,12 @@ class HinaRuntimeApplication:
         speech_service = self.speech_service
         tts_service = self.tts_service
         memory_service = self.memory_service
+        avatar_service = self.avatar_service
         try:
+            if avatar_service is None:
+                from hina_avatar import AvatarStageService
+
+                avatar_service = AvatarStageService()
             model_gateway = self.model_gateway
             if model_gateway is None:
                 from hina_text_brain import (
@@ -145,6 +152,7 @@ class HinaRuntimeApplication:
                     PersonaSpec.load(self.paths.persona_spec.resolve()),
                     long_term_memory=memory_service,
                     on_error=self._log_conversation_error,
+                    on_state_change=avatar_service.observe_turn_state,
                 )
             if speech_service is None:
                 from hina_speech import FasterWhisperProvider, SpeechConfig, SpeechInputService
@@ -204,6 +212,7 @@ class HinaRuntimeApplication:
                 speech_service=speech_service,
                 tts_service=tts_service,
                 memory_service=memory_service,
+                avatar_service=avatar_service,
                 build_commit=self.build_commit,
             )
             await server.start()
@@ -226,6 +235,7 @@ class HinaRuntimeApplication:
         self.speech_service = speech_service
         self.tts_service = tts_service
         self.memory_service = memory_service
+        self.avatar_service = avatar_service
         self.metrics.set_gauge(
             "hina_runtime_ready",
             1,
@@ -246,6 +256,7 @@ class HinaRuntimeApplication:
         speech_service = self.speech_service
         tts_service = self.tts_service
         memory_service = self.memory_service
+        avatar_service = self.avatar_service
         self.server = None
         self.store = None
         self.safety_policy = None
@@ -253,6 +264,7 @@ class HinaRuntimeApplication:
         self.speech_service = None
         self.tts_service = None
         self.memory_service = None
+        self.avatar_service = None
         if server is not None:
             await server.stop()
         if conversation is not None:
@@ -263,6 +275,8 @@ class HinaRuntimeApplication:
             await tts_service.close()
         if memory_service is not None:
             await memory_service.close()
+        if avatar_service is not None:
+            avatar_service.reset(source="runtime.lifecycle")
         if store is not None:
             store.close()
 

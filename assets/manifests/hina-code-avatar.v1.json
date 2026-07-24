@@ -1,0 +1,59 @@
+{
+  "schema_version": "1.0",
+  "manifest_id": "hina.code-avatar.v1",
+  "artifact_kind": "code_native_svg_avatar_fallback",
+  "asset_name": "Hina code-native fallback",
+  "source": {
+    "origin": "Created directly in the Hina AI repository from original geometric SVG and CSS primitives.",
+    "external_source_url": null,
+    "copied_or_adapted": false,
+    "depicts_real_person": false,
+    "contains_biometric_or_voice_data": false
+  },
+  "license": {
+    "spdx": "MIT",
+    "copyright_holder": "Hina AI repository owner",
+    "permitted_use": [
+      "local development",
+      "commercial use under the repository license",
+      "modification",
+      "redistribution with the repository license notice"
+    ],
+    "attribution": "Hina AI code-native avatar"
+  },
+  "consent_and_rights": {
+    "real_person_consent_required": false,
+    "voice_consent_required": false,
+    "owner_may_modify_or_delete": true,
+    "third_party_publicity_rights_claimed": false
+  },
+  "files": [
+    {
+      "path": "apps/dev-console/public/index.html",
+      "role": "inline SVG geometry and accessible labels",
+      "sha256": "e413128278b7a7147b36b930d693369881d4280df4b0b6a085e5980cb77b257d"
+    },
+    {
+      "path": "apps/dev-console/public/styles.css",
+      "role": "avatar styling, expressions and state animation",
+      "sha256": "72242c8e01c96e2135d1246fd16ef9db3a1fc31e388656569f2e4ca2afa8ebb4"
+    },
+    {
+      "path": "apps/dev-console/public/app.js",
+      "role": "renderer-safe runtime state and observed audio-amplitude binding",
+      "sha256": "796189a4357f8ba573cd445f2f3bc2d52b3f39bd5f47782ffde7e45262f815db"
+    }
+  ],
+  "runtime": {
+    "allowlisted": true,
+    "default_fallback": true,
+    "vrm": false,
+    "live2d": false,
+    "external_network_required": false
+  },
+  "status": {
+    "local_development_ready": true,
+    "production_ready": false,
+    "blocker": "M07 Electron/VRM integration and performance/accessibility release evidence are not complete."
+  }
+}

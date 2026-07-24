@@ -4,13 +4,15 @@ Hina AI là dự án local-first xây dựng AI VTuber tiếng Việt theo kiế
 mô-đun. Hội thoại, speech, memory, avatar, perception, Minecraft và livestream
 được tách bằng contract rõ ràng để có thể phát triển và rollback độc lập.
 
-Trạng thái hiện tại: **M06 — long-term memory có consent đang có vertical slice
-để owner test**. M01 runtime spine, M02 safety, M03 text brain, M04 speech input
-và M05 speech output đã qua fast gate. Hina Dev Console hiện là dashboard nhiều
+Trạng thái hiện tại: **M07 — avatar stage đang có vertical slice chạy thật để
+owner test**. M01 runtime spine, M02 safety, M03 text brain, M04 speech input,
+M05 speech output và M06 memory đã qua fast gate; M06 cũng đã qua independent
+review không có P0/P1. Hina Dev Console hiện là dashboard nhiều
 trang có chat text thật qua Ollama/OpenAI-compatible local, microphone/WAV tiếng
 Việt qua faster-whisper, giọng Việt qua VieNeu-TTS ONNX int8 và ký ức dài hạn
-SQLite + Qdrant local; không dùng câu trả lời, transcript, audio hay memory giả.
-Avatar chưa được tích hợp.
+SQLite + Qdrant local. Trang Avatar Stage đọc turn state thật và mở miệng theo
+biên độ WAV TTS đang phát; không dùng câu trả lời, transcript, audio, memory hay
+backend state giả.
 
 ## Chạy ứng dụng hiện có
 
@@ -23,7 +25,8 @@ pnpm start:dev-console
 
 Trình duyệt sẽ mở `http://127.0.0.1:8765/`. Đây là ứng dụng local chạy liên tục
 cho tới khi bạn bấm `Ctrl+C`, không phải output dựng sẵn. Navbar chia chức năng
-thành Tổng quan, Trò chuyện & giọng nói, Ký ức, An toàn và Runtime & chẩn đoán.
+thành Tổng quan, Trò chuyện & giọng nói, Avatar Stage, Ký ức, An toàn và Runtime
+& chẩn đoán.
 Giao diện cho phép:
 
 - kiểm tra health, version, config và metrics của runtime;
@@ -44,6 +47,10 @@ Giao diện cho phép:
 - tạo memory candidate đã lọc, rồi tự tay duyệt hoặc từ chối;
 - tìm, sửa, pin, export hoặc xóa ký ức với biên nhận sau khi SQLite và Qdrant
   đã đồng bộ.
+- xem avatar code-native phản ứng theo `idle | listening | thinking | speaking |
+  interrupted | error` từ runtime thật;
+- xem miệng chuyển động theo Web Audio amplitude của WAV TTS thật, kiểm tra cue
+  thủ công có nhãn `manual-preview`, mute hoặc emergency stop từ cùng safety backend.
 
 Ứng dụng không có câu trả lời AI dựng sẵn. Nếu provider/model chưa sẵn sàng,
 chat turn trả lỗi thật và ghi vào `var/logs/hina-runtime.jsonl`.
@@ -133,6 +140,18 @@ viewer chat không được đọc owner memory. Nút **Xóa có biên nhận** 
 công sau khi SQLite và Qdrant đã đối soát; biên nhận không tuyên bố xóa dữ liệu
 khỏi model weights đã train.
 
+## Dùng Avatar Stage
+
+Mở navbar **Avatar Stage** để xem state renderer-safe do control plane cung cấp.
+Khi chat đang chạy, stage nhận trực tiếp state của turn FSM. Khi WAV TTS phát,
+browser đo biên độ audio thật bằng Web Audio API và điều khiển độ mở miệng; backend
+nhận cue `speech.output` cho vòng đời speaking/idle.
+
+Visual hiện tại là SVG/CSS gốc của repository và được ghi provenance tại
+`assets/manifests/hina-code-avatar.v1.json`. UI luôn báo `VRM chưa tải`; đây
+không phải VRM/Live2D và lip-sync hiện chưa nhận dạng nguyên âm. Electron/Vue,
+three-vrm, licensed avatar asset và performance/soak gate thuộc slice M07 kế tiếp.
+
 ## Vòng lặp phát triển nhanh
 
 ```powershell
@@ -141,6 +160,7 @@ pnpm test:safety
 pnpm test:text-brain
 pnpm test:speech
 pnpm test:memory
+pnpm test:avatar
 pnpm report:errors
 ```
 
@@ -158,6 +178,7 @@ Các lệnh `smoke:m01-s2` đến `smoke:m01-s6` là harness kiểm tra kỹ thu
 - [Trạng thái M04](docs/modules/M04-speech-input.md)
 - [Trạng thái M05](docs/modules/M05-speech-output.md)
 - [Trạng thái M06](docs/modules/M06-long-term-memory.md)
+- [Trạng thái M07](docs/modules/M07-avatar-stage.md)
 - [Hướng dẫn Dev Console](apps/dev-console/README.md)
 
 ## Nguyên tắc an toàn

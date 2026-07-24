@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import unittest
 from pathlib import Path
 
@@ -68,6 +69,21 @@ class ProvenanceTests(unittest.TestCase):
         )
         self.assertFalse(voice["consent_and_use"]["voice_cloning_allowed_by_hina"])
         self.assertFalse(voice["status"]["production_ready"])
+        avatar = json.loads(
+            (
+                ROOT
+                / "assets"
+                / "manifests"
+                / "hina-code-avatar.v1.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(avatar["license"]["spdx"], "MIT")
+        self.assertFalse(avatar["source"]["copied_or_adapted"])
+        self.assertFalse(avatar["source"]["depicts_real_person"])
+        self.assertFalse(avatar["runtime"]["vrm"])
+        for item in avatar["files"]:
+            digest = hashlib.sha256((ROOT / item["path"]).read_bytes()).hexdigest()
+            self.assertEqual(digest, item["sha256"])
 
     def test_research_candidates_are_explicitly_unfrozen(self) -> None:
         for path in (

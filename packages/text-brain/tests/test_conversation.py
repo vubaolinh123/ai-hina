@@ -141,6 +141,53 @@ class ConversationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(replay["turnCount"], 1)
         self.assertEqual(replay["relationship"]["completedTurns"], 1)
 
+    async def test_avatar_state_callback_tracks_turns_without_text(self) -> None:
+        events: list[dict[str, str | None]] = []
+        service = self.service(
+            ScriptedGateway([["Chào bạn."]]),
+            on_state_change=events.append,
+        )
+        completed = await self.run_turn(service, "Nội dung riêng tư")
+        self.assertEqual(
+            [event["state"] for event in events],
+            ["listening", "thinking", "speaking", "idle"],
+        )
+        self.assertTrue(all(event["turnId"] == completed["turnId"] for event in events))
+        self.assertNotIn("Nội dung riêng tư", json.dumps(events, ensure_ascii=False))
+        self.assertNotIn("Chào bạn.", json.dumps(events, ensure_ascii=False))
+
+        error_events: list[dict[str, str | None]] = []
+        failed_service = self.service(
+            ScriptedGateway(
+                [[TextBrainError("E_MODEL_UNAVAILABLE", "provider unavailable")]]
+            ),
+            on_state_change=error_events.append,
+        )
+        failed = await self.run_turn(
+            failed_service,
+            "Gây lỗi",
+            session_id=OTHER_SESSION_ID,
+        )
+        self.assertEqual(failed["outcome"], "error")
+        self.assertEqual(error_events[-1]["state"], "error")
+
+        interrupted_events: list[dict[str, str | None]] = []
+        gateway = BlockingGateway()
+        interrupted_service = self.service(
+            gateway,
+            on_state_change=interrupted_events.append,
+        )
+        started = await interrupted_service.start_turn(
+            {
+                "sessionId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "source": "owner.console",
+                "text": "Chờ",
+            }
+        )
+        await asyncio.wait_for(gateway.started.wait(), timeout=1)
+        await interrupted_service.cancel_turn(started["turnId"])
+        self.assertEqual(interrupted_events[-1]["state"], "interrupted")
+
     async def test_persona_is_frozen_and_relationship_is_session_scoped(self) -> None:
         with self.assertRaises(dataclasses.FrozenInstanceError):
             self.persona.name = "Changed"  # type: ignore[misc]

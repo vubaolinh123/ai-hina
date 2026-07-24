@@ -164,6 +164,7 @@ class ControlPlaneServer:
         speech_service: Any | None = None,
         tts_service: Any | None = None,
         memory_service: Any | None = None,
+        avatar_service: Any | None = None,
         build_commit: str | None = None,
     ) -> None:
         self.config = config
@@ -177,6 +178,7 @@ class ControlPlaneServer:
         self.speech_service = speech_service
         self.tts_service = tts_service
         self.memory_service = memory_service
+        self.avatar_service = avatar_service
         self.build_commit = build_commit or os.environ.get("HINA_BUILD_COMMIT", "development")
         self._server: asyncio.AbstractServer | None = None
         self._started_at = 0.0
@@ -438,6 +440,8 @@ class ControlPlaneServer:
             body = await self._tts_status()
         elif path == "/v1/memory/status":
             body = await self._memory_call("status")
+        elif path == "/v1/avatar/status":
+            body = self._avatar_call("status")
         elif path == "/v1/memory/candidates":
             status = _parse_memory_candidate_query(parsed_target.query)
             body = await self._memory_call("candidates", status=status)
@@ -485,6 +489,20 @@ class ControlPlaneServer:
             return self._safety_call("moderate", payload)
         if path == "/v1/chat/turns":
             return await self._chat_call("start_turn", payload)
+        if path == "/v1/avatar/cues":
+            if payload.get("source") not in {"owner.console", "speech.output"}:
+                raise PrimitiveError(  # type: ignore[arg-type]
+                    "E_AVATAR_SOURCE",
+                    "external avatar cues require an owner or observed speech source",
+                )
+            return self._avatar_call("apply_cue", payload)
+        if path == "/v1/avatar/reset":
+            if payload != {"action": "reset"}:
+                raise PrimitiveError(
+                    RuntimeErrorCode.AVATAR_BAD_REQUEST,
+                    "avatar reset request is invalid",
+                )
+            return self._avatar_call("reset")
         if path == "/v1/memory/candidates":
             return await self._memory_call("propose", payload)
         candidate_id = _memory_item_route(path, "candidates", "decision")
@@ -1018,6 +1036,29 @@ class ControlPlaneServer:
             )
         return result
 
+    def _avatar_call(self, operation: str, *args: Any) -> dict[str, Any]:
+        if self.avatar_service is None:
+            raise PrimitiveError(
+                RuntimeErrorCode.AVATAR_UNAVAILABLE,
+                "avatar stage service is unavailable",
+            )
+        try:
+            result = getattr(self.avatar_service, operation)(*args)
+        except Exception as exc:
+            code = getattr(exc, "code", "")
+            if not isinstance(code, str) or not code.startswith("E_AVATAR_"):
+                raise
+            raise PrimitiveError(  # type: ignore[arg-type]
+                code,
+                getattr(exc, "detail", "avatar cue was rejected"),
+            ) from exc
+        if not isinstance(result, dict):
+            raise PrimitiveError(
+                RuntimeErrorCode.AVATAR_UNAVAILABLE,
+                "avatar stage service returned invalid data",
+            )
+        return result
+
     async def _serve_static_file(self, writer: asyncio.StreamWriter, route: str) -> None:
         assert self.static_dir is not None
         filename, content_type = _STATIC_FILES[route]
@@ -1407,6 +1448,10 @@ class ControlPlaneServer:
         if code_value == "E_MEMORY_DELETE_PENDING" or code_value.startswith(
             "E_MEMORY_INDEX_"
         ) or code_value == "E_MEMORY_UNAVAILABLE":
+            return HTTPStatus.SERVICE_UNAVAILABLE
+        if code_value == "E_AVATAR_SOURCE":
+            return HTTPStatus.FORBIDDEN
+        if code_value == "E_AVATAR_UNAVAILABLE":
             return HTTPStatus.SERVICE_UNAVAILABLE
         if code is RuntimeErrorCode.FRAME_TOO_LARGE:
             return HTTPStatus.REQUEST_HEADER_FIELDS_TOO_LARGE

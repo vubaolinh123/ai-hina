@@ -27,6 +27,7 @@
     "test:safety": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-SafetyUnit.ps1",
     "test:text-brain": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-TextBrainUnit.ps1",
     "test:memory": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-MemoryUnit.ps1",
+    "test:avatar": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-AvatarUnit.ps1",
     "test:speech": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-SpeechUnit.ps1",
     "test:contracts": "uv run --frozen python tools/contracts/generate_models.py --check && pnpm --filter @hina/contracts check:generated && uv run --frozen python -m unittest discover -s tests/contracts -p \"test_*.py\" && pnpm --filter @hina/contracts test",
     "test:contracts:repeat": "uv run --frozen python tools/contracts/repeat_gate.py --runs 20 --require-clean",

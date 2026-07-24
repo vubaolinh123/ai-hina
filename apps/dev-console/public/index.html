@@ -16,7 +16,7 @@
       <div class="brand">
         <div class="brand-mark" aria-hidden="true">H</div>
         <div>
-          <p class="eyebrow">LOCAL RUNTIME / M01–M06</p>
+          <p class="eyebrow">LOCAL RUNTIME / M01–M07</p>
           <h1>Hina Dev Console</h1>
         </div>
       </div>
@@ -38,16 +38,20 @@
             <span class="nav-icon" aria-hidden="true">02</span>
             <span><strong>Trò chuyện & giọng nói</strong><small>Chat, nghe và nói</small></span>
           </a>
-          <a href="#/memory" data-dashboard-nav="memory">
+          <a href="#/avatar" data-dashboard-nav="avatar">
             <span class="nav-icon" aria-hidden="true">03</span>
+            <span><strong>Avatar Stage</strong><small>Hình ảnh và trạng thái Hina</small></span>
+          </a>
+          <a href="#/memory" data-dashboard-nav="memory">
+            <span class="nav-icon" aria-hidden="true">04</span>
             <span><strong>Ký ức</strong><small>Duyệt và quản lý ghi nhớ</small></span>
           </a>
           <a href="#/safety" data-dashboard-nav="safety">
-            <span class="nav-icon" aria-hidden="true">04</span>
+            <span class="nav-icon" aria-hidden="true">05</span>
             <span><strong>An toàn</strong><small>Quyền hạn và kiểm duyệt</small></span>
           </a>
           <a href="#/runtime" data-dashboard-nav="runtime">
-            <span class="nav-icon" aria-hidden="true">05</span>
+            <span class="nav-icon" aria-hidden="true">06</span>
             <span><strong>Runtime & chẩn đoán</strong><small>Event, metric và lỗi</small></span>
           </a>
         </nav>
@@ -103,7 +107,7 @@
       </section>
 
       <section class="page-guide" data-dashboard-page="memory" aria-label="Hướng dẫn nhanh trang Ký ức">
-        <span class="page-guide-badge" aria-hidden="true">03</span>
+        <span class="page-guide-badge" aria-hidden="true">04</span>
         <div>
           <strong>Khi nào dùng: có thông tin ổn định mà Hina nên nhớ ở những lần trò chuyện sau.</strong>
           <p>
@@ -115,6 +119,23 @@
             <li>1. Tạo đề xuất</li>
             <li>2. Đọc lại và duyệt</li>
             <li>3. Tìm, sửa, ghim hoặc xóa</li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="page-guide" data-dashboard-page="avatar" aria-label="Hướng dẫn nhanh trang Avatar Stage">
+        <span class="page-guide-badge" aria-hidden="true">03</span>
+        <div>
+          <strong>Khi nào dùng: muốn nhìn Hina phản ứng khi nghe, suy nghĩ, nói hoặc gặp lỗi.</strong>
+          <p>
+            Stage đọc trạng thái thật từ runtime. Khi phát WAV do TTS tạo, độ mở
+            miệng được đo từ chính audio đang nghe. Các nút “Xem thử” chỉ kiểm tra
+            biểu cảm thủ công, không giả vờ rằng AI đang thực hiện một lượt chat.
+          </p>
+          <ol class="guide-steps">
+            <li>Chat hoặc phát TTS để xem phản ứng thật</li>
+            <li>Xem thử state để kiểm tra hình</li>
+            <li>Mute / dừng khẩn cấp khi cần</li>
           </ol>
         </div>
       </section>
@@ -203,21 +224,184 @@
           <h3>Trò chuyện & giọng nói</h3>
           <p>Dùng để nhắn tin với Hina, chuyển giọng nói thành chữ và phát câu trả lời bằng giọng Việt trên máy.</p>
         </a>
-        <a class="overview-card" href="#/memory">
+        <a class="overview-card" href="#/avatar">
           <span class="overview-number">02</span>
+          <h3>Avatar Stage</h3>
+          <p>Dùng để nhìn trạng thái nghe, suy nghĩ, nói và lỗi của Hina; miệng chuyển động theo audio TTS thật đang phát.</p>
+        </a>
+        <a class="overview-card" href="#/memory">
+          <span class="overview-number">03</span>
           <h3>Ký ức có kiểm soát</h3>
           <p>Dùng để đề xuất điều Hina nên nhớ; chỉ dữ liệu bạn bấm duyệt mới được đưa vào ký ức dài hạn.</p>
         </a>
         <a class="overview-card" href="#/safety">
-          <span class="overview-number">03</span>
+          <span class="overview-number">04</span>
           <h3>Trung tâm an toàn</h3>
           <p>Dùng để kiểm tra quyền, dừng khẩn cấp, lọc dữ liệu đầu vào và xem lịch sử quyết định an toàn.</p>
         </a>
         <a class="overview-card" href="#/runtime">
-          <span class="overview-number">04</span>
+          <span class="overview-number">05</span>
           <h3>Runtime & chẩn đoán</h3>
           <p>Dùng để kiểm tra luồng sự kiện, dữ liệu đã lưu, chỉ số vận hành và mã lỗi khi một tính năng gặp sự cố.</p>
         </a>
+      </section>
+
+      <section class="avatar-stage-layout" data-dashboard-page="avatar" aria-labelledby="avatarStageTitle">
+        <article class="panel avatar-viewport-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">M07-S1/S2 / REAL RUNTIME CUES</p>
+              <h2 id="avatarStageTitle">Sân khấu của Hina</h2>
+            </div>
+            <button id="refreshAvatarButton" class="text-button" type="button">Làm mới</button>
+          </div>
+          <p class="panel-copy feature-purpose">
+            <strong>Mục đích:</strong> biến state của hội thoại và TTS thành phản
+            ứng nhìn thấy được. Đây là visual SVG/CSS gốc của dự án để kiểm thử
+            luồng chạy thật; chưa phải model VRM hoặc Live2D.
+          </p>
+
+          <div
+            id="avatarViewport"
+            class="avatar-viewport"
+            data-state="idle"
+            data-expression="neutral"
+            aria-label="Hina code-native avatar"
+          >
+            <div class="avatar-stage-topline">
+              <span id="avatarAssetBadge" class="protocol-pill">CODE-NATIVE FALLBACK</span>
+              <span id="avatarLiveBadge" class="avatar-live-badge">Đang kết nối runtime…</span>
+            </div>
+            <svg
+              id="hinaAvatarSvg"
+              class="hina-avatar"
+              viewBox="0 0 520 620"
+              role="img"
+              aria-labelledby="hinaAvatarTitle hinaAvatarDescription"
+            >
+              <title id="hinaAvatarTitle">Hina code-native avatar</title>
+              <desc id="hinaAvatarDescription">
+                Visual gốc dùng để hiển thị state và độ mở miệng từ audio TTS thật.
+              </desc>
+              <defs>
+                <linearGradient id="avatarHairGradient" x1="0" x2="1" y1="0" y2="1">
+                  <stop offset="0" stop-color="#352c48"/>
+                  <stop offset="0.55" stop-color="#211b31"/>
+                  <stop offset="1" stop-color="#17131f"/>
+                </linearGradient>
+                <linearGradient id="avatarCoatGradient" x1="0" x2="1">
+                  <stop offset="0" stop-color="#24202d"/>
+                  <stop offset="1" stop-color="#16131c"/>
+                </linearGradient>
+                <radialGradient id="avatarSkinGradient" cx="45%" cy="35%">
+                  <stop offset="0" stop-color="#ffe8da"/>
+                  <stop offset="1" stop-color="#e8bfae"/>
+                </radialGradient>
+                <filter id="avatarGlow">
+                  <feGaussianBlur stdDeviation="12"/>
+                </filter>
+              </defs>
+              <circle id="avatarAura" class="avatar-aura" cx="260" cy="278" r="210"/>
+              <g class="avatar-body">
+                <path class="avatar-hair-back" d="M91 514c12-118 7-246 46-352C164 88 210 52 265 52c71 0 126 58 147 151 24 108 6 226 24 311z"/>
+                <path class="avatar-coat" d="M80 620c11-109 71-174 180-174s170 65 181 174z"/>
+                <path class="avatar-shirt" d="M191 620l27-160h84l29 160z"/>
+                <path class="avatar-collar" d="M176 472l72 62-45 35-48-77zM344 472l-72 62 45 35 48-77z"/>
+                <path class="avatar-neck" d="M220 421h80v77c-18 16-62 16-80 0z"/>
+                <ellipse class="avatar-face" cx="260" cy="287" rx="137" ry="168"/>
+                <path class="avatar-fringe" d="M124 238c6-117 64-181 144-181 89 0 139 74 140 183-45-32-70-70-90-118-20 52-75 92-194 116z"/>
+                <path class="avatar-side-hair" d="M124 219c-30 80-12 194 45 246l26-49c-34-58-41-128-28-211zM397 211c31 88 17 198-45 254l-28-48c37-64 43-136 27-218z"/>
+                <g class="avatar-eyes">
+                  <path id="avatarLeftEye" class="avatar-eye" d="M166 287q40-34 78 0q-39 25-78 0z"/>
+                  <path id="avatarRightEye" class="avatar-eye" d="M276 287q40-34 78 0q-39 25-78 0z"/>
+                  <circle class="avatar-eye-glint" cx="209" cy="279" r="5"/>
+                  <circle class="avatar-eye-glint" cx="319" cy="279" r="5"/>
+                </g>
+                <path class="avatar-brow avatar-brow-left" d="M170 249q35-19 70 0"/>
+                <path class="avatar-brow avatar-brow-right" d="M280 249q35-19 70 0"/>
+                <path class="avatar-nose" d="M257 296l-7 48 19 4"/>
+                <ellipse class="avatar-blush avatar-blush-left" cx="176" cy="344" rx="28" ry="10"/>
+                <ellipse class="avatar-blush avatar-blush-right" cx="344" cy="344" rx="28" ry="10"/>
+                <g id="avatarMouthGroup" class="avatar-mouth-group">
+                  <path class="avatar-mouth-line" d="M222 384q38 25 76 0"/>
+                  <ellipse id="avatarMouth" class="avatar-mouth" cx="260" cy="390" rx="32" ry="7"/>
+                </g>
+                <g class="avatar-hairpin">
+                  <path d="M130 196l66-39M136 218l67-37"/>
+                  <circle cx="130" cy="196" r="8"/>
+                  <circle cx="136" cy="218" r="8"/>
+                </g>
+              </g>
+            </svg>
+            <div class="avatar-caption">
+              <span id="avatarStateCaption">IDLE</span>
+              <small id="avatarModeCaption">runtime · neutral</small>
+            </div>
+          </div>
+        </article>
+
+        <aside class="panel avatar-controls-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">OPERATOR / LOOPBACK CONTROL</p>
+              <h2>Điều khiển & trạng thái</h2>
+            </div>
+          </div>
+          <div class="avatar-status-grid">
+            <div><span>State hiện tại</span><strong id="avatarStateValue">—</strong></div>
+            <div><span>Biểu cảm</span><strong id="avatarExpressionValue">—</strong></div>
+            <div><span>Nguồn cue</span><strong id="avatarSourceValue">—</strong></div>
+            <div><span>Sequence</span><strong id="avatarSequenceValue">0</strong></div>
+          </div>
+
+          <div class="avatar-control-block">
+            <h3>Xem thử biểu cảm thủ công</h3>
+            <p class="panel-copy">
+              Dùng để kiểm tra visual. Chế độ này được gắn nhãn
+              <code>manual-preview</code> và không tạo chat/TTS giả.
+            </p>
+            <label for="avatarPreviewState">State muốn xem thử</label>
+            <select id="avatarPreviewState">
+              <option value="idle">Nghỉ — idle</option>
+              <option value="listening">Đang nghe — listening</option>
+              <option value="thinking">Đang suy nghĩ — thinking</option>
+              <option value="speaking">Đang nói — speaking</option>
+              <option value="interrupted">Bị ngắt — interrupted</option>
+              <option value="error">Có lỗi — error</option>
+            </select>
+            <div class="button-row avatar-control-actions">
+              <button id="previewAvatarButton" class="button button-primary" type="button">Xem thử state</button>
+              <button id="resetAvatarButton" class="button button-secondary" type="button">Đặt về idle</button>
+            </div>
+          </div>
+
+          <div class="avatar-control-block">
+            <h3>Âm thanh & dừng khẩn cấp</h3>
+            <p class="panel-copy">
+              Mute chỉ tắt tiếng theo safety backend. Dừng khẩn cấp chặn hành động
+              mới của Hina; dùng khi có hành vi bất thường.
+            </p>
+            <div class="button-row avatar-control-actions">
+              <button id="avatarMuteButton" class="button button-secondary" type="button">Bật mute</button>
+              <button id="avatarEmergencyButton" class="button button-danger" type="button">Dừng khẩn cấp</button>
+            </div>
+            <p id="avatarSafetyState" class="avatar-safety-state">Đang đọc trạng thái safety…</p>
+          </div>
+
+          <div class="avatar-control-block avatar-limitations">
+            <h3>Giới hạn hiện tại</h3>
+            <ul>
+              <li><strong>VRM:</strong> chưa tải; visual hiện tại là SVG gốc.</li>
+              <li><strong>Lip-sync:</strong> theo biên độ audio thật, chưa nhận dạng nguyên âm.</li>
+              <li><strong>Desktop app:</strong> Electron/Vue sẽ được thêm ở slice kế tiếp.</li>
+            </ul>
+          </div>
+
+          <label>Snapshot renderer-safe</label>
+          <div id="avatarStatusBox" class="data-box avatar-status-box empty">
+            Chưa có trạng thái avatar.
+          </div>
+        </aside>
       </section>
 
       <div class="workspace-grid">
@@ -992,7 +1176,7 @@
       </div>
 
       <footer>
-        <span>Hina AI · M01–M06 local companion dashboard</span>
+        <span>Hina AI · M01–M07 local companion dashboard</span>
         <span>Dừng dịch vụ bằng <kbd>Ctrl</kbd> + <kbd>C</kbd></span>
       </footer>
       </main>

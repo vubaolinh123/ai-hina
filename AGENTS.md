@@ -4,7 +4,7 @@
 
 Đọc `HINA_AI_MASTER_PLAN_VI.md` trước khi thay đổi kiến trúc hoặc mở module mới. Chỉ một module sản phẩm được ở write phase tại một thời điểm.
 
-Module active hiện tại: **M06 — Long-term memory có consent và chống poisoning**. M01,
+Module active hiện tại: **M07 — Avatar stage và operator desktop**. M01,
 M02 và M03 đã qua fast unit/contract/startup gate; repeat/soak/deep release
 verification được hoãn tới khi owner yêu cầu. M04-S1/S2 đã qua fast gate,
 real-provider smoke và independent review; P1 native inference timeout đã đóng
@@ -18,10 +18,18 @@ promotion. Owner vẫn thực hiện manual feature testing và báo lỗi bằn
 correlation ID. Ngày 2026-07-25 owner chỉ thị “tiếp tục task tiếp theo”, được ghi
 nhận là cho phép chuyển từ candidate M05 sang M06 trong fast-development mode.
 M06 đồng thời sở hữu việc tổ chức lại Dev Console thành dashboard nhiều trang
-logic để owner quản lý memory và các module đã chạy thật. M06-S1 hiện là runnable
-candidate: fast unit/contract/governance/startup và browser workflow đều xanh;
-owner tiếp theo tự manual acceptance. Không mở M07 trước khi candidate M06 qua
-independent review theo yêu cầu trước đó của owner và owner cho phép tiếp tục.
+logic để owner quản lý memory và các module đã chạy thật. M06-S1 là reviewed
+runnable candidate: fast unit/contract/governance/startup/browser workflow đều
+xanh; independent reviewer PASS frozen SHA `76986f53eb84de7bb276c22b925524c7442577a5`
+không có P0/P1. P2 derived-index isolation được giữ trong backlog và M06 hiện
+chỉ hỗ trợ local single-owner. Ngày 2026-07-25 owner chỉ thị “tiếp tục các task
+tiếp theo đi”, được ghi nhận là cho phép mở M07 trong fast-development mode.
+M07-S1/S2 hiện là runnable candidate: avatar state/control plane, turn callback,
+stage code-native và Web Audio amplitude từ TTS thật đã qua fast unit/contract/
+governance/startup/browser gate. Browser đã xác nhận cue `speech.output` chuyển
+stage sang `speaking` và mở miệng theo WAV thật; không có console error.
+Electron/Vue shell là slice kế tiếp; VRM chỉ mở khi dependency và asset
+provenance đã chốt.
 
 Legacy AIRI skill paths dưới `D:\ProjectAiri` mặc định ánh xạ sang repository
 hiện tại `D:\ProjectHinaAI`, trừ khi owner chỉ định workspace khác.

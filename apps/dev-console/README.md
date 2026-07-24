@@ -2,8 +2,9 @@
 
 This is the owner-facing local application for manually exercising the real
 M01 runtime, M02 safety policy, M03 local text brain, M04 local speech input,
-M05 local Vietnamese speech output and M06 consent-gated long-term memory. It
-contains no simulated AI response, transcript, audio or memory.
+M05 local Vietnamese speech output, M06 consent-gated long-term memory and the
+M07 renderer-safe avatar stage. It contains no simulated AI response,
+transcript, audio, memory or backend activity.
 
 From the repository root:
 
@@ -26,6 +27,7 @@ The UI is an admin-style hash-routed dashboard:
 
 - `#/overview` shows runtime readiness and describes each area;
 - `#/companion` groups text chat, STT and TTS;
+- `#/avatar` renders typed turn/TTS cues and operator safety controls;
 - `#/memory` handles candidate consent and active memory lifecycle;
 - `#/safety` contains policy, sanitation, moderation and audit controls;
 - `#/runtime` groups events, replay, binary frames, metrics, errors and activity.
@@ -52,6 +54,10 @@ Qdrant runs in persistent local mode as a rebuildable derived index. Search
 hits are revalidated against SQLite; deletion returns a receipt only after both
 stores reconcile. Owner memory enters chat only as delimited untrusted user-role
 data and is never retrieved for public/viewer turns.
+M07 displays the typed avatar states from the runtime and analyzes the real WAV
+already playing in the browser to drive mouth amplitude. Manual visual checks
+are labeled `manual-preview`. The current repository-original SVG/CSS asset is
+an honest fallback (`vrmLoaded=false`), not a VRM or Live2D model.
 
 After updating the source, restart the running console so its Python process
-loads the new safety, text-brain, speech and memory modules.
+loads the new safety, text-brain, speech, memory and avatar modules.

@@ -16,6 +16,14 @@ const state = {
   memoryStatus: null,
   memoryCandidates: [],
   memoryRecords: [],
+  avatarStatus: null,
+  avatarRefreshBusy: false,
+  avatarUnavailableLogged: false,
+  avatarAudioContext: null,
+  avatarAudioSource: null,
+  avatarAnalyser: null,
+  avatarAudioFrame: null,
+  avatarPlaybackActive: false,
   sessionId: localStorage.getItem("hina.console.session") || crypto.randomUUID(),
 };
 
@@ -150,6 +158,25 @@ const elements = Object.fromEntries(
     "searchMemoryButton",
     "memorySearchResult",
     "memoryRecordList",
+    "refreshAvatarButton",
+    "avatarViewport",
+    "avatarAssetBadge",
+    "avatarLiveBadge",
+    "avatarMouth",
+    "avatarMouthGroup",
+    "avatarStateCaption",
+    "avatarModeCaption",
+    "avatarStateValue",
+    "avatarExpressionValue",
+    "avatarSourceValue",
+    "avatarSequenceValue",
+    "avatarPreviewState",
+    "previewAvatarButton",
+    "resetAvatarButton",
+    "avatarMuteButton",
+    "avatarEmergencyButton",
+    "avatarSafetyState",
+    "avatarStatusBox",
   ].map((id) => [id, document.getElementById(id)]),
 );
 
@@ -168,6 +195,11 @@ const dashboardPages = {
     eyebrow: "M06 / OWNER CONTROL",
     title: "Ký ức dài hạn",
     description: "Đề xuất, duyệt, sửa, ghim, tìm kiếm, xuất hoặc xóa những dữ kiện Hina được phép nhớ.",
+  },
+  avatar: {
+    eyebrow: "M07 / AVATAR STAGE",
+    title: "Avatar Stage & điều khiển",
+    description: "Xem state hội thoại thật, chuyển động miệng theo WAV TTS đang phát và dùng các điều khiển an toàn của operator.",
   },
   safety: {
     eyebrow: "M02 / POLICY AUTHORITY",
@@ -220,6 +252,9 @@ function renderDashboardRoute() {
   document.title = `${copy.title} · Hina Dev Console`;
   elements.dashboardMain.scrollTo({ top: 0, behavior: "instant" });
   elements.dashboardMain.focus({ preventScroll: true });
+  if (page === "avatar") {
+    refreshAvatar();
+  }
 }
 
 function addActivity(message, level = "info") {
@@ -273,6 +308,211 @@ async function postJson(path, body) {
     throw new Error(`${result.errorCode || response.status}: ${result.message || "request failed"}`);
   }
   return result;
+}
+
+const avatarStateLabels = {
+  idle: "Nghỉ",
+  listening: "Đang nghe",
+  thinking: "Đang suy nghĩ",
+  speaking: "Đang nói",
+  interrupted: "Bị ngắt",
+  error: "Có lỗi",
+};
+
+function setAvatarMouth(intensity) {
+  const bounded = Math.min(1, Math.max(0, Number(intensity) || 0));
+  elements.avatarMouth.setAttribute("ry", String(7 + bounded * 25));
+  elements.avatarMouth.setAttribute("rx", String(32 - bounded * 4));
+  const line = elements.avatarMouthGroup.querySelector(".avatar-mouth-line");
+  if (line) {
+    line.style.opacity = String(Math.max(0, 1 - bounded * 2.2));
+  }
+}
+
+function renderAvatarStatus(status) {
+  state.avatarStatus = status;
+  elements.avatarViewport.dataset.state = status.state;
+  elements.avatarViewport.dataset.expression = status.expression;
+  elements.avatarStateValue.textContent = avatarStateLabels[status.state] || status.state;
+  elements.avatarExpressionValue.textContent = status.expression;
+  elements.avatarSourceValue.textContent = status.source;
+  elements.avatarSequenceValue.textContent = String(status.sequence);
+  elements.avatarStateCaption.textContent = status.state.toUpperCase();
+  elements.avatarModeCaption.textContent = `${status.mode} · ${status.expression}`;
+  elements.avatarAssetBadge.textContent = status.asset.vrmLoaded
+    ? "VRM LOADED"
+    : "CODE-NATIVE FALLBACK · VRM CHƯA TẢI";
+  elements.avatarLiveBadge.textContent =
+    `${avatarStateLabels[status.state] || status.state} · cue #${status.sequence}`;
+  elements.avatarStatusBox.classList.remove("empty");
+  elements.avatarStatusBox.textContent = JSON.stringify(
+    {
+      state: status.state,
+      expression: status.expression,
+      source: status.source,
+      mode: status.mode,
+      sequence: status.sequence,
+      updatedAt: status.updatedAt,
+      correlationId: status.correlationId,
+      turnId: status.turnId,
+      utteranceId: status.utteranceId,
+      asset: status.asset,
+      lipSync: status.lipSync,
+      rendererContract: status.rendererContract,
+    },
+    null,
+    2,
+  );
+  if (!state.avatarPlaybackActive) {
+    setAvatarMouth(status.state === "speaking" ? status.intensity : 0);
+  }
+}
+
+async function refreshAvatar({ logFailure = false } = {}) {
+  if (state.avatarRefreshBusy || document.hidden) return;
+  state.avatarRefreshBusy = true;
+  try {
+    const status = await fetchJson("/v1/avatar/status");
+    renderAvatarStatus(status);
+    state.avatarUnavailableLogged = false;
+  } catch (error) {
+    elements.avatarLiveBadge.textContent = "Avatar runtime unavailable";
+    elements.avatarStateValue.textContent = "unavailable";
+    if (logFailure || !state.avatarUnavailableLogged) {
+      addActivity(`Không đọc được avatar stage: ${error.message}`, "error");
+      state.avatarUnavailableLogged = true;
+    }
+  } finally {
+    state.avatarRefreshBusy = false;
+  }
+}
+
+async function applyAvatarCue(cue, { announce = true } = {}) {
+  try {
+    const status = await postJson("/v1/avatar/cues", cue);
+    renderAvatarStatus(status);
+    if (announce) {
+      addActivity(
+        `Avatar ${status.state} · ${status.mode} · cue #${status.sequence}.`,
+        "success",
+      );
+    }
+    return status;
+  } catch (error) {
+    addActivity(`Avatar cue lỗi: ${error.message}`, "error");
+    return null;
+  }
+}
+
+async function previewAvatarState() {
+  await applyAvatarCue({
+    source: "owner.console",
+    state: elements.avatarPreviewState.value,
+    mode: "manual-preview",
+  });
+}
+
+async function resetAvatarState() {
+  try {
+    const status = await postJson("/v1/avatar/reset", { action: "reset" });
+    renderAvatarStatus(status);
+    addActivity("Avatar đã về idle trung tính.", "success");
+  } catch (error) {
+    addActivity(`Reset avatar lỗi: ${error.message}`, "error");
+  }
+}
+
+async function ensureAvatarAudioAnalyser() {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) {
+    throw new Error("trình duyệt không hỗ trợ Web Audio API");
+  }
+  if (!state.avatarAudioContext) {
+    state.avatarAudioContext = new AudioContextClass();
+    state.avatarAudioSource =
+      state.avatarAudioContext.createMediaElementSource(elements.ttsPreview);
+    state.avatarAnalyser = state.avatarAudioContext.createAnalyser();
+    state.avatarAnalyser.fftSize = 256;
+    state.avatarAnalyser.smoothingTimeConstant = 0.55;
+    state.avatarAudioSource.connect(state.avatarAnalyser);
+    state.avatarAnalyser.connect(state.avatarAudioContext.destination);
+  }
+  if (state.avatarAudioContext.state === "suspended") {
+    await state.avatarAudioContext.resume();
+  }
+}
+
+function startAvatarAudioAnimation() {
+  if (!state.avatarAnalyser) return;
+  if (state.avatarAudioFrame !== null) {
+    cancelAnimationFrame(state.avatarAudioFrame);
+  }
+  const samples = new Uint8Array(state.avatarAnalyser.fftSize);
+  const renderFrame = () => {
+    if (!state.avatarPlaybackActive || elements.ttsPreview.paused) {
+      state.avatarAudioFrame = null;
+      setAvatarMouth(0);
+      return;
+    }
+    state.avatarAnalyser.getByteTimeDomainData(samples);
+    let energy = 0;
+    for (const sample of samples) {
+      const normalized = (sample - 128) / 128;
+      energy += normalized * normalized;
+    }
+    const rms = Math.sqrt(energy / samples.length);
+    setAvatarMouth(Math.min(1, rms * 5.5));
+    state.avatarAudioFrame = requestAnimationFrame(renderFrame);
+  };
+  renderFrame();
+}
+
+async function beginAvatarPlayback() {
+  state.avatarPlaybackActive = true;
+  try {
+    await ensureAvatarAudioAnalyser();
+    startAvatarAudioAnimation();
+  } catch (error) {
+    addActivity(`Lip-sync amplitude không khởi động được: ${error.message}`, "error");
+  }
+  await applyAvatarCue(
+    {
+      source: "speech.output",
+      state: "speaking",
+      expression: "happy",
+      viseme: "A",
+      intensity: 0.25,
+      mode: "tts-playback",
+      correlationId: state.ttsCorrelationId,
+      sessionId: state.sessionId,
+      utteranceId: state.ttsUtteranceId,
+    },
+    { announce: false },
+  );
+}
+
+async function finishAvatarPlayback() {
+  if (!state.avatarPlaybackActive) return;
+  state.avatarPlaybackActive = false;
+  if (state.avatarAudioFrame !== null) {
+    cancelAnimationFrame(state.avatarAudioFrame);
+    state.avatarAudioFrame = null;
+  }
+  setAvatarMouth(0);
+  await applyAvatarCue(
+    {
+      source: "speech.output",
+      state: "idle",
+      expression: "neutral",
+      viseme: "sil",
+      intensity: 0,
+      mode: "tts-playback",
+      correlationId: state.ttsCorrelationId,
+      sessionId: state.sessionId,
+      utteranceId: state.ttsUtteranceId,
+    },
+    { announce: false },
+  );
 }
 
 function setSpeechBlob(blob, label) {
@@ -1044,6 +1284,17 @@ function renderSafetyStatus(status) {
   elements.emergencyStopButton.disabled = safety.emergencyStopped;
   elements.emergencyResetButton.disabled = !safety.emergencyStopped;
   elements.muteButton.textContent = safety.muted ? "Tắt mute" : "Bật mute";
+  elements.avatarMuteButton.textContent = safety.muted ? "Tắt mute" : "Bật mute";
+  elements.avatarEmergencyButton.textContent = safety.emergencyStopped
+    ? "Khôi phục hoạt động"
+    : "Dừng khẩn cấp";
+  elements.avatarEmergencyButton.className = safety.emergencyStopped
+    ? "button button-secondary"
+    : "button button-danger";
+  elements.avatarSafetyState.dataset.emergency = String(safety.emergencyStopped);
+  elements.avatarSafetyState.textContent = safety.emergencyStopped
+    ? `EMERGENCY STOP đang bật · ${safety.muted ? "đang mute" : "audio chưa mute"}`
+    : `Safety ready · ${safety.muted ? "đang mute" : "audio đang bật"}`;
 
   const capabilities = status.manifest.capabilities.map((item) => item.name);
   replaceOptions(elements.capabilitySelect, capabilities, capabilityLabels);
@@ -1549,6 +1800,7 @@ async function refreshAll({ announce = true } = {}) {
     refreshSpeech(),
     refreshTts(),
     refreshMemory(),
+    refreshAvatar(),
   ]);
   if (announce) {
     addActivity("Đã làm mới control plane, metrics và error log.", "success");
@@ -1803,7 +2055,14 @@ elements.refreshSpeechButton.addEventListener("click", refreshSpeech);
 elements.refreshTtsButton.addEventListener("click", refreshTts);
 elements.synthesizeTtsButton.addEventListener("click", () => synthesizeTts());
 elements.stopTtsButton.addEventListener("click", () => stopTts());
+elements.ttsPreview.addEventListener("play", () => {
+  void beginAvatarPlayback();
+});
+elements.ttsPreview.addEventListener("pause", () => {
+  void finishAvatarPlayback();
+});
 elements.ttsPreview.addEventListener("ended", () => {
+  void finishAvatarPlayback();
   state.ttsUtteranceId = null;
   state.ttsCorrelationId = null;
   elements.stopTtsButton.disabled = true;
@@ -1858,6 +2117,18 @@ elements.memorySearchInput.addEventListener("keydown", (event) => {
 });
 elements.exportMemoryButton.addEventListener("click", exportMemory);
 elements.rebuildMemoryButton.addEventListener("click", rebuildMemory);
+elements.refreshAvatarButton.addEventListener("click", () =>
+  refreshAvatar({ logFailure: true }));
+elements.previewAvatarButton.addEventListener("click", previewAvatarState);
+elements.resetAvatarButton.addEventListener("click", resetAvatarState);
+elements.avatarMuteButton.addEventListener("click", () => {
+  const enabled = !(state.safetyStatus?.state.muted || false);
+  applySafetyControl("set_mute", { enabled });
+});
+elements.avatarEmergencyButton.addEventListener("click", () => {
+  const stopped = state.safetyStatus?.state.emergencyStopped || false;
+  applySafetyControl(stopped ? "emergency_reset" : "emergency_stop");
+});
 window.addEventListener("hashchange", renderDashboardRoute);
 
 window.addEventListener("beforeunload", () => {
@@ -1877,6 +2148,10 @@ window.addEventListener("beforeunload", () => {
   if (state.ttsBlobUrl) {
     URL.revokeObjectURL(state.ttsBlobUrl);
   }
+  if (state.avatarAudioFrame !== null) {
+    cancelAnimationFrame(state.avatarAudioFrame);
+  }
+  state.avatarAudioContext?.close();
 });
 window.addEventListener("pagehide", cancelTtsOnPageExit);
 
@@ -1894,3 +2169,8 @@ setInterval(() => {
   refreshTts();
   refreshMemory();
 }, 5000);
+setInterval(() => {
+  if (location.hash === "#/avatar" || state.avatarPlaybackActive) {
+    refreshAvatar();
+  }
+}, 250);

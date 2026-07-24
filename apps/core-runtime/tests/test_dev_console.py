@@ -21,10 +21,12 @@ SAFETY_ROOT = ROOT / "packages" / "safety-policy"
 PERSONA_PATH = ROOT / "packages" / "text-brain" / "personas" / "hina.v1.json"
 SPEECH_ROOT = ROOT / "workers" / "speech"
 MEMORY_ROOT = ROOT / "packages" / "memory"
+AVATAR_ROOT = ROOT / "packages" / "avatar"
 sys.path.insert(0, str(ROOT / "packages" / "contracts" / "src"))
 sys.path.insert(0, str(SAFETY_ROOT / "src"))
 sys.path.insert(0, str(SPEECH_ROOT / "src"))
 sys.path.insert(0, str(MEMORY_ROOT / "src"))
+sys.path.insert(0, str(AVATAR_ROOT / "src"))
 sys.path.insert(0, str(APP_ROOT / "src"))
 
 from hina_core.runtime import (  # noqa: E402
@@ -298,7 +300,13 @@ class DevConsoleTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(headers["x-frame-options"], "DENY")
                 self.assertIn(b"Hina Dev Console", html)
                 self.assertIn(b'data-dashboard-nav="memory"', html)
+                self.assertIn(b'data-dashboard-nav="avatar"', html)
                 self.assertIn(b'data-dashboard-page="companion"', html)
+                self.assertIn(b'data-dashboard-page="avatar"', html)
+                self.assertIn(b'id="avatarViewport"', html)
+                self.assertIn(b'id="avatarMouth"', html)
+                self.assertIn("CODE-NATIVE FALLBACK".encode(), html)
+                self.assertIn("chưa phải model VRM".encode(), html)
                 self.assertIn(b'id="dashboardMain"', html)
                 self.assertIn(b'class="page-guide"', html)
                 self.assertIn("Khi nào dùng:".encode(), html)
@@ -311,6 +319,8 @@ class DevConsoleTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn(b"overflow: hidden;", styles)
                 self.assertIn(b"main.dashboard-main", styles)
                 self.assertIn(b"overflow-y: auto;", styles)
+                self.assertIn(b".avatar-stage-layout", styles)
+                self.assertIn(b".avatar-viewport", styles)
                 self.assertNotIn(b"margin: -7px 0 12px;", styles)
 
                 status, _, script = await _get(host, port, "/app.js")
@@ -328,6 +338,11 @@ class DevConsoleTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn(b"/v1/memory/candidates", script)
                 self.assertIn(b"/v1/memory/search", script)
                 self.assertIn(b"/v1/memory/rebuild", script)
+                self.assertIn(b"/v1/avatar/status", script)
+                self.assertIn(b"/v1/avatar/cues", script)
+                self.assertIn(b"/v1/avatar/reset", script)
+                self.assertIn(b"createMediaElementSource", script)
+                self.assertIn(b"getByteTimeDomainData", script)
                 self.assertIn(b"renderDashboardRoute", script)
                 self.assertIn(b"capabilityLabels", script)
                 self.assertIn(b"dashboardMain.scrollTo", script)
@@ -346,6 +361,68 @@ class DevConsoleTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(model.status, HTTPStatus.OK)
                 self.assertFalse(model.body["available"])
                 self.assertEqual(model.body["provider"]["errorCode"], "E_MODEL_UNAVAILABLE")
+            finally:
+                await application.stop()
+
+    async def test_avatar_control_plane_is_typed_and_rejects_untrusted_sources(self) -> None:
+        with tempfile.TemporaryDirectory(dir=APP_ROOT) as temporary_directory:
+            directory = Path(temporary_directory)
+            application = HinaRuntimeApplication(
+                TransportConfig(port=0),
+                RuntimePaths(
+                    database=directory / "runtime.sqlite3",
+                    error_log=directory / "runtime.jsonl",
+                    static_dir=STATIC_DIR,
+                ),
+                model_gateway=_StubModelGateway(),
+            )
+            await application.start()
+            host, port = application.address
+            try:
+                initial = await get_json(host, port, "/v1/avatar/status")
+                self.assertEqual(initial.status, HTTPStatus.OK)
+                self.assertEqual(initial.body["state"], "idle")
+                self.assertFalse(initial.body["asset"]["vrmLoaded"])
+                self.assertTrue(
+                    initial.body["rendererContract"]["controlPlaneOnly"]
+                )
+
+                preview = await post_json(
+                    host,
+                    port,
+                    "/v1/avatar/cues",
+                    {
+                        "source": "owner.console",
+                        "state": "thinking",
+                        "expression": "focused",
+                        "mode": "manual-preview",
+                    },
+                )
+                self.assertEqual(preview.status, HTTPStatus.OK)
+                self.assertEqual(preview.body["state"], "thinking")
+                self.assertEqual(preview.body["mode"], "manual-preview")
+
+                for source in ("viewer.chat", "conversation.service", "runtime.lifecycle"):
+                    rejected = await post_json(
+                        host,
+                        port,
+                        "/v1/avatar/cues",
+                        {
+                            "source": source,
+                            "state": "speaking",
+                        },
+                    )
+                    self.assertEqual(rejected.status, HTTPStatus.FORBIDDEN)
+                    self.assertEqual(rejected.body["errorCode"], "E_AVATAR_SOURCE")
+
+                reset = await post_json(
+                    host,
+                    port,
+                    "/v1/avatar/reset",
+                    {"action": "reset"},
+                )
+                self.assertEqual(reset.status, HTTPStatus.OK)
+                self.assertEqual(reset.body["state"], "idle")
             finally:
                 await application.stop()
 
@@ -597,6 +674,11 @@ class DevConsoleTests(unittest.IsolatedAsyncioTestCase):
                     (turn["outcome"], turn["errorCode"]),
                     ("error", "E_MODEL_UNAVAILABLE"),
                 )
+                avatar = await get_json(host, port, "/v1/avatar/status")
+                self.assertEqual(avatar.body["state"], "error")
+                self.assertEqual(avatar.body["source"], "conversation.service")
+                self.assertEqual(avatar.body["turnId"], turn["turnId"])
+                self.assertNotIn(secret, json.dumps(avatar.body))
                 log_text = (directory / "runtime.jsonl").read_text(encoding="utf-8")
                 self.assertIn("text_brain.conversation", log_text)
                 self.assertIn(turn["correlationId"], log_text)
