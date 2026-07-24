@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta
       name="description"
-      content="Hina Dev Console — giao diện local để kiểm thử runtime M01 thật."
+      content="Hina Dev Console — giao diện local để kiểm thử runtime và safety policy thật."
     >
     <title>Hina Dev Console</title>
     <link rel="stylesheet" href="/styles.css">
@@ -16,7 +16,7 @@
       <div class="brand">
         <div class="brand-mark" aria-hidden="true">H</div>
         <div>
-          <p class="eyebrow">LOCAL RUNTIME / M01</p>
+          <p class="eyebrow">LOCAL RUNTIME / M01 + M02</p>
           <h1>Hina Dev Console</h1>
         </div>
       </div>
@@ -30,10 +30,10 @@
       <section class="hero" aria-labelledby="heroTitle">
         <div>
           <p class="eyebrow">OWNER TEST SURFACE</p>
-          <h2 id="heroTitle">Kiểm tra hạ tầng thật, không giả lập AI</h2>
+          <h2 id="heroTitle">Runtime thật với safety controls</h2>
           <p>
-            Mọi thao tác bên dưới gọi trực tiếp HTTP, WebSocket và SQLite của
-            Hina. Chat/model thật sẽ được tích hợp ở module brain sau M01.
+            Mọi thao tác bên dưới gọi trực tiếp runtime, SQLite và safety-policy
+            của Hina. Chat/model thật sẽ được tích hợp ở module brain sau M02.
           </p>
         </div>
         <div class="hero-actions">
@@ -70,6 +70,110 @@
       </section>
 
       <div class="workspace-grid">
+        <section class="panel safety-panel" aria-labelledby="safetyTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">M02 / POLICY AUTHORITY</p>
+              <h2 id="safetyTitle">Safety control center</h2>
+            </div>
+            <button id="refreshSafetyButton" class="text-button" type="button">Làm mới</button>
+          </div>
+
+          <div id="safetyBanner" class="safety-banner">
+            <div>
+              <span>Emergency stop</span>
+              <strong id="emergencyState">Đang đọc…</strong>
+            </div>
+            <div>
+              <span>Output mute</span>
+              <strong id="muteState">Đang đọc…</strong>
+            </div>
+            <div>
+              <span>Audit chain</span>
+              <strong id="auditState">Đang đọc…</strong>
+            </div>
+            <div>
+              <span>Revision</span>
+              <strong id="safetyRevision">—</strong>
+            </div>
+          </div>
+
+          <div class="safety-columns">
+            <div class="safety-block">
+              <h3>Kiểm tra capability thật</h3>
+              <p class="panel-copy">
+                Runtime quyết định allow, ask hoặc deny rồi ghi audit. Console
+                không tự tính kết quả.
+              </p>
+              <label for="capabilitySelect">Capability</label>
+              <select id="capabilitySelect"></select>
+              <div class="field-grid">
+                <div>
+                  <label for="trustSelect">Trust level</label>
+                  <select id="trustSelect">
+                    <option value="owner">owner</option>
+                    <option value="trusted_local">trusted_local</option>
+                    <option value="authenticated">authenticated</option>
+                    <option value="public">public</option>
+                    <option value="untrusted">untrusted</option>
+                  </select>
+                </div>
+                <label class="checkbox-field" for="consumeCheck">
+                  <input id="consumeCheck" type="checkbox" checked>
+                  <span>Consume rate/budget</span>
+                </label>
+              </div>
+              <button id="evaluateSafetyButton" class="button button-primary full-width" type="button">
+                Authorize capability
+              </button>
+              <div id="safetyDecision" class="data-box empty">Chưa có policy decision.</div>
+            </div>
+
+            <div class="safety-block">
+              <h3>Operator controls</h3>
+              <p class="panel-copy">
+                Các thay đổi bên dưới áp dụng vào policy state và được hash-chain audit.
+              </p>
+              <div class="button-row">
+                <button id="emergencyStopButton" class="button button-danger" type="button">
+                  Emergency stop
+                </button>
+                <button id="emergencyResetButton" class="button button-secondary" type="button">
+                  Reset stop
+                </button>
+                <button id="muteButton" class="button button-secondary" type="button">
+                  Bật mute
+                </button>
+              </div>
+
+              <h3 class="subheading">Feature flags</h3>
+              <div id="featureFlags" class="toggle-list">
+                <p class="empty">Đang đọc feature flags…</p>
+              </div>
+
+              <h3 class="subheading">Capability revocation</h3>
+              <div class="inline-control">
+                <select id="revocationSelect"></select>
+                <button id="revocationButton" class="button button-secondary" type="button">
+                  Revoke
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="audit-section">
+            <div class="panel-heading compact-heading">
+              <div>
+                <p class="eyebrow">SHA-256 CHAIN</p>
+                <h3>Safety audit gần đây</h3>
+              </div>
+            </div>
+            <div id="safetyAuditList" class="stack-list">
+              <p class="empty">Chưa có audit record.</p>
+            </div>
+          </div>
+        </section>
+
         <section class="panel event-panel" aria-labelledby="eventTitle">
           <div class="panel-heading">
             <div>
@@ -209,7 +313,7 @@
     </main>
 
     <footer>
-      <span>Hina AI · M01 infrastructure console</span>
+      <span>Hina AI · M01 runtime + M02 safety console</span>
       <span>Dừng dịch vụ bằng <kbd>Ctrl</kbd> + <kbd>C</kbd></span>
     </footer>
   </body>

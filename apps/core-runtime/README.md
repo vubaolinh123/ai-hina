@@ -1,6 +1,6 @@
 # Hina core runtime
 
-M01-S2 đến M01-S7 cung cấp runtime nền tảng cho các module sau:
+M01-S2 đến M01-S7 và M02-S1 cung cấp runtime nền tảng cho các module sau:
 
 - bounded async queues, deadline, cancellation và idempotency;
 - SQLite journal/outbox/inbox với lease, ACK/NACK và ordered replay;
@@ -11,6 +11,7 @@ M01-S2 đến M01-S7 cung cấp runtime nền tảng cho các module sau:
 - resource lease giữ tối thiểu 2048 MiB VRAM headroom;
 - deterministic test providers và idempotent turn replay harness;
 - Hina Dev Console chạy lâu dài để owner thao tác với runtime thật.
+- capability policy, emergency controls và hash-chained safety audit.
 
 ## Chạy ứng dụng
 
@@ -25,6 +26,7 @@ Runtime dùng mặc định:
 - Console: `http://127.0.0.1:8765/`
 - Database: `var/data/hina-runtime.sqlite3`
 - Error log: `var/logs/hina-runtime.jsonl`
+- Safety audit: `var/audit/hina-safety.jsonl`
 
 Dừng bằng `Ctrl+C`. Chỉ chạy control plane không có giao diện bằng:
 
@@ -36,6 +38,7 @@ pnpm start:control
 
 ```powershell
 pnpm test:fast
+pnpm test:safety
 pnpm smoke:m01-s2
 pnpm smoke:m01-s3
 pnpm smoke:m01-s4

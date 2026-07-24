@@ -1,6 +1,7 @@
 const state = {
   socket: null,
   lastEnvelope: null,
+  safetyStatus: null,
   sessionId: localStorage.getItem("hina.console.session") || crypto.randomUUID(),
 };
 
@@ -19,6 +20,24 @@ const elements = Object.fromEntries(
     "endpointValue",
     "metricCountValue",
     "metricCapacityValue",
+    "refreshSafetyButton",
+    "safetyBanner",
+    "emergencyState",
+    "muteState",
+    "auditState",
+    "safetyRevision",
+    "capabilitySelect",
+    "trustSelect",
+    "consumeCheck",
+    "evaluateSafetyButton",
+    "safetyDecision",
+    "emergencyStopButton",
+    "emergencyResetButton",
+    "muteButton",
+    "featureFlags",
+    "revocationSelect",
+    "revocationButton",
+    "safetyAuditList",
     "messageInput",
     "streamInput",
     "sequenceInput",
@@ -76,6 +95,23 @@ async function fetchJson(path) {
     throw new Error(`${body.errorCode || response.status}: ${body.message || "request failed"}`);
   }
   return body;
+}
+
+async function postJson(path, body) {
+  const response = await fetch(path, {
+    method: "POST",
+    cache: "no-store",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  const result = await response.json();
+  if (!response.ok) {
+    throw new Error(`${result.errorCode || response.status}: ${result.message || "request failed"}`);
+  }
+  return result;
 }
 
 async function refreshStatus() {
@@ -174,8 +210,152 @@ async function refreshErrors() {
   }
 }
 
+function replaceOptions(select, values) {
+  const previous = select.value;
+  const current = Array.from(select.options, (option) => option.value);
+  if (JSON.stringify(current) === JSON.stringify(values)) return;
+  select.replaceChildren();
+  for (const value of values) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = value;
+    select.append(option);
+  }
+  if (values.includes(previous)) {
+    select.value = previous;
+  }
+}
+
+function renderSafetyStatus(status) {
+  state.safetyStatus = status;
+  const safety = status.state;
+  elements.emergencyState.textContent = safety.emergencyStopped ? "ACTIVE" : "ready";
+  elements.muteState.textContent = safety.muted ? "muted" : "audio enabled";
+  elements.auditState.textContent = status.audit.verified
+    ? `${status.audit.records} verified`
+    : "unavailable";
+  elements.safetyRevision.textContent = String(safety.revision);
+  elements.safetyBanner.classList.toggle("emergency-active", safety.emergencyStopped);
+  elements.emergencyStopButton.disabled = safety.emergencyStopped;
+  elements.emergencyResetButton.disabled = !safety.emergencyStopped;
+  elements.muteButton.textContent = safety.muted ? "Tắt mute" : "Bật mute";
+
+  const capabilities = status.manifest.capabilities.map((item) => item.name);
+  replaceOptions(elements.capabilitySelect, capabilities);
+  replaceOptions(elements.revocationSelect, capabilities);
+
+  elements.featureFlags.replaceChildren();
+  for (const [feature, enabled] of Object.entries(safety.featureFlags)) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "toggle-button";
+    button.setAttribute("aria-pressed", String(enabled));
+    button.dataset.feature = feature;
+    const label = document.createElement("span");
+    label.textContent = feature;
+    const value = document.createElement("strong");
+    value.textContent = enabled ? "ON" : "OFF";
+    button.append(label, value);
+    button.addEventListener("click", () => {
+      applySafetyControl("set_feature", { feature, enabled: !enabled });
+    });
+    elements.featureFlags.append(button);
+  }
+  updateRevocationButton();
+}
+
+function renderSafetyAudit(result) {
+  elements.safetyAuditList.replaceChildren();
+  if (result.records.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "empty";
+    empty.textContent = "Chưa có audit record.";
+    elements.safetyAuditList.append(empty);
+    return;
+  }
+  for (const record of [...result.records].reverse()) {
+    const entry = document.createElement("article");
+    entry.className = "audit-entry";
+    const meta = document.createElement("div");
+    meta.className = "entry-meta";
+    const kind = document.createElement("strong");
+    kind.textContent = `#${record.sequence} ${record.eventType}`;
+    const outcome = document.createElement("span");
+    outcome.textContent = `${record.outcome} · ${record.reasonCode}`;
+    meta.append(kind, outcome);
+    const message = document.createElement("p");
+    message.className = "entry-message";
+    message.textContent = `${record.capability || record.target || "operator"} · ${record.entryHash.slice(0, 16)}…`;
+    entry.append(meta, message);
+    elements.safetyAuditList.append(entry);
+  }
+}
+
+async function refreshSafety() {
+  try {
+    const [status, audit] = await Promise.all([
+      fetchJson("/v1/safety/status"),
+      fetchJson("/v1/safety/audit?limit=20"),
+    ]);
+    renderSafetyStatus(status);
+    renderSafetyAudit(audit);
+  } catch (error) {
+    elements.emergencyState.textContent = "unavailable";
+    elements.auditState.textContent = "unavailable";
+    addActivity(`Không đọc được safety policy: ${error.message}`, "error");
+  }
+}
+
+async function evaluateSafety() {
+  try {
+    const result = await postJson("/v1/safety/evaluate", {
+      capability: elements.capabilitySelect.value,
+      actorId: "owner.dev-console",
+      trustLevel: elements.trustSelect.value,
+      correlationId: crypto.randomUUID(),
+      sessionId: state.sessionId,
+      consume: elements.consumeCheck.checked,
+    });
+    elements.safetyDecision.classList.remove("empty");
+    elements.safetyDecision.textContent = JSON.stringify(result, null, 2);
+    addActivity(
+      `Policy ${result.decision.toUpperCase()}: ${result.capability} (${result.reasonCode}).`,
+      result.decision === "deny" ? "error" : "success",
+    );
+    await refreshSafety();
+  } catch (error) {
+    addActivity(`Policy request lỗi: ${error.message}`, "error");
+  }
+}
+
+async function applySafetyControl(action, extra = {}) {
+  try {
+    const result = await postJson("/v1/safety/control", {
+      action,
+      actorId: "owner.dev-console",
+      trustLevel: "owner",
+      correlationId: crypto.randomUUID(),
+      ...extra,
+    });
+    addActivity(
+      `Safety control ${action} đã áp dụng · audit=${result.auditRecorded}.`,
+      action === "emergency_stop" ? "error" : "success",
+    );
+    await refreshSafety();
+  } catch (error) {
+    addActivity(`Safety control lỗi: ${error.message}`, "error");
+  }
+}
+
+function updateRevocationButton() {
+  const capability = elements.revocationSelect.value;
+  const revoked = state.safetyStatus?.state.revokedCapabilities.includes(capability) || false;
+  elements.revocationButton.textContent = revoked ? "Unrevoke" : "Revoke";
+  elements.revocationButton.dataset.revoked = String(revoked);
+}
+
 async function refreshAll({ announce = true } = {}) {
-  await Promise.all([refreshStatus(), refreshMetrics(), refreshErrors()]);
+  await Promise.all([refreshStatus(), refreshMetrics(), refreshErrors(), refreshSafety()]);
   if (announce) {
     addActivity("Đã làm mới control plane, metrics và error log.", "success");
   }
@@ -397,6 +577,20 @@ function handleBinaryMessage(buffer) {
 
 elements.connectButton.addEventListener("click", connectWebSocket);
 elements.refreshAllButton.addEventListener("click", () => refreshAll());
+elements.refreshSafetyButton.addEventListener("click", refreshSafety);
+elements.evaluateSafetyButton.addEventListener("click", evaluateSafety);
+elements.emergencyStopButton.addEventListener("click", () => applySafetyControl("emergency_stop"));
+elements.emergencyResetButton.addEventListener("click", () => applySafetyControl("emergency_reset"));
+elements.muteButton.addEventListener("click", () => {
+  const enabled = !(state.safetyStatus?.state.muted || false);
+  applySafetyControl("set_mute", { enabled });
+});
+elements.revocationSelect.addEventListener("change", updateRevocationButton);
+elements.revocationButton.addEventListener("click", () => {
+  const capability = elements.revocationSelect.value;
+  const enabled = elements.revocationButton.dataset.revoked !== "true";
+  applySafetyControl("set_revocation", { capability, enabled });
+});
 elements.refreshMetricsButton.addEventListener("click", refreshMetrics);
 elements.refreshErrorsButton.addEventListener("click", refreshErrors);
 elements.sendEventButton.addEventListener("click", () => sendEvent());
@@ -418,4 +612,5 @@ connectWebSocket();
 setInterval(() => {
   refreshStatus();
   refreshMetrics();
+  refreshSafety();
 }, 5000);

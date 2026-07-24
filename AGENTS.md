@@ -7,7 +7,8 @@
 Module active hiện tại: **M02 — Safety, permissions, moderation và audit**.
 M01 đã fast-promote trên SHA `bcbd59e9453dc63ab305d331ba73c9a7983e189c`;
 repeat/soak/deep release verification được hoãn tới khi owner yêu cầu. Slice
-đang mở: **M02-S1 — capability policy, operator controls và audit spine**.
+M02-S1 đã triển khai; slice kế tiếp chưa mở là **M02-S2 — trust boundary,
+sanitation evidence và redaction**.
 
 Legacy AIRI skill paths dưới `D:\ProjectAiri` mặc định ánh xạ sang repository
 hiện tại `D:\ProjectHinaAI`, trừ khi owner chỉ định workspace khác.

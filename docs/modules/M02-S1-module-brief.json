@@ -1,0 +1,68 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M02-S1-capability-controls-audit",
+  "module_id": "M02",
+  "objective": "Deliver the first runnable safety vertical slice: a versioned capability manifest, deterministic allow/ask/deny decisions, bounded rate and session budgets, revocation and feature flags, operator emergency controls, hash-chained audit records, and an owner-facing Dev Console control surface.",
+  "non_goals": [
+    "Do not integrate a real LLM, TTS engine, memory store, game action, stream platform or model-generated code execution.",
+    "Do not claim full content moderation, PII detection, prompt-injection classification or M02 release readiness in this slice.",
+    "Do not expose the safety service outside loopback or add remote authentication in this local-owner slice.",
+    "Do not run repeat, soak, chaos, 20-run or full release verification."
+  ],
+  "base_sha": "196b38e",
+  "branch": "codex/M02-safety",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "AGENTS.md",
+    "README.md",
+    "apps/core-runtime/",
+    "apps/dev-console/",
+    "docs/modules/M02-*",
+    "package.json",
+    "packages/contracts/openapi/control-plane.v1.json",
+    "packages/README.md",
+    "packages/safety-policy/",
+    "tools/dev/"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "packages/contracts/schemas/v1/event-envelope.schema.json",
+    "workers/",
+    "adapters/",
+    "ml/",
+    "assets/",
+    "third_party/"
+  ],
+  "contracts": [
+    "Unknown, expired, revoked, critical and feature-disabled capabilities deny deterministically.",
+    "Only an owner-trust local control request can reset emergency stop, unmute output, enable a feature or remove revocation.",
+    "Emergency stop is applied before audit I/O and remains restrictive even if audit writing fails.",
+    "Every normal policy decision and operator control appends a bounded-field audit record chained by SHA-256; no caller-supplied secret or raw prompt is accepted into the audit API.",
+    "Rate limits use monotonic time, session budgets are bounded, and evaluation can be non-consuming while authorization consumes only an allow decision.",
+    "The browser Console calls the real loopback safety API and never simulates policy results client-side."
+  ],
+  "allowed_dependencies": [
+    "Python 3.12+ standard library, browser platform APIs and existing Hina runtime modules."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "The owner can inspect the loaded manifest, safety state and recent verified audit records in Hina Dev Console.",
+    "The owner can authorize a known capability and observe allow, ask or deny with a stable reason code.",
+    "The owner can toggle emergency stop, mute, feature flags and capability revocation, then immediately observe policy enforcement.",
+    "Unknown, expired, revoked, rate-limited, budget-exhausted and critical code-execution capability cases are covered by deterministic unit tests.",
+    "Audit tampering is detected and emergency stop remains active when audit append is unavailable.",
+    "Focused safety and core runtime unit tests plus a real startup smoke pass once."
+  ],
+  "required_test_commands": [
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-SafetyUnit.ps1",
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-FastUnit.ps1",
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Start-HinaDevConsole.ps1 -Port 0 -NoBrowser -StartupCheck"
+  ],
+  "latency_or_quality_budget": {
+    "policy_decision_p95_milliseconds": 10,
+    "emergency_control_p95_milliseconds": 250,
+    "max_audit_response_records": 100,
+    "max_http_control_body_bytes": 65536
+  },
+  "output_artifact_dir": "artifacts/verification/M02/"
+}

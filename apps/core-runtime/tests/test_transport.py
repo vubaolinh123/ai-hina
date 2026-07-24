@@ -87,6 +87,10 @@ class TransportValueTests(unittest.TestCase):
                 "/v1/config",
                 "/v1/metrics",
                 "/v1/errors",
+                "/v1/safety/status",
+                "/v1/safety/audit",
+                "/v1/safety/evaluate",
+                "/v1/safety/control",
             },
         )
         self.assertEqual(asyncapi["asyncapi"], "3.0.0")

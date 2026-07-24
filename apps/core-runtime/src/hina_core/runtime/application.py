@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from .durable import DurableStore
 from .error_log import JsonlErrorLogger
@@ -14,6 +15,8 @@ class RuntimePaths:
     database: Path
     error_log: Path
     static_dir: Path | None = None
+    audit_log: Path | None = None
+    safety_manifest: Path | None = None
 
 
 class HinaRuntimeApplication:
@@ -36,6 +39,7 @@ class HinaRuntimeApplication:
         )
         self.store: DurableStore | None = None
         self.server: ControlPlaneServer | None = None
+        self.safety_policy: Any | None = None
 
     @property
     def address(self) -> tuple[str, int]:
@@ -53,6 +57,18 @@ class HinaRuntimeApplication:
     async def start(self) -> tuple[str, int]:
         if self.server is not None:
             return self.server.address
+        safety_policy = None
+        if self.paths.audit_log is not None or self.paths.safety_manifest is not None:
+            if self.paths.audit_log is None or self.paths.safety_manifest is None:
+                raise ValueError("audit_log and safety_manifest must be configured together")
+            from hina_safety import AuditTrail, CapabilityManifest, SafetyPolicyService
+
+            manifest = CapabilityManifest.load(self.paths.safety_manifest.resolve())
+            audit = AuditTrail(
+                self.paths.audit_log.resolve(),
+                build_commit=self.build_commit,
+            )
+            safety_policy = SafetyPolicyService(manifest, audit)
         store = DurableStore(self.paths.database.resolve())
         server = ControlPlaneServer(
             self.config,
@@ -60,6 +76,7 @@ class HinaRuntimeApplication:
             error_logger=self.error_logger,
             metrics=self.metrics,
             static_dir=self.paths.static_dir,
+            safety_policy=safety_policy,
             build_commit=self.build_commit,
         )
         try:
@@ -69,6 +86,7 @@ class HinaRuntimeApplication:
             raise
         self.store = store
         self.server = server
+        self.safety_policy = safety_policy
         self.metrics.set_gauge(
             "hina_runtime_ready",
             1,
@@ -87,8 +105,8 @@ class HinaRuntimeApplication:
         store = self.store
         self.server = None
         self.store = None
+        self.safety_policy = None
         if server is not None:
             await server.stop()
         if store is not None:
             store.close()
-

@@ -58,6 +58,7 @@ class TransportConfig:
     host: str = "127.0.0.1"
     port: int = 8765
     max_http_header_bytes: int = 16_384
+    max_control_body_bytes: int = 65_536
     max_text_frame_bytes: int = 1_114_112
     max_binary_frame_bytes: int = 2_097_152
     max_connections: int = 16
@@ -80,6 +81,8 @@ class TransportConfig:
             raise ValueError("port must be between 0 and 65535")
         if not 1_024 <= self.max_http_header_bytes <= 65_536:
             raise ValueError("HTTP header limit must be between 1024 and 65536")
+        if not 1_024 <= self.max_control_body_bytes <= 1_048_576:
+            raise ValueError("control body limit must be between 1024 and 1048576")
         if not 1_024 <= self.max_text_frame_bytes <= 16 * 1024 * 1024:
             raise ValueError("text frame limit is outside the supported range")
         if not _BINARY_HEADER.size <= self.max_binary_frame_bytes <= 64 * 1024 * 1024:
@@ -134,6 +137,7 @@ class _HttpRequest:
     target: str
     version: str
     headers: dict[str, str]
+    body: bytes
 
 
 @dataclass(frozen=True, slots=True)
@@ -151,6 +155,7 @@ class ControlPlaneServer:
         error_logger: JsonlErrorLogger | None = None,
         metrics: MetricRegistry | None = None,
         static_dir: Path | None = None,
+        safety_policy: Any | None = None,
         build_commit: str | None = None,
     ) -> None:
         self.config = config
@@ -158,6 +163,7 @@ class ControlPlaneServer:
         self.error_logger = error_logger
         self.metrics = metrics or MetricRegistry()
         self.static_dir = static_dir.resolve() if static_dir is not None else None
+        self.safety_policy = safety_policy
         self.build_commit = build_commit or os.environ.get("HINA_BUILD_COMMIT", "development")
         self._server: asyncio.AbstractServer | None = None
         self._started_at = 0.0
@@ -305,27 +311,49 @@ class ControlPlaneServer:
             raise PrimitiveError(RuntimeErrorCode.HTTP_BAD_REQUEST, "Content-Length is invalid") from exc
         if content_length < 0:
             raise PrimitiveError(RuntimeErrorCode.HTTP_BAD_REQUEST, "Content-Length is invalid")
-        if "transfer-encoding" in headers or content_length != 0:
-            raise PrimitiveError(RuntimeErrorCode.HTTP_BAD_REQUEST, "request bodies are not supported")
-        return _HttpRequest(method=method, target=target, version=version, headers=headers)
+        if "transfer-encoding" in headers:
+            raise PrimitiveError(RuntimeErrorCode.HTTP_BAD_REQUEST, "Transfer-Encoding is not supported")
+        if content_length > self.config.max_control_body_bytes:
+            raise PrimitiveError(RuntimeErrorCode.FRAME_TOO_LARGE, "control request body exceeds limit")
+        body = (
+            await asyncio.wait_for(
+                reader.readexactly(content_length),
+                timeout=self.config.idle_timeout_seconds,
+            )
+            if content_length
+            else b""
+        )
+        return _HttpRequest(
+            method=method,
+            target=target,
+            version=version,
+            headers=headers,
+            body=body,
+        )
 
     async def _serve_control_request(self, writer: asyncio.StreamWriter, request: _HttpRequest) -> None:
-        if request.method != "GET":
+        parsed_target = urlsplit(request.target)
+        path = parsed_target.path
+        if request.method not in {"GET", "POST"}:
             self._record_metric("hina_http_requests_total", operation="method_rejected", status="error")
             await self._send_json_response(
                 writer,
                 HTTPStatus.METHOD_NOT_ALLOWED,
-                self._error_body(RuntimeErrorCode.HTTP_BAD_REQUEST, "only GET is supported"),
-                extra_headers={"Allow": "GET"},
+                self._error_body(RuntimeErrorCode.HTTP_BAD_REQUEST, "only GET and POST are supported"),
+                extra_headers={"Allow": "GET, POST"},
             )
             return
-        parsed_target = urlsplit(request.target)
-        path = parsed_target.path
-        if path in _STATIC_FILES and self.static_dir is not None:
+        if request.method == "GET" and request.body:
+            raise PrimitiveError(RuntimeErrorCode.HTTP_BAD_REQUEST, "GET request body is not supported")
+        if request.method == "GET" and path in _STATIC_FILES and self.static_dir is not None:
             self._record_metric("hina_http_requests_total", operation="static", status="ok")
             await self._serve_static_file(writer, path)
             return
-        if path == "/v1/health":
+
+        body: dict[str, Any]
+        if request.method == "POST":
+            body = self._serve_safety_post(path, request)
+        elif path == "/v1/health":
             body = {
                 "status": "ready",
                 "service": "hina-core-runtime",
@@ -347,6 +375,7 @@ class ControlPlaneServer:
                 "loopbackOnly": True,
                 "limits": {
                     "httpHeaderBytes": self.config.max_http_header_bytes,
+                    "controlBodyBytes": self.config.max_control_body_bytes,
                     "textFrameBytes": self.config.max_text_frame_bytes,
                     "binaryFrameBytes": self.config.max_binary_frame_bytes,
                     "connections": self.config.max_connections,
@@ -366,6 +395,11 @@ class ControlPlaneServer:
                 "count": len(records),
                 "limit": limit,
             }
+        elif path == "/v1/safety/status":
+            body = self._safety_call("status")
+        elif path == "/v1/safety/audit":
+            limit = _parse_safety_audit_limit(parsed_target.query)
+            body = self._safety_call("recent_audit", limit)
         else:
             self._record_metric("hina_http_requests_total", operation="not_found", status="error")
             await self._send_json_response(
@@ -376,6 +410,36 @@ class ControlPlaneServer:
             return
         self._record_metric("hina_http_requests_total", operation=path[4:], status="ok")
         await self._send_json_response(writer, HTTPStatus.OK, body)
+
+    def _serve_safety_post(self, path: str, request: _HttpRequest) -> dict[str, Any]:
+        payload = _parse_json_body(request)
+        if path == "/v1/safety/evaluate":
+            return self._safety_call("evaluate", payload)
+        if path == "/v1/safety/control":
+            return self._safety_call("apply_control", payload)
+        raise PrimitiveError(RuntimeErrorCode.HTTP_BAD_REQUEST, "POST route was not found")
+
+    def _safety_call(self, operation: str, *args: Any) -> dict[str, Any]:
+        if self.safety_policy is None:
+            raise PrimitiveError(RuntimeErrorCode.SAFETY_UNAVAILABLE, "safety policy is unavailable")
+        try:
+            result = getattr(self.safety_policy, operation)(*args)
+        except Exception as exc:
+            code = getattr(exc, "code", "")
+            if not isinstance(code, str) or not code.startswith("E_SAFETY_"):
+                raise
+            unavailable = code in {
+                "E_SAFETY_AUDIT_INVALID",
+                "E_SAFETY_AUDIT_UNAVAILABLE",
+                "E_SAFETY_MANIFEST_INVALID",
+            }
+            raise PrimitiveError(
+                RuntimeErrorCode.SAFETY_UNAVAILABLE if unavailable else RuntimeErrorCode.SAFETY_BAD_REQUEST,
+                getattr(exc, "detail", "safety policy rejected the request"),
+            ) from exc
+        if not isinstance(result, dict):
+            raise PrimitiveError(RuntimeErrorCode.SAFETY_UNAVAILABLE, "safety policy returned invalid data")
+        return result
 
     async def _serve_static_file(self, writer: asyncio.StreamWriter, route: str) -> None:
         assert self.static_dir is not None
@@ -746,6 +810,8 @@ class ControlPlaneServer:
             return HTTPStatus.REQUEST_HEADER_FIELDS_TOO_LARGE
         if code is RuntimeErrorCode.CONNECTION_LIMIT:
             return HTTPStatus.SERVICE_UNAVAILABLE
+        if code is RuntimeErrorCode.SAFETY_UNAVAILABLE:
+            return HTTPStatus.SERVICE_UNAVAILABLE
         return HTTPStatus.BAD_REQUEST
 
     def _log_error(
@@ -808,6 +874,36 @@ def _parse_error_limit(query: str) -> int:
     if not 1 <= limit <= 100:
         raise PrimitiveError(RuntimeErrorCode.HTTP_BAD_REQUEST, "error limit must be between 1 and 100")
     return limit
+
+
+def _parse_safety_audit_limit(query: str) -> int:
+    parsed = parse_qs(query, keep_blank_values=True)
+    if set(parsed) - {"limit"} or len(parsed.get("limit", [])) > 1:
+        raise PrimitiveError(RuntimeErrorCode.SAFETY_BAD_REQUEST, "audit query is invalid")
+    raw_limit = parsed.get("limit", ["20"])[0]
+    try:
+        limit = int(raw_limit)
+    except ValueError as exc:
+        raise PrimitiveError(RuntimeErrorCode.SAFETY_BAD_REQUEST, "audit limit is invalid") from exc
+    if not 1 <= limit <= 100:
+        raise PrimitiveError(RuntimeErrorCode.SAFETY_BAD_REQUEST, "audit limit must be between 1 and 100")
+    return limit
+
+
+def _parse_json_body(request: _HttpRequest) -> dict[str, Any]:
+    content_type = request.headers.get("content-type", "").partition(";")[0].strip().lower()
+    if content_type != "application/json" or not request.body:
+        raise PrimitiveError(RuntimeErrorCode.SAFETY_BAD_REQUEST, "JSON request body is required")
+    try:
+        value = json.loads(
+            request.body.decode("utf-8"),
+            object_pairs_hook=_reject_duplicate_pairs,
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+        raise PrimitiveError(RuntimeErrorCode.SAFETY_BAD_REQUEST, "request body is invalid JSON") from exc
+    if not isinstance(value, dict):
+        raise PrimitiveError(RuntimeErrorCode.SAFETY_BAD_REQUEST, "request body must be an object")
+    return value
 
 
 def _read_recent_error_records(path: Path, limit: int) -> list[dict[str, Any]]:

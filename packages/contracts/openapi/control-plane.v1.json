@@ -108,6 +108,107 @@
           }
         }
       }
+    },
+    "/v1/safety/status": {
+      "get": {
+        "operationId": "getSafetyStatus",
+        "responses": {
+          "200": {
+            "description": "Loaded capability manifest, operator safety state and verified audit head.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SafetyStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/safety/audit": {
+      "get": {
+        "operationId": "getSafetyAudit",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recent hash-chained safety audit records.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SafetyAuditPage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/safety/evaluate": {
+      "post": {
+        "operationId": "evaluateCapability",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Audited allow, ask or deny decision.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyDecision"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/safety/control": {
+      "post": {
+        "operationId": "applySafetyControl",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperatorControlRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Effective operator safety state after the control request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperatorControlResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -193,6 +294,7 @@
             "additionalProperties": false,
             "required": [
               "httpHeaderBytes",
+              "controlBodyBytes",
               "textFrameBytes",
               "binaryFrameBytes",
               "connections"
@@ -201,6 +303,11 @@
               "httpHeaderBytes": {
                 "type": "integer",
                 "minimum": 1024
+              },
+              "controlBodyBytes": {
+                "type": "integer",
+                "minimum": 1024,
+                "maximum": 1048576
               },
               "textFrameBytes": {
                 "type": "integer",
@@ -392,6 +499,338 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 100
+          }
+        }
+      },
+      "CapabilitySummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "risk",
+          "defaultDecision",
+          "allowedTrustLevels",
+          "featureFlag",
+          "rateLimitPerMinute",
+          "sessionBudget",
+          "expiresAt"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "risk": {
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ]
+          },
+          "defaultDecision": {
+            "enum": [
+              "allow",
+              "ask",
+              "deny"
+            ]
+          },
+          "allowedTrustLevels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "featureFlag": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rateLimitPerMinute": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sessionBudget": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "SafetyState": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "revision",
+          "emergencyStopped",
+          "muted",
+          "featureFlags",
+          "revokedCapabilities"
+        ],
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "emergencyStopped": {
+            "type": "boolean"
+          },
+          "muted": {
+            "type": "boolean"
+          },
+          "featureFlags": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "boolean"
+            }
+          },
+          "revokedCapabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "SafetyStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "manifest",
+          "state",
+          "audit"
+        ],
+        "properties": {
+          "manifest": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "schemaVersion",
+              "manifestId",
+              "capabilities"
+            ],
+            "properties": {
+              "schemaVersion": {
+                "const": "1.0"
+              },
+              "manifestId": {
+                "type": "string"
+              },
+              "capabilities": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CapabilitySummary"
+                }
+              }
+            }
+          },
+          "state": {
+            "$ref": "#/components/schemas/SafetyState"
+          },
+          "audit": {
+            "type": "object"
+          }
+        }
+      },
+      "PolicyRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "capability",
+          "actorId",
+          "trustLevel",
+          "correlationId",
+          "sessionId",
+          "consume"
+        ],
+        "properties": {
+          "capability": {
+            "type": "string"
+          },
+          "actorId": {
+            "type": "string"
+          },
+          "trustLevel": {
+            "enum": [
+              "authenticated",
+              "owner",
+              "public",
+              "trusted_local",
+              "untrusted"
+            ]
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sessionId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "consume": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PolicyDecision": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "capability",
+          "decision",
+          "reasonCode",
+          "risk",
+          "consumed",
+          "rateRemaining",
+          "budgetRemaining",
+          "correlationId",
+          "stateRevision"
+        ],
+        "properties": {
+          "capability": {
+            "type": "string"
+          },
+          "decision": {
+            "enum": [
+              "allow",
+              "ask",
+              "deny"
+            ]
+          },
+          "reasonCode": {
+            "type": "string"
+          },
+          "risk": {
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ]
+          },
+          "consumed": {
+            "type": "boolean"
+          },
+          "rateRemaining": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "budgetRemaining": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "stateRevision": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "OperatorControlRequest": {
+        "type": "object",
+        "description": "Action-specific strict fields are enforced by the runtime.",
+        "required": [
+          "action",
+          "actorId",
+          "trustLevel",
+          "correlationId"
+        ],
+        "properties": {
+          "action": {
+            "enum": [
+              "emergency_stop",
+              "emergency_reset",
+              "set_mute",
+              "set_feature",
+              "set_revocation"
+            ]
+          },
+          "actorId": {
+            "type": "string"
+          },
+          "trustLevel": {
+            "const": "owner"
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "feature": {
+            "type": "string"
+          },
+          "capability": {
+            "type": "string"
+          }
+        }
+      },
+      "OperatorControlResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "state",
+          "action",
+          "auditRecorded"
+        ],
+        "properties": {
+          "state": {
+            "$ref": "#/components/schemas/SafetyState"
+          },
+          "action": {
+            "type": "string"
+          },
+          "auditRecorded": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SafetyAuditPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "records",
+          "count",
+          "limit",
+          "lastHash"
+        ],
+        "properties": {
+          "records": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "type": "object"
+            }
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "lastHash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
           }
         }
       }

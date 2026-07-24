@@ -22,17 +22,49 @@ class HttpJsonResponse:
 
 
 async def get_json(host: str, port: int, path: str) -> HttpJsonResponse:
+    return await _request_json(host, port, "GET", path)
+
+
+async def post_json(
+    host: str,
+    port: int,
+    path: str,
+    body: dict[str, Any],
+) -> HttpJsonResponse:
+    encoded = json.dumps(
+        body,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return await _request_json(host, port, "POST", path, encoded)
+
+
+async def _request_json(
+    host: str,
+    port: int,
+    method: str,
+    path: str,
+    body: bytes = b"",
+) -> HttpJsonResponse:
     reader, writer = await asyncio.open_connection(host, port)
     try:
         authority = _authority(host, port)
-        request = (
-            f"GET {path} HTTP/1.1\r\n"
-            f"Host: {authority}\r\n"
-            "Accept: application/json\r\n"
-            "Connection: close\r\n"
-            "\r\n"
-        )
-        writer.write(request.encode("ascii"))
+        request_headers = [
+            f"{method} {path} HTTP/1.1",
+            f"Host: {authority}",
+            "Accept: application/json",
+        ]
+        if body:
+            request_headers.extend(
+                [
+                    "Content-Type: application/json; charset=utf-8",
+                    f"Content-Length: {len(body)}",
+                ]
+            )
+        request_headers.append("Connection: close")
+        request_head = "\r\n".join(request_headers) + "\r\n\r\n"
+        writer.write(request_head.encode("ascii") + body)
         await writer.drain()
         raw = await reader.read()
     finally:

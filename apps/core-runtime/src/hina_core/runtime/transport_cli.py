@@ -6,46 +6,47 @@ import json
 import os
 from pathlib import Path
 
-from .durable import DurableStore
-from .error_log import JsonlErrorLogger
-from .transport import ControlPlaneServer, TransportConfig
+from .application import HinaRuntimeApplication, RuntimePaths
+from .transport import TransportConfig
 
 
 ROOT = Path(__file__).resolve().parents[5]
 
 
 async def _run(args: argparse.Namespace) -> None:
-    logger = JsonlErrorLogger(
-        args.log.resolve(),
+    application = HinaRuntimeApplication(
+        TransportConfig(host=args.host, port=args.port),
+        RuntimePaths(
+            database=args.database,
+            error_log=args.log,
+            audit_log=args.audit_log,
+            safety_manifest=args.safety_manifest,
+        ),
         build_commit=os.environ.get("HINA_BUILD_COMMIT", "development"),
     )
-    with DurableStore(args.database.resolve()) as store:
-        server = ControlPlaneServer(
-            TransportConfig(host=args.host, port=args.port),
-            durable_store=store,
-            error_logger=logger,
-        )
-        await server.start()
-        host, port = server.address
-        authority = f"[{host}]:{port}" if ":" in host else f"{host}:{port}"
-        print(
-            json.dumps(
-                {
-                    "status": "ready",
-                    "control": f"http://{authority}/v1/health",
-                    "realtime": f"ws://{authority}/v1/realtime",
-                    "protocol": "hina.realtime.v1",
-                    "database": str(args.database.resolve()),
-                    "errorLog": str(args.log.resolve()),
-                },
-                ensure_ascii=False,
-            ),
-            flush=True,
-        )
-        try:
-            await server.serve_forever()
-        finally:
-            await server.stop()
+    await application.start()
+    host, port = application.address
+    authority = f"[{host}]:{port}" if ":" in host else f"{host}:{port}"
+    print(
+        json.dumps(
+            {
+                "status": "ready",
+                "control": f"http://{authority}/v1/health",
+                "realtime": f"ws://{authority}/v1/realtime",
+                "protocol": "hina.realtime.v1",
+                "database": str(args.database.resolve()),
+                "errorLog": str(args.log.resolve()),
+                "auditLog": str(args.audit_log.resolve()),
+                "safetyManifest": str(args.safety_manifest.resolve()),
+            },
+            ensure_ascii=False,
+        ),
+        flush=True,
+    )
+    try:
+        await application.serve_forever()
+    finally:
+        await application.stop()
 
 
 def main() -> int:
@@ -61,6 +62,16 @@ def main() -> int:
         "--log",
         type=Path,
         default=ROOT / "var" / "logs" / "hina-runtime.jsonl",
+    )
+    parser.add_argument(
+        "--audit-log",
+        type=Path,
+        default=ROOT / "var" / "audit" / "hina-safety.jsonl",
+    )
+    parser.add_argument(
+        "--safety-manifest",
+        type=Path,
+        default=ROOT / "packages" / "safety-policy" / "manifests" / "default.v1.json",
     )
     args = parser.parse_args()
     try:

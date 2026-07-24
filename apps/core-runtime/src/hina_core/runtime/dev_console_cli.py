@@ -21,6 +21,8 @@ async def _run(args: argparse.Namespace) -> None:
             database=args.database,
             error_log=args.log,
             static_dir=args.static_dir,
+            audit_log=args.audit_log,
+            safety_manifest=args.safety_manifest,
         ),
         build_commit=os.environ.get("HINA_BUILD_COMMIT", "development"),
     )
@@ -39,6 +41,8 @@ async def _run(args: argparse.Namespace) -> None:
                 "protocol": "hina.realtime.v1",
                 "database": str(args.database.resolve()),
                 "errorLog": str(args.log.resolve()),
+                "auditLog": str(args.audit_log.resolve()),
+                "safetyManifest": str(args.safety_manifest.resolve()),
             },
             ensure_ascii=False,
         ),
@@ -73,6 +77,16 @@ def main() -> int:
         "--static-dir",
         type=Path,
         default=ROOT / "apps" / "dev-console" / "public",
+    )
+    parser.add_argument(
+        "--audit-log",
+        type=Path,
+        default=ROOT / "var" / "audit" / "hina-safety.jsonl",
+    )
+    parser.add_argument(
+        "--safety-manifest",
+        type=Path,
+        default=ROOT / "packages" / "safety-policy" / "manifests" / "default.v1.json",
     )
     parser.add_argument("--open-browser", action="store_true")
     parser.add_argument(

@@ -4,10 +4,16 @@ $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
 $sourceRoot = Join-Path $repoRoot "apps\core-runtime\src"
 $contractsRoot = Join-Path $repoRoot "packages\contracts\src"
 $testkitRoot = Join-Path $repoRoot "packages\testkit\src"
-$localPythonPath = "$sourceRoot;$contractsRoot;$testkitRoot"
+$safetyRoot = Join-Path $repoRoot "packages\safety-policy\src"
+$localPythonPath = "$sourceRoot;$contractsRoot;$testkitRoot;$safetyRoot"
 $env:PYTHONPATH = if ($env:PYTHONPATH) { "$localPythonPath;$env:PYTHONPATH" } else { $localPythonPath }
 $env:PYTHONPYCACHEPREFIX = Join-Path $repoRoot ".cache\pycache"
 $env:UV_CACHE_DIR = Join-Path $repoRoot ".cache\uv"
+
+& uv run --frozen python -m unittest discover -s packages/safety-policy/tests -p "test_*.py"
+if ($LASTEXITCODE -ne 0) {
+    throw "Safety policy unit tests failed with exit code $LASTEXITCODE"
+}
 
 & uv run --frozen python -m unittest discover -s apps/core-runtime/tests -p "test_*.py"
 if ($LASTEXITCODE -ne 0) {

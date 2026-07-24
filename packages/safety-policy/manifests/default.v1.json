@@ -1,0 +1,79 @@
+{
+  "schemaVersion": "1.0",
+  "manifestId": "hina.local.default.v1",
+  "capabilities": [
+    {
+      "name": "tool.safe.echo",
+      "risk": "low",
+      "defaultDecision": "allow",
+      "allowedTrustLevels": [
+        "owner",
+        "trusted_local",
+        "authenticated"
+      ],
+      "featureFlag": null,
+      "rateLimitPerMinute": 60,
+      "sessionBudget": 100,
+      "expiresAt": null
+    },
+    {
+      "name": "memory.promote",
+      "risk": "high",
+      "defaultDecision": "ask",
+      "allowedTrustLevels": [
+        "owner"
+      ],
+      "featureFlag": "memoryPromotion",
+      "rateLimitPerMinute": 5,
+      "sessionBudget": 10,
+      "expiresAt": null
+    },
+    {
+      "name": "perception.observe",
+      "risk": "medium",
+      "defaultDecision": "ask",
+      "allowedTrustLevels": [
+        "owner",
+        "trusted_local"
+      ],
+      "featureFlag": "perception",
+      "rateLimitPerMinute": 30,
+      "sessionBudget": 100,
+      "expiresAt": null
+    },
+    {
+      "name": "game.action",
+      "risk": "high",
+      "defaultDecision": "ask",
+      "allowedTrustLevels": [
+        "owner"
+      ],
+      "featureFlag": "gameAction",
+      "rateLimitPerMinute": 10,
+      "sessionBudget": 30,
+      "expiresAt": null
+    },
+    {
+      "name": "stream.output",
+      "risk": "high",
+      "defaultDecision": "ask",
+      "allowedTrustLevels": [
+        "owner"
+      ],
+      "featureFlag": "streamOutput",
+      "rateLimitPerMinute": 30,
+      "sessionBudget": 100,
+      "expiresAt": null
+    },
+    {
+      "name": "tool.code.execute",
+      "risk": "critical",
+      "defaultDecision": "deny",
+      "allowedTrustLevels": [],
+      "featureFlag": null,
+      "rateLimitPerMinute": 1,
+      "sessionBudget": 1,
+      "expiresAt": null
+    }
+  ]
+}
