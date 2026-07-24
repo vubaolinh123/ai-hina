@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import threading
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -32,6 +33,19 @@ def _redact(value: Any, key: str | None = None) -> Any:
     return repr(value)
 
 
+def redact_for_log(value: Any, key: str | None = None) -> Any:
+    return _redact(value, key)
+
+
+def _safe_uuid(value: str | None, *, fallback: str | None = None) -> str | None:
+    if value is None:
+        return fallback
+    try:
+        return str(uuid.UUID(value))
+    except (AttributeError, TypeError, ValueError):
+        return fallback
+
+
 class JsonlErrorLogger:
     def __init__(self, path: Path, *, build_commit: str = "development") -> None:
         self.path = path
@@ -45,6 +59,8 @@ class JsonlErrorLogger:
         component: str,
         operation: str,
         correlation_id: str,
+        session_id: str | None = None,
+        turn_id: str | None = None,
         context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         if isinstance(error, PrimitiveError):
@@ -53,21 +69,41 @@ class JsonlErrorLogger:
         else:
             code = RuntimeErrorCode.OPERATION_FAILED
             detail = str(error)[:512] or type(error).__name__
+        try:
+            safe_message = _redact(detail)
+            safe_context = _redact(context or {})
+        except Exception:
+            safe_message = "error detail redaction failed"
+            safe_context = {"redaction": "<unavailable>"}
         record = {
             "timestamp": datetime.now(UTC).isoformat(),
             "level": "error",
             "component": component,
             "operation": operation,
             "errorCode": str(code),
-            "message": _redact(detail),
-            "correlationId": correlation_id,
+            "message": safe_message,
+            "correlationId": _safe_uuid(
+                correlation_id,
+                fallback="00000000-0000-0000-0000-000000000000",
+            ),
             "exceptionType": type(error).__name__,
             "buildCommit": self.build_commit,
-            "context": _redact(context or {}),
+            "contractVersion": "1.x",
+            "runtimeProfile": "local",
+            "context": safe_context,
         }
-        encoded = json.dumps(record, ensure_ascii=False, separators=(",", ":"))
-        with self._lock:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            with self.path.open("a", encoding="utf-8", newline="\n") as handle:
-                handle.write(encoded + "\n")
+        safe_session_id = _safe_uuid(session_id)
+        safe_turn_id = _safe_uuid(turn_id)
+        if safe_session_id is not None:
+            record["sessionId"] = safe_session_id
+        if safe_turn_id is not None:
+            record["turnId"] = safe_turn_id
+        try:
+            encoded = json.dumps(record, ensure_ascii=False, separators=(",", ":"))
+            with self._lock:
+                self.path.parent.mkdir(parents=True, exist_ok=True)
+                with self.path.open("a", encoding="utf-8", newline="\n") as handle:
+                    handle.write(encoded + "\n")
+        except Exception:
+            record["loggingFailed"] = True
         return record

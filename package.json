@@ -15,6 +15,8 @@
     "demo:m01-s3": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Run-M01S3Demo.ps1",
     "demo:m01-s4": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Run-M01S4Demo.ps1",
     "demo:m01-s5": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Run-M01S5Demo.ps1",
+    "demo:m01-s6": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Run-M01S6Demo.ps1",
+    "report:errors": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Collect-HinaErrorReport.ps1",
     "start:control": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Start-HinaControlPlane.ps1",
     "test:lifecycle:100": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Run-LifecycleCycles.ps1 --cycles 100",
     "test:fast": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-FastUnit.ps1",

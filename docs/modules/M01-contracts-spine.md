@@ -9,7 +9,8 @@
   - `M01-S3 — durable journal/outbox/inbox, ACK, resume and replay`
   - `M01-S4 — control plane, realtime WebSocket and binary-media transport`
   - `M01-S5 — service registry/supervisor and lifecycle`
-- Next slice: `M01-S6 — observability, ResourceLease and fake providers`
+  - `M01-S6 — observability, ResourceLease, fake providers and replay harness`
+- Next: `M01 integration gate` (only when the owner requests deep verification)
 
 ## Slice sequence
 
@@ -104,5 +105,27 @@
   deep verification; it is intentionally not run in the normal fast loop.
 - [x] Focused fast suite passes once with all M01-S2 through M01-S5 tests.
 
-M01 remains open after M01-S5. Do not start M02 until every M01 slice and the
+## M01-S6 fast gate
+
+- [x] Validated module brief with standard-library-only observability/resource
+  scope and deterministic local fake providers.
+- [x] JSONL spans are bounded, nested and secret-redacted; a trace write failure
+  cannot replace the runtime exception.
+- [x] Metric names/labels use a low-cardinality allowlist and series capacity is
+  a hard bound.
+- [x] Resource admission, expiry and idempotent release preserve at least
+  2048 MiB reserved VRAM headroom.
+- [x] Fake model/speech/memory/tool providers are deterministic; memory requires
+  explicit consent and tools use a fixed non-code-execution allowlist.
+- [x] Turn replay validates EventEnvelope v1, rejects conflicting reuse and
+  executes model/speech once for duplicate delivery.
+- [x] Owner error-report command collects at most 100 redacted error records and
+  records build identity without allowing logging failure to mask the source
+  error.
+- [x] Owner demo produces traces, metrics, one redacted capacity error/report,
+  a Vietnamese fake response and zero active leases at exit.
+- [x] Focused fast suite passes once with all M01-S2 through M01-S6 tests.
+
+All M01 product slices are implemented. M01 remains open for the deferred
+integration/deep gate requested by the owner. Do not start M02 until the
 M01 integration gate pass.

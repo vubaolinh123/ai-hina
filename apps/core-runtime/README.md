@@ -1,6 +1,6 @@
 # Hina core runtime
 
-M01-S2 through M01-S5 provide standard-library runtime primitives used by later
+M01-S2 through M01-S6 provide standard-library runtime primitives used by later
 workers:
 
 - bounded async queues with explicit overflow policies;
@@ -11,6 +11,9 @@ workers:
 - binary media frames that never place media bytes in base64 JSON;
 - deterministic service dependency ordering, startup rollback and graceful
   reverse shutdown;
+- bounded JSONL traces, low-cardinality metrics and redacted owner error reports;
+- resource leases that preserve at least 2048 MiB VRAM headroom;
+- deterministic fake providers and idempotent turn replay;
 - a visible CLI demo with redacted JSONL error records.
 
 Run from the repository root:
@@ -20,6 +23,7 @@ pnpm demo:m01-s2
 pnpm demo:m01-s3
 pnpm demo:m01-s4
 pnpm demo:m01-s5
+pnpm demo:m01-s6
 pnpm test:fast
 ```
 
@@ -27,6 +31,7 @@ Run the persistent local control plane with:
 
 ```powershell
 pnpm start:control
+pnpm report:errors
 ```
 
 The explicit deep lifecycle command is available but is not part of the normal
@@ -44,3 +49,5 @@ The realtime demo writes `var/data/m01-s4-demo.sqlite3` and
 `http://127.0.0.1:8765` and logs to `var/logs/hina-runtime.jsonl`.
 The lifecycle demo writes `var/data/m01-s5-demo.sqlite3` and only creates
 `var/logs/m01-s5-demo.jsonl` if a caught lifecycle error occurs.
+The observability demo writes traces/errors under `var/logs`, metrics under
+`var/metrics` and the bounded report under `var/reports`.

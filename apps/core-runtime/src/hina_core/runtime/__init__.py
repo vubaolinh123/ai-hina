@@ -30,6 +30,27 @@ from .primitives import (
     RuntimeErrorCode,
     wait_controlled,
 )
+from .observability import (
+    JsonlTraceWriter,
+    MetricKind,
+    MetricPoint,
+    MetricRegistry,
+    TraceSpan,
+)
+from .replay import (
+    ModelProvider,
+    SpeechProvider,
+    SpeechResult,
+    TurnReplayHarness,
+    TurnReplayResult,
+)
+from .resource import (
+    FakeResourceScheduler,
+    ResourceInventory,
+    ResourceLease,
+    ResourceRequest,
+    ResourceSnapshot,
+)
 from .transport import BinaryMediaFrame, ControlPlaneServer, TransportConfig
 
 __all__ = [
@@ -42,16 +63,26 @@ __all__ = [
     "DurableEvent",
     "DurableSnapshot",
     "DurableStore",
+    "FakeResourceScheduler",
     "HealthReport",
     "IdempotencyRegistry",
     "IdempotencySource",
     "JsonlErrorLogger",
+    "JsonlTraceWriter",
     "InboxReceiveResult",
     "JournalAppendResult",
     "ManagedService",
+    "MetricKind",
+    "MetricPoint",
+    "MetricRegistry",
+    "ModelProvider",
     "OverflowPolicy",
     "PrimitiveError",
     "RuntimeErrorCode",
+    "ResourceInventory",
+    "ResourceLease",
+    "ResourceRequest",
+    "ResourceSnapshot",
     "ServiceDefinition",
     "ServiceHealth",
     "ServiceRegistry",
@@ -60,6 +91,11 @@ __all__ = [
     "ServiceSupervisor",
     "SupervisorSnapshot",
     "SupervisorState",
+    "SpeechProvider",
+    "SpeechResult",
+    "TraceSpan",
     "TransportConfig",
+    "TurnReplayHarness",
+    "TurnReplayResult",
     "wait_controlled",
 ]

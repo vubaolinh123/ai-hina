@@ -1,0 +1,67 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M01-S6-observability-resource-testkit",
+  "module_id": "M01",
+  "objective": "Deliver bounded local traces and metrics, auditable owner error-report collection, a ResourceLease contract with mandatory VRAM headroom, deterministic fake providers and an idempotent turn replay harness for later modules.",
+  "non_goals": [
+    "Do not integrate Prometheus, OpenTelemetry collectors, NVML control, real model weights, real speech engines, vector databases or dangerous tools.",
+    "Do not persist raw audio, hidden reasoning, public chat, screenshots, secrets or unredacted PII in logs or reports.",
+    "Do not run full M01 integration, repeat, soak or release workflow verification during the fast slice."
+  ],
+  "base_sha": "af71d47b0d74c3b698a5f15bef09f1d578507931",
+  "branch": "module/M01-spine",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "AGENTS.md",
+    "apps/core-runtime/",
+    "packages/testkit/",
+    "docs/modules/M01-S6-*",
+    "docs/modules/M01-contracts-spine.md",
+    "docs/operations/OWNER_ERROR_REPORTING_VI.md",
+    "tools/dev/Run-M01S6Demo.ps1",
+    "tools/dev/Collect-HinaErrorReport.ps1",
+    "tools/dev/Invoke-FastUnit.ps1",
+    "package.json"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "packages/contracts/",
+    "workers/",
+    "adapters/",
+    "ml/",
+    "assets/",
+    "third_party/"
+  ],
+  "contracts": [
+    "Trace records contain timestamps, bounded attributes, correlation/session/turn identifiers and duration but never hidden reasoning, raw media or unredacted secret fields.",
+    "Metric names and labels are validated, label keys use a low-cardinality allowlist and total series count has a hard cap.",
+    "Resource admission never allocates the reserved 2048 MiB VRAM headroom; leases expire by monotonic time and release is idempotent.",
+    "Fake model, speech, memory and tool providers are deterministic, local-only and never execute generated shell, JavaScript or Python.",
+    "Turn replay validates EventEnvelope v1, rejects conflicting event reuse and coalesces duplicate execution.",
+    "Owner error reports include only redacted structured error records plus build identity and can be generated with one command."
+  ],
+  "allowed_dependencies": [
+    "Python 3.12+ standard library and existing local hina-contracts and hina-core modules."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "Unit tests prove trace redaction, bounded metric cardinality, resource admission/headroom/release/expiry and safe report collection.",
+    "Unit tests prove deterministic fake providers, consent-gated fake memory, tool allowlisting and duplicate turn replay with one model/speech execution.",
+    "A single demo command runs a Vietnamese fake turn, produces trace/metric/error-report artifacts and shows resource headroom remains at least 2048 MiB.",
+    "The owner can run one error-report command after manual testing and receive a bounded JSON report without secrets.",
+    "Focused M01 fast tests complete once on the owner machine."
+  ],
+  "required_test_commands": [
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-FastUnit.ps1",
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Run-M01S6Demo.ps1"
+  ],
+  "latency_or_quality_budget": {
+    "fast_unit_seconds": 12,
+    "demo_seconds": 8,
+    "max_metric_series": 256,
+    "max_trace_attributes": 16,
+    "max_error_report_records": 100,
+    "minimum_vram_headroom_mib": 2048
+  },
+  "output_artifact_dir": "artifacts/verification/M01/"
+}
