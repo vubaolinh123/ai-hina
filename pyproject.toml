@@ -8,7 +8,9 @@ license = "MIT"
 authors = [
   { name = "Linh Vu" },
 ]
-dependencies = []
+dependencies = [
+  "faster-whisper==1.2.1",
+]
 
 [dependency-groups]
 dev = [

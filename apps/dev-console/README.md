@@ -1,8 +1,8 @@
 # Hina Dev Console
 
 This is the owner-facing local application for manually exercising the real
-M01 runtime, M02 safety policy and M03 local text brain. It contains no
-simulated AI response.
+M01 runtime, M02 safety policy, M03 local text brain and M04 local speech input.
+It contains no simulated AI response or transcript.
 
 From the repository root:
 
@@ -24,6 +24,10 @@ inspect the SHA-256 chained safety audit.
 It also reports real local model/VRAM state and supports starting, polling,
 interrupting and replaying moderated chat turns. Provider output stays internal
 until the complete response passes outbound moderation.
+M04 can record the owner microphone or accept a WAV file, send binary audio to
+the real loopback endpoint, run VAD and pinned faster-whisper, then copy a real
+Vietnamese transcript into the chat composer without auto-sending it. Raw audio
+is never persisted.
 
 After updating the source, restart the running console so its Python process
-loads the new safety and text-brain modules.
+loads the new safety, text-brain and speech modules.

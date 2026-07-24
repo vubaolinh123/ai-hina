@@ -130,6 +130,9 @@ class M00GovernanceTests(unittest.TestCase):
         self.assertTrue(
             validator.is_allowed_m00_checkout("integration/M12-release")
         )
+        self.assertTrue(
+            validator.is_allowed_m00_checkout("codex/M04-speech-input")
+        )
         self.assertFalse(validator.is_allowed_m00_checkout("feature/unrelated"))
 
     def test_hardware_inventory_shape(self) -> None:

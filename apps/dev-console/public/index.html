@@ -16,7 +16,7 @@
       <div class="brand">
         <div class="brand-mark" aria-hidden="true">H</div>
         <div>
-          <p class="eyebrow">LOCAL RUNTIME / M01 + M02 + M03</p>
+          <p class="eyebrow">LOCAL RUNTIME / M01 + M02 + M03 + M04</p>
           <h1>Hina Dev Console</h1>
         </div>
       </div>
@@ -30,11 +30,12 @@
       <section class="hero" aria-labelledby="heroTitle">
         <div>
           <p class="eyebrow">OWNER TEST SURFACE</p>
-          <h2 id="heroTitle">Runtime thật với safety và local model gateway</h2>
+          <h2 id="heroTitle">Runtime thật với chat và giọng nói local</h2>
           <p>
             Mọi thao tác bên dưới gọi trực tiếp runtime, SQLite và safety-policy
-            của Hina. Model gateway chỉ hiển thị token thật từ provider local;
-            khi provider chưa chạy, giao diện báo unavailable thay vì dựng câu trả lời.
+            của Hina. Model gateway và STT chỉ trả kết quả thật từ provider local;
+            khi provider chưa sẵn sàng, giao diện báo lỗi kèm correlation ID thay
+            vì dựng câu trả lời hay transcript.
           </p>
         </div>
         <div class="hero-actions">
@@ -160,6 +161,83 @@
                   hoặc bị cancel sẽ không xuất hiện ở đây.
                 </p>
               </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel speech-panel" aria-labelledby="speechTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">M04 / BINARY WAV + VAD + FASTER-WHISPER</p>
+              <h2 id="speechTitle">Nghe giọng nói tiếng Việt</h2>
+            </div>
+            <button id="refreshSpeechButton" class="text-button" type="button">Làm mới</button>
+          </div>
+
+          <div class="safety-banner">
+            <div>
+              <span>STT</span>
+              <strong id="speechAvailability">Đang đọc…</strong>
+            </div>
+            <div>
+              <span>Model</span>
+              <strong id="speechModelValue">—</strong>
+            </div>
+            <div>
+              <span>Device</span>
+              <strong id="speechDeviceValue">—</strong>
+            </div>
+            <div>
+              <span>Raw audio</span>
+              <strong id="speechRetentionValue">—</strong>
+            </div>
+          </div>
+
+          <div class="speech-grid">
+            <div>
+              <p class="panel-copy">
+                Thu mic tối đa 30 giây hoặc chọn file WAV. Audio được giữ trong
+                RAM, gửi bằng body nhị phân tới loopback runtime và không tự đưa
+                transcript vào chat.
+              </p>
+              <div class="button-row">
+                <button id="startRecordingButton" class="button button-primary" type="button">
+                  Bắt đầu thu mic
+                </button>
+                <button id="stopRecordingButton" class="button button-danger" type="button" disabled>
+                  Dừng thu
+                </button>
+                <span id="recordingDuration" class="recording-duration">00:00.0</span>
+              </div>
+              <label for="audioFileInput">Hoặc chọn WAV từ máy</label>
+              <input id="audioFileInput" type="file" accept=".wav,audio/wav,audio/x-wav">
+              <audio id="speechPreview" class="speech-preview" controls hidden></audio>
+              <div class="button-row speech-actions">
+                <button id="transcribeAudioButton" class="button button-primary" type="button" disabled>
+                  Transcribe tiếng Việt
+                </button>
+                <button id="useTranscriptButton" class="button button-secondary" type="button" disabled>
+                  Đưa vào ô chat
+                </button>
+              </div>
+            </div>
+            <div>
+              <label>Kết quả STT / correlation</label>
+              <div id="speechResult" class="data-box speech-result empty">
+                Chưa có audio được transcribe.
+              </div>
+              <label for="speechTranscript">Transcript cuối</label>
+              <textarea
+                id="speechTranscript"
+                rows="4"
+                readonly
+                placeholder="Transcript thật sẽ hiện ở đây…"
+              ></textarea>
+              <p class="panel-copy speech-hint">
+                Lần đầu có thể cần tải model đã pin. Silence bị chặn trước model;
+                ngôn ngữ luôn là <code>vi</code> và task luôn là
+                <code>transcribe</code>.
+              </p>
             </div>
           </div>
         </section>
@@ -495,7 +573,7 @@
     </main>
 
     <footer>
-      <span>Hina AI · M01 runtime + M02 safety console</span>
+      <span>Hina AI · M01–M04 local companion console</span>
       <span>Dừng dịch vụ bằng <kbd>Ctrl</kbd> + <kbd>C</kbd></span>
     </footer>
   </body>

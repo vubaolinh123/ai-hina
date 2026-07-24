@@ -1,0 +1,87 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M04-S1-audio-vad-stt-console",
+  "module_id": "M04",
+  "objective": "Deliver a runnable local speech-input vertical slice that captures owner microphone audio in the Dev Console, transports bounded binary WAV data without base64 JSON, normalizes it to 16 kHz mono PCM, rejects silence before inference, transcribes Vietnamese through a pinned faster-whisper provider, exposes typed partial/final transcript events, and reports real provider/error state with correlation IDs.",
+  "non_goals": [
+    "Do not generate canned, guessed or placeholder transcripts when the STT model is unavailable.",
+    "Do not persist raw microphone audio or use it for training.",
+    "Do not auto-submit a transcript to chat, memory, TTS, tools or public output.",
+    "Do not claim production WER, accent coverage or latency promotion before the owner corpus and benchmark gate exist.",
+    "Do not require CUDA for the first runnable slice; CPU int8 is the safe default and CUDA is opt-in behind a resource lease."
+  ],
+  "base_sha": "88d3dd72c3ae8ddc269fff371e30d6e6fc055407",
+  "branch": "codex/M04-speech-input",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    ".env.example",
+    "AGENTS.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "README.md",
+    "apps/core-runtime/",
+    "apps/dev-console/",
+    "docs/modules/M03-text-brain.md",
+    "docs/modules/M04-*",
+    "docs/provenance/",
+    "ml/models/manifests/",
+    "package.json",
+    "packages/contracts/openapi/control-plane.v1.json",
+    "pyproject.toml",
+    "third_party/",
+    "tools/dev/",
+    "uv.lock",
+    "workers/speech/"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "adapters/",
+    "assets/",
+    "packages/contracts/schemas/v1/event-envelope.schema.json",
+    "packages/safety-policy/",
+    "packages/text-brain/"
+  ],
+  "contracts": [
+    "The HTTP speech endpoint accepts audio/wav bytes only and never embeds binary audio in JSON.",
+    "Input is bounded to 30 seconds and 1048576 bytes; unsupported, malformed, clipped or empty WAV input fails with a stable speech error.",
+    "All accepted audio is normalized in memory to mono float PCM at 16000 Hz before VAD or STT.",
+    "Energy VAD must reject deterministic silence without invoking the STT provider; faster-whisper also runs its own VAD for admitted speech.",
+    "Language is locked to vi and task is locked to transcribe; callers cannot request translation or another language.",
+    "Raw audio retention is false and no request body, sample data or transcript is written to the error log.",
+    "CPU int8 is the default. Any CUDA provider invocation must hold an active shared ResourceLease and retain at least 2048 MiB VRAM headroom.",
+    "A bounded admission queue rejects excess concurrent transcription instead of growing memory without limit.",
+    "Provider absence, model download/load failure and inference failure return real error state with the request correlation ID and never return fake text.",
+    "Successful one-shot speech returns ordered SpeechStarted, SpeechEnded, TranscriptPartial and TranscriptFinal event records; silence returns an empty final transcript with speechDetected false."
+  ],
+  "allowed_dependencies": [
+    "Python 3.12+ standard library and existing Hina runtime, safety and resource-scheduler code.",
+    "faster-whisper 1.2.1 from PyPI, pinned in uv.lock, used only behind the Hina SttProvider interface.",
+    "Systran/faster-whisper-small at revision 536b0662742c02347bc0e980a01041f333bce120, recorded separately as model weights."
+  ],
+  "oss_candidates": [
+    "https://github.com/SYSTRAN/faster-whisper/tree/v1.2.1",
+    "https://huggingface.co/Systran/faster-whisper-small/tree/536b0662742c02347bc0e980a01041f333bce120"
+  ],
+  "acceptance_criteria": [
+    "Unit tests cover PCM decoding, stereo downmix, resampling, duration/body limits, silence rejection, speech admission, queue overflow, language/task lock, provider failure and raw-audio non-retention.",
+    "Provider tests prove faster-whisper is lazily loaded with the pinned model revision and that CUDA inference cannot run without a resource lease.",
+    "Runtime tests cover GET /v1/speech/status and binary POST /v1/speech/transcriptions with real WAV bytes, correlation IDs and stable HTTP failures.",
+    "Dev Console can record microphone audio or select a WAV file, show capture duration/provider state, request real transcription and place a successful transcript into the chat input without auto-sending it.",
+    "Fast unit, contract and Dev Console startup smoke remain green after integration."
+  ],
+  "required_test_commands": [
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-SpeechUnit.ps1",
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-FastUnit.ps1",
+    "pnpm test:contracts",
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Start-HinaDevConsole.ps1 -Port 0 -NoBrowser -StartupCheck"
+  ],
+  "latency_or_quality_budget": {
+    "max_audio_bytes": 1048576,
+    "max_audio_seconds": 30,
+    "target_sample_rate_hz": 16000,
+    "max_concurrent_transcriptions": 1,
+    "max_queued_transcriptions": 1,
+    "stt_final_after_endpoint_target_milliseconds": 800,
+    "min_free_vram_headroom_mib": 2048
+  },
+  "output_artifact_dir": "artifacts/verification/M04/"
+}

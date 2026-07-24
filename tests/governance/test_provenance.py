@@ -9,12 +9,22 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class ProvenanceTests(unittest.TestCase):
-    def test_m00_imports_no_third_party_source(self) -> None:
+    def test_runtime_dependencies_are_pinned_without_untracked_source_copy(self) -> None:
         data = json.loads(
             (ROOT / "third_party" / "code.lock.json").read_text(encoding="utf-8")
         )
         self.assertEqual("1.0", data["schema_version"])
-        self.assertEqual([], data["components"])
+        by_name = {item["name"]: item for item in data["components"]}
+        faster_whisper = by_name["faster-whisper"]
+        self.assertEqual("MIT", faster_whisper["license_spdx"])
+        self.assertIn("v1.2.1@", faster_whisper["revision"])
+        self.assertTrue(faster_whisper["source_hash"].startswith("sha256:"))
+        self.assertTrue(
+            any(
+                "no upstream source" in item.lower()
+                for item in faster_whisper["modifications"]
+            )
+        )
 
     def test_model_and_asset_registries_exist(self) -> None:
         self.assertTrue((ROOT / "ml" / "models" / "manifests" / "README.md").is_file())

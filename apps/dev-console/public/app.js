@@ -5,6 +5,10 @@ const state = {
   lastSanitation: null,
   activeChatTurnId: null,
   chatPollTimer: null,
+  speechBlob: null,
+  speechBlobUrl: null,
+  speechTranscript: "",
+  recording: null,
   sessionId: localStorage.getItem("hina.console.session") || crypto.randomUUID(),
 };
 
@@ -40,6 +44,20 @@ const elements = Object.fromEntries(
     "replayChatButton",
     "clearChatButton",
     "chatTurnResult",
+    "refreshSpeechButton",
+    "speechAvailability",
+    "speechModelValue",
+    "speechDeviceValue",
+    "speechRetentionValue",
+    "startRecordingButton",
+    "stopRecordingButton",
+    "recordingDuration",
+    "audioFileInput",
+    "speechPreview",
+    "transcribeAudioButton",
+    "useTranscriptButton",
+    "speechResult",
+    "speechTranscript",
     "refreshSafetyButton",
     "safetyBanner",
     "emergencyState",
@@ -143,6 +161,279 @@ async function postJson(path, body) {
     throw new Error(`${result.errorCode || response.status}: ${result.message || "request failed"}`);
   }
   return result;
+}
+
+function setSpeechBlob(blob, label) {
+  if (state.speechBlobUrl) {
+    URL.revokeObjectURL(state.speechBlobUrl);
+  }
+  state.speechBlob = blob;
+  state.speechBlobUrl = URL.createObjectURL(blob);
+  state.speechTranscript = "";
+  elements.speechTranscript.value = "";
+  elements.useTranscriptButton.disabled = true;
+  elements.transcribeAudioButton.disabled = false;
+  elements.speechPreview.src = state.speechBlobUrl;
+  elements.speechPreview.hidden = false;
+  elements.speechResult.classList.remove("empty");
+  elements.speechResult.textContent = `${label}\n${blob.size} byte · audio/wav`;
+}
+
+function renderRecordingDuration(seconds, recording = false) {
+  const safeSeconds = Math.max(0, seconds);
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainder = safeSeconds - minutes * 60;
+  elements.recordingDuration.textContent =
+    `${String(minutes).padStart(2, "0")}:${remainder.toFixed(1).padStart(4, "0")}`;
+  elements.recordingDuration.dataset.recording = String(recording);
+}
+
+async function refreshSpeech() {
+  try {
+    const status = await fetchJson("/v1/speech/status");
+    const configured = status.configured;
+    const provider = status.provider;
+    elements.speechAvailability.textContent = status.available ? "ready" : "unavailable";
+    elements.speechModelValue.textContent = provider.modelLoaded
+      ? "loaded"
+      : provider.modelCached
+        ? "cached"
+        : provider.downloadOnFirstUse
+          ? "download on first use"
+          : "not cached";
+    elements.speechModelValue.title = `${configured.model}@${configured.modelRevision}`;
+    elements.speechDeviceValue.textContent =
+      `${provider.effectiveDevice || configured.device} / ${configured.computeType}`;
+    elements.speechRetentionValue.textContent = status.retention.rawAudio ? "enabled" : "OFF";
+  } catch (error) {
+    elements.speechAvailability.textContent = "unavailable";
+    elements.speechModelValue.textContent = "—";
+    elements.speechDeviceValue.textContent = "—";
+    elements.speechRetentionValue.textContent = "unknown";
+    addActivity(`Không đọc được speech input: ${error.message}`, "error");
+  }
+}
+
+function mergeFloat32Chunks(chunks, sampleCount) {
+  const merged = new Float32Array(sampleCount);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return merged;
+}
+
+function resampleFloat32(samples, sourceRate, targetRate = 16000) {
+  if (sourceRate === targetRate) return samples;
+  const targetLength = Math.max(1, Math.round(samples.length * targetRate / sourceRate));
+  const result = new Float32Array(targetLength);
+  const ratio = sourceRate / targetRate;
+  const last = samples.length - 1;
+  for (let index = 0; index < targetLength; index += 1) {
+    const position = Math.min(last, index * ratio);
+    const left = Math.floor(position);
+    const right = Math.min(last, left + 1);
+    const fraction = position - left;
+    result[index] = samples[left] + (samples[right] - samples[left]) * fraction;
+  }
+  return result;
+}
+
+function encodePcmWav(samples, sampleRate) {
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buffer);
+  const writeAscii = (offset, value) => {
+    for (let index = 0; index < value.length; index += 1) {
+      view.setUint8(offset + index, value.charCodeAt(index));
+    }
+  };
+  writeAscii(0, "RIFF");
+  view.setUint32(4, 36 + samples.length * 2, true);
+  writeAscii(8, "WAVE");
+  writeAscii(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeAscii(36, "data");
+  view.setUint32(40, samples.length * 2, true);
+  for (let index = 0; index < samples.length; index += 1) {
+    const sample = Math.max(-1, Math.min(1, samples[index]));
+    view.setInt16(
+      44 + index * 2,
+      sample < 0 ? sample * 0x8000 : sample * 0x7fff,
+      true,
+    );
+  }
+  return new Blob([buffer], { type: "audio/wav" });
+}
+
+async function startMicrophoneRecording() {
+  if (state.recording) return;
+  if (!navigator.mediaDevices?.getUserMedia) {
+    addActivity("Trình duyệt không hỗ trợ microphone capture.", "error");
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+      video: false,
+    });
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) {
+      stream.getTracks().forEach((track) => track.stop());
+      throw new Error("Web Audio API không khả dụng.");
+    }
+    const context = new AudioContextClass();
+    const source = context.createMediaStreamSource(stream);
+    const processor = context.createScriptProcessor(4096, 1, 1);
+    const chunks = [];
+    let sampleCount = 0;
+    const startedAt = performance.now();
+    processor.onaudioprocess = (event) => {
+      if (!state.recording) return;
+      const chunk = new Float32Array(event.inputBuffer.getChannelData(0));
+      chunks.push(chunk);
+      sampleCount += chunk.length;
+      const seconds = sampleCount / context.sampleRate;
+      renderRecordingDuration(seconds, true);
+      if (seconds >= 30) {
+        stopMicrophoneRecording();
+      }
+    };
+    source.connect(processor);
+    processor.connect(context.destination);
+    state.recording = {
+      stream,
+      context,
+      source,
+      processor,
+      chunks,
+      get sampleCount() {
+        return sampleCount;
+      },
+      startedAt,
+    };
+    elements.startRecordingButton.disabled = true;
+    elements.stopRecordingButton.disabled = false;
+    elements.transcribeAudioButton.disabled = true;
+    elements.audioFileInput.disabled = true;
+    renderRecordingDuration(0, true);
+    addActivity("Đang thu microphone vào RAM; giới hạn 30 giây.", "info");
+  } catch (error) {
+    addActivity(`Không mở được microphone: ${error.message}`, "error");
+  }
+}
+
+async function stopMicrophoneRecording() {
+  const recording = state.recording;
+  if (!recording) return;
+  state.recording = null;
+  recording.processor.onaudioprocess = null;
+  recording.source.disconnect();
+  recording.processor.disconnect();
+  recording.stream.getTracks().forEach((track) => track.stop());
+  await recording.context.close();
+  const seconds = recording.sampleCount / recording.context.sampleRate;
+  elements.startRecordingButton.disabled = false;
+  elements.stopRecordingButton.disabled = true;
+  elements.audioFileInput.disabled = false;
+  renderRecordingDuration(seconds, false);
+  if (recording.sampleCount === 0) {
+    addActivity("Không thu được sample audio nào.", "error");
+    return;
+  }
+  const captured = mergeFloat32Chunks(recording.chunks, recording.sampleCount);
+  const samples = resampleFloat32(captured, recording.context.sampleRate);
+  const blob = encodePcmWav(samples, 16000);
+  if (blob.size > 1048576) {
+    addActivity("Audio vượt 1 MiB; hãy thu đoạn ngắn hơn.", "error");
+    return;
+  }
+  setSpeechBlob(blob, `Mic capture ${seconds.toFixed(2)} giây`);
+  addActivity(`Đã thu ${seconds.toFixed(2)} giây WAV trong RAM.`, "success");
+}
+
+async function selectAudioFile() {
+  const file = elements.audioFileInput.files?.[0];
+  if (!file) return;
+  if (file.size > 1048576) {
+    elements.audioFileInput.value = "";
+    addActivity("File WAV vượt giới hạn 1 MiB.", "error");
+    return;
+  }
+  if (!file.name.toLowerCase().endsWith(".wav")) {
+    elements.audioFileInput.value = "";
+    addActivity("Chỉ chấp nhận file .wav.", "error");
+    return;
+  }
+  setSpeechBlob(file, `File ${file.name}`);
+  addActivity(`Đã chọn ${file.name}; audio chưa được gửi.`, "info");
+}
+
+async function transcribeAudio() {
+  const blob = state.speechBlob;
+  if (!blob) return;
+  const correlationId = crypto.randomUUID();
+  elements.transcribeAudioButton.disabled = true;
+  elements.speechResult.classList.remove("empty");
+  elements.speechResult.textContent =
+    `Đang transcribe…\ncorrelationId=${correlationId}\nLần đầu có thể tải model đã pin.`;
+  try {
+    const response = await fetch("/v1/speech/transcriptions", {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "audio/wav",
+        "X-Hina-Correlation-Id": correlationId,
+        "X-Hina-Session-Id": state.sessionId,
+        "X-Hina-Source": "owner.dev-console",
+      },
+      body: blob,
+    });
+    const result = await response.json();
+    elements.speechResult.textContent = JSON.stringify(result, null, 2);
+    if (!response.ok) {
+      throw new Error(
+        `${result.errorCode || response.status}: ${result.message || "request failed"} · ${result.correlationId || correlationId}`,
+      );
+    }
+    state.speechTranscript = result.transcript || "";
+    elements.speechTranscript.value = state.speechTranscript;
+    elements.useTranscriptButton.disabled = !state.speechTranscript;
+    addActivity(
+      result.speechDetected
+        ? `STT xong trong ${result.processingMilliseconds} ms · ${result.correlationId}.`
+        : `VAD xác nhận silence · ${result.correlationId}.`,
+      "success",
+    );
+    await Promise.all([refreshSpeech(), refreshMetrics()]);
+  } catch (error) {
+    state.speechTranscript = "";
+    elements.speechTranscript.value = "";
+    elements.useTranscriptButton.disabled = true;
+    addActivity(`STT lỗi: ${error.message}`, "error");
+    setTimeout(refreshErrors, 150);
+  } finally {
+    elements.transcribeAudioButton.disabled = false;
+  }
+}
+
+function useTranscriptInChat() {
+  if (!state.speechTranscript) return;
+  elements.chatInput.value = state.speechTranscript;
+  elements.chatInput.focus();
+  addActivity("Đã chép transcript vào ô chat; chưa gửi turn.", "success");
 }
 
 async function refreshStatus() {
@@ -670,6 +961,7 @@ async function refreshAll({ announce = true } = {}) {
     refreshSafety(),
     refreshModel(),
     refreshChatStatus(),
+    refreshSpeech(),
   ]);
   if (announce) {
     addActivity("Đã làm mới control plane, metrics và error log.", "success");
@@ -894,6 +1186,12 @@ elements.connectButton.addEventListener("click", connectWebSocket);
 elements.refreshAllButton.addEventListener("click", () => refreshAll());
 elements.refreshSafetyButton.addEventListener("click", refreshSafety);
 elements.refreshModelButton.addEventListener("click", refreshModel);
+elements.refreshSpeechButton.addEventListener("click", refreshSpeech);
+elements.startRecordingButton.addEventListener("click", startMicrophoneRecording);
+elements.stopRecordingButton.addEventListener("click", stopMicrophoneRecording);
+elements.audioFileInput.addEventListener("change", selectAudioFile);
+elements.transcribeAudioButton.addEventListener("click", transcribeAudio);
+elements.useTranscriptButton.addEventListener("click", useTranscriptInChat);
 elements.sendChatButton.addEventListener("click", startChatTurn);
 elements.cancelChatButton.addEventListener("click", cancelChatTurn);
 elements.replayChatButton.addEventListener("click", replayChat);
@@ -936,6 +1234,12 @@ window.addEventListener("beforeunload", () => {
   if (state.chatPollTimer !== null) {
     clearTimeout(state.chatPollTimer);
   }
+  if (state.recording) {
+    state.recording.stream.getTracks().forEach((track) => track.stop());
+  }
+  if (state.speechBlobUrl) {
+    URL.revokeObjectURL(state.speechBlobUrl);
+  }
 });
 
 updateConnection(false);
@@ -947,4 +1251,5 @@ setInterval(() => {
   refreshSafety();
   refreshModel();
   refreshChatStatus();
+  refreshSpeech();
 }, 5000);

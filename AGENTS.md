@@ -4,12 +4,15 @@
 
 Đọc `HINA_AI_MASTER_PLAN_VI.md` trước khi thay đổi kiến trúc hoặc mở module mới. Chỉ một module sản phẩm được ở write phase tại một thời điểm.
 
-Module active hiện tại: **M03 — Text brain: model gateway, turn FSM, persona và
-short-term memory**. M01 và M02 đã qua fast unit/contract/startup gate;
-repeat/soak/deep release verification được hoãn tới khi owner yêu cầu. M03-S1
-và M03-S2 đã triển khai. M03 đang chờ **một independent reviewer theo yêu cầu
-owner**, sau đó owner tự chạy ứng dụng và manual acceptance. Không mở M04 trước
-khi candidate M03 đã review và blocker được sửa.
+Module active hiện tại: **M04 — Speech input: audio capture, VAD và STT**. M01,
+M02 và M03 đã qua fast unit/contract/startup gate; repeat/soak/deep release
+verification được hoãn tới khi owner yêu cầu. Candidate M03 tại
+`88d3dd72c3ae8ddc269fff371e30d6e6fc055407` đã được independent reviewer chạy
+fast gate và không có blocker P0/P1 được xác nhận. M04-S1 và M04-S2 đã triển
+khai, fast unit/contract/startup và real-provider smoke đều xanh; candidate đang
+chờ independent frozen-SHA review trước khi owner manual acceptance. Owner báo
+lỗi bằng correlation ID. Không mở M05 trước khi review M04 hoàn tất và blocker
+P0/P1 (nếu có) được sửa.
 
 Legacy AIRI skill paths dưới `D:\ProjectAiri` mặc định ánh xạ sang repository
 hiện tại `D:\ProjectHinaAI`, trừ khi owner chỉ định workspace khác.

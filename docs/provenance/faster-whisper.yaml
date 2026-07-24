@@ -1,0 +1,22 @@
+name: faster-whisper
+upstream_url: https://github.com/SYSTRAN/faster-whisper
+revision: 65882eee9f5cdbeeb2d877f1131d48cf241b327d
+release: v1.2.1
+distribution:
+  kind: pypi-wheel
+  filename: faster_whisper-1.2.1-py3-none-any.whl
+  sha256: 79a66ad50688c0b794dd501dc340a736992a6342f7f95e5811be60b5224a26a7
+original_paths: []
+license_spdx: MIT
+copyright: "Copyright (c) 2023 SYSTRAN"
+imported_at: 2026-07-25
+destination_paths:
+  - pyproject.toml
+  - uv.lock
+  - workers/speech/src/hina_speech/provider.py
+modifications:
+  - "Pinned runtime dependency; no upstream source or snippet copied."
+  - "Wrapped behind SttProvider with Vietnamese transcription lock."
+  - "Added pre-VAD, bounded admission, no-retention and ResourceLease enforcement."
+reviewed_by: primary_orchestrator
+approved_by: primary_orchestrator

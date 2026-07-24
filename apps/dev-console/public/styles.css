@@ -256,11 +256,53 @@ main {
 
 .event-panel,
 .brain-panel,
+.speech-panel,
 .safety-panel,
 .metrics-panel,
 .errors-panel,
 .activity-panel {
   grid-column: 1 / -1;
+}
+
+.speech-grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.9fr) minmax(340px, 1.1fr);
+  gap: 24px;
+}
+
+.recording-duration {
+  display: inline-flex;
+  align-items: center;
+  min-height: 42px;
+  padding: 0 11px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.recording-duration[data-recording="true"] {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.speech-preview {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.speech-actions {
+  margin-top: 14px;
+}
+
+.speech-result {
+  min-height: 172px;
+  margin-top: 0;
+}
+
+.speech-hint {
+  margin-top: 10px;
+  margin-bottom: 0;
 }
 
 .panel-heading {
@@ -732,7 +774,8 @@ kbd {
     grid-template-columns: 1fr;
   }
 
-  .chat-grid {
+  .chat-grid,
+  .speech-grid {
     grid-template-columns: 1fr;
   }
 }

@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 from uuid import UUID
+from uuid import uuid4
 
 from hina_contracts import validate_envelope
 
@@ -44,12 +45,14 @@ _STATIC_SECURITY_HEADERS = {
         "default-src 'self'; "
         "connect-src 'self' ws://127.0.0.1:* ws://[::1]:*; "
         "img-src 'self' data:; "
+        "media-src 'self' blob:; "
         "object-src 'none'; "
         "base-uri 'none'; "
         "frame-ancestors 'none'"
     ),
     "Referrer-Policy": "no-referrer",
     "X-Frame-Options": "DENY",
+    "Permissions-Policy": "microphone=(self)",
 }
 
 
@@ -58,7 +61,7 @@ class TransportConfig:
     host: str = "127.0.0.1"
     port: int = 8765
     max_http_header_bytes: int = 16_384
-    max_control_body_bytes: int = 65_536
+    max_control_body_bytes: int = 1_048_576
     max_text_frame_bytes: int = 1_114_112
     max_binary_frame_bytes: int = 2_097_152
     max_connections: int = 16
@@ -158,6 +161,7 @@ class ControlPlaneServer:
         safety_policy: Any | None = None,
         model_gateway: Any | None = None,
         conversation_service: Any | None = None,
+        speech_service: Any | None = None,
         build_commit: str | None = None,
     ) -> None:
         self.config = config
@@ -168,6 +172,7 @@ class ControlPlaneServer:
         self.safety_policy = safety_policy
         self.model_gateway = model_gateway
         self.conversation_service = conversation_service
+        self.speech_service = speech_service
         self.build_commit = build_commit or os.environ.get("HINA_BUILD_COMMIT", "development")
         self._server: asyncio.AbstractServer | None = None
         self._started_at = 0.0
@@ -353,6 +358,9 @@ class ControlPlaneServer:
             self._record_metric("hina_http_requests_total", operation="static", status="ok")
             await self._serve_static_file(writer, path)
             return
+        if request.method == "POST" and path == "/v1/speech/transcriptions":
+            await self._serve_speech_transcription(writer, request)
+            return
 
         body: dict[str, Any]
         if request.method == "POST":
@@ -413,6 +421,8 @@ class ControlPlaneServer:
             body = await self.model_gateway.status()
         elif path == "/v1/chat/status":
             body = await self._chat_call("status")
+        elif path == "/v1/speech/status":
+            body = await self._speech_status()
         elif _chat_route(path, "turns"):
             body = await self._chat_call("get_turn", _chat_route(path, "turns"))
         elif _chat_route(path, "sessions"):
@@ -465,6 +475,160 @@ class ControlPlaneServer:
                 )
             return await self._chat_call("clear_session", session_id)
         raise PrimitiveError(RuntimeErrorCode.HTTP_BAD_REQUEST, "POST route was not found")
+
+    async def _speech_status(self) -> dict[str, Any]:
+        if self.speech_service is None:
+            raise PrimitiveError(
+                RuntimeErrorCode.OPERATION_FAILED,
+                "speech input service is unavailable",
+            )
+        result = await self.speech_service.status()
+        if not isinstance(result, dict):
+            raise PrimitiveError(
+                RuntimeErrorCode.OPERATION_FAILED,
+                "speech input service returned invalid status",
+            )
+        return result
+
+    async def _serve_speech_transcription(
+        self,
+        writer: asyncio.StreamWriter,
+        request: _HttpRequest,
+    ) -> None:
+        correlation_id = request.headers.get("x-hina-correlation-id") or str(uuid4())
+        session_id = request.headers.get("x-hina-session-id") or None
+        source = request.headers.get("x-hina-source", "owner.dev-console")
+        content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+        if content_type not in {"audio/wav", "audio/x-wav"}:
+            self._log_speech_request_error(
+                "E_AUDIO_CONTENT_TYPE",
+                correlation_id,
+                session_id,
+                len(request.body),
+            )
+            await self._send_json_response(
+                writer,
+                HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
+                {
+                    "status": "error",
+                    "errorCode": "E_AUDIO_CONTENT_TYPE",
+                    "message": "speech transcription requires an audio/wav body",
+                    "correlationId": correlation_id,
+                },
+            )
+            return
+        if not request.body:
+            self._log_speech_request_error(
+                "E_AUDIO_EMPTY",
+                correlation_id,
+                session_id,
+                0,
+            )
+            await self._send_json_response(
+                writer,
+                HTTPStatus.BAD_REQUEST,
+                {
+                    "status": "error",
+                    "errorCode": "E_AUDIO_EMPTY",
+                    "message": "WAV audio body is empty",
+                    "correlationId": correlation_id,
+                },
+            )
+            return
+        if self.speech_service is None:
+            self._log_speech_request_error(
+                "E_STT_UNAVAILABLE",
+                correlation_id,
+                session_id,
+                len(request.body),
+            )
+            await self._send_json_response(
+                writer,
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                {
+                    "status": "error",
+                    "errorCode": "E_STT_UNAVAILABLE",
+                    "message": "speech input service is unavailable",
+                    "correlationId": correlation_id,
+                },
+            )
+            return
+        try:
+            body = await self.speech_service.transcribe_wav(
+                request.body,
+                correlation_id=correlation_id,
+                session_id=session_id,
+                source=source,
+            )
+        except Exception as exc:
+            code = getattr(exc, "code", "")
+            if not isinstance(code, str) or not (
+                code.startswith("E_AUDIO_") or code.startswith("E_STT_")
+            ):
+                raise
+            if code == "E_STT_QUEUE_FULL":
+                status = HTTPStatus.TOO_MANY_REQUESTS
+            elif code in {
+                "E_STT_UNAVAILABLE",
+                "E_STT_MODEL_LOAD",
+                "E_STT_INFERENCE",
+                "E_STT_TIMEOUT",
+                "E_STT_RESOURCE_LEASE",
+                "E_STT_OPERATION",
+            }:
+                status = HTTPStatus.SERVICE_UNAVAILABLE
+            else:
+                status = HTTPStatus.BAD_REQUEST
+            if not getattr(exc, "reported", False):
+                self._log_speech_request_error(
+                    code,
+                    correlation_id,
+                    session_id,
+                    len(request.body),
+                )
+            self._record_metric(
+                "hina_http_requests_total",
+                operation="speech/transcriptions",
+                status="error",
+            )
+            await self._send_json_response(
+                writer,
+                status,
+                {
+                    "status": "error",
+                    "errorCode": code,
+                    "message": getattr(exc, "detail", "speech request failed")[:256],
+                    "correlationId": correlation_id,
+                },
+            )
+            return
+        self._record_metric(
+            "hina_http_requests_total",
+            operation="speech/transcriptions",
+            status="ok",
+        )
+        await self._send_json_response(writer, HTTPStatus.OK, body)
+
+    def _log_speech_request_error(
+        self,
+        code: str,
+        correlation_id: str,
+        session_id: str | None,
+        audio_bytes: int,
+    ) -> None:
+        if self.error_logger is None:
+            return
+        self.error_logger.log_error(
+            PrimitiveError(code, "speech input request failed"),  # type: ignore[arg-type]
+            component="speech.input",
+            operation="transcribe",
+            correlation_id=correlation_id,
+            session_id=session_id,
+            context={
+                "audioBytes": audio_bytes,
+                "rawAudioRetained": False,
+            },
+        )
 
     def _safety_call(self, operation: str, *args: Any) -> dict[str, Any]:
         if self.safety_policy is None:

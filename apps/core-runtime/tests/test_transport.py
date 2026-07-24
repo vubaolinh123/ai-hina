@@ -93,6 +93,8 @@ class TransportValueTests(unittest.TestCase):
                 "/v1/chat/turns/{turnId}/cancel",
                 "/v1/chat/sessions/{sessionId}",
                 "/v1/chat/sessions/{sessionId}/clear",
+                "/v1/speech/status",
+                "/v1/speech/transcriptions",
                 "/v1/errors",
                 "/v1/safety/status",
                 "/v1/safety/audit",

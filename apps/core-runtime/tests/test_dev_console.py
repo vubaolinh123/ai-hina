@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import json
+import math
+import struct
 import sys
 import tempfile
 import unittest
+import wave
 from http import HTTPStatus
 from pathlib import Path
 
@@ -14,8 +18,10 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 STATIC_DIR = ROOT / "apps" / "dev-console" / "public"
 SAFETY_ROOT = ROOT / "packages" / "safety-policy"
 PERSONA_PATH = ROOT / "packages" / "text-brain" / "personas" / "hina.v1.json"
+SPEECH_ROOT = ROOT / "workers" / "speech"
 sys.path.insert(0, str(ROOT / "packages" / "contracts" / "src"))
 sys.path.insert(0, str(SAFETY_ROOT / "src"))
+sys.path.insert(0, str(SPEECH_ROOT / "src"))
 sys.path.insert(0, str(APP_ROOT / "src"))
 
 from hina_core.runtime import (  # noqa: E402
@@ -27,6 +33,7 @@ from hina_core.runtime import (  # noqa: E402
 )
 from hina_core.runtime.transport_client import get_json, post_json  # noqa: E402
 from hina_text_brain import TextBrainError  # noqa: E402
+from hina_speech import SpeechConfig, SpeechInputService, SttResult, SttSegment  # noqa: E402
 
 
 class _StubModelGateway:
@@ -72,6 +79,31 @@ class _FailingModelGateway(_StubModelGateway):
         yield ""  # pragma: no cover
 
 
+class _StubSpeechProvider:
+    async def status(self) -> dict[str, object]:
+        return {
+            "available": True,
+            "dependencyAvailable": True,
+            "modelLoaded": True,
+            "modelCached": True,
+            "effectiveDevice": "cpu",
+        }
+
+    async def transcribe(self, audio):
+        return SttResult(
+            text="xin chào Hina",
+            language="vi",
+            language_probability=0.99,
+            duration_seconds=audio.duration_seconds,
+            segments=(
+                SttSegment(0.0, audio.duration_seconds, "xin chào Hina", 0.91),
+            ),
+        )
+
+    async def unload(self) -> None:
+        return None
+
+
 async def _get(host: str, port: int, target: str) -> tuple[int, dict[str, str], bytes]:
     reader, writer = await asyncio.open_connection(host, port)
     writer.write(
@@ -96,6 +128,60 @@ async def _get(host: str, port: int, target: str) -> tuple[int, dict[str, str], 
         if separator
     }
     return status, headers, body
+
+
+async def _post_audio(
+    host: str,
+    port: int,
+    body: bytes,
+    *,
+    correlation_id: str,
+    content_type: str = "audio/wav",
+) -> tuple[int, dict[str, str], bytes]:
+    reader, writer = await asyncio.open_connection(host, port)
+    writer.write(
+        (
+            "POST /v1/speech/transcriptions HTTP/1.1\r\n"
+            f"Host: {host}:{port}\r\n"
+            f"Content-Type: {content_type}\r\n"
+            f"Content-Length: {len(body)}\r\n"
+            f"X-Hina-Correlation-Id: {correlation_id}\r\n"
+            "X-Hina-Session-Id: 66666666-6666-4666-8666-666666666666\r\n"
+            "X-Hina-Source: owner.dev-console\r\n"
+            "Connection: close\r\n"
+            "\r\n"
+        ).encode("ascii")
+        + body
+    )
+    await writer.drain()
+    raw = await reader.read()
+    writer.close()
+    await writer.wait_closed()
+    head, response_body = raw.split(b"\r\n\r\n", 1)
+    lines = head.decode("ascii").split("\r\n")
+    status = int(lines[0].split(" ")[1])
+    headers = {
+        name.lower(): value.strip()
+        for line in lines[1:]
+        for name, separator, value in [line.partition(":")]
+        if separator
+    }
+    return status, headers, response_body
+
+
+def _speech_wav() -> bytes:
+    sample_rate = 16_000
+    frames = bytearray()
+    for index in range(round(sample_rate * 0.25)):
+        sample = int(0.2 * math.sin(2 * math.pi * 440 * index / sample_rate) * 32_767)
+        frames.extend(struct.pack("<h", sample))
+    output = io.BytesIO()
+    with wave.open(output, "wb") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(sample_rate)
+        handle.writeframes(bytes(frames))
+    return output.getvalue()
 
 
 class DevConsoleTests(unittest.IsolatedAsyncioTestCase):
@@ -130,6 +216,8 @@ class DevConsoleTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn(b"/v1/safety/moderate", script)
                 self.assertIn(b"/v1/model/status", script)
                 self.assertIn(b"/v1/chat/turns", script)
+                self.assertIn(b"/v1/speech/status", script)
+                self.assertIn(b"/v1/speech/transcriptions", script)
                 self.assertNotIn(b"unknown_capability", script)
                 self.assertNotIn(b"generated_code_execution", script)
                 self.assertNotIn(b"fake AI", script)
@@ -144,6 +232,73 @@ class DevConsoleTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(model.status, HTTPStatus.OK)
                 self.assertFalse(model.body["available"])
                 self.assertEqual(model.body["provider"]["errorCode"], "E_MODEL_UNAVAILABLE")
+            finally:
+                await application.stop()
+
+    async def test_speech_binary_endpoint_transcribes_and_logs_failure_without_raw_audio(self) -> None:
+        with tempfile.TemporaryDirectory(dir=APP_ROOT) as temporary_directory:
+            directory = Path(temporary_directory)
+            application = HinaRuntimeApplication(
+                TransportConfig(port=0),
+                RuntimePaths(
+                    database=directory / "runtime.sqlite3",
+                    error_log=directory / "runtime.jsonl",
+                    static_dir=STATIC_DIR,
+                ),
+                model_gateway=_StubModelGateway(),
+            )
+            application.speech_service = SpeechInputService(
+                SpeechConfig(),
+                _StubSpeechProvider(),
+                on_error=application._log_speech_error,
+            )
+            await application.start()
+            host, port = application.address
+            correlation = "55555555-5555-4555-8555-555555555555"
+            try:
+                status = await get_json(host, port, "/v1/speech/status")
+                self.assertEqual(status.status, HTTPStatus.OK)
+                self.assertTrue(status.body["available"])
+                self.assertFalse(status.body["retention"]["rawAudio"])
+
+                code, _, body = await _post_audio(
+                    host,
+                    port,
+                    _speech_wav(),
+                    correlation_id=correlation,
+                )
+                result = json.loads(body)
+                self.assertEqual(code, HTTPStatus.OK)
+                self.assertEqual(result["transcript"], "xin chào Hina")
+                self.assertEqual(result["correlationId"], correlation)
+                self.assertFalse(result["audio"]["rawAudioRetained"])
+
+                secret_audio = b"owner-private@example.test"
+                code, _, body = await _post_audio(
+                    host,
+                    port,
+                    secret_audio,
+                    correlation_id=correlation,
+                )
+                failure = json.loads(body)
+                self.assertEqual(code, HTTPStatus.BAD_REQUEST)
+                self.assertEqual(failure["errorCode"], "E_AUDIO_FORMAT")
+                self.assertEqual(failure["correlationId"], correlation)
+                log_text = (directory / "runtime.jsonl").read_text(encoding="utf-8")
+                self.assertIn("speech.input", log_text)
+                self.assertIn("E_AUDIO_FORMAT", log_text)
+                self.assertIn(correlation, log_text)
+                self.assertNotIn("owner-private@example.test", log_text)
+
+                code, _, body = await _post_audio(
+                    host,
+                    port,
+                    _speech_wav(),
+                    correlation_id=correlation,
+                    content_type="application/json",
+                )
+                self.assertEqual(code, HTTPStatus.UNSUPPORTED_MEDIA_TYPE)
+                self.assertEqual(json.loads(body)["errorCode"], "E_AUDIO_CONTENT_TYPE")
             finally:
                 await application.stop()
 

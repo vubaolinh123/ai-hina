@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "manifest_id": "hina.stt.faster-whisper-small.v1",
+  "artifact_kind": "model_weights_and_configuration",
+  "model_id": "Systran/faster-whisper-small",
+  "source_url": "https://huggingface.co/Systran/faster-whisper-small",
+  "revision": "536b0662742c02347bc0e980a01041f333bce120",
+  "observed_at": "2026-07-25",
+  "files": [
+    {
+      "path": "model.bin",
+      "size_bytes": 483546902,
+      "sha256": "3e305921506d8872816023e4c273e75d2419fb89b24da97b4fe7bce14170d671"
+    }
+  ],
+  "licenses": {
+    "runtime_code_spdx": "MIT",
+    "weights_spdx": "MIT",
+    "model_card_url": "https://huggingface.co/Systran/faster-whisper-small",
+    "commercial_use_allowed": true,
+    "redistribution_allowed": true
+  },
+  "lineage": {
+    "base_model": "openai/whisper-small",
+    "conversion": "CTranslate2 float16 conversion published by SYSTRAN",
+    "known_training_data_terms": "Whisper multilingual weakly supervised training lineage; no owner audio is included by Hina."
+  },
+  "runtime": {
+    "provider": "faster-whisper",
+    "provider_version": "1.2.1",
+    "default_device": "cpu",
+    "default_compute_type": "int8",
+    "language": "vi",
+    "task": "transcribe",
+    "cache_path": "var/cache/models/faster-whisper"
+  },
+  "status": {
+    "download_authorized": true,
+    "download_on_first_use": true,
+    "quality_promoted": false,
+    "production_ready": false,
+    "requires_owner_corpus_gate": true
+  }
+}

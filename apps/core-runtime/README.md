@@ -1,6 +1,6 @@
 # Hina core runtime
 
-M01-S2 đến M01-S7, M02 và M03 text vertical slice cung cấp runtime nền tảng:
+M01-S2 đến M01-S7, M02, M03 và M04 speech vertical slice cung cấp runtime nền tảng:
 
 - bounded async queues, deadline, cancellation và idempotency;
 - SQLite journal/outbox/inbox với lease, ACK/NACK và ordered replay;
@@ -14,6 +14,8 @@ M01-S2 đến M01-S7, M02 và M03 text vertical slice cung cấp runtime nền t
 - capability policy, emergency controls và hash-chained safety audit.
 - local model gateway, live GPU lease, persona, turn FSM và short-term memory.
 - REST chat start/poll/interrupt/replay/clear; lỗi có correlation trong JSONL.
+- REST binary WAV transcription, silence VAD, Vietnamese language lock and
+  redacted speech errors with correlation IDs.
 
 ## Chạy ứng dụng
 
@@ -42,6 +44,8 @@ pnpm start:control
 pnpm test:fast
 pnpm test:safety
 pnpm test:text-brain
+pnpm test:speech
+pnpm smoke:m04-stt
 pnpm smoke:m01-s2
 pnpm smoke:m01-s3
 pnpm smoke:m01-s4

@@ -1,6 +1,6 @@
 # Hina AI — Master Plan xây AI VTuber kiểu Neuro-sama
 
-> Trạng thái: kế hoạch greenfield, chưa bắt đầu implementation  
+> Trạng thái: đang implementation; module active M04 — Speech input
 > Nguồn đầu vào chính: `deep-research-report.md`  
 > Mục tiêu phần cứng ban đầu: Windows, NVIDIA RTX 5070 Ti 16 GB; RAM/driver/runtime phải được xác minh lại ở M00  
 > Nguyên tắc phát triển: một module sản phẩm tại một thời điểm; nhiều agent làm song song bên trong module; chỉ mở module kế tiếp sau khi module hiện tại qua toàn bộ quality gate

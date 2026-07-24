@@ -74,26 +74,6 @@
       ]
     },
     {
-      "id": "systran-faster-whisper",
-      "name": "faster-whisper",
-      "kind": "runtime_dependency_candidate",
-      "source_url": "https://github.com/SYSTRAN/faster-whisper",
-      "revision": null,
-      "observed_default_branch": "master",
-      "license": {
-        "spdx": "MIT",
-        "evidence_url": "https://github.com/SYSTRAN/faster-whisper/blob/master/LICENSE"
-      },
-      "intended_use": [
-        "local_stt_provider"
-      ],
-      "freeze_blockers": [
-        "pin_release_and_ctranslate2_version",
-        "select_and_manifest_whisper_weights_separately",
-        "benchmark_windows_cuda_cpu_and_vietnamese_wer"
-      ]
-    },
-    {
       "id": "qdrant-qdrant",
       "name": "Qdrant",
       "kind": "service_dependency_candidate",

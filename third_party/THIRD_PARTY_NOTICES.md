@@ -1,5 +1,19 @@
 # Third-party notices
 
-M00 imports no third-party source code, model weights, datasets, voices, motions or avatar assets.
+## faster-whisper 1.2.1
 
-The approved plan references upstream projects for later research. A reference is not an import. Add notices only when a dependency, file, snippet or artifact is actually incorporated and pinned.
+- Upstream: https://github.com/SYSTRAN/faster-whisper
+- Pinned tag/commit: `v1.2.1` /
+  `65882eee9f5cdbeeb2d877f1131d48cf241b327d`
+- License: MIT
+- Copyright: Copyright (c) 2023 SYSTRAN
+- Use: runtime dependency behind Hina's local STT provider interface
+
+No faster-whisper source file or snippet is copied into this repository.
+Transitive Python packages are pinned by `uv.lock` and emitted in the CycloneDX
+SBOM.
+
+Model weights are licensed and tracked separately. The M04 default is
+`Systran/faster-whisper-small` at
+`536b0662742c02347bc0e980a01041f333bce120`; see its model manifest for the
+weight hash and terms.

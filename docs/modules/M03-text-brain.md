@@ -1,10 +1,11 @@
 # M03 — Text brain
 
-- Status: fast implementation complete; independent review and owner acceptance pending
+- Status: fast implementation complete; independent review passed without a confirmed P0/P1 blocker; owner manual acceptance remains available
 - Branch: `codex/M03-text-brain`
 - Base: `6c21754`
 - Completed slices: `M03-S1`, `M03-S2`
-- Next action: independent review, then owner manual application test
+- Reviewed candidate: `88d3dd72c3ae8ddc269fff371e30d6e6fc055407`
+- Next action: owner manual application test while M04 proceeds
 
 ## M03-S1 implementation
 
@@ -66,3 +67,14 @@ optional `HINA_MODEL_API_KEY` select an already-running local provider.
 The 200+ golden conversation/model-quality benchmark, TTFT/tokens-per-second
 baseline and deep repeat/soak gate remain deferred under the owner's fast
 development rule. No model is quality-promoted by this implementation gate.
+
+## Independent review
+
+- [x] Candidate SHA and remote branch matched with a clean tree.
+- [x] Fast unit gate passed: safety 22/22, text brain 22/22, runtime 32/32.
+- [x] Contract gate passed: Python 28/28 and Node 13/13.
+- [x] Real Dev Console startup smoke passed.
+- [x] No P0/P1 blocker was confirmed before the time-boxed reviewer completed.
+
+The reviewer did not run repeat/soak/deep model-quality verification. Those
+checks remain explicitly deferred by the owner's fast-development policy.

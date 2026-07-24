@@ -53,7 +53,7 @@ EXPECTED_AGENTS = {
 }
 
 MODULE_BRANCH_PATTERN = re.compile(
-    r"^(?:module|integration)/M[0-9]{2}-[A-Za-z0-9._/-]+$"
+    r"^(?:module|integration|codex)/M[0-9]{2}-[A-Za-z0-9._/-]+$"
 )
 
 MODULE_BRIEF_REQUIRED = {
