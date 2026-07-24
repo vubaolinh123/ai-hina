@@ -79,6 +79,23 @@
         }
       }
     },
+    "/v1/model/status": {
+      "get": {
+        "operationId": "getModelGatewayStatus",
+        "responses": {
+          "200": {
+            "description": "Non-secret local model provider, circuit and live resource status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelGatewayStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/errors": {
       "get": {
         "operationId": "getRecentErrors",
@@ -485,6 +502,34 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 256
+          }
+        }
+      },
+      "ModelGatewayStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "configured",
+          "provider",
+          "resource",
+          "circuit",
+          "available"
+        ],
+        "properties": {
+          "configured": {
+            "type": "object"
+          },
+          "provider": {
+            "type": "object"
+          },
+          "resource": {
+            "type": "object"
+          },
+          "circuit": {
+            "type": "object"
+          },
+          "available": {
+            "type": "boolean"
           }
         }
       },

@@ -21,6 +21,13 @@ const elements = Object.fromEntries(
     "endpointValue",
     "metricCountValue",
     "metricCapacityValue",
+    "refreshModelButton",
+    "modelAvailability",
+    "modelProviderValue",
+    "modelNameValue",
+    "modelResourceValue",
+    "modelCircuitValue",
+    "modelStatusBox",
     "refreshSafetyButton",
     "safetyBanner",
     "emergencyState",
@@ -182,6 +189,32 @@ async function refreshMetrics() {
     renderMetrics(await fetchJson("/v1/metrics"));
   } catch (error) {
     addActivity(`Không đọc được metrics: ${error.message}`, "error");
+  }
+}
+
+async function refreshModel() {
+  try {
+    const status = await fetchJson("/v1/model/status");
+    const provider = status.provider;
+    const configured = status.configured;
+    const resource = status.resource;
+    elements.modelAvailability.textContent = status.available ? "ready" : "unavailable";
+    elements.modelProviderValue.textContent = provider.reachable
+      ? `${configured.provider} online`
+      : `${configured.provider} offline`;
+    elements.modelNameValue.textContent = configured.model;
+    elements.modelNameValue.title = configured.model;
+    elements.modelResourceValue.textContent = resource.telemetry
+      ? `${resource.telemetry.freeVramMiB} MiB free`
+      : `${resource.errorCode || "telemetry unavailable"}`;
+    elements.modelCircuitValue.textContent = status.circuit.state;
+    elements.modelStatusBox.classList.remove("empty");
+    elements.modelStatusBox.textContent = JSON.stringify(status, null, 2);
+  } catch (error) {
+    elements.modelAvailability.textContent = "unavailable";
+    elements.modelStatusBox.classList.remove("empty");
+    elements.modelStatusBox.textContent = error.message;
+    addActivity(`Không đọc được model gateway: ${error.message}`, "error");
   }
 }
 
@@ -457,7 +490,13 @@ function updateRevocationButton() {
 }
 
 async function refreshAll({ announce = true } = {}) {
-  await Promise.all([refreshStatus(), refreshMetrics(), refreshErrors(), refreshSafety()]);
+  await Promise.all([
+    refreshStatus(),
+    refreshMetrics(),
+    refreshErrors(),
+    refreshSafety(),
+    refreshModel(),
+  ]);
   if (announce) {
     addActivity("Đã làm mới control plane, metrics và error log.", "success");
   }
@@ -680,6 +719,7 @@ function handleBinaryMessage(buffer) {
 elements.connectButton.addEventListener("click", connectWebSocket);
 elements.refreshAllButton.addEventListener("click", () => refreshAll());
 elements.refreshSafetyButton.addEventListener("click", refreshSafety);
+elements.refreshModelButton.addEventListener("click", refreshModel);
 elements.evaluateSafetyButton.addEventListener("click", evaluateSafety);
 elements.emergencyStopButton.addEventListener("click", () => applySafetyControl("emergency_stop"));
 elements.emergencyResetButton.addEventListener("click", () => applySafetyControl("emergency_reset"));
@@ -718,4 +758,5 @@ setInterval(() => {
   refreshStatus();
   refreshMetrics();
   refreshSafety();
+  refreshModel();
 }, 5000);

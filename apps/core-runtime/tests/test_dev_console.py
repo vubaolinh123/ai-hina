@@ -27,6 +27,35 @@ from hina_core.runtime import (  # noqa: E402
 from hina_core.runtime.transport_client import get_json, post_json  # noqa: E402
 
 
+class _StubModelGateway:
+    async def status(self) -> dict[str, object]:
+        return {
+            "configured": {
+                "provider": "ollama",
+                "baseUrl": "http://127.0.0.1:11434",
+                "model": "test-model",
+                "apiKeyConfigured": False,
+            },
+            "provider": {
+                "reachable": False,
+                "modelAvailable": False,
+                "provider": "ollama",
+                "model": "test-model",
+                "models": [],
+                "errorCode": "E_MODEL_UNAVAILABLE",
+            },
+            "resource": {
+                "headroomMiB": 2048,
+            },
+            "circuit": {
+                "state": "closed",
+                "failureCount": 0,
+                "retryAfterSeconds": 0,
+            },
+            "available": False,
+        }
+
+
 async def _get(host: str, port: int, target: str) -> tuple[int, dict[str, str], bytes]:
     reader, writer = await asyncio.open_connection(host, port)
     writer.write(
@@ -65,6 +94,7 @@ class DevConsoleTests(unittest.IsolatedAsyncioTestCase):
                     static_dir=STATIC_DIR,
                 ),
                 build_commit="test-build",
+                model_gateway=_StubModelGateway(),
             )
             await application.start()
             host, port = application.address
@@ -82,6 +112,7 @@ class DevConsoleTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn(b"/v1/safety/evaluate", script)
                 self.assertIn(b"/v1/safety/sanitize", script)
                 self.assertIn(b"/v1/safety/moderate", script)
+                self.assertIn(b"/v1/model/status", script)
                 self.assertNotIn(b"unknown_capability", script)
                 self.assertNotIn(b"generated_code_execution", script)
                 self.assertNotIn(b"fake AI", script)
@@ -91,6 +122,11 @@ class DevConsoleTests(unittest.IsolatedAsyncioTestCase):
                 metrics = json.loads(body)
                 self.assertGreaterEqual(metrics["seriesCount"], 1)
                 self.assertLessEqual(metrics["seriesCount"], metrics["maxSeries"])
+
+                model = await get_json(host, port, "/v1/model/status")
+                self.assertEqual(model.status, HTTPStatus.OK)
+                self.assertFalse(model.body["available"])
+                self.assertEqual(model.body["provider"]["errorCode"], "E_MODEL_UNAVAILABLE")
             finally:
                 await application.stop()
 

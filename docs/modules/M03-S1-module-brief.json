@@ -1,0 +1,65 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M03-S1-local-model-gateway-resource-lease",
+  "module_id": "M03",
+  "objective": "Create a real loopback-only Ollama/OpenAI-compatible text model gateway with provider/model health, streamed tokens, bounded timeout and retry, circuit breaking, live NVIDIA telemetry, and mandatory resource leases that retain at least 2048 MiB VRAM headroom.",
+  "non_goals": [
+    "Do not download, promote or claim quality for a model automatically.",
+    "Do not return canned or fake assistant responses when the configured provider/model is unavailable.",
+    "Do not send prompts, API keys or model responses to logs, audit records or non-loopback endpoints.",
+    "Do not implement long-term memory, speech, avatar, perception or tool execution."
+  ],
+  "base_sha": "6c21754",
+  "branch": "codex/M03-text-brain",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "AGENTS.md",
+    "README.md",
+    "apps/core-runtime/",
+    "apps/dev-console/",
+    "docs/modules/M03-*",
+    "packages/contracts/openapi/control-plane.v1.json",
+    "packages/text-brain/",
+    "tools/dev/"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "packages/contracts/schemas/v1/event-envelope.schema.json",
+    "packages/safety-policy/",
+    "workers/",
+    "adapters/",
+    "ml/",
+    "assets/",
+    "third_party/"
+  ],
+  "contracts": [
+    "Provider base URL must resolve to a numeric or named loopback host and credentials are never returned by status APIs.",
+    "Every GPU-backed model stream must hold an active resource lease before network inference begins and release it on success, error or cancellation.",
+    "Live NVIDIA telemetry admission retains at least 2048 MiB free VRAM; missing telemetry fails closed for GPU inference.",
+    "The gateway emits only real provider tokens and returns an explicit unavailable/error state when no provider or model is reachable.",
+    "Retry applies only before any response token is emitted; partial streams are never silently replayed.",
+    "Repeated provider failure opens a bounded circuit and recovery uses a half-open probe."
+  ],
+  "allowed_dependencies": [
+    "Python 3.12+ standard library and existing Hina runtime modules."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "A local test HTTP server proves Ollama and OpenAI-compatible health and token streaming adapters.",
+    "Provider URLs outside loopback, malformed stream payloads, timeout and unavailable models fail explicitly without fake text.",
+    "Resource tests cover live telemetry admission, 2048 MiB headroom, lease release, timeout and higher-priority preemption callback.",
+    "Gateway tests cover retry-before-first-token, no retry after a partial stream, circuit open and recovery.",
+    "Runtime exposes real provider/resource status while remaining startable when Ollama is absent."
+  ],
+  "required_test_commands": [
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-TextBrainUnit.ps1",
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-FastUnit.ps1"
+  ],
+  "latency_or_quality_budget": {
+    "reserved_vram_headroom_mib": 2048,
+    "provider_health_timeout_seconds": 3,
+    "default_request_timeout_seconds": 90,
+    "max_stream_bytes": 1048576
+  },
+  "output_artifact_dir": "artifacts/verification/M03/"
+}

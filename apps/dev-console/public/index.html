@@ -16,7 +16,7 @@
       <div class="brand">
         <div class="brand-mark" aria-hidden="true">H</div>
         <div>
-          <p class="eyebrow">LOCAL RUNTIME / M01 + M02</p>
+          <p class="eyebrow">LOCAL RUNTIME / M01 + M02 + M03</p>
           <h1>Hina Dev Console</h1>
         </div>
       </div>
@@ -30,10 +30,11 @@
       <section class="hero" aria-labelledby="heroTitle">
         <div>
           <p class="eyebrow">OWNER TEST SURFACE</p>
-          <h2 id="heroTitle">Runtime thật với safety controls</h2>
+          <h2 id="heroTitle">Runtime thật với safety và local model gateway</h2>
           <p>
             Mọi thao tác bên dưới gọi trực tiếp runtime, SQLite và safety-policy
-            của Hina. Chat/model thật sẽ được tích hợp ở module brain sau M02.
+            của Hina. Model gateway chỉ hiển thị token thật từ provider local;
+            khi provider chưa chạy, giao diện báo unavailable thay vì dựng câu trả lời.
           </p>
         </div>
         <div class="hero-actions">
@@ -70,6 +71,41 @@
       </section>
 
       <div class="workspace-grid">
+        <section class="panel brain-panel" aria-labelledby="brainTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">M03-S1 / LOCAL MODEL</p>
+              <h2 id="brainTitle">Text brain gateway</h2>
+            </div>
+            <button id="refreshModelButton" class="text-button" type="button">Làm mới</button>
+          </div>
+          <div class="safety-banner">
+            <div>
+              <span>Gateway</span>
+              <strong id="modelAvailability">Đang đọc…</strong>
+            </div>
+            <div>
+              <span>Provider</span>
+              <strong id="modelProviderValue">—</strong>
+            </div>
+            <div>
+              <span>Model</span>
+              <strong id="modelNameValue">—</strong>
+            </div>
+            <div>
+              <span>VRAM</span>
+              <strong id="modelResourceValue">—</strong>
+            </div>
+            <div>
+              <span>Circuit</span>
+              <strong id="modelCircuitValue">—</strong>
+            </div>
+          </div>
+          <div id="modelStatusBox" class="data-box empty">
+            Chưa có trạng thái model gateway.
+          </div>
+        </section>
+
         <section class="panel safety-panel" aria-labelledby="safetyTitle">
           <div class="panel-heading">
             <div>

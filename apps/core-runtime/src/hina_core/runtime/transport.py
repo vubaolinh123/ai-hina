@@ -156,6 +156,7 @@ class ControlPlaneServer:
         metrics: MetricRegistry | None = None,
         static_dir: Path | None = None,
         safety_policy: Any | None = None,
+        model_gateway: Any | None = None,
         build_commit: str | None = None,
     ) -> None:
         self.config = config
@@ -164,6 +165,7 @@ class ControlPlaneServer:
         self.metrics = metrics or MetricRegistry()
         self.static_dir = static_dir.resolve() if static_dir is not None else None
         self.safety_policy = safety_policy
+        self.model_gateway = model_gateway
         self.build_commit = build_commit or os.environ.get("HINA_BUILD_COMMIT", "development")
         self._server: asyncio.AbstractServer | None = None
         self._started_at = 0.0
@@ -400,6 +402,13 @@ class ControlPlaneServer:
         elif path == "/v1/safety/audit":
             limit = _parse_safety_audit_limit(parsed_target.query)
             body = self._safety_call("recent_audit", limit)
+        elif path == "/v1/model/status":
+            if self.model_gateway is None:
+                raise PrimitiveError(
+                    RuntimeErrorCode.OPERATION_FAILED,
+                    "model gateway is unavailable",
+                )
+            body = await self.model_gateway.status()
         else:
             self._record_metric("hina_http_requests_total", operation="not_found", status="error")
             await self._send_json_response(

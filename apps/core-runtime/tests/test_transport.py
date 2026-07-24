@@ -86,6 +86,7 @@ class TransportValueTests(unittest.TestCase):
                 "/v1/version",
                 "/v1/config",
                 "/v1/metrics",
+                "/v1/model/status",
                 "/v1/errors",
                 "/v1/safety/status",
                 "/v1/safety/audit",

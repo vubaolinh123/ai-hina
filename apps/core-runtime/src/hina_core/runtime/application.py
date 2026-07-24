@@ -28,6 +28,7 @@ class HinaRuntimeApplication:
         paths: RuntimePaths,
         *,
         build_commit: str = "development",
+        model_gateway: Any | None = None,
     ) -> None:
         self.config = config
         self.paths = paths
@@ -40,6 +41,7 @@ class HinaRuntimeApplication:
         self.store: DurableStore | None = None
         self.server: ControlPlaneServer | None = None
         self.safety_policy: Any | None = None
+        self.model_gateway: Any | None = model_gateway
 
     @property
     def address(self) -> tuple[str, int]:
@@ -70,6 +72,19 @@ class HinaRuntimeApplication:
             )
             safety_policy = SafetyPolicyService(manifest, audit)
         store = DurableStore(self.paths.database.resolve())
+        model_gateway = self.model_gateway
+        if model_gateway is None:
+            from hina_text_brain import (
+                LocalResourceScheduler,
+                ModelGateway,
+                ModelGatewayConfig,
+                NvidiaSmiTelemetry,
+            )
+
+            model_gateway = ModelGateway(
+                ModelGatewayConfig.from_env(),
+                LocalResourceScheduler(NvidiaSmiTelemetry()),
+            )
         server = ControlPlaneServer(
             self.config,
             durable_store=store,
@@ -77,6 +92,7 @@ class HinaRuntimeApplication:
             metrics=self.metrics,
             static_dir=self.paths.static_dir,
             safety_policy=safety_policy,
+            model_gateway=model_gateway,
             build_commit=self.build_commit,
         )
         try:
@@ -87,6 +103,7 @@ class HinaRuntimeApplication:
         self.store = store
         self.server = server
         self.safety_policy = safety_policy
+        self.model_gateway = model_gateway
         self.metrics.set_gauge(
             "hina_runtime_ready",
             1,

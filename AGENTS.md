@@ -6,8 +6,9 @@
 
 Module active hiện tại: **M03 — Text brain: model gateway, turn FSM, persona và
 short-term memory**. M01 và M02 đã qua fast unit/contract/startup gate;
-repeat/soak/deep release verification được hoãn tới khi owner yêu cầu. Slice kế
-tiếp là **M03-S1 — local model gateway, provider health và resource lease**.
+repeat/soak/deep release verification được hoãn tới khi owner yêu cầu. M03-S1
+đã triển khai; slice kế tiếp là **M03-S2 — turn FSM, immutable persona,
+short-term memory và real chat Console**.
 
 Legacy AIRI skill paths dưới `D:\ProjectAiri` mặc định ánh xạ sang repository
 hiện tại `D:\ProjectHinaAI`, trừ khi owner chỉ định workspace khác.
