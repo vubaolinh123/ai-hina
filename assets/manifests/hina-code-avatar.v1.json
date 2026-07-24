@@ -46,12 +46,12 @@
     {
       "path": "apps/desktop/src/App.vue",
       "role": "desktop Vue stage and original inline SVG geometry",
-      "sha256": "c876dbba980676b7ac1a4192ac896d580acc918d010b96e182e8385d8a8adb19"
+      "sha256": "d9225080184cb1f37c309ce085c957c45e13597e633c25c0a1534dad4e0b56f6"
     },
     {
       "path": "apps/desktop/src/style.css",
       "role": "desktop avatar styling, expressions and state animation",
-      "sha256": "6f132c244be85ef5447e5c729c1e89e656e268420dcc45e5ac3d9da554657b6a"
+      "sha256": "9091e969ed960195aebd0528ee3bb1f0e6c096eab13718a1c2a381061e807c92"
     }
   ],
   "runtime": {
@@ -64,6 +64,6 @@
   "status": {
     "local_development_ready": true,
     "production_ready": false,
-    "blocker": "M07 Electron/VRM integration and performance/accessibility release evidence are not complete."
+    "blocker": "The final owner-approved Hina identity asset and performance/accessibility release evidence are not complete."
   }
 }

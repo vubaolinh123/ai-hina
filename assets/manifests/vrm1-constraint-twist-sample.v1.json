@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "manifest_id": "vrm1.constraint-twist-sample.v1",
+  "artifact_kind": "vrm_1_development_avatar",
+  "asset_name": "VRM1_Constraint_Twist_Sample",
+  "file": {
+    "path": "assets/avatars/vrm1-constraint-twist-sample/VRM1_Constraint_Twist_Sample.vrm",
+    "bytes": 10776032,
+    "sha256": "12c2b97e95e700783a6a550dc0eee2d7880aeedccef9ae67bc4c5a2f0f2631a2"
+  },
+  "source": {
+    "repository": "https://github.com/vrm-c/vrm-specification",
+    "revision": "3942748efbc803b258e288e0f6c993c6bb96cebf",
+    "source_path": "samples/VRM1_Constraint_Twist_Sample/vrm/VRM1_Constraint_Twist_Sample.vrm",
+    "copied_unmodified": true,
+    "author": "pixiv Inc.",
+    "copyright": "(c) 2022 pixiv Inc.",
+    "depicts_real_person": false
+  },
+  "embedded_vrm_meta": {
+    "version": "v1.0.1",
+    "license_url": "https://vrm.dev/licenses/1.0/",
+    "avatar_permission": "everyone",
+    "commercial_usage": "corporation",
+    "allow_redistribution": true,
+    "modification": "allowModificationRedistribution",
+    "credit_notation": "unnecessary",
+    "allow_antisocial_or_hate_usage": false,
+    "allow_excessively_sexual_usage": true,
+    "allow_excessively_violent_usage": true,
+    "allow_political_or_religious_usage": true
+  },
+  "use_policy": {
+    "purpose": "local VRM interoperability and renderer development",
+    "final_hina_identity": false,
+    "runtime_download_allowed": false,
+    "user_path_loading_allowed": false,
+    "antisocial_or_hate_usage_allowed": false
+  },
+  "status": {
+    "local_development_ready": true,
+    "production_ready": false,
+    "blocker": "The official sample is not Hina's final commissioned or owner-approved character identity asset."
+  }
+}

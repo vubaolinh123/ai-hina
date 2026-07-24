@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import VrmStage from "./VrmStage.vue";
 
 const stateLabels: Record<AvatarState, string> = {
   idle: "Nghỉ",
@@ -16,6 +17,10 @@ const runtime = ref<RuntimeHealth | null>(null);
 const previewState = ref<AvatarState>("idle");
 const errorMessage = ref("");
 const busy = ref(false);
+const vrmReady = ref(false);
+const vrmError = ref("");
+const vrmFps = ref(0);
+const vrmDisplayName = ref("");
 let avatarTimer: number | null = null;
 let safetyTimer: number | null = null;
 let avatarRefreshPending = false;
@@ -37,6 +42,13 @@ const snapshot = computed(() => avatar.value
       utteranceId: avatar.value.utteranceId,
       asset: avatar.value.asset,
       lipSync: avatar.value.lipSync,
+      desktopRenderer: {
+        vrmLoaded: vrmReady.value,
+        displayName: vrmDisplayName.value || null,
+        fps: vrmFps.value || null,
+        developmentSample: true,
+        phonemeAccurate: false,
+      },
     }, null, 2)
   : "Chưa nhận được snapshot từ control plane.");
 
@@ -134,6 +146,24 @@ async function toggleEmergency(): Promise<void> {
   }
 }
 
+function handleVrmReady(details: {
+  displayName: string;
+  source: "bundled-vrm-1.0";
+}): void {
+  vrmReady.value = true;
+  vrmError.value = "";
+  vrmDisplayName.value = details.displayName;
+  document.documentElement.dataset.vrmReady = "true";
+  delete document.documentElement.dataset.vrmError;
+}
+
+function handleVrmFailure(message: string): void {
+  vrmReady.value = false;
+  vrmError.value = message.slice(0, 200);
+  document.documentElement.dataset.vrmError = vrmError.value;
+  delete document.documentElement.dataset.vrmReady;
+}
+
 onMounted(async () => {
   await Promise.all([refreshAvatar(), refreshSafety()]);
   avatarTimer = window.setInterval(refreshAvatar, 250);
@@ -173,12 +203,33 @@ onBeforeUnmount(() => {
         class="stage"
         :data-state="stageState"
         :data-expression="stageExpression"
+        :data-vrm-loaded="vrmReady"
       >
         <div class="stage-topline">
-          <span>CODE-NATIVE FALLBACK · VRM CHƯA TẢI</span>
+          <span>
+            {{ vrmReady
+              ? "VRM 1.0 DEV SAMPLE · FINAL HINA ASSET PENDING"
+              : vrmError
+                ? "VRM LOAD FAILED · CODE-NATIVE FALLBACK"
+                : "CODE-NATIVE FALLBACK · VRM ĐANG TẢI" }}
+          </span>
           <span>#{{ avatar?.sequence ?? 0 }} · {{ avatar?.mode ?? "offline" }}</span>
         </div>
-        <svg class="avatar" viewBox="0 0 520 620" role="img" aria-label="Hina code-native avatar">
+        <VrmStage
+          v-show="vrmReady"
+          :state="stageState"
+          :expression="stageExpression"
+          @ready="handleVrmReady"
+          @failed="handleVrmFailure"
+          @fps="vrmFps = $event"
+        />
+        <svg
+          v-if="!vrmReady"
+          class="avatar"
+          viewBox="0 0 520 620"
+          role="img"
+          aria-label="Hina code-native avatar fallback"
+        >
           <defs>
             <linearGradient id="desktopHair" x1="0" x2="1" y1="0" y2="1">
               <stop offset="0" stop-color="#3c3150"/>
@@ -225,7 +276,10 @@ onBeforeUnmount(() => {
         </svg>
         <div class="stage-caption">
           <strong>{{ stateLabels[stageState] }}</strong>
-          <span>{{ stageState }} · {{ avatar?.expression ?? "offline" }}</span>
+          <span>
+            {{ stageState }} · {{ avatar?.expression ?? "offline" }} ·
+            {{ vrmReady ? `${vrmFps || "—"} FPS` : "SVG fallback" }}
+          </span>
         </div>
       </article>
 
@@ -283,9 +337,22 @@ onBeforeUnmount(() => {
 
         <section class="limitations">
           <strong>Giới hạn trung thực</strong>
-          <span>VRM/Live2D: chưa tải</span>
-          <span>Lip-sync nguyên âm: chưa có</span>
-          <span>Visual: SVG/CSS gốc, có provenance</span>
+          <span>
+            VRM: {{ vrmReady ? "đã tải sample official có license" : "chưa tải; đang dùng SVG" }}
+          </span>
+          <span>Nhân vật: sample phát triển, chưa phải thiết kế Hina cuối cùng</span>
+          <span>Miệng desktop: theo speaking state, chưa theo âm lượng/nguyên âm</span>
+          <span v-if="vrmError" class="inline-error">Lỗi VRM: {{ vrmError }}</span>
+        </section>
+
+        <section class="asset-notice">
+          <strong>Asset đang dùng để làm gì?</strong>
+          <p>
+            <code>VRM1_Constraint_Twist_Sample</code> là model VRM 1.0 chính thức
+            dùng để kiểm tra renderer, biểu cảm và chuyển động. Model thuộc pixiv
+            Inc., cho phép avatar use, commercial use và redistribution theo VRM
+            Public License 1.0; không phải artwork Hina do dự án sở hữu.
+          </p>
         </section>
 
         <details>

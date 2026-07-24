@@ -12,10 +12,13 @@
     "test": "pnpm run build && node --test test/*.test.mjs"
   },
   "dependencies": {
+    "@pixiv/three-vrm": "3.5.5",
+    "three": "0.185.1",
     "vue": "3.5.40"
   },
   "devDependencies": {
     "@types/node": "26.1.1",
+    "@types/three": "0.185.1",
     "@vitejs/plugin-vue": "6.0.8",
     "electron": "43.2.0",
     "typescript": "6.0.3",

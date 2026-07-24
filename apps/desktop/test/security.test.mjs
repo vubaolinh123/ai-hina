@@ -25,6 +25,8 @@ test("BrowserWindow keeps renderer sandboxed and blocks navigation surfaces", ()
   assert.match(main, /event\.senderFrame\s*!==\s*event\.sender\.mainFrame/);
   assert.match(main, /window\.hinaDesktop\.getRuntimeHealth\(\)/);
   assert.match(main, /window\.hinaDesktop\.getAvatarStatus\(\)/);
+  assert.match(main, /dataset\.vrmReady\s*===\s*"true"/);
+  assert.match(main, /snapshot\.vrmLoaded\s*!==\s*true/);
   assert.doesNotMatch(main, /executeJavaScript\([^)]*\$\{/s);
   assert.doesNotMatch(main, /loadURL\(/);
   assert.doesNotMatch(main, /openExternal|from\s+["']electron["'];?\s*.*\bshell\b/);
@@ -52,11 +54,55 @@ test("Vue renderer has no direct network, Electron, Node or storage access", () 
   const renderer = [
     read("src/App.vue"),
     read("src/main.ts"),
+    read("src/VrmStage.vue"),
   ].join("\n");
   assert.doesNotMatch(renderer, /\bfetch\s*\(/);
   assert.doesNotMatch(renderer, /from\s+["']electron["']/);
   assert.doesNotMatch(renderer, /node:|indexedDB|localStorage|sessionStorage/);
   assert.doesNotMatch(renderer, /sqlite|qdrant|modelPath|process\.env/i);
+});
+
+test("VRM stage uses one fixed bundled asset and disposes graphics resources", () => {
+  const stage = read("src/VrmStage.vue");
+  assert.match(
+    stage,
+    /\.\.\/\.\.\/\.\.\/assets\/avatars\/vrm1-constraint-twist-sample\/VRM1_Constraint_Twist_Sample\.vrm/,
+  );
+  assert.match(stage, /loader\.register\(\(parser\)\s*=>\s*new VRMLoaderPlugin\(parser\)\)/);
+  assert.match(stage, /loader\.loadAsync\(VRM_ASSET_URL\)/);
+  assert.match(stage, /VRMUtils\.deepDispose\(vrm\.scene\)/);
+  assert.match(stage, /renderer\?\.dispose\(\)/);
+  assert.match(stage, /renderer\?\.forceContextLoss\(\)/);
+  assert.match(stage, /resizeObserver\?\.disconnect\(\)/);
+  assert.match(stage, /cancelAnimationFrame\(animationFrame\)/);
+  assert.doesNotMatch(stage, /location\.|URLSearchParams|querySelector.*(?:url|path)/i);
+  assert.doesNotMatch(stage, /https?:\/\//);
+  assert.doesNotMatch(stage, /rotation\.y\s*=\s*Math\.PI/);
+});
+
+test("motion profile covers every state and keeps unknown expressions neutral", () => {
+  const motion = JSON.parse(read("src/avatar-motion.json"));
+  assert.deepEqual(
+    Object.keys(motion.states).sort(),
+    ["error", "idle", "interrupted", "listening", "speaking", "thinking"],
+  );
+  for (const profile of Object.values(motion.states)) {
+    assert.equal(typeof profile.expression, "string");
+    assert.ok(profile.expressionWeight >= 0 && profile.expressionWeight <= 1);
+    assert.ok(profile.breathAmplitude >= 0 && profile.breathAmplitude <= 0.02);
+    assert.ok(profile.headAmplitude >= 0 && profile.headAmplitude <= 0.02);
+    assert.ok(profile.stateDrivenMouth >= 0 && profile.stateDrivenMouth <= 0.12);
+  }
+  assert.deepEqual(motion.expressionAliases, {
+    neutral: "neutral",
+    happy: "happy",
+    curious: "surprised",
+    focused: "neutral",
+    concerned: "sad",
+  });
+  const stage = read("src/VrmStage.vue");
+  assert.match(stage, /const expression = alias \?\? "neutral"/);
+  assert.match(stage, /not audio-amplitude or phoneme alignment/);
 });
 
 test("control client accepts numeric loopback only and validates mutations", () => {
@@ -152,8 +198,9 @@ test("control client maps only fixed operations and bounds control responses", a
 
 test("renderer CSP denies network, objects, framing and form submission", () => {
   const html = read("index.html");
-  assert.match(html, /connect-src 'none'/);
+  assert.match(html, /connect-src 'self'/);
   assert.match(html, /object-src 'none'/);
   assert.match(html, /form-action 'none'/);
   assert.match(html, /frame-ancestors 'none'/);
+  assert.doesNotMatch(html, /https?:|wss?:/);
 });

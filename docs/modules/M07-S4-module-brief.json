@@ -1,0 +1,88 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M07-S4-three-vrm-development-stage",
+  "module_id": "M07",
+  "objective": "Load and render one real, locally bundled VRM 1.0 development avatar in the sandboxed Electron/Vue stage through pinned three.js and @pixiv/three-vrm dependencies. The renderer must keep the code-native fallback, bind deterministic expression and motion presentation to the existing renderer-safe avatar state, prove the VRM load in Electron smoke, and preserve the sample model's embedded license and upstream provenance without claiming that the sample is Hina's final identity asset.",
+  "non_goals": [
+    "Do not claim the upstream development sample is the final Hina design or an original Hina asset.",
+    "Do not download an avatar at runtime, load a user-selected arbitrary path or expose a generic filesystem/network bridge.",
+    "Do not modify the conversation, speech, memory, safety or avatar backend policy.",
+    "Do not report phoneme-accurate lip sync or audio-amplitude binding in Electron; M07-S2 browser amplitude evidence remains the only real amplitude path in this iteration.",
+    "Do not add camera tracking, face tracking, Live2D, OBS integration, packaging or auto-update.",
+    "Do not run dropped-frame, A/V soak or eight-hour release gates in fast-development mode.",
+    "Do not mark M07 complete or open M08."
+  ],
+  "base_sha": "37f60253cc936be1927710b23a62b33e712f1014",
+  "branch": "codex/M07-avatar-stage",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "AGENTS.md",
+    "README.md",
+    "apps/desktop/",
+    "assets/avatars/",
+    "assets/manifests/",
+    "docs/modules/M07-*",
+    "pnpm-lock.yaml",
+    "tests/governance/test_provenance.py",
+    "third_party/code.lock.json",
+    "third_party/THIRD_PARTY_NOTICES.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "adapters/",
+    "apps/core-runtime/",
+    "apps/dev-console/",
+    "packages/avatar/",
+    "packages/contracts/",
+    "packages/memory/",
+    "packages/safety-policy/",
+    "packages/text-brain/",
+    "workers/"
+  ],
+  "contracts": [
+    "The only bundled VRM is the exact upstream VRM Consortium sample pinned by repository commit and SHA-256; embedded VRM meta must allow everyone avatar use, corporate commercial use, redistribution and modification redistribution.",
+    "The UI names the model as an official development sample and never calls it the final Hina avatar; production_ready remains false.",
+    "GLTFLoader registers VRMLoaderPlugin, loads only the fixed relative bundled asset and never accepts a URL/path from IPC, environment, query string, user input or backend data.",
+    "VRM render failure leaves the existing code-native SVG visible with a bounded error; success sets a renderer-local loaded signal without changing the backend asset truth.",
+    "Avatar state and expression props influence deterministic visual presentation only; renderer business policy remains in backend modules.",
+    "Electron CSP permits only same-origin bundled resources and continues to deny remote navigation, popup, webview and direct HTTP control-plane access.",
+    "Animation frame handles, ResizeObserver, renderer, scene resources and VRM resources are disposed when the component unmounts.",
+    "Electron smoke must wait for both typed preload IPC and the real VRM loader success signal."
+  ],
+  "allowed_dependencies": [
+    "three 0.185.1 (MIT), exact renderer dependency.",
+    "@types/three 0.185.1 (MIT), exact development dependency.",
+    "@pixiv/three-vrm 3.5.5 (MIT), exact renderer dependency and its npm-locked transitive @pixiv packages.",
+    "VRM1_Constraint_Twist_Sample.vrm from vrm-c/vrm-specification commit 3942748efbc803b258e288e0f6c993c6bb96cebf, embedded VRM Public License 1.0 settings."
+  ],
+  "oss_candidates": [
+    "https://github.com/pixiv/three-vrm/tree/v3.5.5",
+    "https://github.com/mrdoob/three.js/tree/r185",
+    "https://github.com/vrm-c/vrm-specification/tree/3942748efbc803b258e288e0f6c993c6bb96cebf/samples/VRM1_Constraint_Twist_Sample"
+  ],
+  "acceptance_criteria": [
+    "Dependency lock and code provenance contain exact npm versions, integrity, source repositories, licenses and no-copy statements.",
+    "Avatar manifest records upstream commit, source URL, SHA-256, size, embedded author/copyright/license settings and development-only promotion state.",
+    "Vue typecheck and build pass with Three.js and three-vrm.",
+    "Unit/static tests cover all six avatar states, unknown expression neutral fallback, fixed asset URL, cleanup and the absence of runtime remote/user-controlled asset selection.",
+    "Electron smoke loads the 10,776,032-byte bundled VRM through the real renderer and returns vrmLoaded true after typed IPC succeeds.",
+    "When the fixed model fails, the existing SVG remains usable and the desktop displays an honest bounded error.",
+    "Governance/provenance tests validate the binary hash and embedded VRM license metadata.",
+    "README explains that the bundled avatar is a replaceable official development sample, not Hina's final character design."
+  ],
+  "required_test_commands": [
+    "pnpm --filter @hina/desktop typecheck",
+    "pnpm --filter @hina/desktop test",
+    "pnpm smoke:desktop",
+    "uv run --frozen python -m unittest discover -s tests/governance -p \"test_*.py\"",
+    "uv run --frozen python tools/license/check_provenance.py"
+  ],
+  "latency_or_quality_budget": {
+    "fixed_asset_bytes": 10776032,
+    "desktop_smoke_timeout_seconds": 30,
+    "target_frames_per_second": 60,
+    "fast_gate_minimum_observed_frames": 30,
+    "deep_dropped_frame_and_av_gate_deferred": true
+  },
+  "output_artifact_dir": "artifacts/verification/M07/"
+}

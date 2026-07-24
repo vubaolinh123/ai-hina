@@ -1,10 +1,11 @@
 # M07 — Avatar stage và operator desktop
 
-- Status: M07-S1/S2/S3 runnable candidate; M07 remains active
+- Status: M07-S1/S2/S3/S4 runnable candidate; M07 remains active
 - Branch: `codex/M07-avatar-stage`
 - Base: `ac29424e4dc58f42f9eeeb9f7a7f2408ad5c2f4f`
 - Active slices: M07-S1 avatar state/control plane, M07-S2 code-native runtime
-  stage, M07-S3 sandboxed Electron/Vue operator shell
+  stage, M07-S3 sandboxed Electron/Vue operator shell, M07-S4 real VRM
+  development stage
 
 ## Runnable target
 
@@ -19,11 +20,11 @@ không đọc database, model, Qdrant hay provider nội bộ. Public/viewer inp
 
 ## Deferred M07 deliverables
 
-Three-vrm adapter, licensed VRM/Live2D asset, phoneme/viseme alignment,
+Final owner-approved Hina identity asset, phoneme/viseme alignment,
 dropped-frame/A-V benchmark và soak tám giờ được giữ cho các slice M07 tiếp
 theo. Không được đánh dấu M07 complete khi các phần này chưa có evidence.
 
-## Implemented in M07-S1/S2/S3
+## Implemented in M07-S1/S2/S3/S4
 
 - `packages/avatar`: typed renderer-safe state/cue service, trusted-source
   allowlist, bounded history, neutral fallback và recovery khỏi terminal state.
@@ -45,6 +46,17 @@ theo. Không được đánh dấu M07 complete khi các phần này chưa có e
   preview, reset, mute và emergency stop đều gọi control plane hiện có.
 - Electron, Vue, Vite và toolchain TypeScript được pin version/integrity/license
   trong lock/provenance; không copy source upstream.
+- Desktop dùng `three@0.185.1` và `@pixiv/three-vrm@3.5.5` để load real VRM 1.0
+  từ fixed bundled path; không nhận URL/query/user path và không tải runtime.
+- `VRM1_Constraint_Twist_Sample` official sample của pixiv/VRM Consortium được
+  pin upstream commit + SHA-256. Embedded meta cho phép everyone avatar use,
+  corporate commercial use, redistribution và modification redistribution.
+- UI ghi rõ đây là development sample, không phải thiết kế Hina cuối cùng.
+  Load lỗi tự về SVG code-native; backend `asset.vrmLoaded` không bị sửa thành
+  true giả vì renderer-local load state được báo riêng.
+- State/expression thật điều khiển deterministic head/breath/expression motion.
+  Miệng Electron chỉ là speaking-state placeholder có nhãn, chưa tuyên bố
+  amplitude/phoneme-accurate.
 
 ## Fast evidence
 
@@ -64,3 +76,8 @@ theo. Không được đánh dấu M07 complete khi các phần này chưa có e
   IPC thật và trả `loaded-local-file-with-typed-ipc`.
 - Governance 12 tests pass; provenance validator ghi nhận 10 imported
   components.
+- Three/VRM typecheck + build pass; Vite emit đúng VRM 10,776,032 byte.
+- 8 desktop security/motion/control tests pass; Electron hidden smoke parse VRM
+  thật và trả `vrmLoaded=true`.
+- Governance 12 tests pass; provenance validator ghi nhận 13 imported
+  components và đối chiếu embedded VRM meta với manifest.

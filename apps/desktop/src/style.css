@@ -238,6 +238,14 @@ h3 {
   filter: drop-shadow(0 26px 34px rgba(0, 0, 0, 0.42));
 }
 
+.vrm-canvas {
+  width: min(88%, 760px);
+  height: min(78vh, 690px);
+  min-height: 580px;
+  outline: none;
+  filter: drop-shadow(0 28px 38px rgba(0, 0, 0, 0.38));
+}
+
 .avatar-body {
   transform-origin: center bottom;
   animation: breathe 4.6s ease-in-out infinite;
@@ -405,6 +413,7 @@ h3 {
 
 .control-card,
 .limitations,
+.asset-notice,
 details {
   padding: 16px;
   border: 1px solid var(--border);
@@ -439,6 +448,17 @@ details {
 
 .limitations strong {
   color: var(--text);
+}
+
+.inline-error {
+  color: var(--danger);
+}
+
+.asset-notice p {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
 }
 
 summary {

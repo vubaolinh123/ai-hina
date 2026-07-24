@@ -147,10 +147,9 @@ Khi chat đang chạy, stage nhận trực tiếp state của turn FSM. Khi WAV 
 browser đo biên độ audio thật bằng Web Audio API và điều khiển độ mở miệng; backend
 nhận cue `speech.output` cho vòng đời speaking/idle.
 
-Visual hiện tại là SVG/CSS gốc của repository và được ghi provenance tại
-`assets/manifests/hina-code-avatar.v1.json`. UI luôn báo `VRM chưa tải`; đây
-không phải VRM/Live2D và lip-sync hiện chưa nhận dạng nguyên âm. Three-vrm,
-licensed avatar asset và performance/soak gate thuộc slice M07 kế tiếp.
+Dev Console dùng SVG/CSS gốc của repository và được ghi provenance tại
+`assets/manifests/hina-code-avatar.v1.json`. Browser mở miệng theo biên độ WAV
+TTS thật nhưng chưa nhận dạng nguyên âm.
 
 ### Mở ứng dụng desktop
 
@@ -164,6 +163,12 @@ pnpm start:desktop
 avatar và safety state qua typed preload IPC; renderer không có Node, filesystem,
 database, model hay quyền gọi network trực tiếp. Nếu control plane chưa chạy,
 ứng dụng hiện lỗi offline và chỉ dẫn `pnpm start:dev-console`.
+
+Desktop tải real VRM 1.0 bằng Three.js/`@pixiv/three-vrm`. Asset hiện tại là
+`VRM1_Constraint_Twist_Sample` chính thức của pixiv/VRM Consortium, được bundle
+local với SHA-256 và embedded VRM Public License 1.0 đã kiểm tra. Đây là model
+phát triển có thể thay thế để kiểm thử renderer, không phải thiết kế Hina cuối
+cùng và UI luôn ghi rõ điều đó. Nếu VRM lỗi, desktop tự giữ SVG fallback.
 
 ## Vòng lặp phát triển nhanh
 

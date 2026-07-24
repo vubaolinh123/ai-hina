@@ -114,13 +114,36 @@ async function createWindow(): Promise<void> {
     mainWindow.webContents.once("did-finish-load", async () => {
       try {
         const snapshot: unknown = await mainWindow?.webContents.executeJavaScript(
-          `Promise.all([
-            window.hinaDesktop.getRuntimeHealth(),
-            window.hinaDesktop.getAvatarStatus()
-          ]).then(([health, avatar]) => ({
-            runtime: health.status,
-            avatarState: avatar.state
-          }))`,
+          `(() => {
+            const vrmReady = new Promise((resolve, reject) => {
+              const deadline = Date.now() + 25000;
+              const check = () => {
+                if (document.documentElement.dataset.vrmReady === "true") {
+                  resolve(true);
+                  return;
+                }
+                if (document.documentElement.dataset.vrmError) {
+                  reject(new Error(document.documentElement.dataset.vrmError));
+                  return;
+                }
+                if (Date.now() >= deadline) {
+                  reject(new Error("E_DESKTOP_VRM_SMOKE_TIMEOUT"));
+                  return;
+                }
+                setTimeout(check, 50);
+              };
+              check();
+            });
+            return Promise.all([
+              window.hinaDesktop.getRuntimeHealth(),
+              window.hinaDesktop.getAvatarStatus(),
+              vrmReady
+            ]).then(([health, avatar, vrmLoaded]) => ({
+              runtime: health.status,
+              avatarState: avatar.state,
+              vrmLoaded
+            }));
+          })()`,
           true,
         );
         if (
@@ -130,6 +153,8 @@ async function createWindow(): Promise<void> {
           || typeof snapshot.runtime !== "string"
           || !("avatarState" in snapshot)
           || typeof snapshot.avatarState !== "string"
+          || !("vrmLoaded" in snapshot)
+          || snapshot.vrmLoaded !== true
         ) {
           throw new Error("E_DESKTOP_SMOKE_IPC: renderer returned an invalid snapshot");
         }
@@ -138,6 +163,7 @@ async function createWindow(): Promise<void> {
           application: "hina-avatar-desktop",
           runtime: snapshot.runtime,
           avatarState: snapshot.avatarState,
+          vrmLoaded: snapshot.vrmLoaded,
           renderer: "loaded-local-file-with-typed-ipc",
         }));
         app.exit(0);
@@ -156,7 +182,7 @@ async function createWindow(): Promise<void> {
         errorCode: "E_DESKTOP_SMOKE_TIMEOUT",
       }));
       app.exit(1);
-    }, 20_000);
+    }, 30_000);
   }
 
   await mainWindow.loadFile(rendererPath);

@@ -162,6 +162,51 @@
       "modifications": [
         "Used as an exact npm type-definition dependency; no upstream source file or snippet was copied."
       ]
+    },
+    {
+      "name": "three",
+      "source_url": "https://github.com/mrdoob/three.js",
+      "revision": "npm:three@0.185.1",
+      "license_spdx": "MIT",
+      "source_hash": "sha512-5aojFCXKwnjBRZvUnt3WFfEcvUJgkN5LlijRFN95hMy8WVkG4I0QNcJE+OuWvuJ0bOdStrbfXn0pkd6/QyiAlg==",
+      "destination_paths": [
+        "pnpm-lock.yaml",
+        "apps/desktop/package.json",
+        "apps/desktop/src/VrmStage.vue"
+      ],
+      "modifications": [
+        "Used as an exact npm renderer dependency behind Hina's VRM stage component; no upstream source file or snippet was copied."
+      ]
+    },
+    {
+      "name": "@pixiv/three-vrm",
+      "source_url": "https://github.com/pixiv/three-vrm",
+      "revision": "npm:@pixiv/three-vrm@3.5.5",
+      "license_spdx": "MIT",
+      "source_hash": "sha512-RPXy7jYAXs704NIpZlosB0U2ENu21G9DrqGWdQgRe8dShaCo1ugpj+6BVPRCy91nt+MPMA96j5rbsSzEl0HlQA==",
+      "destination_paths": [
+        "pnpm-lock.yaml",
+        "apps/desktop/package.json",
+        "apps/desktop/src/VrmStage.vue"
+      ],
+      "modifications": [
+        "Used as an exact npm renderer dependency through VRMLoaderPlugin; no upstream source file or snippet was copied.",
+        "Hina loads one fixed, locally bundled and independently licensed VRM asset; runtime URLs and user-selected paths are not accepted."
+      ]
+    },
+    {
+      "name": "@types/three",
+      "source_url": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/three",
+      "revision": "npm:@types/three@0.185.1",
+      "license_spdx": "MIT",
+      "source_hash": "sha512-db1xTb+EgYF2didW+eudSvVPtn75zo+fGsY8ShQrJY/B5ZBmC2Fiaykv3aImHAlCNEGuMPkPGXBJGLwzu5mC7A==",
+      "destination_paths": [
+        "pnpm-lock.yaml",
+        "apps/desktop/package.json"
+      ],
+      "modifications": [
+        "Used as an exact npm development type dependency; no upstream source file or snippet was copied."
+      ]
     }
   ]
 }

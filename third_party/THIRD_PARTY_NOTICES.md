@@ -75,3 +75,16 @@ is copied into Hina. Electron, Vite, the Vue plugin, TypeScript, vue-tsc and
 @types/node are development/runtime-host tooling; Vue is the renderer runtime
 dependency. TypeScript 7 is not used because it is currently incompatible with
 the pinned Vue type checker.
+
+## M07 VRM renderer
+
+- three 0.185.1 — MIT — https://github.com/mrdoob/three.js
+- @pixiv/three-vrm 3.5.5 — MIT —
+  https://github.com/pixiv/three-vrm
+- @types/three 0.185.1 — MIT —
+  https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/three
+
+These packages are exact npm dependencies pinned by registry integrity. No
+upstream source file or snippet is copied into Hina. The VRM binary is a
+separate asset with separate rights and provenance at
+`assets/manifests/vrm1-constraint-twist-sample.v1.json`.

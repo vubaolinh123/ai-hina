@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import struct
 import unittest
 from pathlib import Path
 
@@ -54,6 +55,9 @@ class ProvenanceTests(unittest.TestCase):
             "typescript": ("Apache-2.0", "npm:typescript@6.0.3"),
             "vue-tsc": ("MIT", "npm:vue-tsc@3.3.8"),
             "@types/node": ("MIT", "npm:@types/node@26.1.1"),
+            "three": ("MIT", "npm:three@0.185.1"),
+            "@pixiv/three-vrm": ("MIT", "npm:@pixiv/three-vrm@3.5.5"),
+            "@types/three": ("MIT", "npm:@types/three@0.185.1"),
         }
         for name, (license_spdx, revision) in desktop_dependencies.items():
             component = by_name[name]
@@ -104,6 +108,40 @@ class ProvenanceTests(unittest.TestCase):
         for item in avatar["files"]:
             digest = hashlib.sha256((ROOT / item["path"]).read_bytes()).hexdigest()
             self.assertEqual(digest, item["sha256"])
+
+        vrm_manifest = json.loads(
+            (
+                ROOT
+                / "assets"
+                / "manifests"
+                / "vrm1-constraint-twist-sample.v1.json"
+            ).read_text(encoding="utf-8")
+        )
+        vrm_bytes = (ROOT / vrm_manifest["file"]["path"]).read_bytes()
+        self.assertEqual(vrm_manifest["file"]["bytes"], len(vrm_bytes))
+        self.assertEqual(
+            vrm_manifest["file"]["sha256"],
+            hashlib.sha256(vrm_bytes).hexdigest(),
+        )
+        self.assertEqual(b"glTF", vrm_bytes[:4])
+        json_length = struct.unpack_from("<I", vrm_bytes, 12)[0]
+        self.assertEqual(b"JSON", vrm_bytes[16:20])
+        gltf = json.loads(
+            vrm_bytes[20 : 20 + json_length]
+            .decode("utf-8")
+            .rstrip("\x00 ")
+        )
+        meta = gltf["extensions"]["VRMC_vrm"]["meta"]
+        expected_meta = vrm_manifest["embedded_vrm_meta"]
+        self.assertEqual(expected_meta["license_url"], meta["licenseUrl"])
+        self.assertEqual(expected_meta["avatar_permission"], meta["avatarPermission"])
+        self.assertEqual(expected_meta["commercial_usage"], meta["commercialUsage"])
+        self.assertEqual(expected_meta["allow_redistribution"], meta["allowRedistribution"])
+        self.assertEqual(expected_meta["modification"], meta["modification"])
+        self.assertEqual(expected_meta["credit_notation"], meta["creditNotation"])
+        self.assertFalse(meta["allowAntisocialOrHateUsage"])
+        self.assertFalse(vrm_manifest["use_policy"]["final_hina_identity"])
+        self.assertFalse(vrm_manifest["status"]["production_ready"])
 
     def test_research_candidates_are_explicitly_unfrozen(self) -> None:
         for path in (
