@@ -188,7 +188,11 @@ class SpeechInputService:
                     self._pending -= 1
 
     async def close(self) -> None:
-        await self.provider.unload()
+        close = getattr(self.provider, "close", None)
+        if close is not None:
+            await close()
+        else:
+            await self.provider.unload()
 
     def _report_error(
         self,

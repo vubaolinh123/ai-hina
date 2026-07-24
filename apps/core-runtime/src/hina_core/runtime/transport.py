@@ -570,6 +570,7 @@ class ControlPlaneServer:
                 status = HTTPStatus.TOO_MANY_REQUESTS
             elif code in {
                 "E_STT_UNAVAILABLE",
+                "E_STT_DRAINING",
                 "E_STT_MODEL_LOAD",
                 "E_STT_INFERENCE",
                 "E_STT_TIMEOUT",

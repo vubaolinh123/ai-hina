@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import sys
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -74,6 +75,36 @@ class _FakeWhisperModel:
         return [segment], SimpleNamespace(language_probability=0.97)
 
 
+class _BlockingWhisperModel(_FakeWhisperModel):
+    def __init__(self) -> None:
+        self.calls = 0
+        self.started = threading.Event()
+        self.release = threading.Event()
+
+    def transcribe(self, samples, **kwargs):
+        self.calls += 1
+        self.started.set()
+        self.release.wait(timeout=5)
+        return super().transcribe(samples, **kwargs)
+
+
+class _FailingWhisperModel(_FakeWhisperModel):
+    def transcribe(self, samples, **kwargs):
+        raise RuntimeError("simulated device inference failure")
+
+
+class _FakeLease:
+    def __init__(self) -> None:
+        self.release_calls = 0
+
+    def assert_active(self) -> None:
+        return None
+
+    async def release(self) -> bool:
+        self.release_calls += 1
+        return True
+
+
 class ProviderTests(unittest.IsolatedAsyncioTestCase):
     async def test_provider_lazily_loads_pinned_model_and_locks_vi_transcribe(self) -> None:
         created: dict[str, object] = {}
@@ -123,6 +154,71 @@ class ProviderTests(unittest.IsolatedAsyncioTestCase):
         result = await fallback.transcribe(audio)
         self.assertEqual(result.language, "vi")
         self.assertEqual((await fallback.status())["effectiveDevice"], "cpu")
+
+    async def test_timeout_drains_native_worker_before_releasing_lease(self) -> None:
+        model = _BlockingWhisperModel()
+        lease = _FakeLease()
+        config = SpeechConfig(
+            device="cuda",
+            compute_type="float16",
+            fallback_to_cpu=False,
+        )
+        object.__setattr__(config, "request_timeout_seconds", 0.05)
+
+        async def acquire_lease(_unload):
+            return lease
+
+        provider = FasterWhisperProvider(
+            config,
+            gpu_lease_factory=acquire_lease,
+            model_factory=lambda *_args, **_kwargs: model,
+        )
+        audio = decode_and_normalize_wav(wav_bytes(duration_seconds=0.25))
+
+        with self.assertRaises(SpeechError) as timed_out:
+            await provider.transcribe(audio)
+        self.assertEqual(timed_out.exception.code, "E_STT_TIMEOUT")
+        self.assertTrue(model.started.is_set())
+        self.assertEqual(lease.release_calls, 0)
+        self.assertTrue((await provider.status())["drainingTimedOutInference"])
+
+        with self.assertRaises(SpeechError) as draining:
+            await provider.transcribe(audio)
+        self.assertEqual(draining.exception.code, "E_STT_DRAINING")
+        self.assertEqual(model.calls, 1)
+        self.assertEqual(lease.release_calls, 0)
+
+        model.release.set()
+        await provider.close()
+        self.assertEqual(lease.release_calls, 1)
+
+    async def test_cpu_fallback_does_not_mask_cuda_retry_on_next_request(self) -> None:
+        devices: list[str] = []
+        leases: list[_FakeLease] = []
+
+        def factory(_model_id: str, **kwargs):
+            device = kwargs["device"]
+            devices.append(device)
+            return _FailingWhisperModel() if device == "cuda" else _FakeWhisperModel()
+
+        async def acquire_lease(_unload):
+            lease = _FakeLease()
+            leases.append(lease)
+            return lease
+
+        provider = FasterWhisperProvider(
+            SpeechConfig(device="cuda", compute_type="float16", fallback_to_cpu=True),
+            gpu_lease_factory=acquire_lease,
+            model_factory=factory,
+        )
+        audio = decode_and_normalize_wav(wav_bytes(duration_seconds=0.25))
+
+        await provider.transcribe(audio)
+        await provider.transcribe(audio)
+        await provider.close()
+
+        self.assertEqual(devices, ["cuda", "cpu", "cuda", "cpu"])
+        self.assertEqual([lease.release_calls for lease in leases], [1, 1])
 
 
 class SpeechServiceTests(unittest.IsolatedAsyncioTestCase):

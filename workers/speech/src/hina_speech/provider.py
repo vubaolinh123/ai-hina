@@ -4,6 +4,7 @@ import asyncio
 import importlib.util
 import math
 from collections.abc import Awaitable, Callable
+from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -29,6 +30,12 @@ class SttProvider(Protocol):
     async def unload(self) -> None: ...
 
 
+class _InferenceTimeout(SpeechError):
+    def __init__(self, worker: Future[SttResult]) -> None:
+        super().__init__("E_STT_TIMEOUT", "STT inference timed out", retryable=True)
+        self.worker = worker
+
+
 class FasterWhisperProvider:
     def __init__(
         self,
@@ -41,11 +48,17 @@ class FasterWhisperProvider:
         self.gpu_lease_factory = gpu_lease_factory
         self.model_factory = model_factory
         self._model: Any | None = None
+        self._model_device: str | None = None
         self._model_lock = asyncio.Lock()
+        self._drain_lock = asyncio.Lock()
+        self._drain_task: asyncio.Task[None] | None = None
+        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="hina-stt")
+        self._closed = False
         self._last_error_code: str | None = None
         self._effective_device = config.device
 
     async def status(self) -> dict[str, object]:
+        draining = self._drain_task is not None and not self._drain_task.done()
         dependency_available = (
             self.model_factory is not None
             or (
@@ -61,11 +74,15 @@ class FasterWhisperProvider:
             "effectiveDevice": self._effective_device,
             "downloadOnFirstUse": self.config.allow_download,
             "lastErrorCode": self._last_error_code,
+            "drainingTimedOutInference": draining,
         }
 
     async def transcribe(self, audio: NormalizedAudio) -> SttResult:
         if audio.sample_rate_hz != 16_000:
             raise SpeechError("E_STT_AUDIO", "STT provider requires normalized 16 kHz audio")
+        if self._closed:
+            raise SpeechError("E_STT_UNAVAILABLE", "STT provider is closed", retryable=True)
+        await self._reject_while_draining()
         lease: GpuLease | None = None
         device = self.config.device
         if device == "cuda":
@@ -92,6 +109,10 @@ class FasterWhisperProvider:
         try:
             try:
                 return await self._run_device(audio, device)
+            except _InferenceTimeout as exc:
+                await self._arm_timeout_drain(exc.worker, lease)
+                lease = None
+                raise
             except SpeechError:
                 if device != "cuda" or not self.config.fallback_to_cpu:
                     raise
@@ -107,14 +128,14 @@ class FasterWhisperProvider:
     async def _run_device(self, audio: NormalizedAudio, device: str) -> SttResult:
         try:
             async with self._model_lock:
-                self._effective_device = device
+                worker = self._executor.submit(self._transcribe_sync, audio, device)
                 return await asyncio.wait_for(
-                    asyncio.to_thread(self._transcribe_sync, audio, device),
+                    asyncio.shield(asyncio.wrap_future(worker)),
                     timeout=self.config.request_timeout_seconds,
                 )
         except TimeoutError as exc:
             self._last_error_code = "E_STT_TIMEOUT"
-            raise SpeechError("E_STT_TIMEOUT", "STT inference timed out", retryable=True) from exc
+            raise _InferenceTimeout(worker) from exc
         except SpeechError as exc:
             self._last_error_code = exc.code
             raise
@@ -127,8 +148,53 @@ class FasterWhisperProvider:
             ) from exc
 
     async def unload(self) -> None:
+        drain = self._drain_task
+        if drain is not None:
+            await asyncio.shield(drain)
         async with self._model_lock:
             self._model = None
+            self._model_device = None
+
+    async def close(self) -> None:
+        self._closed = True
+        await self.unload()
+        self._executor.shutdown(wait=True, cancel_futures=True)
+
+    async def _reject_while_draining(self) -> None:
+        async with self._drain_lock:
+            drain = self._drain_task
+            if drain is not None and not drain.done():
+                raise SpeechError(
+                    "E_STT_DRAINING",
+                    "a timed-out STT inference is still draining",
+                    retryable=True,
+                )
+
+    async def _arm_timeout_drain(
+        self,
+        worker: Future[SttResult],
+        lease: GpuLease | None,
+    ) -> None:
+        async with self._drain_lock:
+            if self._drain_task is not None and not self._drain_task.done():
+                raise RuntimeError("an STT timeout drain is already active")
+            self._drain_task = asyncio.create_task(
+                self._finish_timed_out_inference(worker, lease)
+            )
+
+    async def _finish_timed_out_inference(
+        self,
+        worker: Future[SttResult],
+        lease: GpuLease | None,
+    ) -> None:
+        try:
+            await _wait_for_native_worker(worker)
+        finally:
+            if lease is not None:
+                await lease.release()
+            async with self._drain_lock:
+                if self._drain_task is asyncio.current_task():
+                    self._drain_task = None
 
     def _transcribe_sync(self, audio: NormalizedAudio, device: str) -> SttResult:
         model = self._load_model(device)
@@ -187,8 +253,11 @@ class FasterWhisperProvider:
             ) from exc
 
     def _load_model(self, device: str) -> Any:
-        if self._model is not None and self._effective_device == device:
+        if self._model is not None and self._model_device == device:
+            self._effective_device = device
             return self._model
+        self._model = None
+        self._model_device = None
         factory = self.model_factory
         if factory is None:
             try:
@@ -214,6 +283,7 @@ class FasterWhisperProvider:
                 local_files_only=not self.config.allow_download,
                 revision=self.config.model_revision,
             )
+            self._model_device = device
             self._effective_device = device
             self._last_error_code = None
             return self._model
@@ -238,3 +308,19 @@ def _model_is_cached(config: SpeechConfig) -> bool:
         cache / revision,
     )
     return any((candidate / "model.bin").is_file() for candidate in candidates)
+
+
+async def _wait_for_native_worker(worker: Future[SttResult]) -> None:
+    while not worker.done():
+        try:
+            await asyncio.shield(asyncio.wrap_future(worker))
+        except asyncio.CancelledError:
+            current = asyncio.current_task()
+            if current is not None:
+                current.uncancel()
+        except Exception:
+            break
+    try:
+        worker.result()
+    except Exception:
+        pass
