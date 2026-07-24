@@ -958,6 +958,8 @@ Tạo xương sống để mọi module sau có thể phát triển độc lập
 - Service registry/supervisor và graceful startup/shutdown.
 - Bounded queue, deadline, cancellation, idempotency primitives.
 - Per-turn trace, structured logs, metric API.
+- Owner-facing local error reports with stable error codes, correlation context,
+  redacted exception details and a documented collection path for manual testing.
 - `ResourceLease` contract, resource inventory API và fake scheduler.
 - Fake model/speech/memory/tool providers trong `packages/testkit`.
 - Replay harness nhận event fixture và tái hiện turn.
@@ -973,6 +975,8 @@ Tạo xương sống để mọi module sau có thể phát triển độc lập
 - Burst/drop policy theo từng QoS; binary frame không bị nhét base64 vào JSON.
 - Crash/restart giữa event stream.
 - Secret/redaction test cho logs.
+- Manual fault injection verifies that every caught runtime failure emits one
+  redacted structured error record without hidden reasoning, secret or raw PII.
 
 ### Gate
 
@@ -985,6 +989,9 @@ Tạo xương sống để mọi module sau có thể phát triển độc lập
 - Sau 100 start/stop, handle/thread/task count trở về baseline trong ngưỡng đã định.
 - Generated model round-trip TS ↔ Python không mất dữ liệu.
 - Health và graceful shutdown ổn định qua 100 vòng start/stop.
+- Every caught runtime failure is diagnosable from a local structured log using
+  timestamp, component, operation, stable error code and correlation ID; logging
+  failure must not hide or replace the original error.
 
 ---
 

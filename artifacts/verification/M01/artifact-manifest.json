@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "module_id": "M01",
+  "slice_id": "M01-S1",
+  "generated_at": "2026-07-24T19:18:49.317915+07:00",
+  "source_commit_sha": "525e91895ea0c079f123bcad78691b7b8ddcee01",
+  "source_tree_hash": "893ba2d5d605295dabd0f68a09d43317e7258224",
+  "verification": {
+    "command": "pnpm test:contracts:repeat",
+    "required_runs": 20,
+    "completed_runs": 20,
+    "failed_runs": 0,
+    "python_tests_per_run": 28,
+    "node_tests_per_run": 13,
+    "performance_p95_budget_ms": 5,
+    "started_at": "2026-07-24T12:12:10.677287+00:00",
+    "ended_at": "2026-07-24T12:18:49.317915+00:00",
+    "initial_tracked_status": "",
+    "final_tracked_status": "",
+    "required_gate_passed": true
+  },
+  "review": {
+    "targeted_re_review": "PASS",
+    "closed_p0": 0,
+    "closed_p1": 4,
+    "remaining_p0_p1": 0
+  },
+  "owner_error_reporting_contract": "docs/operations/OWNER_ERROR_REPORTING_VI.md",
+  "files": [
+    {
+      "path": "artifacts/verification/M01/gate-decision.md",
+      "sha256": "c016cc4f1196956d8d2366f9fc5ec348f11bab70934d930a8359d783b25aca67",
+      "bytes": 2431
+    }
+  ]
+}

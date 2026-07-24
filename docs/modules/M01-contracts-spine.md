@@ -17,16 +17,27 @@
 7. M01 integration gate: replay, crash/reconnect, compatibility, resource and
    leak suites across every slice.
 
+## Owner manual-test logging requirement
+
+- M01-S6 must provide local structured error logs and an owner-facing collection
+  guide before any interactive feature is handed off for manual testing.
+- A caught runtime failure records timestamp, component, operation, stable error
+  code and available correlation/session/turn identifiers.
+- Logs redact secrets, raw PII and hidden reasoning. Logging failure never
+  replaces the original failure.
+- M01-S1 validators remain side-effect free: callers receive stable
+  `ErrorCode`/detail values and the future runtime boundary owns the log record.
+
 ## M01-S1 gate
 
 - [x] Module brief created from the M00 contract.
 - [x] Wave A architecture, OSS and QA design reviewed.
-- [ ] Contract schemas frozen.
-- [ ] Python and TypeScript projections generated deterministically.
-- [ ] Runtime boundary validation implemented in both languages.
-- [ ] Negative, Unicode, oversize and cross-language tests pass.
-- [ ] Deterministic suite passes 20 consecutive runs.
-- [ ] Independent QA and safety review pass on frozen SHA.
+- [x] Contract schemas frozen.
+- [x] Python and TypeScript projections generated deterministically.
+- [x] Runtime boundary validation implemented in both languages.
+- [x] Negative, Unicode, oversize and cross-language tests pass.
+- [x] Deterministic suite passes 20 consecutive runs.
+- [x] Independent QA and safety review pass on frozen SHA.
 - [ ] Slice evidence recorded and pushed.
 
 M01 remains open after M01-S1. Do not start M02 until every M01 slice and the
