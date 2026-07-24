@@ -3,7 +3,8 @@
 - Status: in progress
 - Branch: `module/M01-spine`
 - Base: `aa7138e`
-- Active slice: `M01-S1 — contract catalog and EventEnvelope v1`
+- Completed slice: `M01-S1 — contract catalog and EventEnvelope v1`
+- Next slice: `M01-S2 — bounded queues, deadlines, cancellation and idempotency`
 
 ## Slice sequence
 
@@ -38,7 +39,7 @@
 - [x] Negative, Unicode, oversize and cross-language tests pass.
 - [x] Deterministic suite passes 20 consecutive runs.
 - [x] Independent QA and safety review pass on frozen SHA.
-- [ ] Slice evidence recorded and pushed.
+- [x] Slice evidence recorded and pushed.
 
 M01 remains open after M01-S1. Do not start M02 until every M01 slice and the
 M01 integration gate pass.

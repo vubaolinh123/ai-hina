@@ -22,6 +22,9 @@ spine**. Slice đang mở: **M01-S1 — contract catalog và event envelope v1**
   mà primary có thể hoàn thành nhanh hơn chi phí handoff.
 - Mặc định không spawn agent. Tối đa hai subagent đồng thời và chỉ khi công
   việc độc lập, bounded, chạy song song thật sự và có đầu ra được dùng ngay.
+- Owner mode từ 2026-07-24 là **Solo-first**: primary không spawn subagent trừ
+  khi owner yêu cầu rõ trong task hiện tại. Primary tự code/test/commit; owner
+  thực hiện manual acceptance và báo lỗi bằng error log/correlation ID.
 - Mỗi agent chỉ nhận context packet gồm brief, diff và tối đa các file trực
   tiếp liên quan; không yêu cầu đọc toàn repository hoặc toàn master plan.
 - Advisory agent hoàn thành trong một lượt, trả kết quả ngắn; không tự mở vòng
@@ -61,7 +64,9 @@ Không mở write phase module kế tiếp trước Gate 6.
 
 - Không tuyên bố pass nếu thiếu command, commit SHA và artifact.
 - Agent không tự review code của chính mình.
-- Nếu primary orchestrator sửa tracked file, diff phải được agent độc lập review.
+- Trong owner Solo-first mode, tracked diff của primary không bắt buộc qua
+  subagent review; phải có automated test evidence và owner manual acceptance.
+  Khi owner yêu cầu independent review trở lại, reviewer vẫn phải read-only.
 - Must-pass deterministic suite phải chạy 20 lần liên tiếp không lỗi khi module yêu cầu.
 - Không để nhiều agent chạy cùng một full suite hoặc cùng tạo một loại evidence.
 - Agent prompt tối đa hóa tham chiếu file/diff và tối thiểu hóa nội dung lặp lại;
