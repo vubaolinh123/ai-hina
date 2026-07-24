@@ -143,6 +143,28 @@ class ProvenanceTests(unittest.TestCase):
         self.assertFalse(vrm_manifest["use_policy"]["final_hina_identity"])
         self.assertFalse(vrm_manifest["status"]["production_ready"])
 
+        presentation = json.loads(
+            (
+                ROOT
+                / "assets"
+                / "manifests"
+                / "hina-kawaii-vrm-presentation.v1.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual("MIT", presentation["license"]["spdx"])
+        self.assertEqual(
+            "vrm1.constraint-twist-sample.v1",
+            presentation["base_asset"]["manifest_id"],
+        )
+        self.assertFalse(presentation["base_asset"]["file_modified"])
+        self.assertFalse(presentation["source"]["depicts_real_person"])
+        self.assertFalse(presentation["design"]["sexualized_childlike_design"])
+        self.assertFalse(presentation["runtime"]["external_network_required"])
+        self.assertFalse(presentation["status"]["production_ready"])
+        for item in presentation["files"]:
+            digest = hashlib.sha256((ROOT / item["path"]).read_bytes()).hexdigest()
+            self.assertEqual(digest, item["sha256"])
+
     def test_research_candidates_are_explicitly_unfrozen(self) -> None:
         for path in (
             ROOT / "third_party" / "candidates.json",

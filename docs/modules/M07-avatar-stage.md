@@ -1,12 +1,13 @@
 # M07 — Avatar stage và operator desktop
 
-- Status: M07-S1/S2/S3/S4/S5/S6 runnable candidate; M07 remains active
+- Status: M07-S1/S2/S3/S4/S5/S6/S7 runnable candidate; M07 remains active
 - Branch: `codex/M07-avatar-stage`
 - Base: `ac29424e4dc58f42f9eeeb9f7a7f2408ad5c2f4f`
 - Active slices: M07-S1 avatar state/control plane, M07-S2 code-native runtime
   stage, M07-S3 sandboxed Electron/Vue operator shell, M07-S4 real VRM
   development stage, M07-S5 audio-derived viseme pipeline, M07-S6 short-window
-  performance telemetry and renderer recovery
+  performance telemetry and renderer recovery, M07-S7 colored Hina anime
+  presentation and natural standing pose
 
 ## Runnable target
 
@@ -27,7 +28,7 @@ theo. Không được đánh dấu M07 complete khi các phần này chưa có e
 Fast hidden Electron telemetry chỉ là development sample, không thay thế frozen
 profile ghi rõ resolution/FPS/avatar/OBS state/duration.
 
-## Implemented in M07-S1/S2/S3/S4/S5/S6
+## Implemented in M07-S1/S2/S3/S4/S5/S6/S7
 
 - `packages/avatar`: typed renderer-safe state/cue service, trusted-source
   allowlist, bounded history, neutral fallback và recovery khỏi terminal state.
@@ -69,6 +70,15 @@ profile ghi rõ resolution/FPS/avatar/OBS state/duration.
 - WebGL context loss hoặc VRM load/render error lập tức về SVG với lỗi bounded.
   Owner có nút retry fixed bundled VRM; control-plane request tiếp theo tự phục
   hồi sau service restart.
+- CSP cho phép `blob:` đúng biên `img-src`/`connect-src` để Three.js
+  ImageBitmapLoader đọc texture nhúng trong GLB; HTTP/WebSocket/network vẫn bị
+  chặn. Smoke xác nhận 20 texture binding thay vì model trắng.
+- Profile original `hina-kawaii-v0.1` phối 13 material pastel, hạ hai upper-arm
+  khỏi T-pose, thêm blink/state sway deterministic, nơ tóc/ngực, má hồng và váy
+  kín đáo phủ ngoài short. Base VRM bytes/license không đổi và provenance của
+  presentation được tách riêng.
+- Left avatar stage sticky theo viewport nên panel operator dài không còn đẩy
+  canvas xuống dưới màn hình; khung hình thật hiển thị Hina từ đầu tới đầu gối.
 
 ## Fast evidence
 
@@ -103,3 +113,8 @@ profile ghi rõ resolution/FPS/avatar/OBS state/duration.
 - Fast Electron smoke: real VRM loaded, 60.1 FPS, frame p95/p99 20.9 ms,
   estimated drop 0% trên 121 frame; fault-injected WebGL context loss quan sát
   SVG fallback rồi reload VRM + telemetry thành công.
+- M07-S7 desktop typecheck và 17 Node security/motion/presentation tests pass.
+  Real Electron smoke xác nhận `hina-kawaii-v0.1`, 20 texture, 13 styled
+  material, khoảng 60 FPS/drop 0%, WebGL fallback/recovery xanh; capture thật
+  được ghi tại ignored artifact
+  `artifacts/verification/M07/hina-kawaii-stage-latest.png`.

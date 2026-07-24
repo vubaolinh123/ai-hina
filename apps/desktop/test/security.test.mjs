@@ -58,6 +58,7 @@ test("Vue renderer has no direct network, Electron, Node or storage access", () 
     read("src/App.vue"),
     read("src/main.ts"),
     read("src/VrmStage.vue"),
+    read("src/hina-presentation.mjs"),
     read("src/frame-metrics.mjs"),
   ].join("\n");
   assert.doesNotMatch(renderer, /\bfetch\s*\(/);
@@ -83,6 +84,9 @@ test("VRM stage uses one fixed bundled asset and disposes graphics resources", (
   assert.match(stage, /removeEventListener\("webglcontextlost", handleWebglContextLost\)/);
   assert.match(stage, /createFrameMetrics\(\{/);
   assert.match(stage, /emit\("performance", performanceReport\)/);
+  assert.match(stage, /applyHinaPalette\(loaded\.scene\)/);
+  assert.match(stage, /addHinaAccessories\(loaded\)/);
+  assert.match(stage, /createHinaPoseFrame\(props\.state, time\)/);
   assert.doesNotMatch(stage, /location\.|URLSearchParams|querySelector.*(?:url|path)/i);
   assert.doesNotMatch(stage, /https?:\/\//);
   assert.doesNotMatch(stage, /rotation\.y\s*=\s*Math\.PI/);
@@ -112,6 +116,12 @@ test("VRM is lazy-loaded and fixed-asset recovery exposes bounded real telemetry
   assert.match(main, /E_DESKTOP_VRM_RECOVERY_TIMEOUT/);
   assert.match(main, /snapshot\.performance\.droppedFramePercent > 5/);
   assert.match(main, /sampleCount < 30/);
+  assert.match(main, /snapshot\.loadedTextureCount < 8/);
+  assert.match(main, /snapshot\.styledMaterialCount < 13/);
+  assert.match(main, /snapshot\.presentation !== "hina-kawaii-v0\.1"/);
+  assert.match(main, /app\.quit\(\)/);
+  assert.match(app, /addEventListener\("beforeunload", stopPolling/);
+  assert.match(app, /function stopPolling\(\)/);
 });
 
 test("motion profile covers every state and keeps unknown expressions neutral", () => {
@@ -262,9 +272,11 @@ test("control client retries cleanly after a transient service restart", async (
 
 test("renderer CSP denies network, objects, framing and form submission", () => {
   const html = read("index.html");
-  assert.match(html, /connect-src 'self'/);
+  assert.match(html, /connect-src 'self' blob:/);
+  assert.match(html, /img-src 'self' data: blob:/);
   assert.match(html, /object-src 'none'/);
   assert.match(html, /form-action 'none'/);
   assert.match(html, /frame-ancestors 'none'/);
   assert.doesNotMatch(html, /https?:|wss?:/);
+  assert.doesNotMatch(html, /connect-src[^;]*(?:data:|https?:|wss?:)/);
 });

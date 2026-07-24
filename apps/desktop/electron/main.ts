@@ -4,7 +4,8 @@ import {
   ipcMain,
   type IpcMainInvokeEvent,
 } from "electron";
-import { join } from "node:path";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import {
   requestControl,
   validateAvatarCue,
@@ -178,6 +179,13 @@ async function createWindow(): Promise<void> {
               vrmReady,
               performance
             ]).then(async ([health, avatar, vrmLoaded, performance]) => {
+              const presentation = document.documentElement.dataset.avatarPresentation;
+              const loadedTextureCount = Number(
+                document.documentElement.dataset.avatarTextureCount
+              );
+              const styledMaterialCount = Number(
+                document.documentElement.dataset.avatarStyledMaterialCount
+              );
               const canvas = document.querySelector("canvas.vrm-canvas");
               const context = canvas?.getContext("webgl2")
                 || canvas?.getContext("webgl");
@@ -236,6 +244,9 @@ async function createWindow(): Promise<void> {
                 runtime: health.status,
                 avatarState: avatar.state,
                 vrmLoaded,
+                presentation,
+                loadedTextureCount,
+                styledMaterialCount,
                 performance,
                 recovery: {
                   webglContextLost: true,
@@ -256,6 +267,16 @@ async function createWindow(): Promise<void> {
           || typeof snapshot.avatarState !== "string"
           || !("vrmLoaded" in snapshot)
           || snapshot.vrmLoaded !== true
+          || !("presentation" in snapshot)
+          || snapshot.presentation !== "hina-kawaii-v0.1"
+          || !("loadedTextureCount" in snapshot)
+          || typeof snapshot.loadedTextureCount !== "number"
+          || !Number.isFinite(snapshot.loadedTextureCount)
+          || snapshot.loadedTextureCount < 8
+          || !("styledMaterialCount" in snapshot)
+          || typeof snapshot.styledMaterialCount !== "number"
+          || !Number.isFinite(snapshot.styledMaterialCount)
+          || snapshot.styledMaterialCount < 13
           || !("performance" in snapshot)
           || !snapshot.performance
           || typeof snapshot.performance !== "object"
@@ -295,7 +316,17 @@ async function createWindow(): Promise<void> {
           || !("vrmReloaded" in snapshot.recovery)
           || snapshot.recovery.vrmReloaded !== true
         ) {
-          throw new Error("E_DESKTOP_SMOKE_IPC: renderer returned an invalid snapshot");
+          throw new Error(
+            `E_DESKTOP_SMOKE_IPC: renderer returned an invalid snapshot ${
+              JSON.stringify(snapshot).slice(0, 700)
+            }`,
+          );
+        }
+        const capturePath = process.env.HINA_DESKTOP_CAPTURE_PATH?.trim();
+        if (capturePath && mainWindow) {
+          await mkdir(dirname(capturePath), { recursive: true });
+          const image = await mainWindow.webContents.capturePage();
+          await writeFile(capturePath, image.toPNG());
         }
         console.log(JSON.stringify({
           status: "ready",
@@ -303,11 +334,14 @@ async function createWindow(): Promise<void> {
           runtime: snapshot.runtime,
           avatarState: snapshot.avatarState,
           vrmLoaded: snapshot.vrmLoaded,
+          presentation: snapshot.presentation,
+          loadedTextureCount: snapshot.loadedTextureCount,
+          styledMaterialCount: snapshot.styledMaterialCount,
           performance: snapshot.performance,
           recovery: snapshot.recovery,
           renderer: "loaded-local-file-with-typed-ipc",
         }));
-        app.exit(0);
+        app.quit();
       } catch (error) {
         console.error(JSON.stringify({
           status: "error",

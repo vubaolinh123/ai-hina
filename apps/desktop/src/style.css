@@ -200,9 +200,12 @@ h3 {
 
 .stage {
   --stage-accent: var(--accent);
-  position: relative;
+  position: sticky;
+  top: 76px;
   display: grid;
+  height: calc(100vh - 76px);
   min-height: 690px;
+  align-self: start;
   place-items: center;
   overflow: hidden;
   border-right: 1px solid var(--border);
@@ -212,6 +215,38 @@ h3 {
     linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
     #0f0d14;
   background-size: auto, 44px 44px, 44px 44px, auto;
+}
+
+.stage::before,
+.stage::after {
+  position: absolute;
+  width: 260px;
+  height: 260px;
+  border: 1px solid rgba(255, 166, 202, 0.18);
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(255, 143, 184, 0.09),
+    transparent 68%
+  );
+  content: "";
+  pointer-events: none;
+}
+
+.stage::before {
+  top: 12%;
+  left: -90px;
+}
+
+.stage::after {
+  right: -80px;
+  bottom: 12%;
+  border-color: rgba(184, 163, 255, 0.16);
+  background: radial-gradient(
+    circle,
+    rgba(168, 144, 255, 0.08),
+    transparent 68%
+  );
 }
 
 .stage[data-state="listening"] {
@@ -245,6 +280,8 @@ h3 {
 }
 
 .vrm-canvas {
+  position: relative;
+  z-index: 1;
   width: min(88%, 760px);
   height: min(78vh, 690px);
   min-height: 580px;
@@ -436,6 +473,69 @@ details {
   font-size: 12px;
 }
 
+.presentation-card {
+  border-color: rgba(255, 143, 184, 0.32);
+  background:
+    linear-gradient(135deg, rgba(255, 143, 184, 0.08), transparent 45%),
+    var(--surface-raised);
+}
+
+.presentation-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.presentation-heading h3 {
+  margin-bottom: 0;
+}
+
+.presentation-status {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.presentation-status[data-ready="true"] {
+  border-color: rgba(121, 214, 162, 0.5);
+  color: var(--success);
+}
+
+.palette-row {
+  display: flex;
+  gap: 7px;
+  margin-bottom: 9px;
+}
+
+.palette-row span {
+  width: 28px;
+  height: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  background: #ff8fb8;
+}
+
+.palette-row span:nth-child(2) {
+  background: #9d8bc4;
+}
+
+.palette-row span:nth-child(3) {
+  background: #fff3ed;
+}
+
+.palette-row span:nth-child(4) {
+  background: #70536f;
+}
+
+.presentation-card small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
 .control-card label {
   display: block;
   margin-bottom: 6px;
@@ -502,6 +602,9 @@ pre {
   }
 
   .stage {
+    position: relative;
+    top: auto;
+    height: auto;
     border-right: 0;
     border-bottom: 1px solid var(--border);
   }

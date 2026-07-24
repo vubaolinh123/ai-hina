@@ -1,0 +1,78 @@
+{
+  "schema_version": "1.0",
+  "manifest_id": "hina.kawaii-vrm-presentation.v1",
+  "artifact_kind": "repository_original_vrm_runtime_presentation",
+  "asset_name": "Hina Kawaii · Pastel Sakura",
+  "source": {
+    "origin": "Created directly in the Hina AI repository as original material tint, pose, blink, accessory geometry and stage presentation code.",
+    "external_source_url": null,
+    "copied_or_adapted": false,
+    "depicts_real_person": false,
+    "contains_biometric_or_voice_data": false
+  },
+  "base_asset": {
+    "manifest_id": "vrm1.constraint-twist-sample.v1",
+    "file_modified": false,
+    "runtime_customization_only": true,
+    "license_and_provenance_remain_separate": true
+  },
+  "license": {
+    "spdx": "MIT",
+    "copyright_holder": "Hina AI repository owner",
+    "scope": "Repository-original presentation source files only; the underlying VRM retains its embedded VRM Public License metadata.",
+    "permitted_use": [
+      "local development",
+      "commercial use under the repository license and base-asset permissions",
+      "modification",
+      "redistribution with both applicable notices"
+    ],
+    "attribution": "Hina Kawaii runtime presentation"
+  },
+  "design": {
+    "identity": "cute, modest, anime-inspired Hina prototype",
+    "palette": "pastel sakura, lavender, warm cream and plum",
+    "features": [
+      "restored embedded color textures",
+      "relaxed standing pose",
+      "deterministic blink and state motion",
+      "hair and neck bows",
+      "subtle cheek blush",
+      "pastel skirt layered over the base shorts"
+    ],
+    "sexualized_childlike_design": false
+  },
+  "files": [
+    {
+      "path": "apps/desktop/index.html",
+      "role": "CSP permits only local/data/blob image decoding and local/blob ImageBitmap fetch for embedded VRM textures",
+      "sha256": "38b232a7221d9394fb2d2448f7dff655d1f12a426c4fe8789819d549428d7cfc"
+    },
+    {
+      "path": "apps/desktop/src/VrmStage.vue",
+      "role": "fixed local VRM renderer, material palette application, accessory geometry, pose and blink integration",
+      "sha256": "5c42ab0c123e5b2e30116596471680e21354a677106d387cf91d966b760190cc"
+    },
+    {
+      "path": "apps/desktop/src/hina-presentation.mjs",
+      "role": "pure deterministic Hina palette, natural pose and blink profile",
+      "sha256": "8e95beb99512e357a6db338c895068f732a30cacda380257be59f79328fd2337"
+    },
+    {
+      "path": "apps/desktop/src/hina-presentation.d.mts",
+      "role": "TypeScript contract for the repository-original presentation profile",
+      "sha256": "4a469b9bbfd04418f9648a63bc10b68945f1aef2a5b4b15b34b91b91c05d8743"
+    }
+  ],
+  "runtime": {
+    "allowlisted": true,
+    "base_vrm_path_fixed": true,
+    "external_network_required": false,
+    "user_asset_path_allowed": false,
+    "live2d": false
+  },
+  "status": {
+    "local_development_ready": true,
+    "production_ready": false,
+    "blocker": "Owner manual visual acceptance and a future exclusive/final VRM identity decision remain required before production identity approval."
+  }
+}

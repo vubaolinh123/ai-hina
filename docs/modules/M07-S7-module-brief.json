@@ -1,0 +1,77 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M07-S7-hina-anime-presentation",
+  "module_id": "M07",
+  "objective": "Turn the licensed generic VRM development sample into a clearly colored, modest, cute anime-style Hina presentation that is immediately usable in the local desktop: restore its embedded textures without widening renderer network access, apply an original pastel identity palette and accessories at runtime, replace the T-pose with a relaxed standing pose, and add deterministic blink/body motion while preserving real state, expression and audio-derived viseme control.",
+  "non_goals": [
+    "Do not claim the runtime customization is a commissioned, owner-final or production-exclusive VRM asset.",
+    "Do not sexualize or add revealing clothing to the childlike/chibi character design.",
+    "Do not download a model, texture, motion or other runtime asset from the network.",
+    "Do not add a new package, change backend business logic or open M08.",
+    "Do not run the deferred frozen OBS benchmark or eight-hour soak in this iteration."
+  ],
+  "base_sha": "81e65a4bc3325bddf3c537d672c54e6bcc489a5f",
+  "branch": "codex/M07-avatar-stage",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "AGENTS.md",
+    "README.md",
+    "apps/desktop/",
+    "assets/manifests/",
+    "docs/modules/M07-*",
+    "tools/dev/Run-M07DesktopSmoke.ps1"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "adapters/",
+    "apps/core-runtime/",
+    "apps/dev-console/",
+    "packages/contracts/",
+    "packages/memory/",
+    "packages/safety-policy/",
+    "packages/text-brain/",
+    "third_party/",
+    "workers/"
+  ],
+  "contracts": [
+    "The desktop CSP may allow blob only for img-src and connect-src so Three.js ImageBitmapLoader can decode GLB-embedded textures; script, HTTP/WebSocket connect, object, frame and navigation boundaries remain unchanged.",
+    "The fixed bundled VRM path, upstream file bytes and embedded license metadata remain unchanged.",
+    "Hina palette, pose, blink and accessory geometry are repository-original runtime presentation code with no external asset or network requirement.",
+    "The base pose lowers both upper arms away from the VRM bind/T-pose, keeps clothing modest and uses bounded state motion.",
+    "Real backend state, expression and audio-spectral viseme values remain the only product animation inputs; decorative idle motion does not create fake conversation or speech.",
+    "Unknown expression still falls back to neutral and all generated rotation, blink and material values remain finite and bounded.",
+    "Renderer failure still falls back to the code-native SVG and can retry only the fixed local VRM."
+  ],
+  "allowed_dependencies": [
+    "Existing Three.js, @pixiv/three-vrm, Vue and Electron dependencies.",
+    "Existing fixed VRM1_Constraint_Twist_Sample asset and its embedded textures.",
+    "Repository-original JavaScript profile data and Three.js primitive geometry.",
+    "No new package, binary asset, model, texture or network dependency."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "A unit test proves img-src permits local/data/blob images and connect-src permits only self/blob for ImageBitmap decoding, with no HTTP/WebSocket source introduced.",
+    "Pure Node tests cover all six avatar states, finite bounded pose output, visibly lowered symmetric upper arms, deterministic blink and complete material palette mappings.",
+    "The desktop reports the named Hina presentation and a non-zero loaded embedded texture count.",
+    "The real Electron capture visibly contains colored hair, skin, eyes and clothing instead of a white untextured model.",
+    "The avatar starts in a relaxed standing pose, not a horizontal-arm T-pose, and state motion remains subtle.",
+    "The Hina presentation adds original pastel accessories and keeps the generic upstream VRM provenance visible in the UI.",
+    "Desktop typecheck, unit/security tests and one real Electron smoke pass."
+  ],
+  "required_test_commands": [
+    "pnpm --filter @hina/desktop typecheck",
+    "pnpm --filter @hina/desktop test",
+    "pnpm smoke:desktop",
+    "uv run --frozen python -m unittest discover -s tests/governance -p \"test_*.py\""
+  ],
+  "latency_or_quality_budget": {
+    "target_fps": 60,
+    "upper_arm_lowering_radians_minimum": 0.9,
+    "decorative_motion_rotation_radians_maximum": 0.2,
+    "loaded_embedded_texture_count_minimum": 8,
+    "new_runtime_network_sources": 0,
+    "deep_obs_benchmark_deferred": true,
+    "eight_hour_soak_deferred": true
+  },
+  "output_artifact_dir": "artifacts/verification/M07/"
+}

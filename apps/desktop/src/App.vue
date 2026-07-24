@@ -29,6 +29,9 @@ const vrmReady = ref(false);
 const vrmError = ref("");
 const vrmFps = ref(0);
 const vrmDisplayName = ref("");
+const vrmPresentationId = ref("");
+const vrmTextureCount = ref(0);
+const vrmStyledMaterialCount = ref(0);
 const vrmPerformance = ref<FrameMetricsReport | null>(null);
 const vrmStageKey = ref(0);
 let avatarTimer: number | null = null;
@@ -85,6 +88,9 @@ const snapshot = computed(() => avatar.value
       desktopRenderer: {
         vrmLoaded: vrmReady.value,
         displayName: vrmDisplayName.value || null,
+        presentationId: vrmPresentationId.value || null,
+        loadedTextureCount: vrmTextureCount.value,
+        styledMaterialCount: vrmStyledMaterialCount.value,
         fps: vrmFps.value || null,
         performance: vrmPerformance.value,
         developmentSample: true,
@@ -198,12 +204,23 @@ async function toggleEmergency(): Promise<void> {
 
 function handleVrmReady(details: {
   displayName: string;
+  presentationId: string;
   source: "bundled-vrm-1.0";
+  loadedTextureCount: number;
+  styledMaterialCount: number;
 }): void {
   vrmReady.value = true;
   vrmError.value = "";
   vrmDisplayName.value = details.displayName;
+  vrmPresentationId.value = details.presentationId;
+  vrmTextureCount.value = details.loadedTextureCount;
+  vrmStyledMaterialCount.value = details.styledMaterialCount;
   document.documentElement.dataset.vrmReady = "true";
+  document.documentElement.dataset.avatarPresentation = details.presentationId;
+  document.documentElement.dataset.avatarTextureCount =
+    String(details.loadedTextureCount);
+  document.documentElement.dataset.avatarStyledMaterialCount =
+    String(details.styledMaterialCount);
   delete document.documentElement.dataset.vrmError;
 }
 
@@ -224,9 +241,15 @@ function clearVrmPerformance(): void {
 function handleVrmFailure(message: string): void {
   vrmReady.value = false;
   vrmError.value = message.slice(0, 200);
+  vrmPresentationId.value = "";
+  vrmTextureCount.value = 0;
+  vrmStyledMaterialCount.value = 0;
   clearVrmPerformance();
   document.documentElement.dataset.vrmError = vrmError.value;
   delete document.documentElement.dataset.vrmReady;
+  delete document.documentElement.dataset.avatarPresentation;
+  delete document.documentElement.dataset.avatarTextureCount;
+  delete document.documentElement.dataset.avatarStyledMaterialCount;
 }
 
 function handleVrmPerformance(report: FrameMetricsReport): void {
@@ -246,18 +269,33 @@ function retryVrm(): void {
   clearVrmPerformance();
   delete document.documentElement.dataset.vrmError;
   delete document.documentElement.dataset.vrmReady;
+  delete document.documentElement.dataset.avatarPresentation;
+  delete document.documentElement.dataset.avatarTextureCount;
+  delete document.documentElement.dataset.avatarStyledMaterialCount;
   vrmStageKey.value += 1;
+}
+
+function stopPolling(): void {
+  if (avatarTimer !== null) {
+    window.clearInterval(avatarTimer);
+    avatarTimer = null;
+  }
+  if (safetyTimer !== null) {
+    window.clearInterval(safetyTimer);
+    safetyTimer = null;
+  }
 }
 
 onMounted(async () => {
   await Promise.all([refreshAvatar(), refreshSafety()]);
   avatarTimer = window.setInterval(refreshAvatar, 250);
   safetyTimer = window.setInterval(refreshSafety, 1_000);
+  window.addEventListener("beforeunload", stopPolling, { once: true });
 });
 
 onBeforeUnmount(() => {
-  if (avatarTimer !== null) window.clearInterval(avatarTimer);
-  if (safetyTimer !== null) window.clearInterval(safetyTimer);
+  window.removeEventListener("beforeunload", stopPolling);
+  stopPolling();
 });
 </script>
 
@@ -300,7 +338,7 @@ onBeforeUnmount(() => {
         <div class="stage-topline">
           <span>
             {{ vrmReady
-              ? "VRM 1.0 DEV SAMPLE · FINAL HINA ASSET PENDING"
+              ? "HINA KAWAII v0.1 · COLORED ANIME PROTOTYPE"
               : vrmError
                 ? "VRM LOAD FAILED · CODE-NATIVE FALLBACK"
                 : "CODE-NATIVE FALLBACK · VRM ĐANG TẢI" }}
@@ -395,7 +433,35 @@ onBeforeUnmount(() => {
           <div><span>Khẩu hình</span><strong>{{ stageViseme }} · {{ Math.round(stageIntensity * 100) }}%</strong></div>
           <div><span>Nguồn cue</span><strong>{{ avatar?.source ?? "—" }}</strong></div>
           <div><span>Safety revision</span><strong>{{ safety?.state.revision ?? "—" }}</strong></div>
+          <div><span>Visual Hina</span><strong>{{ vrmPresentationId || "Đang tải…" }}</strong></div>
         </div>
+
+        <section class="control-card presentation-card">
+          <div class="presentation-heading">
+            <div>
+              <p class="eyebrow">HINA VISUAL PROFILE</p>
+              <h3>{{ vrmDisplayName || "Đang chuẩn bị Hina…" }}</h3>
+            </div>
+            <span class="presentation-status" :data-ready="vrmReady">
+              {{ vrmReady ? "Đã có màu" : "Đang tải" }}
+            </span>
+          </div>
+          <p>
+            Bản này dùng khuôn VRM có license làm nền, sau đó áp bảng màu sakura,
+            nơ tóc/ngực, chớp mắt và dáng đứng tay hạ tự nhiên do dự án tự tạo.
+            Texture được nhúng local, không tải từ Internet.
+          </p>
+          <div class="palette-row" aria-label="Bảng màu Hina">
+            <span title="Sakura pink"></span>
+            <span title="Lavender"></span>
+            <span title="Warm cream"></span>
+            <span title="Plum"></span>
+          </div>
+          <small v-if="vrmReady">
+            Đã đọc {{ vrmTextureCount }} texture nhúng · đã phối màu
+            {{ vrmStyledMaterialCount }} material.
+          </small>
+        </section>
 
         <section class="control-card">
           <h3>Hiệu năng renderer thật</h3>
@@ -450,9 +516,12 @@ onBeforeUnmount(() => {
         <section class="limitations">
           <strong>Giới hạn trung thực</strong>
           <span>
-            VRM: {{ vrmReady ? "đã tải sample official có license" : "chưa tải; đang dùng SVG" }}
+            VRM: {{ vrmReady ? "đã tải local, có texture và profile Hina" : "chưa tải; đang dùng SVG" }}
           </span>
-          <span>Nhân vật: sample phát triển, chưa phải thiết kế Hina cuối cùng</span>
+          <span>
+            Nhân vật: Hina prototype v0.1 dùng base VRM phát triển; chưa phải
+            model đặt vẽ độc quyền/final do owner duyệt
+          </span>
           <span>
             Miệng desktop: theo viseme phổ âm thanh thật khi Dev Console phát TTS;
             đây là heuristic, chưa phải căn phoneme chính xác
@@ -475,10 +544,11 @@ onBeforeUnmount(() => {
         <section class="asset-notice">
           <strong>Asset đang dùng để làm gì?</strong>
           <p>
-            <code>VRM1_Constraint_Twist_Sample</code> là model VRM 1.0 chính thức
-            dùng để kiểm tra renderer, biểu cảm và chuyển động. Model thuộc pixiv
-            Inc., cho phép avatar use, commercial use và redistribution theo VRM
-            Public License 1.0; không phải artwork Hina do dự án sở hữu.
+            <code>VRM1_Constraint_Twist_Sample</code> vẫn là base mesh VRM 1.0
+            chính thức thuộc pixiv Inc., cho phép avatar use, commercial use,
+            modification và redistribution theo metadata nhúng. Profile màu,
+            pose và phụ kiện “Hina Kawaii · Pastel Sakura” là code original trong
+            repository; đây chưa phải artwork VRM độc quyền do dự án sở hữu.
           </p>
         </section>
 
