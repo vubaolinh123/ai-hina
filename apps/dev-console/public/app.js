@@ -128,6 +128,7 @@ const elements = Object.fromEntries(
     "pageEyebrow",
     "pageTitle",
     "pageDescription",
+    "dashboardMain",
     "refreshMemoryButton",
     "exportMemoryButton",
     "rebuildMemoryButton",
@@ -180,6 +181,22 @@ const dashboardPages = {
   },
 };
 
+const capabilityLabels = {
+  "tool.safe.echo": "Kiểm tra phản hồi an toàn",
+  "memory.promote": "Cho phép ghi ký ức",
+  "perception.observe": "Cho phép quan sát màn hình",
+  "game.action": "Cho phép hành động trong game",
+  "stream.output": "Cho phép gửi nội dung livestream",
+  "tool.code.execute": "Chạy mã do AI tạo (luôn chặn)",
+};
+
+const featureLabels = {
+  memoryPromotion: "Duyệt ký ức",
+  perception: "Quan sát màn hình",
+  gameAction: "Hành động trong game",
+  streamOutput: "Gửi nội dung ra livestream",
+};
+
 function renderDashboardRoute() {
   const requested = location.hash.replace(/^#\/?/, "");
   const page = Object.hasOwn(dashboardPages, requested) ? requested : "overview";
@@ -201,7 +218,8 @@ function renderDashboardRoute() {
     }
   });
   document.title = `${copy.title} · Hina Dev Console`;
-  window.scrollTo({ top: 0, behavior: "instant" });
+  elements.dashboardMain.scrollTo({ top: 0, behavior: "instant" });
+  elements.dashboardMain.focus({ preventScroll: true });
 }
 
 function addActivity(message, level = "info") {
@@ -997,7 +1015,7 @@ async function refreshErrors() {
   }
 }
 
-function replaceOptions(select, values) {
+function replaceOptions(select, values, labels = {}) {
   const previous = select.value;
   const current = Array.from(select.options, (option) => option.value);
   if (JSON.stringify(current) === JSON.stringify(values)) return;
@@ -1005,7 +1023,7 @@ function replaceOptions(select, values) {
   for (const value of values) {
     const option = document.createElement("option");
     option.value = value;
-    option.textContent = value;
+    option.textContent = labels[value] ? `${labels[value]} — ${value}` : value;
     select.append(option);
   }
   if (values.includes(previous)) {
@@ -1028,9 +1046,9 @@ function renderSafetyStatus(status) {
   elements.muteButton.textContent = safety.muted ? "Tắt mute" : "Bật mute";
 
   const capabilities = status.manifest.capabilities.map((item) => item.name);
-  replaceOptions(elements.capabilitySelect, capabilities);
-  replaceOptions(elements.revocationSelect, capabilities);
-  replaceOptions(elements.moderationCapability, capabilities);
+  replaceOptions(elements.capabilitySelect, capabilities, capabilityLabels);
+  replaceOptions(elements.revocationSelect, capabilities, capabilityLabels);
+  replaceOptions(elements.moderationCapability, capabilities, capabilityLabels);
 
   elements.featureFlags.replaceChildren();
   for (const [feature, enabled] of Object.entries(safety.featureFlags)) {
@@ -1039,8 +1057,9 @@ function renderSafetyStatus(status) {
     button.className = "toggle-button";
     button.setAttribute("aria-pressed", String(enabled));
     button.dataset.feature = feature;
+    button.title = `Bật hoặc tắt nhóm tính năng: ${featureLabels[feature] || feature}`;
     const label = document.createElement("span");
-    label.textContent = feature;
+    label.textContent = featureLabels[feature] || feature;
     const value = document.createElement("strong");
     value.textContent = enabled ? "ON" : "OFF";
     button.append(label, value);
@@ -1227,7 +1246,7 @@ async function moderateContent() {
 function updateRevocationButton() {
   const capability = elements.revocationSelect.value;
   const revoked = state.safetyStatus?.state.revokedCapabilities.includes(capability) || false;
-  elements.revocationButton.textContent = revoked ? "Unrevoke" : "Revoke";
+  elements.revocationButton.textContent = revoked ? "Khôi phục quyền" : "Thu hồi quyền";
   elements.revocationButton.dataset.revoked = String(revoked);
 }
 

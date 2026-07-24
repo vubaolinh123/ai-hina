@@ -31,6 +31,9 @@ The UI is an admin-style hash-routed dashboard:
 - `#/runtime` groups events, replay, binary frames, metrics, errors and activity.
 
 Every page explains its purpose in plain Vietnamese for non-developers.
+The header and management navigation stay visible while only the selected
+page content scrolls. Each page starts with a short “when to use” guide, and
+form help text is visually separated from its control.
 It also reports real local model/VRAM state and supports starting, polling,
 interrupting and replaying moderated chat turns. Provider output stays internal
 until the complete response passes outbound moderation.

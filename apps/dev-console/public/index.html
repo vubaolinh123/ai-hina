@@ -57,7 +57,7 @@
         </div>
       </aside>
 
-      <main class="dashboard-main">
+      <main id="dashboardMain" class="dashboard-main" tabindex="-1">
       <section class="page-heading" aria-live="polite">
         <div>
           <p id="pageEyebrow" class="eyebrow">DASHBOARD</p>
@@ -65,6 +65,91 @@
           <p id="pageDescription">
             Xem nhanh Hina đang sẵn sàng ở mức nào và chọn khu vực cần thao tác.
           </p>
+        </div>
+      </section>
+
+      <section class="page-guide" data-dashboard-page="overview" aria-label="Hướng dẫn nhanh trang Tổng quan">
+        <span class="page-guide-badge" aria-hidden="true">?</span>
+        <div>
+          <strong>Lần đầu sử dụng? Hãy bắt đầu ở trang này.</strong>
+          <p>
+            Bấm “Làm mới trạng thái”, kiểm tra Runtime báo “ready”, rồi chọn đúng
+            khu vực bên trái. Nếu có lỗi, mở “Runtime &amp; chẩn đoán” và gửi cho
+            người hỗ trợ mã correlation ID được hiển thị.
+          </p>
+          <ol class="guide-steps">
+            <li>1. Kiểm tra Runtime</li>
+            <li>2. Chọn tính năng</li>
+            <li>3. Làm theo hướng dẫn trong thẻ</li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="page-guide" data-dashboard-page="companion" aria-label="Hướng dẫn nhanh trang Trò chuyện và giọng nói">
+        <span class="page-guide-badge" aria-hidden="true">02</span>
+        <div>
+          <strong>Khi nào dùng: muốn nói chuyện, chuyển giọng nói thành chữ hoặc nghe Hina đọc.</strong>
+          <p>
+            Chat, nhận giọng nói và phát giọng là ba tính năng độc lập. Hãy kiểm
+            tra ô trạng thái của tính năng cần dùng trước; “unavailable” nghĩa là
+            dịch vụ local chưa sẵn sàng và giao diện sẽ không dựng kết quả giả.
+          </p>
+          <ol class="guide-steps">
+            <li>Chat: nhập tin nhắn</li>
+            <li>STT: mic/WAV → chữ</li>
+            <li>TTS: văn bản → giọng nói</li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="page-guide" data-dashboard-page="memory" aria-label="Hướng dẫn nhanh trang Ký ức">
+        <span class="page-guide-badge" aria-hidden="true">03</span>
+        <div>
+          <strong>Khi nào dùng: có thông tin ổn định mà Hina nên nhớ ở những lần trò chuyện sau.</strong>
+          <p>
+            Phù hợp với sở thích, cách xưng hô và hồ sơ cơ bản. Không nhập mật
+            khẩu, token hoặc bí mật nhạy cảm. Một đề xuất chỉ trở thành ký ức sau
+            khi bạn kiểm tra lại và bấm “Duyệt”.
+          </p>
+          <ol class="guide-steps">
+            <li>1. Tạo đề xuất</li>
+            <li>2. Đọc lại và duyệt</li>
+            <li>3. Tìm, sửa, ghim hoặc xóa</li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="page-guide" data-dashboard-page="safety" aria-label="Hướng dẫn nhanh trang An toàn">
+        <span class="page-guide-badge" aria-hidden="true">04</span>
+        <div>
+          <strong>Khi nào dùng: cần dừng Hina, tắt tiếng hoặc kiểm tra vì sao một hành động bị chặn.</strong>
+          <p>
+            Khi sử dụng bình thường, bạn có thể giữ nguyên các thiết lập. “Dừng
+            khẩn cấp” khóa hành động mới; “Bật mute” chỉ tắt âm thanh. Các khu vực
+            thử quyền và kiểm duyệt chủ yếu dành cho kiểm tra lỗi.
+          </p>
+          <ol class="guide-steps">
+            <li>Sự cố nghiêm trọng: Dừng khẩn cấp</li>
+            <li>Chỉ cần im lặng: Bật mute</li>
+            <li>Điều tra: xem Safety audit</li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="page-guide" data-dashboard-page="runtime" aria-label="Hướng dẫn nhanh trang Runtime và chẩn đoán">
+        <span class="page-guide-badge" aria-hidden="true">05</span>
+        <div>
+          <strong>Khi nào dùng: một tính năng báo lỗi hoặc người hỗ trợ cần thông tin chẩn đoán.</strong>
+          <p>
+            Người dùng thông thường không cần thay đổi Stream ID hay Sequence.
+            Hãy tái hiện lỗi một lần, mở “Lỗi gần đây” và gửi correlation ID; nút
+            “Gửi event lỗi” chỉ chủ động tạo lỗi thử nghiệm.
+          </p>
+          <ol class="guide-steps">
+            <li>1. Tái hiện lỗi</li>
+            <li>2. Làm mới log</li>
+            <li>3. Sao chép correlation ID</li>
+          </ol>
         </div>
       </section>
 
@@ -140,7 +225,7 @@
           <div class="panel-heading">
             <div>
               <p class="eyebrow">M03-S1 / LOCAL MODEL</p>
-              <h2 id="brainTitle">Text brain gateway</h2>
+              <h2 id="brainTitle">Bộ não trò chuyện</h2>
             </div>
             <button id="refreshModelButton" class="text-button" type="button">Làm mới</button>
           </div>
@@ -196,11 +281,14 @@
                   <div>
                     <label for="chatSourceSelect">Nguồn input</label>
                     <select id="chatSourceSelect">
-                      <option value="owner.console" selected>owner.console</option>
-                      <option value="authenticated.user">authenticated.user</option>
-                      <option value="viewer.chat">viewer.chat</option>
-                      <option value="public.chat">public.chat</option>
+                      <option value="owner.console" selected>Bạn nhập trực tiếp</option>
+                      <option value="authenticated.user">Người dùng đã xác thực</option>
+                      <option value="viewer.chat">Khán giả / chat ngoài</option>
+                      <option value="public.chat">Kênh chat công khai</option>
                     </select>
+                    <small class="field-help">
+                      Nguồn quyết định mức độ tin cậy. Khi tự chat, hãy giữ “Bạn nhập trực tiếp”.
+                    </small>
                   </div>
                   <div>
                     <label>Session</label>
@@ -225,7 +313,7 @@
                 </div>
               </div>
               <div>
-                <label>Turn FSM / correlation</label>
+                <label>Trạng thái lượt nói / mã đối chiếu lỗi</label>
                 <div id="chatTurnResult" class="data-box empty">
                   Chưa có turn đang chạy.
                 </div>
@@ -438,8 +526,15 @@
                 </div>
                 <div>
                   <label for="memoryKindInput">Loại ký ức</label>
-                  <input id="memoryKindInput" maxlength="64" value="preference" placeholder="Ví dụ: preference">
-                  <small class="field-help">Nhóm dữ liệu, ví dụ preference (sở thích) hoặc profile (hồ sơ).</small>
+                  <select id="memoryKindInput">
+                    <option value="preference" selected>Sở thích</option>
+                    <option value="profile">Hồ sơ cơ bản</option>
+                    <option value="relationship">Mối quan hệ / cách xưng hô</option>
+                    <option value="routine">Thói quen</option>
+                    <option value="project">Dự án đang làm</option>
+                    <option value="temporary_note">Ghi chú tạm thời</option>
+                  </select>
+                  <small class="field-help">Chọn nhóm gần nhất để Hina tìm và dùng thông tin đúng ngữ cảnh.</small>
                 </div>
               </div>
               <label for="memoryTopicInput">Chủ đề duy nhất</label>
@@ -517,7 +612,7 @@
           <div class="panel-heading">
             <div>
               <p class="eyebrow">M02 / POLICY AUTHORITY</p>
-              <h2 id="safetyTitle">Safety control center</h2>
+              <h2 id="safetyTitle">Trung tâm an toàn</h2>
             </div>
             <button id="refreshSafetyButton" class="text-button" type="button">Làm mới</button>
           </div>
@@ -548,12 +643,12 @@
 
           <div class="safety-columns">
             <div class="safety-block">
-              <h3>Kiểm tra capability thật</h3>
+              <h3>Kiểm tra một quyền cụ thể</h3>
               <p class="panel-copy">
                 Runtime quyết định allow, ask hoặc deny rồi ghi audit. Console
                 không tự tính kết quả.
               </p>
-              <label for="capabilitySelect">Capability</label>
+              <label for="capabilitySelect">Quyền cần kiểm tra</label>
               <select id="capabilitySelect"></select>
               <small class="field-help">
                 Capability là một quyền cụ thể, ví dụ ghi nhớ, quan sát hoặc điều
@@ -561,45 +656,45 @@
               </small>
               <div class="field-grid">
                 <div>
-                  <label for="trustSelect">Trust level</label>
-                  <select id="trustSelect">
-                    <option value="owner">owner</option>
-                    <option value="trusted_local">trusted_local</option>
-                    <option value="authenticated">authenticated</option>
-                    <option value="public">public</option>
-                    <option value="untrusted">untrusted</option>
-                  </select>
+                    <label for="trustSelect">Người yêu cầu là ai?</label>
+                    <select id="trustSelect">
+                      <option value="owner">Chủ máy</option>
+                      <option value="trusted_local">Dịch vụ local tin cậy</option>
+                      <option value="authenticated">Người dùng đã xác thực</option>
+                      <option value="public">Người dùng công khai</option>
+                      <option value="untrusted">Nguồn chưa tin cậy</option>
+                    </select>
+                  </div>
+                  <label class="checkbox-field" for="consumeCheck">
+                    <input id="consumeCheck" type="checkbox" checked>
+                    <span>Tính vào giới hạn sử dụng</span>
+                  </label>
                 </div>
-                <label class="checkbox-field" for="consumeCheck">
-                  <input id="consumeCheck" type="checkbox" checked>
-                  <span>Consume rate/budget</span>
-                </label>
-              </div>
               <button id="evaluateSafetyButton" class="button button-primary full-width" type="button">
-                Authorize capability
+                Kiểm tra quyền này
               </button>
               <div id="safetyDecision" class="data-box empty">Chưa có policy decision.</div>
             </div>
 
             <div class="safety-block">
-              <h3>Operator controls</h3>
+              <h3>Điều khiển khẩn cấp</h3>
               <p class="panel-copy">
                 Emergency stop chặn hành động mới; mute chỉ tắt output. Mọi thay
                 đổi bên dưới áp dụng ngay vào policy state và được hash-chain audit.
               </p>
               <div class="button-row">
                 <button id="emergencyStopButton" class="button button-danger" type="button">
-                  Emergency stop
+                  Dừng khẩn cấp
                 </button>
                 <button id="emergencyResetButton" class="button button-secondary" type="button">
-                  Reset stop
+                  Khôi phục hoạt động
                 </button>
                 <button id="muteButton" class="button button-secondary" type="button">
                   Bật mute
                 </button>
               </div>
 
-              <h3 class="subheading">Feature flags</h3>
+              <h3 class="subheading">Công tắc nhóm tính năng</h3>
               <p class="panel-copy">
                 Công tắc tổng để bật hoặc tắt cả một nhóm tính năng rủi ro. OFF
                 khiến policy từ chối nhóm đó ngay cả khi capability riêng cho phép.
@@ -608,7 +703,7 @@
                 <p class="empty">Đang đọc feature flags…</p>
               </div>
 
-              <h3 class="subheading">Capability revocation</h3>
+              <h3 class="subheading">Thu hồi một quyền</h3>
               <p class="panel-copy">
                 Thu hồi một quyền cụ thể cho tới khi bạn bấm Unrevoke. Dùng khi
                 muốn khóa tạm một hành vi mà không dừng toàn bộ Hina.
@@ -616,7 +711,7 @@
               <div class="inline-control">
                 <select id="revocationSelect"></select>
                 <button id="revocationButton" class="button button-secondary" type="button">
-                  Revoke
+                  Thu hồi quyền
                 </button>
               </div>
             </div>
@@ -626,7 +721,7 @@
             <div class="panel-heading compact-heading">
               <div>
                 <p class="eyebrow">TRUST BOUNDARY / M02-S2</p>
-                <h3>Input sanitation</h3>
+                <h3>Làm sạch dữ liệu đầu vào</h3>
               </div>
             </div>
             <p class="panel-copy">
@@ -638,20 +733,20 @@
               <div>
                 <label for="inputSourceSelect">Nguồn dữ liệu</label>
                 <select id="inputSourceSelect">
-                  <option value="owner.console">owner.console</option>
-                  <option value="viewer.chat" selected>viewer.chat</option>
-                  <option value="public.chat">public.chat</option>
-                  <option value="web.research">web.research</option>
-                  <option value="game.text">game.text</option>
-                  <option value="screen.ocr">screen.ocr</option>
-                  <option value="local.service">local.service</option>
-                  <option value="authenticated.user">authenticated.user</option>
+                  <option value="owner.console">Bạn nhập trực tiếp</option>
+                  <option value="viewer.chat" selected>Khán giả / chat ngoài</option>
+                  <option value="public.chat">Kênh chat công khai</option>
+                  <option value="web.research">Nội dung nghiên cứu web</option>
+                  <option value="game.text">Chữ trong game</option>
+                  <option value="screen.ocr">Chữ đọc từ màn hình</option>
+                  <option value="local.service">Dịch vụ local</option>
+                  <option value="authenticated.user">Người dùng đã xác thực</option>
                 </select>
                 <label for="sanitationInput">Raw input để kiểm tra</label>
                 <textarea id="sanitationInput" rows="4" maxlength="16384">Xin chào Hina. Email của tôi là owner@example.test.</textarea>
                 <div class="button-row">
                   <button id="sanitizeButton" class="button button-primary" type="button">
-                    Sanitize input
+                    Làm sạch nội dung
                   </button>
                   <button id="createContextButton" class="button button-secondary" type="button" disabled>
                     Tạo ContextBundle
@@ -671,7 +766,7 @@
             <div class="panel-heading compact-heading">
               <div>
                 <p class="eyebrow">FAIL-CLOSED GATES / M02-S3</p>
-                <h3>Moderation lab</h3>
+                <h3>Thử kiểm duyệt nội dung</h3>
               </div>
             </div>
             <p class="panel-copy">
@@ -685,27 +780,27 @@
                   <div>
                     <label for="moderationSurfaceSelect">Điểm chặn</label>
                     <select id="moderationSurfaceSelect">
-                      <option value="input">input</option>
-                      <option value="pre_tool">pre_tool</option>
-                      <option value="pre_tts" selected>pre_tts</option>
-                      <option value="outbound">outbound</option>
+                      <option value="input">Trước khi gửi vào AI</option>
+                      <option value="pre_tool">Trước khi dùng công cụ</option>
+                      <option value="pre_tts" selected>Trước khi phát giọng</option>
+                      <option value="outbound">Trước khi gửi ra ngoài</option>
                     </select>
                   </div>
                   <div>
                     <label for="moderationSourceSelect">Nguồn</label>
                     <select id="moderationSourceSelect">
-                      <option value="owner.console" selected>owner.console</option>
-                      <option value="local.service">local.service</option>
-                      <option value="authenticated.user">authenticated.user</option>
-                      <option value="viewer.chat">viewer.chat</option>
-                      <option value="public.chat">public.chat</option>
-                      <option value="web.research">web.research</option>
+                      <option value="owner.console" selected>Bạn nhập trực tiếp</option>
+                      <option value="local.service">Dịch vụ local</option>
+                      <option value="authenticated.user">Người dùng đã xác thực</option>
+                      <option value="viewer.chat">Khán giả / chat ngoài</option>
+                      <option value="public.chat">Kênh chat công khai</option>
+                      <option value="web.research">Nội dung nghiên cứu web</option>
                     </select>
                   </div>
                 </div>
                 <label for="moderationInput">Nội dung cần duyệt</label>
                 <textarea id="moderationInput" rows="4" maxlength="16384">Xin chào, đây là một câu nói an toàn.</textarea>
-                <label for="moderationCapability">Capability cho pre_tool</label>
+                <label for="moderationCapability">Quyền công cụ cần kiểm tra</label>
                 <select id="moderationCapability"></select>
                 <button id="moderateButton" class="button button-primary full-width" type="button">
                   Gửi moderation thật
@@ -742,7 +837,7 @@
           <div class="panel-heading">
             <div>
               <p class="eyebrow">REALTIME EVENT LAB</p>
-              <h2 id="eventTitle">Durable event</h2>
+              <h2 id="eventTitle">Kiểm tra sự kiện có lưu</h2>
             </div>
             <span class="protocol-pill">hina.realtime.v1</span>
           </div>
@@ -759,10 +854,16 @@
             <div>
               <label for="streamInput">Stream ID</label>
               <input id="streamInput" maxlength="64" value="owner.dev-console">
+              <small class="field-help">
+                Tên luồng dùng để nhóm các sự kiện. Người dùng thông thường nên giữ nguyên.
+              </small>
             </div>
             <div>
               <label for="sequenceInput">Sequence</label>
               <input id="sequenceInput" type="number" min="0" step="1" value="0">
+              <small class="field-help">
+                Số thứ tự chống xử lý lặp. Chỉ thay đổi khi đang kiểm tra event.
+              </small>
             </div>
           </div>
 
@@ -794,11 +895,12 @@
           <div class="panel-heading">
             <div>
               <p class="eyebrow">SQLITE JOURNAL</p>
-              <h2 id="replayTitle">Replay stream</h2>
+                <h2 id="replayTitle">Xem lại sự kiện đã lưu</h2>
             </div>
           </div>
           <p class="panel-copy">
-            Đọc lại các event đã được runtime ghi thật vào journal.
+            Đọc lại các sự kiện đã được runtime ghi thật vào SQLite. Dùng khi cần
+            xác minh thao tác trước đó có được lưu hay không.
           </p>
           <label for="afterSequenceInput">Đọc sau sequence</label>
           <input id="afterSequenceInput" type="number" min="-1" step="1" value="-1">
@@ -812,11 +914,12 @@
           <div class="panel-heading">
             <div>
               <p class="eyebrow">OPCODE 2 / HINA HEADER</p>
-              <h2 id="binaryTitle">Binary round-trip</h2>
+                <h2 id="binaryTitle">Kiểm tra dữ liệu nhị phân</h2>
             </div>
           </div>
           <p class="panel-copy">
-            Gửi byte thật qua WebSocket, không chuyển media thành base64 JSON.
+            Gửi dữ liệu dạng byte thật qua WebSocket. Đây là bài kiểm tra kỹ thuật
+            cho đường truyền audio/media; không cần dùng khi chat thông thường.
           </p>
           <label for="binaryInput">Payload UTF-8</label>
           <input id="binaryInput" value="âm thanh thử nghiệm">
@@ -830,7 +933,7 @@
           <div class="panel-heading">
             <div>
               <p class="eyebrow">BOUNDED OBSERVABILITY</p>
-              <h2 id="metricsTitle">Metrics</h2>
+                <h2 id="metricsTitle">Chỉ số vận hành</h2>
             </div>
             <button id="refreshMetricsButton" class="text-button" type="button">Làm mới</button>
           </div>
@@ -887,12 +990,12 @@
           <ol id="activityLog" class="activity-log" aria-live="polite"></ol>
         </section>
       </div>
+
+      <footer>
+        <span>Hina AI · M01–M06 local companion dashboard</span>
+        <span>Dừng dịch vụ bằng <kbd>Ctrl</kbd> + <kbd>C</kbd></span>
+      </footer>
       </main>
     </div>
-
-    <footer>
-      <span>Hina AI · M01–M06 local companion dashboard</span>
-      <span>Dừng dịch vụ bằng <kbd>Ctrl</kbd> + <kbd>C</kbd></span>
-    </footer>
   </body>
 </html>
