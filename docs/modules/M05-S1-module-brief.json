@@ -1,0 +1,97 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M05-S1-real-vietnamese-tts-turn-taking",
+  "module_id": "M05",
+  "objective": "Deliver a runnable local speech-output vertical slice that moderates the complete utterance before synthesis, normalizes and chunks Vietnamese text, lazily runs pinned VieNeu-TTS v3 Turbo CPU/ONNX inference with a licensed preset voice, returns binary WAV audio, exposes provider/job/alignment state, supports bounded admission and cancellation, and lets the Dev Console play or stop both manually-entered text and completed Hina chat replies.",
+  "non_goals": [
+    "Do not clone the owner or any real person's voice in this slice.",
+    "Do not use MMS/F5-TTS or another non-commercial or unknown-license model as a fallback.",
+    "Do not generate canned, silent or placeholder audio when the real provider is unavailable.",
+    "Do not send text to the provider before the complete utterance passes the pre_tts moderation surface.",
+    "Do not claim the M05 naturalness, first-audio, RTF, reverse-ASR, barge-in or 1000-turn promotion gates from this fast-development slice.",
+    "Do not enable a CUDA TTS backend until it is protected by the shared ResourceLease scheduler."
+  ],
+  "base_sha": "d459032242fa60ced8c7c6a2e5f2a553a47eddc7",
+  "branch": "codex/M05-speech-output",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    ".env.example",
+    "AGENTS.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "README.md",
+    "apps/core-runtime/",
+    "apps/dev-console/",
+    "assets/manifests/",
+    "docs/modules/M04-speech-input.md",
+    "docs/modules/M05-*",
+    "docs/provenance/",
+    "ml/models/manifests/",
+    "package.json",
+    "packages/contracts/openapi/control-plane.v1.json",
+    "pyproject.toml",
+    "tests/governance/",
+    "third_party/",
+    "tools/dev/",
+    "uv.lock",
+    "workers/speech/"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "adapters/",
+    "packages/contracts/schemas/v1/event-envelope.schema.json",
+    "packages/safety-policy/",
+    "packages/text-brain/"
+  ],
+  "contracts": [
+    "The full normalized utterance must pass the existing pre_tts moderation surface before any provider model load or audio generation begins.",
+    "Blocked, quarantined, muted or emergency-stopped utterances produce zero audio bytes and a stable E_TTS_BLOCKED error with correlation ID.",
+    "The synthesis endpoint returns audio/wav bytes, never base64 audio in JSON, and never persists generated audio or input text.",
+    "Text is Unicode-normalized, bounded and split only at deterministic safe sentence boundaries; empty, control-bearing or oversized text fails closed.",
+    "VieNeu-TTS code is pinned to PyPI 3.2.3 and model/codec snapshots are downloaded only at recorded immutable revisions.",
+    "The default voice is the licensed built-in preset Trúc Ly. Voice cloning, reference audio and arbitrary voice files are unavailable.",
+    "The first runnable backend is CPU ONNX int8. CUDA is rejected until TTS ResourceLease integration exists.",
+    "Synthesis admission is bounded. Cancel marks the active utterance, stops browser playback immediately and asks the provider stream to stop at the next native chunk boundary.",
+    "Provider absence, model load failure, synthesis failure and cancellation return real state and never substitute fake audio.",
+    "Alignment events are estimated from emitted audio/chunk boundaries and labeled estimated; they are not claimed as phoneme-accurate visemes."
+  ],
+  "allowed_dependencies": [
+    "Python 3.12+ standard library and existing Hina runtime, safety and resource-scheduler code.",
+    "vieneu 3.2.3 from PyPI, pinned in uv.lock and used behind Hina's TtsProvider interface.",
+    "pnnbao-ump/VieNeu-TTS-v3-Turbo at revision 75ff82a72f54d55ed389e1eeb12041d3c4bac7d4 using its Apache-2.0 CPU ONNX int8 assets.",
+    "OpenMOSS-Team/MOSS-Audio-Tokenizer-Nano-ONNX at revision ceff0d0749bfb3fa2d61149794ec6feef0d1e1ae using its Apache-2.0 codec assets."
+  ],
+  "oss_candidates": [
+    "https://github.com/pnnbao97/VieNeu-TTS/tree/v3.2.3",
+    "https://pypi.org/project/vieneu/3.2.3/",
+    "https://huggingface.co/pnnbao-ump/VieNeu-TTS-v3-Turbo/tree/75ff82a72f54d55ed389e1eeb12041d3c4bac7d4",
+    "https://huggingface.co/OpenMOSS-Team/MOSS-Audio-Tokenizer-Nano-ONNX/tree/ceff0d0749bfb3fa2d61149794ec6feef0d1e1ae"
+  ],
+  "acceptance_criteria": [
+    "Unit tests cover Unicode normalization, sentence chunking, text/body limits, complete-utterance moderation, zero-provider-call on block, WAV encoding, bounded admission, cancellation and no text/audio logging.",
+    "Provider tests prove model and codec snapshots are requested at exact revisions, CPU ONNX int8 is forced, only allowlisted preset voices are accepted and no reference audio/voice cloning path exists.",
+    "Runtime tests cover GET /v1/tts/status, binary POST /v1/tts/synthesis, POST /v1/tts/utterances/{id}/cancel, correlation headers and stable failures.",
+    "Dev Console can synthesize owner-entered text, play the real WAV, stop playback, show provider/voice/timing state and optionally auto-speak a completed moderated Hina chat response.",
+    "Starting microphone capture stops current playback and requests cancellation so user barge-in does not leave local audio playing.",
+    "A real VieNeu CPU smoke generates a non-empty valid WAV using the pinned Trúc Ly preset; the runtime retains nothing, while the explicit owner smoke tool may leave its ignored var/tmp WAV for manual listening.",
+    "Fast unit, contract, governance/provenance and Dev Console startup smoke remain green after integration."
+  ],
+  "required_test_commands": [
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-SpeechUnit.ps1",
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-FastUnit.ps1",
+    "pnpm test:contracts",
+    "uv run --frozen python -m unittest discover -s tests/governance -p \"test_*.py\"",
+    "uv run --frozen python tools/license/check_provenance.py",
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Start-HinaDevConsole.ps1 -Port 0 -NoBrowser -StartupCheck"
+  ],
+  "latency_or_quality_budget": {
+    "max_text_characters": 2000,
+    "max_provider_chunk_characters": 256,
+    "max_concurrent_syntheses": 1,
+    "max_queued_syntheses": 1,
+    "target_sample_rate_hz": 48000,
+    "first_audio_target_milliseconds": 500,
+    "barge_in_playback_stop_target_milliseconds": 250,
+    "min_free_vram_headroom_mib": 2048
+  },
+  "output_artifact_dir": "artifacts/verification/M05/"
+}

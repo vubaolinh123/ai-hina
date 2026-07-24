@@ -1,6 +1,6 @@
 # M04 — Speech input
 
-- Status: independent fast review passed; awaiting owner manual acceptance
+- Status: fast candidate accepted for roadmap progression by owner on 2026-07-25
 - Branch: `codex/M04-speech-input`
 - Base: `88d3dd72c3ae8ddc269fff371e30d6e6fc055407`
 - Completed slices: `M04-S1` core audio/VAD/provider, `M04-S2` runtime API/Dev Console
@@ -45,6 +45,10 @@ The owner can now run the Dev Console, record a microphone clip or select an
 actual WAV file, transcribe it and manually copy the result into chat. Errors
 show a correlation ID and are recorded in `var/logs/hina-runtime.jsonl` without
 raw audio payload retention.
+
+The owner's “Tiếp tục đi” instruction on 2026-07-25 authorizes M05 to open.
+Manual feature testing remains owner-led and any later M04 failure is reported
+with its correlation ID and fixed as a regression.
 
 ## Deferred promotion evidence
 

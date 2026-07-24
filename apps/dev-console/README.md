@@ -1,8 +1,9 @@
 # Hina Dev Console
 
 This is the owner-facing local application for manually exercising the real
-M01 runtime, M02 safety policy, M03 local text brain and M04 local speech input.
-It contains no simulated AI response or transcript.
+M01 runtime, M02 safety policy, M03 local text brain, M04 local speech input and
+M05 local Vietnamese speech output. It contains no simulated AI response,
+transcript or audio.
 
 From the repository root:
 
@@ -28,6 +29,11 @@ M04 can record the owner microphone or accept a WAV file, send binary audio to
 the real loopback endpoint, run VAD and pinned faster-whisper, then copy a real
 Vietnamese transcript into the chat composer without auto-sending it. Raw audio
 is never persisted.
+M05 can synthesize owner-entered text or completed moderated chat responses
+through pinned VieNeu ONNX int8, play the returned 48 kHz mono WAV, and cancel
+or stop playback when the owner starts speaking. Complete text passes pre-TTS
+moderation before inference; voice cloning and runtime audio/text retention are
+disabled.
 
 After updating the source, restart the running console so its Python process
 loads the new safety, text-brain and speech modules.

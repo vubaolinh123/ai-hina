@@ -1,0 +1,58 @@
+{
+  "schema_version": "1.0",
+  "manifest_id": "hina.codec.moss-audio-tokenizer-nano-onnx.v1",
+  "artifact_kind": "audio_codec_weights_and_configuration",
+  "model_id": "OpenMOSS-Team/MOSS-Audio-Tokenizer-Nano-ONNX",
+  "source_url": "https://huggingface.co/OpenMOSS-Team/MOSS-Audio-Tokenizer-Nano-ONNX",
+  "revision": "ceff0d0749bfb3fa2d61149794ec6feef0d1e1ae",
+  "observed_at": "2026-07-25",
+  "files": [
+    {
+      "path": "codec_browser_onnx_meta.json",
+      "size_bytes": 17036,
+      "sha256": "3e291c883bb7d11ff2fe8e964e3e495519760358859f35c951254c7741592731"
+    },
+    {
+      "path": "moss_audio_tokenizer_decode_full.onnx",
+      "size_bytes": 681902,
+      "sha256": "0fbbafe3fd4afa2a019af5c5ced204af6e2d1db044fa40f021525d2aee95b4ac"
+    },
+    {
+      "path": "moss_audio_tokenizer_decode_shared.data",
+      "size_bytes": 44198912,
+      "sha256": "e69d52e0f4e84ca27850557ee54face46632d3a5a16c89bd246c7c408466dcad"
+    },
+    {
+      "path": "moss_audio_tokenizer_decode_step.onnx",
+      "size_bytes": 351400,
+      "sha256": "9527c86a29e1837edec1f74db57d5eeaadb3a715af3382703566460afed25855"
+    },
+    {
+      "path": "moss_audio_tokenizer_encode.data",
+      "size_bytes": 44507136,
+      "sha256": "aa751265b2bab2887eac224484546b194875aa7494b607115439b3dc6b228a2c"
+    },
+    {
+      "path": "moss_audio_tokenizer_encode.onnx",
+      "size_bytes": 815775,
+      "sha256": "eadea4a645abdcf98714c7aead122ee2ce7da6e080f9f80b977cd1ca8e19473a"
+    }
+  ],
+  "licenses": {
+    "weights_spdx": "Apache-2.0",
+    "model_card_url": "https://huggingface.co/OpenMOSS-Team/MOSS-Audio-Tokenizer-Nano-ONNX",
+    "commercial_use_allowed": true,
+    "redistribution_allowed": true
+  },
+  "runtime": {
+    "consumer": "vieneu 3.2.3",
+    "default_device": "cpu",
+    "cache_path": "var/cache/models/vieneu"
+  },
+  "status": {
+    "download_authorized": true,
+    "download_on_first_use": true,
+    "local_development_ready": true,
+    "production_ready": false
+  }
+}

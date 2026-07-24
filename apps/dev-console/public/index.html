@@ -16,7 +16,7 @@
       <div class="brand">
         <div class="brand-mark" aria-hidden="true">H</div>
         <div>
-          <p class="eyebrow">LOCAL RUNTIME / M01 + M02 + M03 + M04</p>
+          <p class="eyebrow">LOCAL RUNTIME / M01 + M02 + M03 + M04 + M05</p>
           <h1>Hina Dev Console</h1>
         </div>
       </div>
@@ -237,6 +237,70 @@
                 Lần đầu có thể cần tải model đã pin. Silence bị chặn trước model;
                 ngôn ngữ luôn là <code>vi</code> và task luôn là
                 <code>transcribe</code>.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel tts-panel" aria-labelledby="ttsTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">M05 / VIENEU ONNX INT8 + PRE-TTS MODERATION</p>
+              <h2 id="ttsTitle">Hina nói tiếng Việt</h2>
+            </div>
+            <button id="refreshTtsButton" class="text-button" type="button">Làm mới</button>
+          </div>
+
+          <div class="safety-banner">
+            <div>
+              <span>TTS</span>
+              <strong id="ttsAvailability">Đang đọc…</strong>
+            </div>
+            <div>
+              <span>Voice</span>
+              <strong id="ttsVoiceValue">—</strong>
+            </div>
+            <div>
+              <span>Model</span>
+              <strong id="ttsModelValue">—</strong>
+            </div>
+            <div>
+              <span>Output</span>
+              <strong id="ttsOutputValue">48 kHz mono WAV</strong>
+            </div>
+          </div>
+
+          <div class="tts-grid">
+            <div>
+              <p class="panel-copy">
+                Nội dung được duyệt toàn bộ ở cổng <code>pre_tts</code> trước khi
+                model tạo bất kỳ audio nào. Lần dùng đầu có thể tải snapshot ONNX
+                đã pin; không clone giọng và không lưu text/audio sinh ra.
+              </p>
+              <label for="ttsInput">Nội dung cần đọc</label>
+              <textarea id="ttsInput" rows="5" maxlength="2000">Xin chào, mình là Hina. Đây là giọng nói tiếng Việt chạy hoàn toàn trên máy của bạn.</textarea>
+              <label class="checkbox-field tts-auto-field" for="ttsAutoSpeak">
+                <input id="ttsAutoSpeak" type="checkbox">
+                <span>Tự đọc câu trả lời chat đã qua moderation</span>
+              </label>
+              <div class="button-row">
+                <button id="synthesizeTtsButton" class="button button-primary" type="button">
+                  Tạo và phát giọng thật
+                </button>
+                <button id="stopTtsButton" class="button button-danger" type="button" disabled>
+                  Dừng / barge-in
+                </button>
+              </div>
+            </div>
+            <div>
+              <label>Kết quả TTS / correlation</label>
+              <div id="ttsResult" class="data-box tts-result empty">
+                Chưa có utterance được tạo.
+              </div>
+              <audio id="ttsPreview" class="speech-preview" controls hidden></audio>
+              <p class="panel-copy speech-hint">
+                Nút dừng tắt audio trên trình duyệt ngay lập tức và gửi cancellation
+                xuống runtime. Bắt đầu thu microphone cũng tự kích hoạt barge-in.
               </p>
             </div>
           </div>
@@ -573,7 +637,7 @@
     </main>
 
     <footer>
-      <span>Hina AI · M01–M04 local companion console</span>
+      <span>Hina AI · M01–M05 local companion console</span>
       <span>Dừng dịch vụ bằng <kbd>Ctrl</kbd> + <kbd>C</kbd></span>
     </footer>
   </body>

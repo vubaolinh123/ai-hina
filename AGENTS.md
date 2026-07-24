@@ -4,17 +4,18 @@
 
 Đọc `HINA_AI_MASTER_PLAN_VI.md` trước khi thay đổi kiến trúc hoặc mở module mới. Chỉ một module sản phẩm được ở write phase tại một thời điểm.
 
-Module active hiện tại: **M04 — Speech input: audio capture, VAD và STT**. M01,
+Module active hiện tại: **M05 — Speech output, turn-taking và barge-in**. M01,
 M02 và M03 đã qua fast unit/contract/startup gate; repeat/soak/deep release
-verification được hoãn tới khi owner yêu cầu. Candidate M03 tại
-`88d3dd72c3ae8ddc269fff371e30d6e6fc055407` đã được independent reviewer chạy
-fast gate và không có blocker P0/P1 được xác nhận. M04-S1 và M04-S2 đã triển
-khai, fast unit/contract/startup và real-provider smoke đều xanh. Independent
-review đã tìm thấy một P1 ở native inference timeout; fix
-`cba2a816e0d63f7d0c5756331374c0da9213cc02` đã được cùng reviewer xác nhận đóng,
-không còn P0/P1 trong scoped re-check. Candidate M04 đang chờ owner manual
-acceptance; owner báo lỗi bằng correlation ID. Không mở M05 trước khi owner
-hoàn thành manual acceptance M04.
+verification được hoãn tới khi owner yêu cầu. M04-S1/S2 đã qua fast gate,
+real-provider smoke và independent review; P1 native inference timeout đã đóng
+tại `cba2a816e0d63f7d0c5756331374c0da9213cc02`. Ngày 2026-07-25 owner chỉ thị
+“Tiếp tục đi”, được ghi nhận là quyết định cho phép chuyển từ candidate M04 sang
+M05 trong fast-development mode. M05-S1/S2/S3 đã có candidate chạy thật: fast
+unit/contract/governance/startup đều xanh và real VieNeu CPU smoke đã sinh WAV.
+Đúng một independent reviewer đã PASS candidate, không có P0/P1; page-unload
+cancellation P2 đã sửa, còn voice-consent P2 tiếp tục chặn public/production
+promotion. Owner vẫn thực hiện manual feature testing và báo lỗi bằng
+correlation ID. Không mở M06 trước khi owner cho phép tiếp tục.
 
 Legacy AIRI skill paths dưới `D:\ProjectAiri` mặc định ánh xạ sang repository
 hiện tại `D:\ProjectHinaAI`, trừ khi owner chỉ định workspace khác.

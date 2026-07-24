@@ -47,3 +47,28 @@ class SttResult:
     language_probability: float
     duration_seconds: float
     segments: tuple[SttSegment, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class TtsPcmChunk:
+    text: str
+    pcm16: bytes
+    start_seconds: float
+    end_seconds: float
+
+
+@dataclass(frozen=True, slots=True)
+class TtsSynthesis:
+    sample_rate_hz: int
+    voice: str
+    chunks: tuple[TtsPcmChunk, ...]
+    first_chunk_milliseconds: float
+    processing_milliseconds: float
+
+    @property
+    def pcm16(self) -> bytes:
+        return b"".join(chunk.pcm16 for chunk in self.chunks)
+
+    @property
+    def duration_seconds(self) -> float:
+        return len(self.pcm16) / 2 / self.sample_rate_hz

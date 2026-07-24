@@ -257,6 +257,7 @@ main {
 .event-panel,
 .brain-panel,
 .speech-panel,
+.tts-panel,
 .safety-panel,
 .metrics-panel,
 .errors-panel,
@@ -268,6 +269,22 @@ main {
   display: grid;
   grid-template-columns: minmax(300px, 0.9fr) minmax(340px, 1.1fr);
   gap: 24px;
+}
+
+.tts-grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.9fr) minmax(340px, 1.1fr);
+  gap: 24px;
+}
+
+.tts-auto-field {
+  width: fit-content;
+  margin: 12px 0;
+}
+
+.tts-result {
+  min-height: 172px;
+  margin-top: 0;
 }
 
 .recording-duration {
@@ -759,6 +776,8 @@ kbd {
 
   .event-panel,
   .brain-panel,
+  .speech-panel,
+  .tts-panel,
   .safety-panel,
   .metrics-panel,
   .errors-panel,
@@ -775,7 +794,8 @@ kbd {
   }
 
   .chat-grid,
-  .speech-grid {
+  .speech-grid,
+  .tts-grid {
     grid-template-columns: 1fr;
   }
 }

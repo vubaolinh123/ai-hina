@@ -1,0 +1,24 @@
+name: vieneu
+upstream_url: https://github.com/pnnbao97/VieNeu-TTS
+revision: 452bf58485a37772d8963a7dfb9e13b0d8288a50
+release: v3.2.3
+distribution:
+  kind: pypi-wheel
+  filename: vieneu-3.2.3-py3-none-any.whl
+  sha256: 54fd23bf70dcc5bf83885163de67a0ae2b7d2030cf7b53996d5ec97d2dbb20ca
+original_paths: []
+license_spdx: Apache-2.0
+copyright: "Copyright 2024-2026 Phạm Nguyễn Ngọc Bảo and VieNeu contributors"
+imported_at: 2026-07-25
+destination_paths:
+  - pyproject.toml
+  - uv.lock
+  - workers/speech/src/hina_speech/tts_provider.py
+modifications:
+  - "Pinned runtime dependency; no upstream source or snippet copied."
+  - "Wrapped behind TtsProvider with exact model and codec revisions."
+  - "Uses pinned version-specific internal ONNX engine APIs to supply local snapshots."
+  - "Restricts operation to CPU int8, the Trúc Ly preset and audio watermarking."
+  - "Adds pre-TTS moderation, bounded admission, cancellation and no-retention controls."
+reviewed_by: primary_orchestrator
+approved_by: primary_orchestrator_for_local_development

@@ -162,6 +162,7 @@ class ControlPlaneServer:
         model_gateway: Any | None = None,
         conversation_service: Any | None = None,
         speech_service: Any | None = None,
+        tts_service: Any | None = None,
         build_commit: str | None = None,
     ) -> None:
         self.config = config
@@ -173,6 +174,7 @@ class ControlPlaneServer:
         self.model_gateway = model_gateway
         self.conversation_service = conversation_service
         self.speech_service = speech_service
+        self.tts_service = tts_service
         self.build_commit = build_commit or os.environ.get("HINA_BUILD_COMMIT", "development")
         self._server: asyncio.AbstractServer | None = None
         self._started_at = 0.0
@@ -361,6 +363,13 @@ class ControlPlaneServer:
         if request.method == "POST" and path == "/v1/speech/transcriptions":
             await self._serve_speech_transcription(writer, request)
             return
+        if request.method == "POST" and path == "/v1/tts/synthesis":
+            await self._serve_tts_synthesis(writer, request)
+            return
+        tts_cancel_id = _tts_cancel_route(path)
+        if request.method == "POST" and tts_cancel_id is not None:
+            await self._serve_tts_cancel(writer, request, tts_cancel_id)
+            return
 
         body: dict[str, Any]
         if request.method == "POST":
@@ -423,6 +432,8 @@ class ControlPlaneServer:
             body = await self._chat_call("status")
         elif path == "/v1/speech/status":
             body = await self._speech_status()
+        elif path == "/v1/tts/status":
+            body = await self._tts_status()
         elif _chat_route(path, "turns"):
             body = await self._chat_call("get_turn", _chat_route(path, "turns"))
         elif _chat_route(path, "sessions"):
@@ -609,6 +620,260 @@ class ControlPlaneServer:
             status="ok",
         )
         await self._send_json_response(writer, HTTPStatus.OK, body)
+
+    async def _tts_status(self) -> dict[str, Any]:
+        if self.tts_service is None:
+            return {
+                "available": False,
+                "errorCode": "E_TTS_UNAVAILABLE",
+                "message": "speech output service requires the safety policy",
+            }
+        result = await self.tts_service.status()
+        if not isinstance(result, dict):
+            raise PrimitiveError(
+                RuntimeErrorCode.OPERATION_FAILED,
+                "speech output service returned invalid status",
+            )
+        return result
+
+    async def _serve_tts_synthesis(
+        self,
+        writer: asyncio.StreamWriter,
+        request: _HttpRequest,
+    ) -> None:
+        correlation_id = request.headers.get("x-hina-correlation-id") or str(uuid4())
+        payload = _parse_json_body(request, error_code=RuntimeErrorCode.HTTP_BAD_REQUEST)
+        expected = {"text", "utteranceId", "sessionId", "source"}
+        if set(payload) != expected:
+            await self._send_tts_error(
+                writer,
+                HTTPStatus.BAD_REQUEST,
+                "E_TTS_REQUEST",
+                "TTS request fields are invalid",
+                correlation_id,
+                None,
+                None,
+            )
+            return
+        utterance_id = payload.get("utteranceId")
+        session_id = payload.get("sessionId")
+        source = payload.get("source")
+        if (
+            not isinstance(utterance_id, str)
+            or (session_id is not None and not isinstance(session_id, str))
+            or not isinstance(source, str)
+        ):
+            await self._send_tts_error(
+                writer,
+                HTTPStatus.BAD_REQUEST,
+                "E_TTS_REQUEST",
+                "TTS request identifiers are invalid",
+                correlation_id,
+                utterance_id if isinstance(utterance_id, str) else None,
+                session_id if isinstance(session_id, str) else None,
+            )
+            return
+        if self.tts_service is None:
+            await self._send_tts_error(
+                writer,
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                "E_TTS_UNAVAILABLE",
+                "speech output service is unavailable",
+                correlation_id,
+                utterance_id,
+                session_id,
+            )
+            return
+        try:
+            result = await self.tts_service.synthesize(
+                payload.get("text"),
+                utterance_id=utterance_id,
+                correlation_id=correlation_id,
+                session_id=session_id,
+                source=source,
+            )
+        except Exception as exc:
+            code = getattr(exc, "code", "")
+            if not isinstance(code, str) or not code.startswith("E_TTS_"):
+                raise
+            if code == "E_TTS_QUEUE_FULL":
+                status = HTTPStatus.TOO_MANY_REQUESTS
+            elif code == "E_TTS_CONFLICT":
+                status = HTTPStatus.CONFLICT
+            elif code == "E_TTS_BLOCKED":
+                status = HTTPStatus.FORBIDDEN
+            elif code in {
+                "E_TTS_UNAVAILABLE",
+                "E_TTS_DRAINING",
+                "E_TTS_MODEL_LOAD",
+                "E_TTS_INFERENCE",
+                "E_TTS_TIMEOUT",
+                "E_TTS_RESOURCE_LEASE",
+                "E_TTS_OPERATION",
+            }:
+                status = HTTPStatus.SERVICE_UNAVAILABLE
+            else:
+                status = HTTPStatus.BAD_REQUEST
+            if not getattr(exc, "reported", False):
+                self._log_tts_request_error(
+                    code,
+                    correlation_id,
+                    utterance_id,
+                    session_id,
+                )
+            await self._send_tts_error(
+                writer,
+                status,
+                code,
+                getattr(exc, "detail", "TTS request failed"),
+                correlation_id,
+                utterance_id,
+                session_id,
+                log_error=False,
+            )
+            return
+        wav = result.pop("audioWav", None)
+        if not isinstance(wav, bytes) or not wav.startswith(b"RIFF"):
+            raise PrimitiveError(
+                RuntimeErrorCode.OPERATION_FAILED,
+                "speech output service returned invalid audio",
+            )
+        self._record_metric(
+            "hina_http_requests_total",
+            operation="tts/synthesis",
+            status="ok",
+        )
+        alignment = [
+            event["payload"]
+            for event in result.get("events", [])
+            if isinstance(event, dict)
+            and event.get("type") == "AudioAlignment"
+            and isinstance(event.get("payload"), dict)
+        ]
+        await self._send_response(
+            writer,
+            HTTPStatus.OK,
+            wav,
+            content_type="audio/wav",
+            extra_headers={
+                "X-Hina-Utterance-Id": utterance_id,
+                "X-Hina-Correlation-Id": correlation_id,
+                "X-Hina-Duration-Milliseconds": str(
+                    round(float(result.get("durationSeconds", 0)) * 1_000)
+                ),
+                "X-Hina-First-Chunk-Milliseconds": str(
+                    result.get("firstChunkMilliseconds", 0)
+                ),
+                "X-Hina-Processing-Milliseconds": str(
+                    result.get("processingMilliseconds", 0)
+                ),
+                "X-Hina-Event-Count": str(len(result.get("events", []))),
+                "X-Hina-Alignment": json.dumps(
+                    alignment,
+                    ensure_ascii=True,
+                    separators=(",", ":"),
+                ),
+            },
+        )
+
+    async def _serve_tts_cancel(
+        self,
+        writer: asyncio.StreamWriter,
+        request: _HttpRequest,
+        utterance_id: str,
+    ) -> None:
+        correlation_id = request.headers.get("x-hina-correlation-id") or str(uuid4())
+        try:
+            payload = _parse_json_body(request, error_code=RuntimeErrorCode.HTTP_BAD_REQUEST)
+            if payload:
+                raise PrimitiveError(
+                    RuntimeErrorCode.HTTP_BAD_REQUEST,
+                    "TTS cancel request body must be empty",
+                )
+            if self.tts_service is None:
+                raise PrimitiveError(
+                    RuntimeErrorCode.OPERATION_FAILED,
+                    "speech output service is unavailable",
+                )
+            result = await self.tts_service.cancel(utterance_id)
+        except Exception as exc:
+            code = getattr(exc, "code", "")
+            if isinstance(code, str) and code.startswith("E_TTS_"):
+                await self._send_tts_error(
+                    writer,
+                    HTTPStatus.BAD_REQUEST,
+                    code,
+                    getattr(exc, "detail", "TTS cancel failed"),
+                    correlation_id,
+                    utterance_id,
+                    None,
+                )
+                return
+            raise
+        self._record_metric(
+            "hina_http_requests_total",
+            operation="tts/cancel",
+            status="ok",
+        )
+        await self._send_json_response(writer, HTTPStatus.OK, result)
+
+    async def _send_tts_error(
+        self,
+        writer: asyncio.StreamWriter,
+        status: HTTPStatus,
+        code: str,
+        message: str,
+        correlation_id: str,
+        utterance_id: str | None,
+        session_id: str | None,
+        *,
+        log_error: bool = True,
+    ) -> None:
+        if log_error:
+            self._log_tts_request_error(
+                code,
+                correlation_id,
+                utterance_id,
+                session_id,
+            )
+        self._record_metric(
+            "hina_http_requests_total",
+            operation="tts/synthesis",
+            status="error",
+        )
+        await self._send_json_response(
+            writer,
+            status,
+            {
+                "status": "error",
+                "errorCode": code,
+                "message": message[:256],
+                "correlationId": correlation_id,
+                "utteranceId": utterance_id,
+            },
+        )
+
+    def _log_tts_request_error(
+        self,
+        code: str,
+        correlation_id: str,
+        utterance_id: str | None,
+        session_id: str | None,
+    ) -> None:
+        if self.error_logger is None:
+            return
+        self.error_logger.log_error(
+            PrimitiveError(code, "speech output request failed"),  # type: ignore[arg-type]
+            component="speech.output",
+            operation="synthesize",
+            correlation_id=correlation_id,
+            session_id=session_id,
+            context={
+                "utteranceId": utterance_id,
+                "generatedAudioRetained": False,
+                "inputTextRetained": False,
+            },
+        )
 
     def _log_speech_request_error(
         self,
@@ -1171,6 +1436,17 @@ def _chat_route(path: str, collection: str, *, suffix: str | None = None) -> str
         len(parts) != expected_length
         or parts[:3] != ["v1", "chat", collection]
         or (suffix is not None and parts[-1] != suffix)
+    ):
+        return None
+    return parts[3]
+
+
+def _tts_cancel_route(path: str) -> str | None:
+    parts = path.strip("/").split("/")
+    if (
+        len(parts) != 5
+        or parts[:3] != ["v1", "tts", "utterances"]
+        or parts[-1] != "cancel"
     ):
         return None
     return parts[3]

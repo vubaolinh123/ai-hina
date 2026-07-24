@@ -7,6 +7,7 @@ import math
 import struct
 import sys
 import tempfile
+import threading
 import unittest
 import wave
 from http import HTTPStatus
@@ -33,7 +34,17 @@ from hina_core.runtime import (  # noqa: E402
 )
 from hina_core.runtime.transport_client import get_json, post_json  # noqa: E402
 from hina_text_brain import TextBrainError  # noqa: E402
-from hina_speech import SpeechConfig, SpeechInputService, SttResult, SttSegment  # noqa: E402
+from hina_speech import (  # noqa: E402
+    DEFAULT_TTS_VOICE,
+    SpeechConfig,
+    SpeechInputService,
+    SpeechOutputService,
+    SttResult,
+    SttSegment,
+    TtsConfig,
+    TtsPcmChunk,
+    TtsSynthesis,
+)
 
 
 class _StubModelGateway:
@@ -104,6 +115,46 @@ class _StubSpeechProvider:
         return None
 
 
+class _StubTtsProvider:
+    def __init__(self) -> None:
+        self.calls = 0
+        self.closed = False
+
+    async def status(self) -> dict[str, object]:
+        return {
+            "available": not self.closed,
+            "dependencyAvailable": True,
+            "modelLoaded": True,
+            "modelCached": True,
+            "effectiveDevice": "cpu",
+        }
+
+    async def synthesize(
+        self,
+        chunks: tuple[str, ...],
+        cancel_event: threading.Event,
+    ) -> TtsSynthesis:
+        self.calls += 1
+        pcm = struct.pack("<" + "h" * 480, *([250] * 480))
+        return TtsSynthesis(
+            sample_rate_hz=48_000,
+            voice=DEFAULT_TTS_VOICE,
+            chunks=(
+                TtsPcmChunk(
+                    text=" ".join(chunks),
+                    pcm16=pcm,
+                    start_seconds=0,
+                    end_seconds=0.01,
+                ),
+            ),
+            first_chunk_milliseconds=3.5,
+            processing_milliseconds=7.0,
+        )
+
+    async def close(self) -> None:
+        self.closed = True
+
+
 async def _get(host: str, port: int, target: str) -> tuple[int, dict[str, str], bytes]:
     reader, writer = await asyncio.open_connection(host, port)
     writer.write(
@@ -148,6 +199,43 @@ async def _post_audio(
             f"X-Hina-Correlation-Id: {correlation_id}\r\n"
             "X-Hina-Session-Id: 66666666-6666-4666-8666-666666666666\r\n"
             "X-Hina-Source: owner.dev-console\r\n"
+            "Connection: close\r\n"
+            "\r\n"
+        ).encode("ascii")
+        + body
+    )
+    await writer.drain()
+    raw = await reader.read()
+    writer.close()
+    await writer.wait_closed()
+    head, response_body = raw.split(b"\r\n\r\n", 1)
+    lines = head.decode("ascii").split("\r\n")
+    status = int(lines[0].split(" ")[1])
+    headers = {
+        name.lower(): value.strip()
+        for line in lines[1:]
+        for name, separator, value in [line.partition(":")]
+        if separator
+    }
+    return status, headers, response_body
+
+
+async def _post_tts(
+    host: str,
+    port: int,
+    payload: dict[str, object],
+    *,
+    correlation_id: str,
+) -> tuple[int, dict[str, str], bytes]:
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    reader, writer = await asyncio.open_connection(host, port)
+    writer.write(
+        (
+            "POST /v1/tts/synthesis HTTP/1.1\r\n"
+            f"Host: {host}:{port}\r\n"
+            "Content-Type: application/json\r\n"
+            f"Content-Length: {len(body)}\r\n"
+            f"X-Hina-Correlation-Id: {correlation_id}\r\n"
             "Connection: close\r\n"
             "\r\n"
         ).encode("ascii")
@@ -218,6 +306,9 @@ class DevConsoleTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn(b"/v1/chat/turns", script)
                 self.assertIn(b"/v1/speech/status", script)
                 self.assertIn(b"/v1/speech/transcriptions", script)
+                self.assertIn(b"/v1/tts/status", script)
+                self.assertIn(b"/v1/tts/synthesis", script)
+                self.assertIn(b"navigator.sendBeacon", script)
                 self.assertNotIn(b"unknown_capability", script)
                 self.assertNotIn(b"generated_code_execution", script)
                 self.assertNotIn(b"fake AI", script)
@@ -232,6 +323,83 @@ class DevConsoleTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(model.status, HTTPStatus.OK)
                 self.assertFalse(model.body["available"])
                 self.assertEqual(model.body["provider"]["errorCode"], "E_MODEL_UNAVAILABLE")
+            finally:
+                await application.stop()
+
+    async def test_tts_endpoint_returns_real_wav_and_logs_block_without_text(self) -> None:
+        with tempfile.TemporaryDirectory(dir=APP_ROOT) as temporary_directory:
+            directory = Path(temporary_directory)
+            provider = _StubTtsProvider()
+
+            def moderator(payload: dict[str, object]) -> dict[str, object]:
+                if "blocked-secret" in str(payload["text"]):
+                    return {"decision": "block", "reasonCode": "test_block"}
+                return {"decision": "allow", "sanitizedText": payload["text"]}
+
+            application = HinaRuntimeApplication(
+                TransportConfig(port=0),
+                RuntimePaths(
+                    database=directory / "runtime.sqlite3",
+                    error_log=directory / "runtime.jsonl",
+                    static_dir=STATIC_DIR,
+                ),
+                model_gateway=_StubModelGateway(),
+                tts_service=SpeechOutputService(
+                    TtsConfig(),
+                    provider,
+                    moderator=moderator,
+                ),
+            )
+            await application.start()
+            host, port = application.address
+            correlation = "77777777-7777-4777-8777-777777777777"
+            utterance = "88888888-8888-4888-8888-888888888888"
+            request = {
+                "text": "Xin chào từ TTS.",
+                "utteranceId": utterance,
+                "sessionId": None,
+                "source": "owner.console",
+            }
+            try:
+                status = await get_json(host, port, "/v1/tts/status")
+                self.assertEqual(status.status, HTTPStatus.OK)
+                self.assertTrue(status.body["available"])
+                self.assertFalse(status.body["retention"]["generatedAudio"])
+
+                code, headers, wav = await _post_tts(
+                    host,
+                    port,
+                    request,
+                    correlation_id=correlation,
+                )
+                self.assertEqual(code, HTTPStatus.OK)
+                self.assertEqual(headers["content-type"], "audio/wav")
+                self.assertEqual(headers["x-hina-utterance-id"], utterance)
+                self.assertEqual(headers["x-hina-correlation-id"], correlation)
+                self.assertEqual(headers["x-hina-event-count"], "3")
+                alignment = json.loads(headers["x-hina-alignment"])
+                self.assertEqual(alignment[0]["accuracy"], "estimated_chunk_boundary")
+                self.assertTrue(wav.startswith(b"RIFF"))
+                with wave.open(io.BytesIO(wav), "rb") as handle:
+                    self.assertEqual(handle.getframerate(), 48_000)
+                    self.assertEqual(handle.getnchannels(), 1)
+
+                request["text"] = "blocked-secret owner@example.test"
+                code, _, body = await _post_tts(
+                    host,
+                    port,
+                    request,
+                    correlation_id=correlation,
+                )
+                self.assertEqual(code, HTTPStatus.FORBIDDEN)
+                self.assertEqual(json.loads(body)["errorCode"], "E_TTS_BLOCKED")
+                self.assertEqual(provider.calls, 1)
+                log_text = (directory / "runtime.jsonl").read_text(encoding="utf-8")
+                self.assertIn("speech.output", log_text)
+                self.assertIn("E_TTS_BLOCKED", log_text)
+                self.assertIn(correlation, log_text)
+                self.assertNotIn("blocked-secret", log_text)
+                self.assertNotIn("owner@example.test", log_text)
             finally:
                 await application.stop()
 

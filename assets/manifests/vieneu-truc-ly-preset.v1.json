@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "manifest_id": "hina.voice.vieneu-truc-ly-preset.v1",
+  "artifact_kind": "bundled_tts_voice_preset",
+  "asset_name": "Trúc Ly",
+  "source_url": "https://github.com/pnnbao97/VieNeu-TTS",
+  "source_release": "vieneu 3.2.3",
+  "source_path": "vieneu/assets/voices_v3_turbo.json",
+  "source_file_size_bytes": 235685,
+  "source_file_sha256": "13f17165586ec132efd35076f46ec8de7f7e474a344e262c6360d89726eeb8d9",
+  "license": {
+    "spdx": "Apache-2.0",
+    "redistributed_by_hina": false,
+    "loaded_from_pinned_dependency": true
+  },
+  "consent_and_use": {
+    "upstream_published_as_tts_preset": true,
+    "independent_speaker_consent_evidence_available": false,
+    "voice_cloning_allowed_by_hina": false,
+    "owner_audio_used": false,
+    "allowed_scope": "local development and owner evaluation only",
+    "release_promotion_requires_consent_review": true
+  },
+  "runtime": {
+    "allowlisted": true,
+    "default": true,
+    "style": "tu_nhien",
+    "audio_watermark_requested": true,
+    "generated_audio_retained": false
+  },
+  "status": {
+    "local_development_ready": true,
+    "production_ready": false,
+    "blocker": "Independent speaker-consent evidence is not published by upstream."
+  }
+}

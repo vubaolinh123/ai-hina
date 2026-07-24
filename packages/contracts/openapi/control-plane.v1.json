@@ -346,6 +346,153 @@
         }
       }
     },
+    "/v1/tts/status": {
+      "get": {
+        "operationId": "getSpeechOutputStatus",
+        "responses": {
+          "200": {
+            "description": "Pinned Vietnamese TTS provider, output, queue and retention status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpeechOutputStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tts/synthesis": {
+      "post": {
+        "operationId": "synthesizeVietnameseWav",
+        "parameters": [
+          {
+            "name": "X-Hina-Correlation-Id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpeechSynthesisRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Moderated Vietnamese speech as 48 kHz mono PCM16 WAV.",
+            "headers": {
+              "X-Hina-Utterance-Id": {
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "X-Hina-Correlation-Id": {
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "X-Hina-Duration-Milliseconds": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "X-Hina-First-Chunk-Milliseconds": {
+                "schema": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "X-Hina-Processing-Milliseconds": {
+                "schema": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "X-Hina-Alignment": {
+                "description": "JSON array of estimated chunk-boundary timings; not phoneme-accurate.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "audio/wav": {
+                "schema": {
+                  "type": "string",
+                  "contentMediaType": "audio/wav",
+                  "contentEncoding": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed or policy-invalid synthesis request."
+          },
+          "403": {
+            "description": "The entire utterance was blocked before audio generation."
+          },
+          "409": {
+            "description": "The utterance identifier is already active."
+          },
+          "429": {
+            "description": "The bounded synthesis queue is full."
+          },
+          "503": {
+            "description": "The TTS dependency, pinned model, codec or inference is unavailable."
+          }
+        }
+      }
+    },
+    "/v1/tts/utterances/{utteranceId}/cancel": {
+      "post": {
+        "operationId": "cancelSpeechSynthesis",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/UtteranceId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "maxProperties": 0
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cancellation was requested when the utterance was active.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpeechSynthesisCancellation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The utterance identifier or request body is invalid."
+          }
+        }
+      }
+    },
     "/v1/errors": {
       "get": {
         "operationId": "getRecentErrors",
@@ -572,6 +719,15 @@
       },
       "SessionId": {
         "name": "sessionId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "UtteranceId": {
+        "name": "utteranceId",
         "in": "path",
         "required": true,
         "schema": {
@@ -920,6 +1076,99 @@
           "processingMilliseconds": {
             "type": "number",
             "minimum": 0
+          }
+        }
+      },
+      "SpeechOutputStatus": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "available"
+        ],
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "configured": {
+            "type": "object"
+          },
+          "provider": {
+            "type": "object"
+          },
+          "queue": {
+            "type": "object"
+          },
+          "output": {
+            "type": "object"
+          },
+          "retention": {
+            "type": "object",
+            "properties": {
+              "generatedAudio": {
+                "const": false
+              },
+              "inputText": {
+                "const": false
+              },
+              "voiceCloning": {
+                "const": false
+              }
+            }
+          },
+          "errorCode": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "SpeechSynthesisRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "text",
+          "utteranceId",
+          "sessionId",
+          "source"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "utteranceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sessionId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "source": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"
+          }
+        }
+      },
+      "SpeechSynthesisCancellation": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "utteranceId",
+          "cancelled"
+        ],
+        "properties": {
+          "utteranceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "cancelled": {
+            "type": "boolean"
           }
         }
       },

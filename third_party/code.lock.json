@@ -17,6 +17,23 @@
         "Used as a pinned PyPI dependency behind Hina's SttProvider interface; no upstream source file or snippet was copied.",
         "Hina locks language=vi and task=transcribe, adds deterministic pre-VAD, bounded admission, no-retention and GPU ResourceLease enforcement."
       ]
+    },
+    {
+      "name": "vieneu",
+      "source_url": "https://github.com/pnnbao97/VieNeu-TTS",
+      "revision": "v3.2.3@452bf58485a37772d8963a7dfb9e13b0d8288a50",
+      "license_spdx": "Apache-2.0",
+      "source_hash": "sha256:54fd23bf70dcc5bf83885163de67a0ae2b7d2030cf7b53996d5ec97d2dbb20ca",
+      "destination_paths": [
+        "pyproject.toml",
+        "uv.lock",
+        "workers/speech/src/hina_speech/tts_provider.py"
+      ],
+      "modifications": [
+        "Used as a pinned PyPI dependency behind Hina's TtsProvider interface; no upstream source file or snippet was copied.",
+        "Hina instantiates the pinned ONNX engine through version-specific internal APIs so both model and codec snapshots remain exact-revision local paths.",
+        "Hina restricts the integration to CPU int8, one allowlisted preset voice, audio watermarking, bounded admission, cancellation, pre-TTS moderation and no retention or voice cloning."
+      ]
     }
   ]
 }

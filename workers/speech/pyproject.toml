@@ -6,6 +6,7 @@ requires-python = ">=3.12,<3.15"
 license = "MIT"
 dependencies = [
   "faster-whisper==1.2.1",
+  "vieneu==3.2.3",
 ]
 
 [build-system]

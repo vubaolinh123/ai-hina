@@ -9,6 +9,10 @@ const state = {
   speechBlobUrl: null,
   speechTranscript: "",
   recording: null,
+  ttsUtteranceId: null,
+  ttsCorrelationId: null,
+  ttsAbortController: null,
+  ttsBlobUrl: null,
   sessionId: localStorage.getItem("hina.console.session") || crypto.randomUUID(),
 };
 
@@ -58,6 +62,17 @@ const elements = Object.fromEntries(
     "useTranscriptButton",
     "speechResult",
     "speechTranscript",
+    "refreshTtsButton",
+    "ttsAvailability",
+    "ttsVoiceValue",
+    "ttsModelValue",
+    "ttsOutputValue",
+    "ttsInput",
+    "ttsAutoSpeak",
+    "synthesizeTtsButton",
+    "stopTtsButton",
+    "ttsResult",
+    "ttsPreview",
     "refreshSafetyButton",
     "safetyBanner",
     "emergencyState",
@@ -214,6 +229,186 @@ async function refreshSpeech() {
   }
 }
 
+async function refreshTts() {
+  try {
+    const status = await fetchJson("/v1/tts/status");
+    if (!status.configured || !status.provider) {
+      elements.ttsAvailability.textContent = "unavailable";
+      elements.ttsVoiceValue.textContent = "—";
+      elements.ttsModelValue.textContent = status.errorCode || "not configured";
+      elements.ttsOutputValue.textContent = "safety policy required";
+      return;
+    }
+    const configured = status.configured;
+    const provider = status.provider;
+    elements.ttsAvailability.textContent = status.available
+      ? provider.modelLoaded
+        ? "ready"
+        : provider.modelCached
+          ? "cached"
+          : "download on first use"
+      : provider.drainingTimedOutInference
+        ? "draining timeout"
+        : "unavailable";
+    elements.ttsVoiceValue.textContent = configured.voice;
+    elements.ttsModelValue.textContent = provider.modelLoaded
+      ? "loaded"
+      : provider.modelCached
+        ? "cached"
+        : "not cached";
+    elements.ttsModelValue.title = `${configured.model}@${configured.modelRevision}`;
+    elements.ttsOutputValue.textContent =
+      `${status.output.sampleRateHz / 1000} kHz · mono · ${status.output.transport}`;
+  } catch (error) {
+    elements.ttsAvailability.textContent = "unavailable";
+    elements.ttsVoiceValue.textContent = "—";
+    elements.ttsModelValue.textContent = "—";
+    elements.ttsOutputValue.textContent = "unknown";
+    addActivity(`Không đọc được speech output: ${error.message}`, "error");
+  }
+}
+
+async function stopTts({ announce = true } = {}) {
+  const utteranceId = state.ttsUtteranceId;
+  const correlationId = state.ttsCorrelationId;
+  if (!utteranceId && !state.ttsBlobUrl) return;
+  elements.ttsPreview.pause();
+  elements.ttsPreview.currentTime = 0;
+  state.ttsAbortController?.abort();
+  state.ttsAbortController = null;
+  state.ttsUtteranceId = null;
+  state.ttsCorrelationId = null;
+  elements.stopTtsButton.disabled = true;
+  if (utteranceId) {
+    try {
+      const response = await fetch(`/v1/tts/utterances/${utteranceId}/cancel`, {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          "X-Hina-Correlation-Id": correlationId || crypto.randomUUID(),
+        },
+        body: "{}",
+      });
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(`${result.errorCode || response.status}: ${result.message || "cancel failed"}`);
+      }
+    } catch (error) {
+      if (error.name !== "AbortError") {
+        addActivity(`TTS cancel lỗi: ${error.message}`, "error");
+      }
+    }
+  }
+  if (announce) {
+    addActivity(`Đã dừng audio TTS${correlationId ? ` · ${correlationId}` : ""}.`, "info");
+  }
+}
+
+async function synthesizeTts(text = elements.ttsInput.value, autoPlay = true) {
+  const normalized = String(text || "").trim();
+  if (!normalized) return;
+  await stopTts({ announce: false });
+  if (state.ttsBlobUrl) {
+    URL.revokeObjectURL(state.ttsBlobUrl);
+    state.ttsBlobUrl = null;
+  }
+  const utteranceId = crypto.randomUUID();
+  const correlationId = crypto.randomUUID();
+  const controller = new AbortController();
+  state.ttsUtteranceId = utteranceId;
+  state.ttsCorrelationId = correlationId;
+  state.ttsAbortController = controller;
+  elements.synthesizeTtsButton.disabled = true;
+  elements.stopTtsButton.disabled = false;
+  elements.ttsResult.classList.remove("empty");
+  elements.ttsResult.textContent =
+    `Đang tổng hợp giọng nói thật…\nutteranceId=${utteranceId}\ncorrelationId=${correlationId}`;
+  try {
+    const response = await fetch("/v1/tts/synthesis", {
+      method: "POST",
+      cache: "no-store",
+      signal: controller.signal,
+      headers: {
+        Accept: "audio/wav, application/json",
+        "Content-Type": "application/json",
+        "X-Hina-Correlation-Id": correlationId,
+      },
+      body: JSON.stringify({
+        text: normalized,
+        utteranceId,
+        sessionId: state.sessionId,
+        source: "owner.console",
+      }),
+    });
+    if (!response.ok) {
+      const result = await response.json();
+      elements.ttsResult.textContent = JSON.stringify(result, null, 2);
+      throw new Error(
+        `${result.errorCode || response.status}: ${result.message || "request failed"} · ${result.correlationId || correlationId}`,
+      );
+    }
+    const wav = await response.blob();
+    if (wav.size < 44) {
+      throw new Error("runtime trả về WAV không hợp lệ");
+    }
+    state.ttsBlobUrl = URL.createObjectURL(wav);
+    elements.ttsPreview.src = state.ttsBlobUrl;
+    elements.ttsPreview.hidden = false;
+    const durationMs = response.headers.get("X-Hina-Duration-Milliseconds") || "—";
+    const firstChunkMs = response.headers.get("X-Hina-First-Chunk-Milliseconds") || "—";
+    const processingMs = response.headers.get("X-Hina-Processing-Milliseconds") || "—";
+    const alignmentHeader = response.headers.get("X-Hina-Alignment") || "[]";
+    let alignment = [];
+    try {
+      alignment = JSON.parse(alignmentHeader);
+    } catch {
+      alignment = [];
+    }
+    elements.ttsResult.textContent = JSON.stringify(
+      {
+        status: "synthesized",
+        utteranceId,
+        correlationId,
+        audioBytes: wav.size,
+        durationMilliseconds: Number(durationMs) || durationMs,
+        firstChunkMilliseconds: Number(firstChunkMs) || firstChunkMs,
+        processingMilliseconds: Number(processingMs) || processingMs,
+        alignment,
+        retained: false,
+      },
+      null,
+      2,
+    );
+    state.ttsAbortController = null;
+    if (autoPlay) {
+      try {
+        await elements.ttsPreview.play();
+      } catch (error) {
+        addActivity(`WAV đã sẵn sàng; trình duyệt chặn autoplay: ${error.message}`, "info");
+      }
+    }
+    addActivity(`TTS đã tạo WAV thật · ${wav.size} byte · ${correlationId}.`, "success");
+    await Promise.all([refreshTts(), refreshMetrics()]);
+  } catch (error) {
+    if (error.name !== "AbortError") {
+      addActivity(`TTS lỗi: ${error.message}`, "error");
+      setTimeout(refreshErrors, 150);
+    }
+    if (state.ttsUtteranceId === utteranceId) {
+      state.ttsUtteranceId = null;
+      state.ttsCorrelationId = null;
+      elements.stopTtsButton.disabled = true;
+    }
+  } finally {
+    if (state.ttsAbortController === controller) {
+      state.ttsAbortController = null;
+    }
+    elements.synthesizeTtsButton.disabled = false;
+  }
+}
+
 function mergeFloat32Chunks(chunks, sampleCount) {
   const merged = new Float32Array(sampleCount);
   let offset = 0;
@@ -274,6 +469,7 @@ function encodePcmWav(samples, sampleRate) {
 
 async function startMicrophoneRecording() {
   if (state.recording) return;
+  await stopTts({ announce: false });
   if (!navigator.mediaDevices?.getUserMedia) {
     addActivity("Trình duyệt không hỗ trợ microphone capture.", "error");
     return;
@@ -599,6 +795,9 @@ async function pollChatTurn(turnId) {
     elements.cancelChatButton.disabled = true;
     if (turn.outcome === "completed") {
       await replayChat();
+      if (elements.ttsAutoSpeak.checked && typeof turn.assistant === "string") {
+        synthesizeTts(turn.assistant, true);
+      }
       addActivity(`Chat turn ${turn.turnId} hoàn tất qua ${turn.promptVersion}.`, "success");
     } else if (turn.outcome === "interrupted") {
       appendChatMessage("runtime", "Turn đã bị interrupt; không có partial output được phát.", turn.turnId);
@@ -962,6 +1161,7 @@ async function refreshAll({ announce = true } = {}) {
     refreshModel(),
     refreshChatStatus(),
     refreshSpeech(),
+    refreshTts(),
   ]);
   if (announce) {
     addActivity("Đã làm mới control plane, metrics và error log.", "success");
@@ -1182,11 +1382,45 @@ function handleBinaryMessage(buffer) {
   refreshMetrics();
 }
 
+function cancelTtsOnPageExit() {
+  const utteranceId = state.ttsUtteranceId;
+  if (!utteranceId) {
+    state.ttsAbortController?.abort();
+    return;
+  }
+  const route = `/v1/tts/utterances/${utteranceId}/cancel`;
+  const body = new Blob(["{}"], { type: "application/json" });
+  if (!navigator.sendBeacon?.(route, body)) {
+    fetch(route, {
+      method: "POST",
+      cache: "no-store",
+      keepalive: true,
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: "{}",
+    }).catch(() => {});
+  }
+  state.ttsAbortController?.abort();
+  state.ttsAbortController = null;
+  state.ttsUtteranceId = null;
+  state.ttsCorrelationId = null;
+}
+
 elements.connectButton.addEventListener("click", connectWebSocket);
 elements.refreshAllButton.addEventListener("click", () => refreshAll());
 elements.refreshSafetyButton.addEventListener("click", refreshSafety);
 elements.refreshModelButton.addEventListener("click", refreshModel);
 elements.refreshSpeechButton.addEventListener("click", refreshSpeech);
+elements.refreshTtsButton.addEventListener("click", refreshTts);
+elements.synthesizeTtsButton.addEventListener("click", () => synthesizeTts());
+elements.stopTtsButton.addEventListener("click", () => stopTts());
+elements.ttsPreview.addEventListener("ended", () => {
+  state.ttsUtteranceId = null;
+  state.ttsCorrelationId = null;
+  elements.stopTtsButton.disabled = true;
+});
 elements.startRecordingButton.addEventListener("click", startMicrophoneRecording);
 elements.stopRecordingButton.addEventListener("click", stopMicrophoneRecording);
 elements.audioFileInput.addEventListener("change", selectAudioFile);
@@ -1240,7 +1474,12 @@ window.addEventListener("beforeunload", () => {
   if (state.speechBlobUrl) {
     URL.revokeObjectURL(state.speechBlobUrl);
   }
+  cancelTtsOnPageExit();
+  if (state.ttsBlobUrl) {
+    URL.revokeObjectURL(state.ttsBlobUrl);
+  }
 });
+window.addEventListener("pagehide", cancelTtsOnPageExit);
 
 updateConnection(false);
 refreshAll({ announce: false });
@@ -1252,4 +1491,5 @@ setInterval(() => {
   refreshModel();
   refreshChatStatus();
   refreshSpeech();
+  refreshTts();
 }, 5000);

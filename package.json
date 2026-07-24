@@ -19,6 +19,7 @@
     "report:errors": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Collect-HinaErrorReport.ps1",
     "smoke:dev-console": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Start-HinaDevConsole.ps1 -Port 0 -NoBrowser -StartupCheck",
     "smoke:m04-stt": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Run-M04RealSttSmoke.ps1",
+    "smoke:m05-tts": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Run-M05RealTtsSmoke.ps1",
     "start:control": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Start-HinaControlPlane.ps1",
     "start:dev-console": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Start-HinaDevConsole.ps1",
     "test:lifecycle:100": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Run-LifecycleCycles.ps1 --cycles 100",

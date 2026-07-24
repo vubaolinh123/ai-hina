@@ -19,3 +19,24 @@ Defaults:
 The first accepted speech request can download the pinned model into
 `var/cache/models/faster-whisper`. Set `HINA_STT_ALLOW_DOWNLOAD=false` for
 strict offline operation after preloading the model.
+
+## M05 speech output
+
+The same worker now provides real Vietnamese synthesis through pinned
+`vieneu==3.2.3`, the VieNeu-TTS v3 Turbo ONNX int8 snapshot and the MOSS audio
+codec snapshot. It runs on CPU, uses the allowlisted `Trúc Ly` preset voice,
+watermarks generated audio, and exposes 48 kHz mono PCM16 WAV through the
+loopback runtime.
+
+Every complete utterance passes `pre_tts` moderation before inference. Voice
+cloning, generated-audio retention and input-text retention are disabled.
+The first accepted request can download the pinned model and codec into
+`var/cache/models/vieneu`; set `HINA_TTS_ALLOW_DOWNLOAD=false` after preloading
+for strict offline use.
+
+Run one real moderated inference and keep a WAV under the ignored `var/tmp`
+folder for manual listening:
+
+```powershell
+pnpm smoke:m05-tts
+```

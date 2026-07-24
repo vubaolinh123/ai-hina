@@ -1,0 +1,74 @@
+{
+  "schema_version": "1.0",
+  "manifest_id": "hina.tts.vieneu-v3-turbo-int8.v1",
+  "artifact_kind": "model_weights_and_configuration",
+  "model_id": "pnnbao-ump/VieNeu-TTS-v3-Turbo",
+  "source_url": "https://huggingface.co/pnnbao-ump/VieNeu-TTS-v3-Turbo",
+  "revision": "75ff82a72f54d55ed389e1eeb12041d3c4bac7d4",
+  "observed_at": "2026-07-25",
+  "files": [
+    {
+      "path": "onnx_int8/config.json",
+      "size_bytes": 2152,
+      "sha256": "a9f8d9c4b4736448ab355d1a98cfe48f5e39aecf2916c37b0806c228612e9a2d"
+    },
+    {
+      "path": "onnx_int8/tokenizer.json",
+      "size_bytes": 22320,
+      "sha256": "6cc6bcbe380b8c37bd9f2514e37c5dfa3e00e122c6e3125dae5c4afe48e39158"
+    },
+    {
+      "path": "onnx_int8/vieneu_acoustic_cached.onnx",
+      "size_bytes": 7207223,
+      "sha256": "0be6575ffe1c4c2009edb9c9b218c235f09665f630d1840e63c74bef30d462c1"
+    },
+    {
+      "path": "onnx_int8/vieneu_backbone_shared.data",
+      "size_bytes": 103891968,
+      "sha256": "68c0bd5e75f9cf2d557040201f5465dc03a61206813845f2de1ebe6542652b92"
+    },
+    {
+      "path": "onnx_int8/vieneu_decode_step.onnx",
+      "size_bytes": 1062040,
+      "sha256": "7907f8e067de22ee88f0912ffc8ccaf7cf90025e1d41351d2a5bb7cec44fc859"
+    },
+    {
+      "path": "onnx_int8/vieneu_prefill.onnx",
+      "size_bytes": 1090823,
+      "sha256": "9d04bd8023c5a003dd60939848bba7e85c5d8448480e607a9ae7aa3ecd6d7494"
+    },
+    {
+      "path": "onnx_int8/vieneu_v3_heads.npz",
+      "size_bytes": 52219622,
+      "sha256": "c2eadeb5b0b85c3009270352adea8c05a72f31c5a9f189ead9184333fb1becb8"
+    }
+  ],
+  "licenses": {
+    "runtime_code_spdx": "Apache-2.0",
+    "weights_spdx": "Apache-2.0",
+    "model_card_url": "https://huggingface.co/pnnbao-ump/VieNeu-TTS-v3-Turbo",
+    "commercial_use_allowed": true,
+    "redistribution_allowed": true
+  },
+  "lineage": {
+    "architecture": "VieNeu-TTS v3 Turbo acoustic model exported to ONNX int8",
+    "known_training_data_terms": "The upstream model card declares Apache-2.0 but does not publish a complete training-data inventory.",
+    "owner_data_included": false
+  },
+  "runtime": {
+    "provider": "vieneu",
+    "provider_version": "3.2.3",
+    "default_device": "cpu",
+    "default_precision": "int8",
+    "sample_rate_hz": 48000,
+    "cache_path": "var/cache/models/vieneu"
+  },
+  "status": {
+    "download_authorized": true,
+    "download_on_first_use": true,
+    "local_development_ready": true,
+    "quality_promoted": false,
+    "production_ready": false,
+    "requires_performance_and_voice_consent_gate": true
+  }
+}
