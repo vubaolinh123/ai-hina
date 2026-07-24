@@ -1,0 +1,7 @@
+{
+  "name": "@hina/dev-console",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Owner-facing local console for the real Hina M01 runtime",
+  "license": "MIT"
+}

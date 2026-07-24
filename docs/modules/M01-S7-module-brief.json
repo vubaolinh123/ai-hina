@@ -1,0 +1,67 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M01-S7-owner-dev-console",
+  "module_id": "M01",
+  "objective": "Deliver a persistent loopback-only Hina Dev Console that lets the owner manually exercise the real M01 HTTP, WebSocket, durable replay, binary media, metrics and redacted error-log paths from a browser.",
+  "non_goals": [
+    "Do not simulate an AI conversation, model response, speech engine, avatar, memory or tool execution.",
+    "Do not deploy the console publicly or bind any service to a non-loopback address.",
+    "Do not add a frontend framework, external CDN asset or new runtime dependency.",
+    "Do not run the full M01 release, repeat, soak or 100-cycle workflow during this fast product slice."
+  ],
+  "base_sha": "7d4e554c6cf99950f9b708b9cb186bfaf8ea6c1e",
+  "branch": "module/M01-spine",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "AGENTS.md",
+    "apps/dev-console/",
+    "apps/core-runtime/",
+    "docs/modules/M01-S7-*",
+    "docs/modules/M01-contracts-spine.md",
+    "packages/contracts/openapi/control-plane.v1.json",
+    "tools/dev/Start-HinaDevConsole.ps1",
+    "package.json",
+    "pnpm-lock.yaml",
+    "README.md",
+    "apps/README.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "packages/contracts/schemas/",
+    "workers/",
+    "adapters/",
+    "ml/",
+    "assets/",
+    "third_party/"
+  ],
+  "contracts": [
+    "The console is a long-running local application served from the same loopback origin as the M01 control plane.",
+    "Every visible event, replay and binary result comes from the real runtime WebSocket connection; the console contains no fake AI response path.",
+    "The console serves a fixed static-file allowlist with no directory traversal and a restrictive Content-Security-Policy.",
+    "The error endpoint returns at most 100 already-redacted structured error records and never exposes an arbitrary filesystem path.",
+    "The metrics endpoint returns only the bounded in-memory MetricRegistry snapshot.",
+    "The start command keeps running until Ctrl+C and reports its URL, database and log locations."
+  ],
+  "allowed_dependencies": [
+    "Python 3.12+ standard library, browser platform APIs and existing local hina-contracts and hina-core modules."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "pnpm start:dev-console starts a persistent application at http://127.0.0.1:8765/ that can be opened and manually tested by the owner.",
+    "The owner can inspect health, version, config and metrics, connect WebSocket, submit a valid durable echo event, observe deduplication, replay a stream and round-trip a binary frame.",
+    "The owner can deliberately submit an invalid event and inspect the resulting stable redacted error record in the same console.",
+    "Unit tests cover static serving, security headers, metrics, bounded redacted errors and application assembly shutdown.",
+    "The focused fast test command passes once on the owner machine."
+  ],
+  "required_test_commands": [
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-FastUnit.ps1",
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Start-HinaDevConsole.ps1 -Port 0 -NoBrowser -StartupCheck"
+  ],
+  "latency_or_quality_budget": {
+    "fast_unit_seconds": 15,
+    "console_initial_load_milliseconds": 1000,
+    "max_error_records": 100,
+    "max_metric_series": 256
+  },
+  "output_artifact_dir": "artifacts/verification/M01/"
+}

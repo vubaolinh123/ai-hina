@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Hina Dev Console — giao diện local để kiểm thử runtime M01 thật."
+    >
+    <title>Hina Dev Console</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">H</div>
+        <div>
+          <p class="eyebrow">LOCAL RUNTIME / M01</p>
+          <h1>Hina Dev Console</h1>
+        </div>
+      </div>
+      <div class="connection-state" role="status" aria-live="polite">
+        <span id="connectionDot" class="status-dot status-offline"></span>
+        <span id="connectionText">WebSocket chưa kết nối</span>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero" aria-labelledby="heroTitle">
+        <div>
+          <p class="eyebrow">OWNER TEST SURFACE</p>
+          <h2 id="heroTitle">Kiểm tra hạ tầng thật, không giả lập AI</h2>
+          <p>
+            Mọi thao tác bên dưới gọi trực tiếp HTTP, WebSocket và SQLite của
+            Hina. Chat/model thật sẽ được tích hợp ở module brain sau M01.
+          </p>
+        </div>
+        <div class="hero-actions">
+          <button id="refreshAllButton" class="button button-secondary" type="button">
+            Làm mới trạng thái
+          </button>
+          <button id="connectButton" class="button button-primary" type="button">
+            Kết nối WebSocket
+          </button>
+        </div>
+      </section>
+
+      <section class="status-grid" aria-label="Trạng thái runtime">
+        <article class="stat">
+          <span>Runtime</span>
+          <strong id="healthValue">Đang kiểm tra…</strong>
+          <small id="uptimeValue">—</small>
+        </article>
+        <article class="stat">
+          <span>Build</span>
+          <strong id="buildValue">—</strong>
+          <small id="protocolValue">—</small>
+        </article>
+        <article class="stat">
+          <span>Endpoint</span>
+          <strong id="endpointValue">—</strong>
+          <small>loopback-only</small>
+        </article>
+        <article class="stat">
+          <span>Metric series</span>
+          <strong id="metricCountValue">0</strong>
+          <small id="metricCapacityValue">tối đa 256</small>
+        </article>
+      </section>
+
+      <div class="workspace-grid">
+        <section class="panel event-panel" aria-labelledby="eventTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">REALTIME EVENT LAB</p>
+              <h2 id="eventTitle">Durable event</h2>
+            </div>
+            <span class="protocol-pill">hina.realtime.v1</span>
+          </div>
+
+          <label for="messageInput">Nội dung echo</label>
+          <textarea id="messageInput" rows="3" maxlength="4096">Xin chào Hina — kiểm tra event thật từ Dev Console.</textarea>
+
+          <div class="field-grid">
+            <div>
+              <label for="streamInput">Stream ID</label>
+              <input id="streamInput" maxlength="64" value="owner.dev-console">
+            </div>
+            <div>
+              <label for="sequenceInput">Sequence</label>
+              <input id="sequenceInput" type="number" min="0" step="1" value="0">
+            </div>
+          </div>
+
+          <div class="button-row">
+            <button id="sendEventButton" class="button button-primary" type="button">
+              Gửi event thật
+            </button>
+            <button id="resendButton" class="button button-secondary" type="button" disabled>
+              Gửi lại để test dedupe
+            </button>
+            <button id="invalidButton" class="button button-danger" type="button">
+              Gửi event lỗi
+            </button>
+          </div>
+
+          <div class="result-strip">
+            <div>
+              <span>Kết quả gần nhất</span>
+              <strong id="eventResult">Chưa gửi</strong>
+            </div>
+            <div>
+              <span>Event ID</span>
+              <code id="eventIdValue">—</code>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="replayTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">SQLITE JOURNAL</p>
+              <h2 id="replayTitle">Replay stream</h2>
+            </div>
+          </div>
+          <p class="panel-copy">
+            Đọc lại các event đã được runtime ghi thật vào journal.
+          </p>
+          <label for="afterSequenceInput">Đọc sau sequence</label>
+          <input id="afterSequenceInput" type="number" min="-1" step="1" value="-1">
+          <button id="replayButton" class="button button-primary full-width" type="button">
+            Replay từ SQLite
+          </button>
+          <div id="replayResult" class="data-box empty">Chưa có dữ liệu replay.</div>
+        </section>
+
+        <section class="panel" aria-labelledby="binaryTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">OPCODE 2 / HINA HEADER</p>
+              <h2 id="binaryTitle">Binary round-trip</h2>
+            </div>
+          </div>
+          <p class="panel-copy">
+            Gửi byte thật qua WebSocket, không chuyển media thành base64 JSON.
+          </p>
+          <label for="binaryInput">Payload UTF-8</label>
+          <input id="binaryInput" value="âm thanh thử nghiệm">
+          <button id="binaryButton" class="button button-primary full-width" type="button">
+            Gửi binary frame
+          </button>
+          <div id="binaryResult" class="data-box empty">Chưa gửi binary.</div>
+        </section>
+
+        <section class="panel metrics-panel" aria-labelledby="metricsTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">BOUNDED OBSERVABILITY</p>
+              <h2 id="metricsTitle">Metrics</h2>
+            </div>
+            <button id="refreshMetricsButton" class="text-button" type="button">Làm mới</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Tên</th>
+                  <th>Labels</th>
+                  <th>Giá trị</th>
+                  <th>Count</th>
+                </tr>
+              </thead>
+              <tbody id="metricsBody">
+                <tr><td colspan="4" class="empty-cell">Chưa có metric.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel errors-panel" aria-labelledby="errorsTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">REDACTED JSONL</p>
+              <h2 id="errorsTitle">Lỗi gần đây</h2>
+            </div>
+            <button id="refreshErrorsButton" class="text-button" type="button">Làm mới</button>
+          </div>
+          <p class="panel-copy">
+            Chỉ hiển thị tối đa 20 bản ghi đã che secret. Dùng nút “Gửi event lỗi”
+            để kiểm tra luồng này.
+          </p>
+          <div id="errorsList" class="stack-list">
+            <p class="empty">Chưa có lỗi.</p>
+          </div>
+        </section>
+
+        <section class="panel activity-panel" aria-labelledby="activityTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">LIVE CLIENT LOG</p>
+              <h2 id="activityTitle">Hoạt động</h2>
+            </div>
+            <button id="clearActivityButton" class="text-button" type="button">Xóa</button>
+          </div>
+          <ol id="activityLog" class="activity-log" aria-live="polite"></ol>
+        </section>
+      </div>
+    </main>
+
+    <footer>
+      <span>Hina AI · M01 infrastructure console</span>
+      <span>Dừng dịch vụ bằng <kbd>Ctrl</kbd> + <kbd>C</kbd></span>
+    </footer>
+  </body>
+</html>

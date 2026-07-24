@@ -1,53 +1,47 @@
 # Hina core runtime
 
-M01-S2 through M01-S6 provide standard-library runtime primitives used by later
-workers:
+M01-S2 đến M01-S7 cung cấp runtime nền tảng cho các module sau:
 
-- bounded async queues with explicit overflow policies;
-- monotonic deadlines and cooperative cancellation;
-- bounded in-memory idempotency with concurrent call coalescing;
-- SQLite journal/outbox/inbox with delivery leases, ACK/NACK and ordered replay;
-- loopback-only health/version/config endpoints and a WebSocket realtime plane;
-- binary media frames that never place media bytes in base64 JSON;
-- deterministic service dependency ordering, startup rollback and graceful
-  reverse shutdown;
-- bounded JSONL traces, low-cardinality metrics and redacted owner error reports;
-- resource leases that preserve at least 2048 MiB VRAM headroom;
-- deterministic fake providers and idempotent turn replay;
-- a visible CLI demo with redacted JSONL error records.
+- bounded async queues, deadline, cancellation và idempotency;
+- SQLite journal/outbox/inbox với lease, ACK/NACK và ordered replay;
+- control plane loopback-only và WebSocket realtime;
+- binary media frame không nhét byte vào base64 JSON;
+- lifecycle dependency ordering, startup rollback và graceful shutdown;
+- JSONL traces, low-cardinality metrics và error report đã che secret;
+- resource lease giữ tối thiểu 2048 MiB VRAM headroom;
+- deterministic test providers và idempotent turn replay harness;
+- Hina Dev Console chạy lâu dài để owner thao tác với runtime thật.
 
-Run from the repository root:
+## Chạy ứng dụng
+
+Từ repository root:
 
 ```powershell
-pnpm demo:m01-s2
-pnpm demo:m01-s3
-pnpm demo:m01-s4
-pnpm demo:m01-s5
-pnpm demo:m01-s6
-pnpm test:fast
+pnpm start:dev-console
 ```
 
-Run the persistent local control plane with:
+Runtime dùng mặc định:
+
+- Console: `http://127.0.0.1:8765/`
+- Database: `var/data/hina-runtime.sqlite3`
+- Error log: `var/logs/hina-runtime.jsonl`
+
+Dừng bằng `Ctrl+C`. Chỉ chạy control plane không có giao diện bằng:
 
 ```powershell
 pnpm start:control
-pnpm report:errors
 ```
 
-The explicit deep lifecycle command is available but is not part of the normal
-fast loop:
+## Kiểm tra nhanh
 
 ```powershell
-pnpm test:lifecycle:100
+pnpm test:fast
+pnpm smoke:m01-s2
+pnpm smoke:m01-s3
+pnpm smoke:m01-s4
+pnpm smoke:m01-s5
+pnpm smoke:m01-s6
 ```
 
-Demo errors are written to `var/logs/m01-s2-demo.jsonl`.
-The durable demo keeps its SQLite database at `var/data/m01-s3-demo.sqlite3`
-and error log at `var/logs/m01-s3-demo.jsonl`.
-The realtime demo writes `var/data/m01-s4-demo.sqlite3` and
-`var/logs/m01-s4-demo.jsonl`. The persistent server defaults to
-`http://127.0.0.1:8765` and logs to `var/logs/hina-runtime.jsonl`.
-The lifecycle demo writes `var/data/m01-s5-demo.sqlite3` and only creates
-`var/logs/m01-s5-demo.jsonl` if a caught lifecycle error occurs.
-The observability demo writes traces/errors under `var/logs`, metrics under
-`var/metrics` and the bounded report under `var/reports`.
+Các lệnh `smoke:*` là harness kỹ thuật và không phải demo sản phẩm. Lệnh deep
+`pnpm test:lifecycle:100` chỉ chạy khi owner yêu cầu.

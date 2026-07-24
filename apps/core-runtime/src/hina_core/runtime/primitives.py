@@ -258,13 +258,20 @@ class _Entry(Generic[T]):
 
 
 class IdempotencyRegistry(Generic[T]):
-    def __init__(self, max_entries: int = 1024, default_ttl_seconds: float = 300.0) -> None:
+    def __init__(
+        self,
+        max_entries: int = 1024,
+        default_ttl_seconds: float = 300.0,
+        *,
+        clock: Callable[[], float] | None = None,
+    ) -> None:
         if max_entries < 1:
             raise ValueError("max_entries must be at least one")
         if default_ttl_seconds <= 0:
             raise ValueError("default TTL must be positive")
         self.max_entries = max_entries
         self.default_ttl_seconds = default_ttl_seconds
+        self._clock = clock or time.monotonic
         self._entries: OrderedDict[str, _Entry[T]] = OrderedDict()
         self._lock = asyncio.Lock()
 
@@ -325,7 +332,7 @@ class IdempotencyRegistry(Generic[T]):
             current = self._entries.get(key)
             if current is entry:
                 entry.completed = True
-                entry.expires_at = time.monotonic() + ttl
+                entry.expires_at = self._clock() + ttl
                 self._entries.move_to_end(key)
             if not entry.future.done():
                 entry.future.set_result(_Completion(value=value))
@@ -343,7 +350,7 @@ class IdempotencyRegistry(Generic[T]):
                 entry.future.set_result(_Completion(failure=failure))
 
     def _prune_expired_locked(self) -> int:
-        now = time.monotonic()
+        now = self._clock()
         expired = [key for key, entry in self._entries.items() if entry.completed and entry.expires_at <= now]
         for key in expired:
             del self._entries[key]

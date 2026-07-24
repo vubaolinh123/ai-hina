@@ -81,7 +81,13 @@ class TransportValueTests(unittest.TestCase):
         self.assertEqual(openapi["openapi"], "3.1.0")
         self.assertEqual(
             set(openapi["paths"]),
-            {"/v1/health", "/v1/version", "/v1/config"},
+            {
+                "/v1/health",
+                "/v1/version",
+                "/v1/config",
+                "/v1/metrics",
+                "/v1/errors",
+            },
         )
         self.assertEqual(asyncapi["asyncapi"], "3.0.0")
         self.assertEqual(
@@ -95,7 +101,7 @@ class TransportValueTests(unittest.TestCase):
 
 
 class TransportServerTests(unittest.IsolatedAsyncioTestCase):
-    async def test_visible_demo_exercises_control_text_binary_and_durable_paths(self) -> None:
+    async def test_transport_smoke_exercises_control_text_binary_and_durable_paths(self) -> None:
         with tempfile.TemporaryDirectory(dir=APP_ROOT) as temporary_directory:
             directory = Path(temporary_directory)
             result = await run_transport_demo(

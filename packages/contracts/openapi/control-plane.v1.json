@@ -61,6 +61,53 @@
           }
         }
       }
+    },
+    "/v1/metrics": {
+      "get": {
+        "operationId": "getMetrics",
+        "responses": {
+          "200": {
+            "description": "Bounded in-memory runtime metric snapshot.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricsSnapshot"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/errors": {
+      "get": {
+        "operationId": "getRecentErrors",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recent redacted structured error records.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorRecordPage"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -168,6 +215,183 @@
                 "minimum": 1
               }
             }
+          }
+        }
+      },
+      "MetricPoint": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "kind",
+          "labels",
+          "value",
+          "count",
+          "sum",
+          "min",
+          "max"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "counter",
+              "gauge",
+              "histogram"
+            ]
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "value": {
+            "type": "number"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sum": {
+            "type": "number"
+          },
+          "min": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "max": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        }
+      },
+      "MetricsSnapshot": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "series",
+          "seriesCount",
+          "maxSeries"
+        ],
+        "properties": {
+          "series": {
+            "type": "array",
+            "maxItems": 256,
+            "items": {
+              "$ref": "#/components/schemas/MetricPoint"
+            }
+          },
+          "seriesCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 256
+          },
+          "maxSeries": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 256
+          }
+        }
+      },
+      "ErrorRecord": {
+        "type": "object",
+        "required": [
+          "timestamp",
+          "level",
+          "component",
+          "operation",
+          "errorCode",
+          "message",
+          "correlationId",
+          "exceptionType",
+          "buildCommit",
+          "contractVersion",
+          "runtimeProfile",
+          "context"
+        ],
+        "properties": {
+          "timestamp": {
+            "type": "string"
+          },
+          "level": {
+            "const": "error"
+          },
+          "component": {
+            "type": "string"
+          },
+          "operation": {
+            "type": "string"
+          },
+          "errorCode": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "exceptionType": {
+            "type": "string"
+          },
+          "buildCommit": {
+            "type": "string"
+          },
+          "contractVersion": {
+            "type": "string"
+          },
+          "runtimeProfile": {
+            "type": "string"
+          },
+          "context": {
+            "type": "object"
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "turnId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "loggingFailed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ErrorRecordPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "records",
+          "count",
+          "limit"
+        ],
+        "properties": {
+          "records": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/ErrorRecord"
+            }
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
           }
         }
       }

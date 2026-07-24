@@ -102,7 +102,12 @@ class RuntimePrimitiveTests(unittest.IsolatedAsyncioTestCase):
         await registry.run_once("third-key", operation)
         self.assertLessEqual(registry.size, 2)
 
-        expiring = IdempotencyRegistry[int](max_entries=2, default_ttl_seconds=0.005)
+        clock_now = 100.0
+        expiring = IdempotencyRegistry[int](
+            max_entries=2,
+            default_ttl_seconds=0.005,
+            clock=lambda: clock_now,
+        )
         expiry_side_effects = 0
 
         async def expiring_operation() -> int:
@@ -111,7 +116,7 @@ class RuntimePrimitiveTests(unittest.IsolatedAsyncioTestCase):
             return expiry_side_effects
 
         await expiring.run_once("expires", expiring_operation)
-        await asyncio.sleep(0.01)
+        clock_now += 0.006
         after_expiry = await expiring.run_once("expires", expiring_operation)
         self.assertEqual(after_expiry.source, IdempotencySource.EXECUTED)
         self.assertEqual(expiry_side_effects, 2)

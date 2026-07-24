@@ -13,3 +13,8 @@ $env:UV_CACHE_DIR = Join-Path $repoRoot ".cache\uv"
 if ($LASTEXITCODE -ne 0) {
     throw "Fast unit tests failed with exit code $LASTEXITCODE"
 }
+
+& node --check (Join-Path $repoRoot "apps\dev-console\public\app.js")
+if ($LASTEXITCODE -ne 0) {
+    throw "Dev Console JavaScript syntax check failed with exit code $LASTEXITCODE"
+}

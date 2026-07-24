@@ -9,16 +9,19 @@ import json
 import os
 import struct
 import time
+from collections import deque
 from dataclasses import dataclass
 from http import HTTPStatus
+from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 from uuid import UUID
 
 from hina_contracts import validate_envelope
 
 from .durable import DurableStore
-from .error_log import JsonlErrorLogger
+from .error_log import JsonlErrorLogger, redact_for_log
+from .observability import MetricRegistry
 from .primitives import PrimitiveError, RuntimeErrorCode
 
 
@@ -29,6 +32,25 @@ _BINARY_MAGIC = b"HINA"
 _BINARY_VERSION = 1
 _END_OF_STREAM = 0x01
 _ZERO_CORRELATION_ID = "00000000-0000-0000-0000-000000000000"
+_MAX_ERROR_LOG_SCAN_BYTES = 4 * 1024 * 1024
+_STATIC_FILES = {
+    "/": ("index.html", "text/html; charset=utf-8"),
+    "/index.html": ("index.html", "text/html; charset=utf-8"),
+    "/app.js": ("app.js", "text/javascript; charset=utf-8"),
+    "/styles.css": ("styles.css", "text/css; charset=utf-8"),
+}
+_STATIC_SECURITY_HEADERS = {
+    "Content-Security-Policy": (
+        "default-src 'self'; "
+        "connect-src 'self' ws://127.0.0.1:* ws://[::1]:*; "
+        "img-src 'self' data:; "
+        "object-src 'none'; "
+        "base-uri 'none'; "
+        "frame-ancestors 'none'"
+    ),
+    "Referrer-Policy": "no-referrer",
+    "X-Frame-Options": "DENY",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,11 +149,15 @@ class ControlPlaneServer:
         *,
         durable_store: DurableStore | None = None,
         error_logger: JsonlErrorLogger | None = None,
+        metrics: MetricRegistry | None = None,
+        static_dir: Path | None = None,
         build_commit: str | None = None,
     ) -> None:
         self.config = config
         self.durable_store = durable_store
         self.error_logger = error_logger
+        self.metrics = metrics or MetricRegistry()
+        self.static_dir = static_dir.resolve() if static_dir is not None else None
         self.build_commit = build_commit or os.environ.get("HINA_BUILD_COMMIT", "development")
         self._server: asyncio.AbstractServer | None = None
         self._started_at = 0.0
@@ -285,6 +311,7 @@ class ControlPlaneServer:
 
     async def _serve_control_request(self, writer: asyncio.StreamWriter, request: _HttpRequest) -> None:
         if request.method != "GET":
+            self._record_metric("hina_http_requests_total", operation="method_rejected", status="error")
             await self._send_json_response(
                 writer,
                 HTTPStatus.METHOD_NOT_ALLOWED,
@@ -292,7 +319,12 @@ class ControlPlaneServer:
                 extra_headers={"Allow": "GET"},
             )
             return
-        path = urlsplit(request.target).path
+        parsed_target = urlsplit(request.target)
+        path = parsed_target.path
+        if path in _STATIC_FILES and self.static_dir is not None:
+            self._record_metric("hina_http_requests_total", operation="static", status="ok")
+            await self._serve_static_file(writer, path)
+            return
         if path == "/v1/health":
             body = {
                 "status": "ready",
@@ -320,14 +352,53 @@ class ControlPlaneServer:
                     "connections": self.config.max_connections,
                 },
             }
+        elif path == "/v1/metrics":
+            body = self.metrics.as_json()
+        elif path == "/v1/errors":
+            limit = _parse_error_limit(parsed_target.query)
+            records = (
+                _read_recent_error_records(self.error_logger.path, limit)
+                if self.error_logger is not None
+                else []
+            )
+            body = {
+                "records": records,
+                "count": len(records),
+                "limit": limit,
+            }
         else:
+            self._record_metric("hina_http_requests_total", operation="not_found", status="error")
             await self._send_json_response(
                 writer,
                 HTTPStatus.NOT_FOUND,
                 self._error_body(RuntimeErrorCode.HTTP_BAD_REQUEST, "route was not found"),
             )
             return
+        self._record_metric("hina_http_requests_total", operation=path[4:], status="ok")
         await self._send_json_response(writer, HTTPStatus.OK, body)
+
+    async def _serve_static_file(self, writer: asyncio.StreamWriter, route: str) -> None:
+        assert self.static_dir is not None
+        filename, content_type = _STATIC_FILES[route]
+        path = self.static_dir / filename
+        try:
+            encoded = path.read_bytes()
+        except OSError:
+            await self._send_json_response(
+                writer,
+                HTTPStatus.NOT_FOUND,
+                self._error_body(RuntimeErrorCode.HTTP_BAD_REQUEST, "console asset was not found"),
+            )
+            return
+        if len(encoded) > 1_048_576:
+            raise PrimitiveError(RuntimeErrorCode.FRAME_TOO_LARGE, "console asset exceeds size limit")
+        await self._send_response(
+            writer,
+            HTTPStatus.OK,
+            encoded,
+            content_type=content_type,
+            extra_headers=_STATIC_SECURITY_HEADERS,
+        )
 
     async def _serve_websocket(
         self,
@@ -374,6 +445,11 @@ class ControlPlaneServer:
                     )
                 elif frame.opcode == 0x2:
                     media = BinaryMediaFrame.decode(frame.payload)
+                    self._record_metric(
+                        "hina_realtime_messages_total",
+                        operation="binary",
+                        status="ok",
+                    )
                     await self._write_websocket_frame(writer, 0x2, media.encode())
                 elif frame.opcode == 0x8:
                     await self._write_websocket_frame(writer, 0x8, frame.payload[:125])
@@ -385,6 +461,11 @@ class ControlPlaneServer:
                 else:
                     raise PrimitiveError(RuntimeErrorCode.WEBSOCKET_PROTOCOL, "unsupported WebSocket opcode")
             except PrimitiveError as exc:
+                self._record_metric(
+                    "hina_realtime_messages_total",
+                    operation="message",
+                    status="error",
+                )
                 self._log_error(exc, "websocket_message", peer=peer)
                 if exc.code in {
                     RuntimeErrorCode.EVENT_REJECTED,
@@ -428,6 +509,11 @@ class ControlPlaneServer:
                 if self.durable_store is None:
                     raise PrimitiveError(RuntimeErrorCode.EVENT_REJECTED, "durable store is unavailable")
                 deduplicated = self.durable_store.append_outbox(envelope).deduplicated
+            self._record_metric(
+                "hina_realtime_messages_total",
+                operation="event",
+                status="ok",
+            )
             return {
                 "kind": "event.accepted",
                 "eventId": envelope["eventId"],
@@ -466,6 +552,11 @@ class ControlPlaneServer:
                 events.append(event)
                 used_bytes += event_bytes
             next_sequence = events[-1].sequence if events else after_sequence
+            self._record_metric(
+                "hina_realtime_messages_total",
+                operation="resume",
+                status="ok",
+            )
             return {
                 "kind": "resume.events",
                 "streamId": stream_id,
@@ -588,8 +679,25 @@ class ControlPlaneServer:
             separators=(",", ":"),
             sort_keys=True,
         ).encode("utf-8")
+        await self._send_response(
+            writer,
+            status,
+            encoded,
+            content_type="application/json; charset=utf-8",
+            extra_headers=extra_headers,
+        )
+
+    async def _send_response(
+        self,
+        writer: asyncio.StreamWriter,
+        status: HTTPStatus,
+        encoded: bytes,
+        *,
+        content_type: str,
+        extra_headers: dict[str, str] | None = None,
+    ) -> None:
         headers = {
-            "Content-Type": "application/json; charset=utf-8",
+            "Content-Type": content_type,
             "Content-Length": str(len(encoded)),
             "Connection": "close",
             "Cache-Control": "no-store",
@@ -600,6 +708,17 @@ class ControlPlaneServer:
         head.extend(f"{name}: {value}" for name, value in headers.items())
         writer.write(("\r\n".join(head) + "\r\n\r\n").encode("ascii") + encoded)
         await self._drain(writer)
+
+    def _record_metric(self, name: str, *, operation: str, status: str) -> None:
+        try:
+            self.metrics.increment(
+                name,
+                labels={"operation": operation, "status": status},
+            )
+        except PrimitiveError:
+            # Observability must not take down the runtime when its bounded
+            # registry reaches capacity.
+            pass
 
     async def _drain(self, writer: asyncio.StreamWriter) -> None:
         try:
@@ -675,3 +794,44 @@ def _origin_is_loopback(origin: str) -> bool:
         return ipaddress.ip_address(parsed.hostname).is_loopback
     except ValueError:
         return False
+
+
+def _parse_error_limit(query: str) -> int:
+    parsed = parse_qs(query, keep_blank_values=True)
+    if set(parsed) - {"limit"} or len(parsed.get("limit", [])) > 1:
+        raise PrimitiveError(RuntimeErrorCode.HTTP_BAD_REQUEST, "error query is invalid")
+    raw_limit = parsed.get("limit", ["20"])[0]
+    try:
+        limit = int(raw_limit)
+    except ValueError as exc:
+        raise PrimitiveError(RuntimeErrorCode.HTTP_BAD_REQUEST, "error limit is invalid") from exc
+    if not 1 <= limit <= 100:
+        raise PrimitiveError(RuntimeErrorCode.HTTP_BAD_REQUEST, "error limit must be between 1 and 100")
+    return limit
+
+
+def _read_recent_error_records(path: Path, limit: int) -> list[dict[str, Any]]:
+    records: deque[dict[str, Any]] = deque(maxlen=limit)
+    try:
+        with path.open("rb") as handle:
+            size = handle.seek(0, os.SEEK_END)
+            start = max(0, size - _MAX_ERROR_LOG_SCAN_BYTES)
+            handle.seek(start)
+            if start:
+                handle.readline()
+            for raw_line in handle:
+                if len(raw_line) > 65_536:
+                    continue
+                try:
+                    record = json.loads(raw_line.decode("utf-8"))
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    continue
+                if isinstance(record, dict) and record.get("level") == "error":
+                    redacted = redact_for_log(record)
+                    if isinstance(redacted, dict):
+                        records.append(redacted)
+    except FileNotFoundError:
+        return []
+    except OSError:
+        return []
+    return list(records)

@@ -1,3 +1,4 @@
+from .application import HinaRuntimeApplication, RuntimePaths
 from .error_log import JsonlErrorLogger
 from .lifecycle import (
     HealthReport,
@@ -65,6 +66,7 @@ __all__ = [
     "DurableStore",
     "FakeResourceScheduler",
     "HealthReport",
+    "HinaRuntimeApplication",
     "IdempotencyRegistry",
     "IdempotencySource",
     "JsonlErrorLogger",
@@ -79,6 +81,7 @@ __all__ = [
     "OverflowPolicy",
     "PrimitiveError",
     "RuntimeErrorCode",
+    "RuntimePaths",
     "ResourceInventory",
     "ResourceLease",
     "ResourceRequest",
