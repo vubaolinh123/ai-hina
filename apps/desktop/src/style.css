@@ -186,6 +186,12 @@ h3 {
   color: var(--muted);
 }
 
+.error-banner button {
+  grid-row: 1 / span 2;
+  grid-column: 3;
+  align-self: center;
+}
+
 .stage-grid {
   display: grid;
   grid-template-columns: minmax(540px, 1.25fr) minmax(360px, 0.75fr);
@@ -244,6 +250,10 @@ h3 {
   min-height: 580px;
   outline: none;
   filter: drop-shadow(0 28px 38px rgba(0, 0, 0, 0.38));
+}
+
+.vrm-stage-hidden {
+  visibility: hidden;
 }
 
 .avatar-body {

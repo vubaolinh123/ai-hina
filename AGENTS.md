@@ -24,15 +24,18 @@ xanh; independent reviewer PASS frozen SHA `76986f53eb84de7bb276c22b925524c74425
 không có P0/P1. P2 derived-index isolation được giữ trong backlog và M06 hiện
 chỉ hỗ trợ local single-owner. Ngày 2026-07-25 owner chỉ thị “tiếp tục các task
 tiếp theo đi”, được ghi nhận là cho phép mở M07 trong fast-development mode.
-M07-S1/S2/S3/S4/S5 hiện là runnable candidate: avatar state/control plane, turn
+M07-S1/S2/S3/S4/S5/S6 hiện là runnable candidate: avatar state/control plane, turn
 callback, stage code-native, Web Audio spectral viseme từ TTS thật và Electron/Vue
 operator shell sandboxed đã qua fast unit/contract/governance/startup/browser/
 desktop IPC smoke gate. Browser đã xác nhận cue `speech.output` chuyển stage sang
 `speaking` và mở miệng theo WAV thật; Electron smoke đã xác nhận renderer local
 gọi control plane qua typed preload IPC và tải real VRM 1.0 development sample
 qua `@pixiv/three-vrm`. Sample có embedded license/provenance nhưng không phải
-thiết kế Hina cuối cùng. M07 tiếp tục với performance/recovery slice; chưa gọi
-independent reviewer trước khi module hoàn tất.
+thiết kế Hina cuối cùng. S6 đã lazy-load VRM, thêm telemetry frame thật, cap
+60 FPS và fault-inject WebGL loss → SVG fallback → VRM recovery trong fast
+Electron smoke. Frozen OBS benchmark, lip-sync p95 sâu, final Hina asset và soak
+tám giờ vẫn deferred theo owner; chưa gọi independent reviewer trước khi module
+thực sự hoàn tất.
 
 Legacy AIRI skill paths dưới `D:\ProjectAiri` mặc định ánh xạ sang repository
 hiện tại `D:\ProjectHinaAI`, trừ khi owner chỉ định workspace khác.

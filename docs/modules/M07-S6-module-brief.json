@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M07-S6-desktop-performance-and-recovery",
+  "module_id": "M07",
+  "objective": "Make the real Electron/VRM stage observable and recoverable in normal owner use: lazy-load the heavy VRM renderer, compute bounded real frame-time telemetry, expose FPS/p95/p99/dropped-frame percentage in the operator UI and smoke output, keep rendering for OBS/background capture, and allow a WebGL/load failure to fall back to SVG and retry the fixed bundled asset without restarting the desktop.",
+  "non_goals": [
+    "Do not run the deferred eight-hour voice/avatar soak or claim its result.",
+    "Do not claim the fast hidden Electron sample is the final frozen OBS benchmark.",
+    "Do not add Live2D, a new avatar asset, final Hina identity art or phoneme-accurate alignment.",
+    "Do not change backend business policy, model, speech, memory or safety modules.",
+    "Do not add a dependency or load renderer code/assets from the network.",
+    "Do not mark M07 complete or open M08 while owner asset selection and deep gates remain deferred."
+  ],
+  "base_sha": "5adaaae1018bb29149d4b8c2a5a0583039acc26b",
+  "branch": "codex/M07-avatar-stage",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "AGENTS.md",
+    "README.md",
+    "apps/desktop/",
+    "assets/manifests/hina-code-avatar.v1.json",
+    "docs/modules/M07-*"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "adapters/",
+    "apps/core-runtime/",
+    "apps/dev-console/",
+    "packages/contracts/",
+    "packages/memory/",
+    "packages/safety-policy/",
+    "packages/text-brain/",
+    "third_party/",
+    "workers/"
+  ],
+  "contracts": [
+    "Frame telemetry is computed only from requestAnimationFrame timestamps in a bounded window; it contains no user, model, audio or avatar asset data.",
+    "Telemetry reports target FPS, observed FPS, frame-time p95/p99, estimated dropped-frame percentage, sample count and window duration with finite bounded values.",
+    "The main Vue shell loads before the Three/VRM renderer chunk through a local dynamic import; the fixed VRM path and renderer trust boundary are unchanged.",
+    "A VRM or WebGL context failure immediately leaves the SVG fallback visible with a bounded error and an explicit retry action.",
+    "Retry remounts only the fixed local VrmStage component and cannot accept a URL, path, query or backend-supplied asset.",
+    "Electron smoke waits for real VRM load and a non-empty performance window, validates bounded values and prints the measurements.",
+    "Renderer resources and context-loss listeners are removed on failure, retry and unmount.",
+    "Background throttling is disabled for the dedicated avatar stage so OBS/background capture does not intentionally pause requestAnimationFrame."
+  ],
+  "allowed_dependencies": [
+    "Existing Vue dynamic component API.",
+    "Existing Electron, Three.js and @pixiv/three-vrm runtime.",
+    "Browser requestAnimationFrame and WebGL context events.",
+    "No new package, model, voice or avatar asset."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "Pure Node tests cover steady 60 FPS, dropped-frame estimation, percentile calculation, invalid timestamps and bounded sample retention.",
+    "Production build emits the operator shell separately from the lazy VRM stage chunk.",
+    "Desktop UI explains FPS, p95/p99 and drop percentage in plain Vietnamese and exposes a retry button only after VRM failure.",
+    "Security tests prove the renderer still has no direct network/Node/storage access and retry cannot select an asset path.",
+    "Electron hidden smoke loads the real bundled VRM, returns a telemetry sample with finite bounded values and exits cleanly.",
+    "Desktop typecheck, unit/security tests and smoke pass once.",
+    "Documentation labels the numbers as a short development sample and keeps frozen OBS benchmark plus eight-hour soak deferred."
+  ],
+  "required_test_commands": [
+    "pnpm --filter @hina/desktop typecheck",
+    "pnpm --filter @hina/desktop test",
+    "pnpm smoke:desktop",
+    "uv run --frozen python -m unittest discover -s tests/governance -p \"test_*.py\""
+  ],
+  "latency_or_quality_budget": {
+    "target_fps": 60,
+    "telemetry_window_milliseconds": 2000,
+    "telemetry_sample_limit": 600,
+    "smoke_timeout_seconds": 30,
+    "smoke_dropped_frame_threshold_percent": 5,
+    "frozen_obs_gate_dropped_frame_threshold_percent": 1,
+    "deep_obs_benchmark_deferred": true,
+    "eight_hour_soak_deferred": true
+  },
+  "output_artifact_dir": "artifacts/verification/M07/"
+}

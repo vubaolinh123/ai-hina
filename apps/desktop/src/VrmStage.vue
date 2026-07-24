@@ -8,12 +8,19 @@ import {
   type VRM,
 } from "@pixiv/three-vrm";
 import motionProfile from "./avatar-motion.json";
+import {
+  createFrameMetrics,
+  type FrameMetricsReport,
+} from "./frame-metrics.mjs";
 
 const VRM_ASSET_URL = new URL(
   "../../../assets/avatars/vrm1-constraint-twist-sample/VRM1_Constraint_Twist_Sample.vrm",
   import.meta.url,
 ).href;
 const DISPLAY_NAME = "VRM1_Constraint_Twist_Sample";
+const TARGET_FPS = 60;
+const TARGET_FRAME_MS = 1_000 / TARGET_FPS;
+const PERFORMANCE_WARMUP_FRAMES = 30;
 const KNOWN_EXPRESSIONS = [
   "happy",
   "sad",
@@ -42,20 +49,26 @@ const props = defineProps<{
 const emit = defineEmits<{
   ready: [details: { displayName: string; source: "bundled-vrm-1.0" }];
   failed: [message: string];
-  fps: [value: number];
+  performance: [value: FrameMetricsReport];
 }>();
 
 const canvas = ref<HTMLCanvasElement | null>(null);
+const frameMetrics = createFrameMetrics({
+  targetFps: TARGET_FPS,
+  reportEveryMs: 2_000,
+  maxSamples: 600,
+});
 let renderer: THREE.WebGLRenderer | null = null;
 let scene: THREE.Scene | null = null;
 let camera: THREE.PerspectiveCamera | null = null;
 let vrm: VRM | null = null;
 let resizeObserver: ResizeObserver | null = null;
 let animationFrame: number | null = null;
+let canvasElement: HTMLCanvasElement | null = null;
 let disposed = false;
-let frameCount = 0;
-let frameWindowStarted = 0;
 let lastFrameTime = 0;
+let nextRenderAt = 0;
+let performanceWarmupRemaining = PERFORMANCE_WARMUP_FRAMES;
 
 function applyExpression(): void {
   const manager = vrm?.expressionManager;
@@ -93,33 +106,51 @@ function resize(): void {
 
 function renderFrame(timeMilliseconds: number): void {
   if (disposed || !renderer || !scene || !camera) return;
-  const time = timeMilliseconds / 1_000;
-  if (vrm) {
-    const profile = motionProfile.states[props.state];
-    const chest = vrm.humanoid.getNormalizedBoneNode("chest");
-    const head = vrm.humanoid.getNormalizedBoneNode("head");
-    if (chest) {
-      chest.rotation.z = Math.sin(time * 1.7) * profile.breathAmplitude;
-    }
-    if (head) {
-      head.rotation.y = Math.sin(time * 0.72) * profile.headAmplitude;
-      head.rotation.z = Math.sin(time * 0.51) * profile.headAmplitude * 0.45;
-    }
-    const delta = lastFrameTime === 0 ? 0 : time - lastFrameTime;
-    vrm.update(Math.min(0.05, Math.max(0, delta)));
+  if (nextRenderAt > 0 && timeMilliseconds < nextRenderAt) {
+    animationFrame = window.requestAnimationFrame(renderFrame);
+    return;
   }
-  lastFrameTime = time;
-  renderer.render(scene, camera);
-
-  frameCount += 1;
-  if (frameWindowStarted === 0) frameWindowStarted = timeMilliseconds;
-  const elapsed = timeMilliseconds - frameWindowStarted;
-  if (elapsed >= 1_000) {
-    emit("fps", Math.round((frameCount * 1_000) / elapsed));
-    frameCount = 0;
-    frameWindowStarted = timeMilliseconds;
+  nextRenderAt = nextRenderAt === 0
+    ? timeMilliseconds + TARGET_FRAME_MS
+    : nextRenderAt + TARGET_FRAME_MS;
+  if (timeMilliseconds - nextRenderAt > TARGET_FRAME_MS) {
+    nextRenderAt = timeMilliseconds + TARGET_FRAME_MS;
   }
-  animationFrame = window.requestAnimationFrame(renderFrame);
+  try {
+    const time = timeMilliseconds / 1_000;
+    if (vrm) {
+      const profile = motionProfile.states[props.state];
+      const chest = vrm.humanoid.getNormalizedBoneNode("chest");
+      const head = vrm.humanoid.getNormalizedBoneNode("head");
+      if (chest) {
+        chest.rotation.z = Math.sin(time * 1.7) * profile.breathAmplitude;
+      }
+      if (head) {
+        head.rotation.y = Math.sin(time * 0.72) * profile.headAmplitude;
+        head.rotation.z = Math.sin(time * 0.51) * profile.headAmplitude * 0.45;
+      }
+      const delta = lastFrameTime === 0 ? 0 : time - lastFrameTime;
+      vrm.update(Math.min(0.05, Math.max(0, delta)));
+    }
+    lastFrameTime = time;
+    renderer.render(scene, camera);
+    if (performanceWarmupRemaining > 0) {
+      performanceWarmupRemaining -= 1;
+      if (performanceWarmupRemaining === 0) frameMetrics.reset();
+    } else {
+      const performanceReport = frameMetrics.push(timeMilliseconds);
+      if (performanceReport) {
+        emit("performance", performanceReport);
+      }
+    }
+    animationFrame = window.requestAnimationFrame(renderFrame);
+  } catch (error) {
+    const message = error instanceof Error
+      ? error.message
+      : "E_DESKTOP_RENDER_FRAME";
+    emit("failed", `E_DESKTOP_RENDER_FRAME: ${message}`.slice(0, 200));
+    disposeGraphics();
+  }
 }
 
 function disposeGraphics(): void {
@@ -127,6 +158,7 @@ function disposeGraphics(): void {
     window.cancelAnimationFrame(animationFrame);
     animationFrame = null;
   }
+  canvasElement?.removeEventListener("webglcontextlost", handleWebglContextLost);
   resizeObserver?.disconnect();
   resizeObserver = null;
   if (vrm && scene) {
@@ -139,11 +171,28 @@ function disposeGraphics(): void {
   renderer = null;
   scene = null;
   camera = null;
+  canvasElement = null;
+  frameMetrics.reset();
+  lastFrameTime = 0;
+  nextRenderAt = 0;
+  performanceWarmupRemaining = PERFORMANCE_WARMUP_FRAMES;
+}
+
+function handleWebglContextLost(event: Event): void {
+  event.preventDefault();
+  if (disposed) return;
+  emit(
+    "failed",
+    "E_DESKTOP_WEBGL_CONTEXT_LOST: ngữ cảnh đồ họa bị mất; SVG fallback vẫn hoạt động",
+  );
+  disposeGraphics();
 }
 
 onMounted(async () => {
   const target = canvas.value;
   if (!target) return;
+  canvasElement = target;
+  target.addEventListener("webglcontextlost", handleWebglContextLost);
   try {
     renderer = new THREE.WebGLRenderer({
       canvas: target,

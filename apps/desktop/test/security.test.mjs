@@ -16,6 +16,9 @@ test("BrowserWindow keeps renderer sandboxed and blocks navigation surfaces", ()
   assert.match(main, /sandbox:\s*true/);
   assert.match(main, /webSecurity:\s*true/);
   assert.match(main, /webviewTag:\s*false/);
+  assert.match(main, /backgroundThrottling:\s*false/);
+  assert.match(main, /opacity:\s*smoke \? 0 : 1/);
+  assert.match(main, /skipTaskbar:\s*smoke/);
   assert.match(main, /setWindowOpenHandler/);
   assert.match(main, /setWindowOpenHandler\(\(\)\s*=>\s*\(\{\s*action:\s*"deny"\s*\}\)\)/);
   assert.match(main, /will-navigate/);
@@ -55,6 +58,7 @@ test("Vue renderer has no direct network, Electron, Node or storage access", () 
     read("src/App.vue"),
     read("src/main.ts"),
     read("src/VrmStage.vue"),
+    read("src/frame-metrics.mjs"),
   ].join("\n");
   assert.doesNotMatch(renderer, /\bfetch\s*\(/);
   assert.doesNotMatch(renderer, /from\s+["']electron["']/);
@@ -75,9 +79,39 @@ test("VRM stage uses one fixed bundled asset and disposes graphics resources", (
   assert.match(stage, /renderer\?\.forceContextLoss\(\)/);
   assert.match(stage, /resizeObserver\?\.disconnect\(\)/);
   assert.match(stage, /cancelAnimationFrame\(animationFrame\)/);
+  assert.match(stage, /addEventListener\("webglcontextlost", handleWebglContextLost\)/);
+  assert.match(stage, /removeEventListener\("webglcontextlost", handleWebglContextLost\)/);
+  assert.match(stage, /createFrameMetrics\(\{/);
+  assert.match(stage, /emit\("performance", performanceReport\)/);
   assert.doesNotMatch(stage, /location\.|URLSearchParams|querySelector.*(?:url|path)/i);
   assert.doesNotMatch(stage, /https?:\/\//);
   assert.doesNotMatch(stage, /rotation\.y\s*=\s*Math\.PI/);
+});
+
+test("VRM is lazy-loaded and fixed-asset recovery exposes bounded real telemetry", () => {
+  const app = read("src/App.vue");
+  const main = read("electron/main.ts");
+  assert.match(
+    app,
+    /defineAsyncComponent\(\(\)\s*=>\s*import\("\.\/VrmStage\.vue"\)\)/,
+  );
+  assert.match(app, /:key="vrmStageKey"/);
+  assert.match(app, /'vrm-stage-hidden': !vrmReady/);
+  assert.doesNotMatch(app, /v-show="vrmReady"/);
+  assert.match(app, /function retryVrm\(\)/);
+  assert.match(app, /function retryConnection\(\)/);
+  assert.match(app, /id="retryVrmButton"/);
+  assert.match(app, /setInterval\(refreshAvatar, 250\)/);
+  assert.match(app, /vrmStageKey\.value \+= 1/);
+  assert.match(app, /@performance="handleVrmPerformance"/);
+  assert.match(app, /frameTimeP95Ms/);
+  assert.match(app, /droppedFramePercent/);
+  assert.doesNotMatch(app, /assetPath|modelPath|URLSearchParams|querySelector.*path/i);
+  assert.match(main, /E_DESKTOP_PERFORMANCE_SMOKE_TIMEOUT/);
+  assert.match(main, /getExtension\("WEBGL_lose_context"\)/);
+  assert.match(main, /E_DESKTOP_VRM_RECOVERY_TIMEOUT/);
+  assert.match(main, /snapshot\.performance\.droppedFramePercent > 5/);
+  assert.match(main, /sampleCount < 30/);
 });
 
 test("motion profile covers every state and keeps unknown expressions neutral", () => {
@@ -201,6 +235,29 @@ test("control client maps only fixed operations and bounds control responses", a
       && error.message.length <= 259
     ),
   );
+});
+
+test("control client retries cleanly after a transient service restart", async () => {
+  let attempts = 0;
+  const fetchImpl = async () => {
+    attempts += 1;
+    if (attempts === 1) {
+      throw new TypeError("connection refused");
+    }
+    return new Response(JSON.stringify({ status: "ready" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+  await assert.rejects(
+    control.requestControl("runtime.health", undefined, { fetchImpl }),
+    /E_DESKTOP_CONTROL_OFFLINE/,
+  );
+  assert.deepEqual(
+    await control.requestControl("runtime.health", undefined, { fetchImpl }),
+    { status: "ready" },
+  );
+  assert.equal(attempts, 2);
 });
 
 test("renderer CSP denies network, objects, framing and form submission", () => {

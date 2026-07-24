@@ -1,6 +1,14 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import VrmStage from "./VrmStage.vue";
+import {
+  computed,
+  defineAsyncComponent,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+} from "vue";
+import type { FrameMetricsReport } from "./frame-metrics.mjs";
+
+const VrmStage = defineAsyncComponent(() => import("./VrmStage.vue"));
 
 const stateLabels: Record<AvatarState, string> = {
   idle: "Nghỉ",
@@ -21,6 +29,8 @@ const vrmReady = ref(false);
 const vrmError = ref("");
 const vrmFps = ref(0);
 const vrmDisplayName = ref("");
+const vrmPerformance = ref<FrameMetricsReport | null>(null);
+const vrmStageKey = ref(0);
 let avatarTimer: number | null = null;
 let safetyTimer: number | null = null;
 let avatarRefreshPending = false;
@@ -76,6 +86,7 @@ const snapshot = computed(() => avatar.value
         vrmLoaded: vrmReady.value,
         displayName: vrmDisplayName.value || null,
         fps: vrmFps.value || null,
+        performance: vrmPerformance.value,
         developmentSample: true,
         phonemeAccurate: false,
       },
@@ -112,6 +123,15 @@ async function refreshSafety(): Promise<void> {
     errorMessage.value = error instanceof Error ? error.message : "E_DESKTOP_SAFETY";
   } finally {
     safetyRefreshPending = false;
+  }
+}
+
+async function retryConnection(): Promise<void> {
+  busy.value = true;
+  try {
+    await Promise.all([refreshAvatar(), refreshSafety()]);
+  } finally {
+    busy.value = false;
   }
 }
 
@@ -187,11 +207,46 @@ function handleVrmReady(details: {
   delete document.documentElement.dataset.vrmError;
 }
 
+function clearVrmPerformance(): void {
+  vrmPerformance.value = null;
+  vrmFps.value = 0;
+  for (const name of [
+    "vrmFps",
+    "vrmFrameP95",
+    "vrmFrameP99",
+    "vrmDroppedPercent",
+    "vrmSampleCount",
+  ]) {
+    delete document.documentElement.dataset[name];
+  }
+}
+
 function handleVrmFailure(message: string): void {
   vrmReady.value = false;
   vrmError.value = message.slice(0, 200);
+  clearVrmPerformance();
   document.documentElement.dataset.vrmError = vrmError.value;
   delete document.documentElement.dataset.vrmReady;
+}
+
+function handleVrmPerformance(report: FrameMetricsReport): void {
+  vrmPerformance.value = report;
+  vrmFps.value = report.fps;
+  document.documentElement.dataset.vrmFps = String(report.fps);
+  document.documentElement.dataset.vrmFrameP95 = String(report.frameTimeP95Ms);
+  document.documentElement.dataset.vrmFrameP99 = String(report.frameTimeP99Ms);
+  document.documentElement.dataset.vrmDroppedPercent =
+    String(report.droppedFramePercent);
+  document.documentElement.dataset.vrmSampleCount = String(report.sampleCount);
+}
+
+function retryVrm(): void {
+  vrmReady.value = false;
+  vrmError.value = "";
+  clearVrmPerformance();
+  delete document.documentElement.dataset.vrmError;
+  delete document.documentElement.dataset.vrmReady;
+  vrmStageKey.value += 1;
 }
 
 onMounted(async () => {
@@ -225,7 +280,13 @@ onBeforeUnmount(() => {
     <section v-if="errorMessage" class="error-banner" role="alert">
       <strong>Không đọc được dữ liệu thật.</strong>
       <span>{{ errorMessage }}</span>
-      <small>Hãy chạy <code>pnpm start:dev-console</code> trước, rồi mở lại desktop.</small>
+      <small>
+        Hãy chạy <code>pnpm start:dev-console</code> rồi bấm thử kết nối;
+        desktop cũng tự thử lại ở nền.
+      </small>
+      <button type="button" :disabled="busy" @click="retryConnection">
+        Thử kết nối lại ngay
+      </button>
     </section>
 
     <section class="stage-grid">
@@ -247,14 +308,15 @@ onBeforeUnmount(() => {
           <span>#{{ avatar?.sequence ?? 0 }} · {{ avatar?.mode ?? "offline" }}</span>
         </div>
         <VrmStage
-          v-show="vrmReady"
+          :key="vrmStageKey"
+          :class="{ 'vrm-stage-hidden': !vrmReady }"
           :state="stageState"
           :expression="stageExpression"
           :viseme="stageViseme"
           :intensity="stageIntensity"
           @ready="handleVrmReady"
           @failed="handleVrmFailure"
-          @fps="vrmFps = $event"
+          @performance="handleVrmPerformance"
         />
         <svg
           v-if="!vrmReady"
@@ -336,6 +398,21 @@ onBeforeUnmount(() => {
         </div>
 
         <section class="control-card">
+          <h3>Hiệu năng renderer thật</h3>
+          <p>
+            FPS là số khung hình mỗi giây. p95/p99 cho biết 95%/99% khung hình
+            hoàn tất nhanh hơn bao nhiêu mili-giây; drop là tỷ lệ khung ước tính
+            bị lỡ. Đây là cửa sổ đo ngắn 2 giây, không phải benchmark OBS dài giờ.
+          </p>
+          <div class="status-grid performance-grid">
+            <div><span>FPS / mục tiêu</span><strong>{{ vrmPerformance ? `${vrmPerformance.fps} / ${vrmPerformance.targetFps}` : "Đang đo…" }}</strong></div>
+            <div><span>Frame p95 / p99</span><strong>{{ vrmPerformance ? `${vrmPerformance.frameTimeP95Ms} / ${vrmPerformance.frameTimeP99Ms} ms` : "—" }}</strong></div>
+            <div><span>Ước tính drop</span><strong>{{ vrmPerformance ? `${vrmPerformance.droppedFramePercent}%` : "—" }}</strong></div>
+            <div><span>Mẫu / cửa sổ</span><strong>{{ vrmPerformance ? `${vrmPerformance.sampleCount} / ${vrmPerformance.windowMs} ms` : "—" }}</strong></div>
+          </div>
+        </section>
+
+        <section class="control-card">
           <h3>Xem thử visual</h3>
           <p>
             Đây là <code>manual-preview</code>, chỉ đổi state renderer qua backend;
@@ -380,7 +457,19 @@ onBeforeUnmount(() => {
             Miệng desktop: theo viseme phổ âm thanh thật khi Dev Console phát TTS;
             đây là heuristic, chưa phải căn phoneme chính xác
           </span>
+          <span>
+            Control plane: tự thử lại mỗi 250 ms; sau khi service restart,
+            avatar mới bắt đầu ở state idle an toàn
+          </span>
           <span v-if="vrmError" class="inline-error">Lỗi VRM: {{ vrmError }}</span>
+          <button
+            v-if="vrmError"
+            id="retryVrmButton"
+            type="button"
+            @click="retryVrm"
+          >
+            Thử tải lại VRM local
+          </button>
         </section>
 
         <section class="asset-notice">

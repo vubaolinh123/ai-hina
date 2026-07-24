@@ -171,6 +171,17 @@ phát triển có thể thay thế để kiểm thử renderer, không phải th
 cùng và UI luôn ghi rõ điều đó. Nếu VRM lỗi, desktop tự giữ SVG fallback.
 Các expression vowel của VRM đọc cùng viseme/intensity đã được backend kiểm tra,
 không còn dùng khẩu hình giả cố định theo state `speaking`.
+Shell operator được tải trước, còn chunk Three/VRM được lazy-load local sau để
+JS khởi động giảm từ khoảng 814 KB xuống khoảng 78 KB. Thẻ **Hiệu năng renderer
+thật** hiển thị FPS, frame-time p95/p99 và tỷ lệ drop ước tính theo cửa sổ hai
+giây. Nếu WebGL/VRM lỗi, SVG vẫn hoạt động và nút **Thử tải lại VRM local** chỉ
+remount fixed asset đã bundle; desktop cũng tự thử nối lại control plane sau
+khi service restart.
+
+Fast Electron smoke hiện đo khoảng 60 FPS, drop 0% trên cửa sổ 121 frame và đã
+fault-inject WebGL context loss → SVG fallback → VRM reload thành công. Đây chỉ
+là development sample ngắn; frozen OBS benchmark và soak voice/avatar tám giờ
+vẫn được hoãn cho tới khi owner yêu cầu deep gate.
 
 ## Vòng lặp phát triển nhanh
 

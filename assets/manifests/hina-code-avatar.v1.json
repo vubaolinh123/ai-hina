@@ -51,12 +51,12 @@
     {
       "path": "apps/desktop/src/App.vue",
       "role": "desktop Vue stage and original inline SVG geometry",
-      "sha256": "a588db875f2246b4f724c5bae47e5f9ac0d0c603da2c80d23a57ad43073cd3d1"
+      "sha256": "d3ebbbb444d686fe2c3dfd0edcf199a5b4def7f32ca5d5bacc00cbc521a7c166"
     },
     {
       "path": "apps/desktop/src/style.css",
       "role": "desktop avatar styling, expressions and state animation",
-      "sha256": "9091e969ed960195aebd0528ee3bb1f0e6c096eab13718a1c2a381061e807c92"
+      "sha256": "0c94f8f98db925768544288171bfb7b877bd15b4638835e284271d2fd02e76a1"
     }
   ],
   "runtime": {

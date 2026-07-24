@@ -1,11 +1,12 @@
 # M07 — Avatar stage và operator desktop
 
-- Status: M07-S1/S2/S3/S4/S5 runnable candidate; M07 remains active
+- Status: M07-S1/S2/S3/S4/S5/S6 runnable candidate; M07 remains active
 - Branch: `codex/M07-avatar-stage`
 - Base: `ac29424e4dc58f42f9eeeb9f7a7f2408ad5c2f4f`
 - Active slices: M07-S1 avatar state/control plane, M07-S2 code-native runtime
   stage, M07-S3 sandboxed Electron/Vue operator shell, M07-S4 real VRM
-  development stage, M07-S5 audio-derived viseme pipeline
+  development stage, M07-S5 audio-derived viseme pipeline, M07-S6 short-window
+  performance telemetry and renderer recovery
 
 ## Runnable target
 
@@ -23,8 +24,10 @@ không đọc database, model, Qdrant hay provider nội bộ. Public/viewer inp
 Final owner-approved Hina identity asset, phoneme-accurate alignment,
 dropped-frame/A-V benchmark và soak tám giờ được giữ cho các slice M07 tiếp
 theo. Không được đánh dấu M07 complete khi các phần này chưa có evidence.
+Fast hidden Electron telemetry chỉ là development sample, không thay thế frozen
+profile ghi rõ resolution/FPS/avatar/OBS state/duration.
 
-## Implemented in M07-S1/S2/S3/S4/S5
+## Implemented in M07-S1/S2/S3/S4/S5/S6
 
 - `packages/avatar`: typed renderer-safe state/cue service, trusted-source
   allowlist, bounded history, neutral fallback và recovery khỏi terminal state.
@@ -58,6 +61,14 @@ theo. Không được đánh dấu M07 complete khi các phần này chưa có e
 - State/expression thật điều khiển deterministic head/breath/expression motion.
   Web SVG và desktop VRM dùng cùng viseme/intensity đã được backend kiểm tra;
   VRM map A/I/U/E/O sang `aa/ih/ou/ee/oh`, không còn speaking-state fake mouth.
+- Vue shell lazy-load local VrmStage/Three/VRM chunk; initial JS giảm từ khoảng
+  814 KB xuống khoảng 78 KB. Renderer cap 60 FPS thay vì chạy theo màn hình
+  144 Hz, giảm GPU work không cần thiết.
+- Bounded frame metrics báo FPS, p95/p99, estimated dropped frames, sample/window
+  ngay trên UI; không chứa user/audio/model data.
+- WebGL context loss hoặc VRM load/render error lập tức về SVG với lỗi bounded.
+  Owner có nút retry fixed bundled VRM; control-plane request tiếp theo tự phục
+  hồi sau service restart.
 
 ## Fast evidence
 
@@ -87,3 +98,8 @@ theo. Không được đánh dấu M07 complete khi các phần này chưa có e
 - Real VieNeu browser workflow: WAV 48 kHz phát thật; backend quan sát
   `speaking → U/O/A` với intensity tới 1.0, sau đó `idle | sil | 0`. Lip-sync
   status là `observed-audio-spectral-viseme`, `phonemeAccurate=false`.
+- Frame-metrics Node unit: 4/4; full desktop security/control/performance:
+  14/14. Lazy production build emit shell 77.88 KB và VrmStage 742.88 KB.
+- Fast Electron smoke: real VRM loaded, 60.1 FPS, frame p95/p99 20.9 ms,
+  estimated drop 0% trên 121 frame; fault-injected WebGL context loss quan sát
+  SVG fallback rồi reload VRM + telemetry thành công.

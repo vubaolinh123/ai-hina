@@ -74,7 +74,10 @@ async function createWindow(): Promise<void> {
     height: 800,
     minWidth: 900,
     minHeight: 620,
-    show: !smoke,
+    show: true,
+    opacity: smoke ? 0 : 1,
+    skipTaskbar: smoke,
+    focusable: !smoke,
     backgroundColor: "#0d0c11",
     autoHideMenuBar: true,
     title: "Hina Avatar Stage",
@@ -86,6 +89,7 @@ async function createWindow(): Promise<void> {
       webSecurity: true,
       webviewTag: false,
       allowRunningInsecureContent: false,
+      backgroundThrottling: false,
     },
   });
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
@@ -134,15 +138,112 @@ async function createWindow(): Promise<void> {
               };
               check();
             });
+            const performance = new Promise((resolve, reject) => {
+              const deadline = Date.now() + 25000;
+              const check = () => {
+                const sampleCount = Number(
+                  document.documentElement.dataset.vrmSampleCount
+                );
+                if (Number.isFinite(sampleCount) && sampleCount >= 30) {
+                  resolve({
+                    fps: Number(document.documentElement.dataset.vrmFps),
+                    frameTimeP95Ms: Number(
+                      document.documentElement.dataset.vrmFrameP95
+                    ),
+                    frameTimeP99Ms: Number(
+                      document.documentElement.dataset.vrmFrameP99
+                    ),
+                    droppedFramePercent: Number(
+                      document.documentElement.dataset.vrmDroppedPercent
+                    ),
+                    sampleCount
+                  });
+                  return;
+                }
+                if (document.documentElement.dataset.vrmError) {
+                  reject(new Error(document.documentElement.dataset.vrmError));
+                  return;
+                }
+                if (Date.now() >= deadline) {
+                  reject(new Error("E_DESKTOP_PERFORMANCE_SMOKE_TIMEOUT"));
+                  return;
+                }
+                setTimeout(check, 50);
+              };
+              check();
+            });
             return Promise.all([
               window.hinaDesktop.getRuntimeHealth(),
               window.hinaDesktop.getAvatarStatus(),
-              vrmReady
-            ]).then(([health, avatar, vrmLoaded]) => ({
-              runtime: health.status,
-              avatarState: avatar.state,
-              vrmLoaded
-            }));
+              vrmReady,
+              performance
+            ]).then(async ([health, avatar, vrmLoaded, performance]) => {
+              const canvas = document.querySelector("canvas.vrm-canvas");
+              const context = canvas?.getContext("webgl2")
+                || canvas?.getContext("webgl");
+              const loseContext = context?.getExtension("WEBGL_lose_context");
+              if (!loseContext) {
+                throw new Error("E_DESKTOP_WEBGL_LOSS_EXTENSION");
+              }
+              loseContext.loseContext();
+              await new Promise((resolve, reject) => {
+                const deadline = Date.now() + 5000;
+                const check = () => {
+                  if (document.documentElement.dataset.vrmError) {
+                    resolve(true);
+                    return;
+                  }
+                  if (Date.now() >= deadline) {
+                    reject(new Error("E_DESKTOP_WEBGL_FALLBACK_TIMEOUT"));
+                    return;
+                  }
+                  setTimeout(check, 25);
+                };
+                check();
+              });
+              const retry = document.getElementById("retryVrmButton");
+              if (!(retry instanceof HTMLButtonElement)) {
+                throw new Error("E_DESKTOP_VRM_RETRY_CONTROL");
+              }
+              retry.click();
+              await new Promise((resolve, reject) => {
+                const deadline = Date.now() + 25000;
+                const check = () => {
+                  const recoveredSamples = Number(
+                    document.documentElement.dataset.vrmSampleCount
+                  );
+                  if (
+                    document.documentElement.dataset.vrmReady === "true"
+                    && Number.isFinite(recoveredSamples)
+                    && recoveredSamples >= 30
+                  ) {
+                    resolve(true);
+                    return;
+                  }
+                  if (document.documentElement.dataset.vrmError) {
+                    reject(new Error(document.documentElement.dataset.vrmError));
+                    return;
+                  }
+                  if (Date.now() >= deadline) {
+                    reject(new Error("E_DESKTOP_VRM_RECOVERY_TIMEOUT"));
+                    return;
+                  }
+                  setTimeout(check, 50);
+                };
+                check();
+              });
+              return {
+                runtime: health.status,
+                avatarState: avatar.state,
+                vrmLoaded,
+                performance,
+                recovery: {
+                  webglContextLost: true,
+                  svgFallbackObserved: true,
+                  vrmReloaded: true
+                }
+              };
+            });
           })()`,
           true,
         );
@@ -155,6 +256,44 @@ async function createWindow(): Promise<void> {
           || typeof snapshot.avatarState !== "string"
           || !("vrmLoaded" in snapshot)
           || snapshot.vrmLoaded !== true
+          || !("performance" in snapshot)
+          || !snapshot.performance
+          || typeof snapshot.performance !== "object"
+          || !("fps" in snapshot.performance)
+          || typeof snapshot.performance.fps !== "number"
+          || !Number.isFinite(snapshot.performance.fps)
+          || snapshot.performance.fps <= 0
+          || snapshot.performance.fps > 240
+          || !("frameTimeP95Ms" in snapshot.performance)
+          || typeof snapshot.performance.frameTimeP95Ms !== "number"
+          || !Number.isFinite(snapshot.performance.frameTimeP95Ms)
+          || snapshot.performance.frameTimeP95Ms <= 0
+          || snapshot.performance.frameTimeP95Ms > 1_000
+          || !("frameTimeP99Ms" in snapshot.performance)
+          || typeof snapshot.performance.frameTimeP99Ms !== "number"
+          || !Number.isFinite(snapshot.performance.frameTimeP99Ms)
+          || snapshot.performance.frameTimeP99Ms > 1_000
+          || snapshot.performance.frameTimeP99Ms
+            < snapshot.performance.frameTimeP95Ms
+          || !("droppedFramePercent" in snapshot.performance)
+          || typeof snapshot.performance.droppedFramePercent !== "number"
+          || !Number.isFinite(snapshot.performance.droppedFramePercent)
+          || snapshot.performance.droppedFramePercent < 0
+          || snapshot.performance.droppedFramePercent > 5
+          || !("sampleCount" in snapshot.performance)
+          || typeof snapshot.performance.sampleCount !== "number"
+          || !Number.isFinite(snapshot.performance.sampleCount)
+          || snapshot.performance.sampleCount < 30
+          || snapshot.performance.sampleCount > 600
+          || !("recovery" in snapshot)
+          || !snapshot.recovery
+          || typeof snapshot.recovery !== "object"
+          || !("webglContextLost" in snapshot.recovery)
+          || snapshot.recovery.webglContextLost !== true
+          || !("svgFallbackObserved" in snapshot.recovery)
+          || snapshot.recovery.svgFallbackObserved !== true
+          || !("vrmReloaded" in snapshot.recovery)
+          || snapshot.recovery.vrmReloaded !== true
         ) {
           throw new Error("E_DESKTOP_SMOKE_IPC: renderer returned an invalid snapshot");
         }
@@ -164,6 +303,8 @@ async function createWindow(): Promise<void> {
           runtime: snapshot.runtime,
           avatarState: snapshot.avatarState,
           vrmLoaded: snapshot.vrmLoaded,
+          performance: snapshot.performance,
+          recovery: snapshot.recovery,
           renderer: "loaded-local-file-with-typed-ipc",
         }));
         app.exit(0);
