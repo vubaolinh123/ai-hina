@@ -9,10 +9,12 @@ M02 và M03 đã qua fast unit/contract/startup gate; repeat/soak/deep release
 verification được hoãn tới khi owner yêu cầu. Candidate M03 tại
 `88d3dd72c3ae8ddc269fff371e30d6e6fc055407` đã được independent reviewer chạy
 fast gate và không có blocker P0/P1 được xác nhận. M04-S1 và M04-S2 đã triển
-khai, fast unit/contract/startup và real-provider smoke đều xanh; candidate đang
-chờ independent frozen-SHA review trước khi owner manual acceptance. Owner báo
-lỗi bằng correlation ID. Không mở M05 trước khi review M04 hoàn tất và blocker
-P0/P1 (nếu có) được sửa.
+khai, fast unit/contract/startup và real-provider smoke đều xanh. Independent
+review đã tìm thấy một P1 ở native inference timeout; fix
+`cba2a816e0d63f7d0c5756331374c0da9213cc02` đã được cùng reviewer xác nhận đóng,
+không còn P0/P1 trong scoped re-check. Candidate M04 đang chờ owner manual
+acceptance; owner báo lỗi bằng correlation ID. Không mở M05 trước khi owner
+hoàn thành manual acceptance M04.
 
 Legacy AIRI skill paths dưới `D:\ProjectAiri` mặc định ánh xạ sang repository
 hiện tại `D:\ProjectHinaAI`, trừ khi owner chỉ định workspace khác.

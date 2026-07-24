@@ -1,6 +1,6 @@
 # M04 — Speech input
 
-- Status: implementation complete; awaiting independent frozen-candidate review
+- Status: independent fast review passed; awaiting owner manual acceptance
 - Branch: `codex/M04-speech-input`
 - Base: `88d3dd72c3ae8ddc269fff371e30d6e6fc055407`
 - Completed slices: `M04-S1` core audio/VAD/provider, `M04-S2` runtime API/Dev Console
@@ -25,7 +25,7 @@ it to the LLM, memory, tools or an outbound channel.
 
 ## Fast-development evidence
 
-- `pnpm test:fast`: 88 tests passed (22 safety, 22 text brain, 11 speech,
+- `pnpm test:fast`: 90 tests passed (22 safety, 22 text brain, 13 speech,
   33 core runtime).
 - `pnpm test:contracts`: 41 tests passed (28 Python, 13 Node).
 - `pnpm smoke:dev-console`: runtime and real browser-facing assets started on
@@ -35,6 +35,11 @@ it to the LLM, memory, tools or an outbound channel.
   CPU inference. The generated English-voice sample is only a provider/runtime
   smoke and is not Vietnamese quality evidence.
 - Provenance validation and CycloneDX SBOM generation passed.
+- Independent GPT-5.5 review found one P1 in native inference timeout handling.
+  The fix at `cba2a816e0d63f7d0c5756331374c0da9213cc02` keeps the provider in a
+  fail-closed draining state and retains the GPU lease until the native worker
+  really exits. The same reviewer re-ran the speech unit suite and confirmed
+  the P1 closed with no remaining P0/P1 in the scoped re-check.
 
 The owner can now run the Dev Console, record a microphone clip or select an
 actual WAV file, transcribe it and manually copy the result into chat. Errors
