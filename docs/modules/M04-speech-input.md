@@ -39,7 +39,7 @@ it to the LLM, memory, tools or an outbound channel.
 The owner can now run the Dev Console, record a microphone clip or select an
 actual WAV file, transcribe it and manually copy the result into chat. Errors
 show a correlation ID and are recorded in `var/logs/hina-runtime.jsonl` without
-audio bytes.
+raw audio payload retention.
 
 ## Deferred promotion evidence
 

@@ -299,6 +299,9 @@ class DevConsoleTests(unittest.IsolatedAsyncioTestCase):
                 )
                 self.assertEqual(code, HTTPStatus.UNSUPPORTED_MEDIA_TYPE)
                 self.assertEqual(json.loads(body)["errorCode"], "E_AUDIO_CONTENT_TYPE")
+                log_text = (directory / "runtime.jsonl").read_text(encoding="utf-8")
+                self.assertIn("E_AUDIO_CONTENT_TYPE", log_text)
+                self.assertIn(correlation, log_text)
             finally:
                 await application.stop()
 
