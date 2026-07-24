@@ -8,7 +8,8 @@
   - `M01-S2 — bounded queues, deadlines, cancellation and idempotency`
   - `M01-S3 — durable journal/outbox/inbox, ACK, resume and replay`
   - `M01-S4 — control plane, realtime WebSocket and binary-media transport`
-- Next slice: `M01-S5 — service registry/supervisor and lifecycle`
+  - `M01-S5 — service registry/supervisor and lifecycle`
+- Next slice: `M01-S6 — observability, ResourceLease and fake providers`
 
 ## Slice sequence
 
@@ -86,5 +87,22 @@
 - [x] Owner can run an ephemeral demo or a persistent server.
 - [x] Focused fast suite passes once with all M01-S2 through M01-S4 tests.
 
-M01 remains open after M01-S4. Do not start M02 until every M01 slice and the
+## M01-S5 fast gate
+
+- [x] Validated module brief with standard-library-only lifecycle scope.
+- [x] Registry rejects duplicate, missing and cyclic service graphs.
+- [x] Supervisor starts dependencies in topological order and shuts down in
+  reverse order with monotonic per-service timeouts.
+- [x] Partial startup failure rolls back every attempted service; a stop failure
+  does not skip remaining services and can be retried.
+- [x] Registry is immutable while services are active and unlocks after clean
+  shutdown.
+- [x] Fast five-cycle unit gate adds no pending asyncio tasks.
+- [x] Owner demo supervises the real durable store and control server, obtains a
+  ready health response, then closes both resources cleanly.
+- [x] A separate `pnpm test:lifecycle:100` command exists for owner-requested
+  deep verification; it is intentionally not run in the normal fast loop.
+- [x] Focused fast suite passes once with all M01-S2 through M01-S5 tests.
+
+M01 remains open after M01-S5. Do not start M02 until every M01 slice and the
 M01 integration gate pass.

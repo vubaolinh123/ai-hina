@@ -5,9 +5,8 @@
 Đọc `HINA_AI_MASTER_PLAN_VI.md` trước khi thay đổi kiến trúc hoặc mở module mới. Chỉ một module sản phẩm được ở write phase tại một thời điểm.
 
 Module active hiện tại: **M01 — Contracts, config, lifecycle và observability
-spine**. Slice hoàn tất gần nhất: **M01-S4 — local control plane, realtime
-WebSocket và binary media transport**. Slice kế tiếp **M01-S5** chưa mở write
-phase.
+spine**. Slice hoàn tất gần nhất: **M01-S5 — service registry, supervisor và
+graceful lifecycle**. Slice kế tiếp **M01-S6** chưa mở write phase.
 
 Legacy AIRI skill paths dưới `D:\ProjectAiri` mặc định ánh xạ sang repository
 hiện tại `D:\ProjectHinaAI`, trừ khi owner chỉ định workspace khác.

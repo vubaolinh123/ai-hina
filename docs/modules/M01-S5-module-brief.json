@@ -1,0 +1,63 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M01-S5-service-lifecycle",
+  "module_id": "M01",
+  "objective": "Deliver a deterministic async service registry and supervisor with dependency ordering, bounded start/stop, rollback on partial startup failure, reverse graceful shutdown and an owner-visible demo supervising the real durable store and local control plane.",
+  "non_goals": [
+    "Do not implement Windows services, containers, distributed orchestration, automatic process spawning or public network deployment.",
+    "Do not implement model inference, speech, memory, avatar, game or livestream services.",
+    "Do not run the 100-cycle deep lifecycle gate during normal fast development; provide it as an explicit owner command."
+  ],
+  "base_sha": "303cd8c3a0d7bb1cab99f0bddf1d77c45361ae5a",
+  "branch": "module/M01-spine",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "AGENTS.md",
+    "apps/core-runtime/",
+    "docs/modules/M01-S5-*",
+    "docs/modules/M01-contracts-spine.md",
+    "tools/dev/Run-M01S5Demo.ps1",
+    "tools/dev/Run-LifecycleCycles.ps1",
+    "package.json"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "packages/contracts/",
+    "workers/",
+    "adapters/",
+    "ml/",
+    "assets/",
+    "third_party/"
+  ],
+  "contracts": [
+    "Service names are unique, dependencies exist and the registry must be an acyclic graph before startup.",
+    "Startup follows topological dependency order and a dependent never starts before every dependency reports healthy.",
+    "Every start and stop operation has a monotonic timeout; partial startup failure rolls back all services that already started in reverse order.",
+    "Graceful shutdown is reverse topological, continues after individual stop failures and leaves no service marked running.",
+    "Start and stop are idempotent at the supervisor boundary and registry mutation is forbidden while the supervisor is active.",
+    "Caught lifecycle failures use stable error codes and write redacted local JSONL records without replacing the original exception."
+  ],
+  "allowed_dependencies": [
+    "Python 3.12+ standard library and existing local hina-core runtime modules."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "Unit tests prove dependency order, reverse shutdown, duplicate/missing/cycle rejection, startup rollback and stop-failure continuation.",
+    "A fast multi-cycle unit test returns every service to stopped state without retained asyncio tasks.",
+    "A single demo command supervises the real SQLite store and loopback control server, reads /v1/health and shuts both down cleanly.",
+    "A separate explicit command can run 100 lifecycle cycles and returns nonzero on any leaked running state or ordering failure.",
+    "Focused M01 fast tests complete once on the owner machine."
+  ],
+  "required_test_commands": [
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-FastUnit.ps1",
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Run-M01S5Demo.ps1"
+  ],
+  "latency_or_quality_budget": {
+    "fast_unit_seconds": 10,
+    "demo_seconds": 8,
+    "startup_timeout_seconds": 5,
+    "shutdown_timeout_seconds": 5,
+    "deep_lifecycle_cycles": 100
+  },
+  "output_artifact_dir": "artifacts/verification/M01/"
+}
