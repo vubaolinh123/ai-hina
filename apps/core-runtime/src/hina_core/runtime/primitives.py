@@ -18,6 +18,12 @@ class RuntimeErrorCode(StrEnum):
     CANCELLED = "E_CANCELLED"
     IDEMPOTENCY_KEY_INVALID = "E_IDEMPOTENCY_KEY_INVALID"
     IDEMPOTENCY_CAPACITY = "E_IDEMPOTENCY_CAPACITY"
+    DURABLE_INVALID_EVENT = "E_DURABLE_INVALID_EVENT"
+    JOURNAL_CONFLICT = "E_JOURNAL_CONFLICT"
+    OUTBOX_NOT_FOUND = "E_OUTBOX_NOT_FOUND"
+    ACK_INVALID_STATE = "E_ACK_INVALID_STATE"
+    INBOX_NOT_FOUND = "E_INBOX_NOT_FOUND"
+    DURABLE_STORE = "E_DURABLE_STORE"
     OPERATION_FAILED = "E_OPERATION_FAILED"
 
 
@@ -335,4 +341,3 @@ class IdempotencyRegistry(Generic[T]):
     def _validate_key(key: str) -> None:
         if not key or len(key) > 128 or any(ord(char) < 0x20 or ord(char) == 0x7F for char in key):
             raise PrimitiveError(RuntimeErrorCode.IDEMPOTENCY_KEY_INVALID, "idempotency key is invalid")
-

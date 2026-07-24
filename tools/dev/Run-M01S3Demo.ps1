@@ -7,8 +7,14 @@ $localPythonPath = "$sourceRoot;$contractsRoot"
 $env:PYTHONPATH = if ($env:PYTHONPATH) { "$localPythonPath;$env:PYTHONPATH" } else { $localPythonPath }
 $env:PYTHONPYCACHEPREFIX = Join-Path $repoRoot ".cache\pycache"
 $env:UV_CACHE_DIR = Join-Path $repoRoot ".cache\uv"
+if (-not $env:HINA_BUILD_COMMIT) {
+    $buildCommit = & git -C $repoRoot rev-parse HEAD
+    if ($LASTEXITCODE -eq 0) {
+        $env:HINA_BUILD_COMMIT = $buildCommit.Trim()
+    }
+}
 
-& uv run --frozen python -m unittest discover -s apps/core-runtime/tests -p "test_*.py"
+& uv run --frozen python -m hina_core.runtime.durable_demo @args
 if ($LASTEXITCODE -ne 0) {
-    throw "Fast unit tests failed with exit code $LASTEXITCODE"
+    throw "M01-S3 demo failed with exit code $LASTEXITCODE"
 }

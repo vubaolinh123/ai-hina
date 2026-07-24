@@ -10,6 +10,8 @@ from pathlib import Path
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 SRC = APP_ROOT / "src"
+ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT / "packages" / "contracts" / "src"))
 sys.path.insert(0, str(SRC))
 
 from hina_core.runtime import (  # noqa: E402
@@ -63,8 +65,10 @@ class RuntimePrimitiveTests(unittest.IsolatedAsyncioTestCase):
             finally:
                 finalized.set()
 
+        slow_task = asyncio.create_task(slow())
+        await asyncio.sleep(0)
         with self.assertRaises(PrimitiveError) as deadline:
-            await wait_controlled(slow(), deadline=Deadline.after(0.005))
+            await wait_controlled(slow_task, deadline=Deadline.after(0.005))
         self.assertEqual(deadline.exception.code, RuntimeErrorCode.DEADLINE_EXCEEDED)
         self.assertTrue(finalized.is_set())
 

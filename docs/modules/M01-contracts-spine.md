@@ -6,7 +6,8 @@
 - Completed slices:
   - `M01-S1 — contract catalog and EventEnvelope v1`
   - `M01-S2 — bounded queues, deadlines, cancellation and idempotency`
-- Next slice: `M01-S3 — durable journal/outbox/inbox, ACK, resume and replay`
+  - `M01-S3 — durable journal/outbox/inbox, ACK, resume and replay`
+- Next slice: `M01-S4 — control plane, realtime WebSocket and binary-media transport`
 
 ## Slice sequence
 
@@ -55,5 +56,19 @@
   correlation IDs.
 - [x] Focused fast unit suite passes once on the owner machine.
 
-M01 remains open after M01-S2. Do not start M02 until every M01 slice and the
+## M01-S3 fast gate
+
+- [x] Validated module brief with SQLite standard-library-only persistence.
+- [x] Journal append and inbox receive reject conflicting reuse while ignoring
+  byte-identical duplicate delivery.
+- [x] Outbox claims are bounded and use expiring leases; ACK is idempotent and
+  unacknowledged work is reclaimed after process restart.
+- [x] Inbox checkpoint advances only through contiguous processed sequences.
+- [x] Ordered journal replay and durable state survive database close/reopen.
+- [x] Owner CLI demo shows append, duplicate suppression, crash recovery, ACK,
+  resume and replay behavior.
+- [x] Expected durable conflict writes one redacted JSONL error record.
+- [x] Focused fast unit suite passes once on the owner machine.
+
+M01 remains open after M01-S3. Do not start M02 until every M01 slice and the
 M01 integration gate pass.

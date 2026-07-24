@@ -1,0 +1,63 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M01-S3-durable-delivery",
+  "module_id": "M01",
+  "objective": "Deliver a runnable SQLite-backed journal, outbox and inbox with idempotent append, delivery lease, ACK/NACK, crash recovery, consumer resume and ordered replay.",
+  "non_goals": [
+    "Do not implement a WebSocket or control-plane server; transport belongs to M01-S4.",
+    "Do not implement service supervision, resource scheduling, model inference, speech, memory, avatar, game or livestream behavior.",
+    "Do not run repeat/soak/full workflow verification in fast-development mode."
+  ],
+  "base_sha": "0a59cdf632a96495a8df19456d1baa72b85fe075",
+  "branch": "module/M01-spine",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "AGENTS.md",
+    "apps/core-runtime/",
+    "docs/modules/M01-S3-*",
+    "docs/modules/M01-contracts-spine.md",
+    "tools/dev/Run-M01S3Demo.ps1",
+    "package.json",
+    ".github/workflows/ci.yml"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "packages/contracts/",
+    "workers/",
+    "adapters/",
+    "ml/",
+    "assets/",
+    "third_party/"
+  ],
+  "contracts": [
+    "Only EventEnvelope v1 values that pass the existing Python boundary validator and contain streamId, sequence and idempotencyKey may enter durable delivery.",
+    "Journal append and inbox receive are idempotent for byte-identical canonical envelopes and fail closed on conflicting reuse.",
+    "Outbox delivery uses bounded claims with expiring leases; ACK is idempotent and NACK stores only a stable redacted error code.",
+    "Inbox checkpoints advance only across contiguous processed sequences, so resume cannot skip a gap.",
+    "Replay is ordered by stream sequence and all database state survives process close/reopen."
+  ],
+  "allowed_dependencies": [
+    "Python 3.12+ standard library sqlite3 and the existing local hina-contracts package."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "Appending the same event twice produces one journal/outbox row; conflicting event or stream-sequence reuse fails with a stable code.",
+    "An unacknowledged in-flight event is reclaimable after lease expiry with incremented attempt count while acknowledged events are not redelivered.",
+    "Duplicate inbox delivery is ignored and consumer checkpoint cannot advance over an unprocessed sequence gap.",
+    "Closing and reopening the SQLite database preserves journal, ACK state, inbox state and checkpoint.",
+    "The owner can run one PowerShell demo and see crash recovery, ACK, resume and replay results plus a redacted error log.",
+    "Focused unit tests for M01-S2 and M01-S3 complete once on the owner machine."
+  ],
+  "required_test_commands": [
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-FastUnit.ps1",
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Run-M01S3Demo.ps1"
+  ],
+  "latency_or_quality_budget": {
+    "fast_unit_seconds": 5,
+    "demo_seconds": 5,
+    "lost_acked_events": 0,
+    "duplicate_journal_rows": 0,
+    "checkpoint_gap_skips": 0
+  },
+  "output_artifact_dir": "artifacts/verification/M01/"
+}

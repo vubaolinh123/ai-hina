@@ -2,7 +2,9 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
 $sourceRoot = Join-Path $repoRoot "apps\core-runtime\src"
-$env:PYTHONPATH = if ($env:PYTHONPATH) { "$sourceRoot;$env:PYTHONPATH" } else { $sourceRoot }
+$contractsRoot = Join-Path $repoRoot "packages\contracts\src"
+$localPythonPath = "$sourceRoot;$contractsRoot"
+$env:PYTHONPATH = if ($env:PYTHONPATH) { "$localPythonPath;$env:PYTHONPATH" } else { $localPythonPath }
 $env:PYTHONPYCACHEPREFIX = Join-Path $repoRoot ".cache\pycache"
 $env:UV_CACHE_DIR = Join-Path $repoRoot ".cache\uv"
 if (-not $env:HINA_BUILD_COMMIT) {
