@@ -50,24 +50,27 @@ spine**. Slice đang mở: **M01-S1 — contract catalog và event envelope v1**
    - OSS cho dependency/source mới;
    - QA design cho hành vi khó kiểm thử hoặc safety-critical.
 3. Primary triển khai vertical slice và chạy test hẹp trong lúc code.
-4. Trên candidate sạch, primary chạy full suite một lần rồi freeze SHA.
+4. Trong fast-development mode, primary chỉ chạy unit/smoke test hẹp một lần
+   trên máy owner; không freeze SHA hoặc tạo evidence bundle cho iteration thường.
 5. Chọn đúng một independent reviewer theo rủi ro và một QA runner nếu module
    yêu cầu benchmark/repeat gate. Không chạy mọi role theo mặc định.
 6. Chỉ P0/P1 hoặc vi phạm acceptance criterion làm quay lại write phase. P2/P3
    được ghi backlog trừ khi primary chứng minh nó chặn release.
-7. Chạy flake/repeat/soak đúng một lần trên frozen SHA cuối, sau đó ghi evidence
-   và push. Review lại chỉ phần diff sửa blocker, không đọc lại toàn module.
+7. Flake/repeat/soak/full-workflow chỉ chạy khi owner yêu cầu rõ để dò bug sâu
+   hoặc chuẩn bị release. Iteration thường commit/push sau fast unit/smoke pass.
 
 Không mở write phase module kế tiếp trước Gate 6.
 
 ## Verification
 
-- Không tuyên bố pass nếu thiếu command, commit SHA và artifact.
+- Handoff iteration thường phải ghi command unit/smoke và kết quả; commit SHA và
+  artifact đầy đủ chỉ bắt buộc cho deep gate/release do owner yêu cầu.
 - Agent không tự review code của chính mình.
 - Trong owner Solo-first mode, tracked diff của primary không bắt buộc qua
   subagent review; phải có automated test evidence và owner manual acceptance.
   Khi owner yêu cầu independent review trở lại, reviewer vẫn phải read-only.
-- Must-pass deterministic suite phải chạy 20 lần liên tiếp không lỗi khi module yêu cầu.
+- Không chạy suite lặp 20 lần theo mặc định. Chỉ chạy khi owner yêu cầu deep
+  verification trong task hiện tại.
 - Không để nhiều agent chạy cùng một full suite hoặc cùng tạo một loại evidence.
 - Agent prompt tối đa hóa tham chiếu file/diff và tối thiểu hóa nội dung lặp lại;
   không paste master plan hoặc research report vào prompt implementation.
