@@ -20,9 +20,11 @@ STATIC_DIR = ROOT / "apps" / "dev-console" / "public"
 SAFETY_ROOT = ROOT / "packages" / "safety-policy"
 PERSONA_PATH = ROOT / "packages" / "text-brain" / "personas" / "hina.v1.json"
 SPEECH_ROOT = ROOT / "workers" / "speech"
+MEMORY_ROOT = ROOT / "packages" / "memory"
 sys.path.insert(0, str(ROOT / "packages" / "contracts" / "src"))
 sys.path.insert(0, str(SAFETY_ROOT / "src"))
 sys.path.insert(0, str(SPEECH_ROOT / "src"))
+sys.path.insert(0, str(MEMORY_ROOT / "src"))
 sys.path.insert(0, str(APP_ROOT / "src"))
 
 from hina_core.runtime import (  # noqa: E402
@@ -295,6 +297,9 @@ class DevConsoleTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn("default-src 'self'", headers["content-security-policy"])
                 self.assertEqual(headers["x-frame-options"], "DENY")
                 self.assertIn(b"Hina Dev Console", html)
+                self.assertIn(b'data-dashboard-nav="memory"', html)
+                self.assertIn(b'data-dashboard-page="companion"', html)
+                self.assertIn("Mục đích:".encode(), html)
 
                 status, _, script = await _get(host, port, "/app.js")
                 self.assertEqual(status, HTTPStatus.OK)
@@ -308,6 +313,10 @@ class DevConsoleTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn(b"/v1/speech/transcriptions", script)
                 self.assertIn(b"/v1/tts/status", script)
                 self.assertIn(b"/v1/tts/synthesis", script)
+                self.assertIn(b"/v1/memory/candidates", script)
+                self.assertIn(b"/v1/memory/search", script)
+                self.assertIn(b"/v1/memory/rebuild", script)
+                self.assertIn(b"renderDashboardRoute", script)
                 self.assertIn(b"navigator.sendBeacon", script)
                 self.assertNotIn(b"unknown_capability", script)
                 self.assertNotIn(b"generated_code_execution", script)
@@ -593,6 +602,8 @@ class DevConsoleTests(unittest.IsolatedAsyncioTestCase):
                     audit_log=directory / "safety-audit.jsonl",
                     safety_manifest=SAFETY_ROOT / "manifests" / "default.v1.json",
                     persona_spec=PERSONA_PATH,
+                    memory_database=directory / "memory.sqlite3",
+                    memory_index=directory / "memory-qdrant",
                 ),
                 build_commit="safety-test",
                 model_gateway=_StubModelGateway(),
@@ -613,6 +624,39 @@ class DevConsoleTests(unittest.IsolatedAsyncioTestCase):
                 status = await get_json(host, port, "/v1/safety/status")
                 self.assertEqual(status.status, HTTPStatus.OK)
                 self.assertEqual(status.body["manifest"]["manifestId"], "hina.local.default.v1")
+
+                memory_status = await get_json(host, port, "/v1/memory/status")
+                self.assertEqual(memory_status.status, HTTPStatus.OK)
+                self.assertFalse(memory_status.body["autoPromotion"])
+                candidate_response = await post_json(
+                    host,
+                    port,
+                    "/v1/memory/candidates",
+                    {
+                        "source": "owner.console",
+                        "sessionId": session,
+                        "kind": "preference",
+                        "topic": "favorite drink",
+                        "content": "Linh likes coffee with little sugar.",
+                        "confidence": 0.95,
+                        "sensitivity": "personal",
+                        "expiresAt": None,
+                        "correlationId": correlation,
+                    },
+                )
+                self.assertEqual(candidate_response.status, HTTPStatus.OK)
+                candidate = candidate_response.body["candidate"]
+                self.assertFalse(candidate_response.body["autoPromoted"])
+                promoted = await post_json(
+                    host,
+                    port,
+                    f"/v1/memory/candidates/{candidate['candidateId']}/decision",
+                    {"action": "promote", "expectedVersion": candidate["version"]},
+                )
+                self.assertEqual(promoted.status, HTTPStatus.OK)
+                search = await get_json(host, port, "/v1/memory/search?q=coffee")
+                self.assertEqual(search.status, HTTPStatus.OK)
+                self.assertEqual(search.body["count"], 1)
 
                 allowed = await post_json(host, port, "/v1/safety/evaluate", policy_request)
                 self.assertEqual(allowed.status, HTTPStatus.OK)
@@ -640,7 +684,7 @@ class DevConsoleTests(unittest.IsolatedAsyncioTestCase):
 
                 audit = await get_json(host, port, "/v1/safety/audit?limit=20")
                 self.assertEqual(audit.status, HTTPStatus.OK)
-                self.assertEqual(audit.body["count"], 3)
+                self.assertEqual(audit.body["count"], 4)
                 self.assertNotIn("local-owner", json.dumps(audit.body))
 
                 rejected = await post_json(

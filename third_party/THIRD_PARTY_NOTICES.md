@@ -39,3 +39,17 @@ and hashed separately in `ml/models/manifests`. The bundled preset-voice table
 is tracked in `assets/manifests`; upstream distribution exists, but independent
 speaker-consent evidence has not been published, so release promotion remains
 blocked pending owner review.
+
+## qdrant-client 1.18.0
+
+- Upstream: https://github.com/qdrant/qdrant-client
+- Pinned tag/commit: `v1.18.0` /
+  `961c21aa930e3e9a0e8b7402cec5dc46b82612c7`
+- PyPI wheel SHA-256:
+  `093aa8cf8a420ee3ad2a68b007e1378d7992b2600e0b53c193fc172674f659cd`
+- License: Apache-2.0
+- Use: persistent loopback-free local vector index for derived memory retrieval
+
+No qdrant-client source file or snippet is copied into this repository. Hina
+uses the pinned local-mode API behind its own derived-index boundary. SQLite
+remains authoritative and the Qdrant collection can be reconciled or rebuilt.

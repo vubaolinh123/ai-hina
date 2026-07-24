@@ -13,6 +13,9 @@ const state = {
   ttsCorrelationId: null,
   ttsAbortController: null,
   ttsBlobUrl: null,
+  memoryStatus: null,
+  memoryCandidates: [],
+  memoryRecords: [],
   sessionId: localStorage.getItem("hina.console.session") || crypto.randomUUID(),
 };
 
@@ -122,8 +125,84 @@ const elements = Object.fromEntries(
     "refreshErrorsButton",
     "activityLog",
     "clearActivityButton",
+    "pageEyebrow",
+    "pageTitle",
+    "pageDescription",
+    "refreshMemoryButton",
+    "exportMemoryButton",
+    "rebuildMemoryButton",
+    "memoryAvailability",
+    "memoryPendingValue",
+    "memoryActiveValue",
+    "memoryIndexValue",
+    "memorySourceSelect",
+    "memoryKindInput",
+    "memoryTopicInput",
+    "memoryContentInput",
+    "memoryConfidenceInput",
+    "memorySensitivitySelect",
+    "memoryExpiryInput",
+    "proposeMemoryButton",
+    "memoryCandidateResult",
+    "memoryCandidateList",
+    "memorySearchInput",
+    "searchMemoryButton",
+    "memorySearchResult",
+    "memoryRecordList",
   ].map((id) => [id, document.getElementById(id)]),
 );
+
+const dashboardPages = {
+  overview: {
+    eyebrow: "DASHBOARD",
+    title: "Tổng quan hệ thống",
+    description: "Xem nhanh Hina đang sẵn sàng ở mức nào và chọn khu vực cần thao tác.",
+  },
+  companion: {
+    eyebrow: "M03 + M04 + M05",
+    title: "Trò chuyện & giọng nói",
+    description: "Nhắn tin với model local, chuyển WAV hoặc microphone thành chữ và phát giọng Việt đã qua kiểm duyệt.",
+  },
+  memory: {
+    eyebrow: "M06 / OWNER CONTROL",
+    title: "Ký ức dài hạn",
+    description: "Đề xuất, duyệt, sửa, ghim, tìm kiếm, xuất hoặc xóa những dữ kiện Hina được phép nhớ.",
+  },
+  safety: {
+    eyebrow: "M02 / POLICY AUTHORITY",
+    title: "Trung tâm an toàn",
+    description: "Quản lý quyền hạn, dừng khẩn cấp, kiểm tra đầu vào và xem lịch sử quyết định của safety backend.",
+  },
+  runtime: {
+    eyebrow: "M01 / OPERATIONS",
+    title: "Runtime & chẩn đoán",
+    description: "Kiểm tra event WebSocket, journal SQLite, binary frame, metrics và log lỗi đã che thông tin nhạy cảm.",
+  },
+};
+
+function renderDashboardRoute() {
+  const requested = location.hash.replace(/^#\/?/, "");
+  const page = Object.hasOwn(dashboardPages, requested) ? requested : "overview";
+  if (requested !== page) {
+    history.replaceState(null, "", `#/overview`);
+  }
+  const copy = dashboardPages[page];
+  elements.pageEyebrow.textContent = copy.eyebrow;
+  elements.pageTitle.textContent = copy.title;
+  elements.pageDescription.textContent = copy.description;
+  document.querySelectorAll("[data-dashboard-page]").forEach((section) => {
+    section.hidden = section.dataset.dashboardPage !== page;
+  });
+  document.querySelectorAll("[data-dashboard-nav]").forEach((link) => {
+    if (link.dataset.dashboardNav === page) {
+      link.setAttribute("aria-current", "page");
+    } else {
+      link.removeAttribute("aria-current");
+    }
+  });
+  document.title = `${copy.title} · Hina Dev Console`;
+  window.scrollTo({ top: 0, behavior: "instant" });
+}
 
 function addActivity(message, level = "info") {
   const item = document.createElement("li");
@@ -1152,6 +1231,294 @@ function updateRevocationButton() {
   elements.revocationButton.dataset.revoked = String(revoked);
 }
 
+function memoryActionButton(label, className, action) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `button ${className}`;
+  button.textContent = label;
+  button.addEventListener("click", action);
+  return button;
+}
+
+function renderMemoryCandidates(candidates) {
+  const actionable = candidates.filter(
+    (candidate) => candidate.status === "pending" || candidate.status === "quarantined",
+  );
+  elements.memoryCandidateList.replaceChildren();
+  if (!actionable.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty";
+    empty.textContent = "Không có đề xuất nào đang chờ bạn quyết định.";
+    elements.memoryCandidateList.append(empty);
+    return;
+  }
+  for (const candidate of actionable) {
+    const item = document.createElement("article");
+    item.className = "memory-entry";
+    item.dataset.status = candidate.status;
+    const title = document.createElement("h4");
+    title.textContent = candidate.topic;
+    const content = document.createElement("p");
+    content.textContent = candidate.status === "quarantined"
+      ? "Nội dung bị cách ly vì có dấu hiệu không an toàn; bản thô không được lưu."
+      : candidate.content;
+    const meta = document.createElement("div");
+    meta.className = "memory-meta";
+    meta.textContent =
+      `${candidate.kind} · ${candidate.source} · ${candidate.sensitivity} · ` +
+      `tin cậy ${Math.round(candidate.confidence * 100)}% · ${candidate.status}`;
+    const actions = document.createElement("div");
+    actions.className = "button-row";
+    if (candidate.status === "pending") {
+      actions.append(
+        memoryActionButton("Duyệt để Hina nhớ", "button-primary", () =>
+          decideMemory(candidate, "promote")),
+      );
+    }
+    actions.append(
+      memoryActionButton("Từ chối", "button-secondary", () =>
+        decideMemory(candidate, "reject")),
+    );
+    item.append(title, content, meta, actions);
+    elements.memoryCandidateList.append(item);
+  }
+}
+
+function renderMemoryRecords(records) {
+  elements.memoryRecordList.replaceChildren();
+  if (!records.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty";
+    empty.textContent = "Chưa có ký ức nào được bạn duyệt.";
+    elements.memoryRecordList.append(empty);
+    return;
+  }
+  for (const record of records) {
+    const item = document.createElement("article");
+    item.className = "memory-entry";
+    item.dataset.pinned = String(record.pinned);
+    const title = document.createElement("h4");
+    title.textContent = `${record.pinned ? "Đã ghim · " : ""}${record.topic}`;
+    const content = document.createElement("p");
+    content.textContent = record.content;
+    const meta = document.createElement("div");
+    meta.className = "memory-meta";
+    meta.textContent =
+      `${record.kind} · phiên bản ${record.version} · ${record.sensitivity} · ` +
+      `${record.expiresAt ? `hết hạn ${new Date(record.expiresAt).toLocaleString("vi-VN")}` : "không tự hết hạn"}`;
+    const actions = document.createElement("div");
+    actions.className = "button-row";
+    actions.append(
+      memoryActionButton("Sửa nội dung", "button-secondary", () => correctMemory(record)),
+      memoryActionButton(
+        record.pinned ? "Bỏ ghim" : "Ghim",
+        "button-secondary",
+        () => setMemoryPinned(record, !record.pinned),
+      ),
+      memoryActionButton("Xóa có biên nhận", "button-danger", () => deleteMemory(record)),
+    );
+    item.append(title, content, meta, actions);
+    elements.memoryRecordList.append(item);
+  }
+}
+
+async function refreshMemory() {
+  try {
+    const [status, candidates, records] = await Promise.all([
+      fetchJson("/v1/memory/status"),
+      fetchJson("/v1/memory/candidates"),
+      fetchJson("/v1/memory/records"),
+    ]);
+    state.memoryStatus = status;
+    state.memoryCandidates = candidates.candidates;
+    state.memoryRecords = records.records;
+    elements.memoryAvailability.textContent = status.available ? "sẵn sàng" : "không sẵn sàng";
+    elements.memoryPendingValue.textContent = String(status.counts["candidates.pending"] || 0);
+    elements.memoryActiveValue.textContent = String(status.counts["records.active"] || 0);
+    const pendingIndex = status.counts["outbox.pending"] || 0;
+    elements.memoryIndexValue.textContent = pendingIndex ? `${pendingIndex} đang chờ` : "đã đồng bộ";
+    renderMemoryCandidates(candidates.candidates);
+    renderMemoryRecords(records.records);
+  } catch (error) {
+    elements.memoryAvailability.textContent = "không sẵn sàng";
+    elements.memoryIndexValue.textContent = "không đọc được";
+    addActivity(`Không đọc được ký ức dài hạn: ${error.message}`, "error");
+  }
+}
+
+async function proposeMemory() {
+  const topic = elements.memoryTopicInput.value.trim();
+  const content = elements.memoryContentInput.value.trim();
+  if (!topic || !content) {
+    addActivity("Hãy nhập chủ đề và nội dung cần nhớ.", "error");
+    return;
+  }
+  const expiresAt = elements.memoryExpiryInput.value
+    ? new Date(elements.memoryExpiryInput.value).toISOString()
+    : null;
+  try {
+    const result = await postJson("/v1/memory/candidates", {
+      source: elements.memorySourceSelect.value,
+      sessionId: state.sessionId,
+      kind: elements.memoryKindInput.value.trim(),
+      topic,
+      content,
+      confidence: Number(elements.memoryConfidenceInput.value),
+      sensitivity: elements.memorySensitivitySelect.value,
+      expiresAt,
+      correlationId: crypto.randomUUID(),
+    });
+    elements.memoryCandidateResult.classList.remove("empty");
+    elements.memoryCandidateResult.textContent =
+      result.candidate.status === "quarantined"
+        ? "Đề xuất đã bị cách ly; nội dung thô không được lưu và không thể trở thành ký ức."
+        : "Đề xuất đã được lọc và đang chờ bạn bấm Duyệt.";
+    elements.memoryContentInput.value = "";
+    addActivity(
+      `Đã tạo đề xuất ký ức “${result.candidate.topic}” (${result.candidate.status}).`,
+      result.candidate.status === "pending" ? "success" : "error",
+    );
+    await refreshMemory();
+  } catch (error) {
+    elements.memoryCandidateResult.classList.remove("empty");
+    elements.memoryCandidateResult.textContent = error.message;
+    addActivity(`Tạo đề xuất ký ức lỗi: ${error.message}`, "error");
+  }
+}
+
+async function decideMemory(candidate, action) {
+  try {
+    const result = await postJson(
+      `/v1/memory/candidates/${candidate.candidateId}/decision`,
+      { action, expectedVersion: candidate.version },
+    );
+    elements.memoryCandidateResult.classList.remove("empty");
+    elements.memoryCandidateResult.textContent = action === "promote"
+      ? `Đã duyệt. Hina có thể dùng ký ức “${result.record.topic}” trong chat của owner.`
+      : `Đã từ chối đề xuất “${result.candidate.topic}”.`;
+    addActivity(
+      action === "promote" ? "Đã duyệt một ký ức dài hạn." : "Đã từ chối đề xuất ký ức.",
+      "success",
+    );
+    await refreshMemory();
+  } catch (error) {
+    addActivity(`Không thể quyết định đề xuất: ${error.message}`, "error");
+    await refreshMemory();
+  }
+}
+
+async function searchMemory() {
+  const query = elements.memorySearchInput.value.trim();
+  if (!query) {
+    addActivity("Hãy nhập nội dung cần tìm trong ký ức.", "error");
+    return;
+  }
+  try {
+    const result = await fetchJson(`/v1/memory/search?q=${encodeURIComponent(query)}`);
+    elements.memorySearchResult.classList.remove("empty");
+    elements.memorySearchResult.textContent = result.memories.length
+      ? result.memories
+          .map(
+            (item, index) =>
+              `${index + 1}. ${item.record.topic} — ${item.record.content} ` +
+              `(độ khớp ${item.score.toFixed(3)})`,
+          )
+          .join("\n")
+      : "Không tìm thấy ký ức đang hoạt động phù hợp.";
+    addActivity(`Tìm kiếm ký ức trả về ${result.count} kết quả.`, "success");
+  } catch (error) {
+    elements.memorySearchResult.classList.remove("empty");
+    elements.memorySearchResult.textContent = error.message;
+    addActivity(`Tìm ký ức lỗi: ${error.message}`, "error");
+  }
+}
+
+async function correctMemory(record) {
+  const content = window.prompt(
+    "Nhập nội dung đúng thay cho ký ức hiện tại. Thao tác này tạo phiên bản mới:",
+    record.content,
+  );
+  if (content === null || !content.trim() || content.trim() === record.content) return;
+  try {
+    await postJson(`/v1/memory/records/${record.memoryId}/correct`, {
+      content: content.trim(),
+      expectedVersion: record.version,
+      correlationId: crypto.randomUUID(),
+    });
+    addActivity(`Đã sửa ký ức “${record.topic}”.`, "success");
+    await refreshMemory();
+  } catch (error) {
+    addActivity(`Sửa ký ức lỗi: ${error.message}`, "error");
+    await refreshMemory();
+  }
+}
+
+async function setMemoryPinned(record, pinned) {
+  try {
+    await postJson(`/v1/memory/records/${record.memoryId}/pin`, {
+      pinned,
+      expectedVersion: record.version,
+    });
+    addActivity(`${pinned ? "Đã ghim" : "Đã bỏ ghim"} ký ức “${record.topic}”.`, "success");
+    await refreshMemory();
+  } catch (error) {
+    addActivity(`Đổi trạng thái ghim lỗi: ${error.message}`, "error");
+    await refreshMemory();
+  }
+}
+
+async function deleteMemory(record) {
+  if (!window.confirm(
+    `Xóa ký ức “${record.topic}”? Nội dung sẽ bị xóa khỏi SQLite và chỉ mục tìm kiếm.`,
+  )) return;
+  try {
+    const result = await postJson(`/v1/memory/records/${record.memoryId}/delete`, {
+      expectedVersion: record.version,
+    });
+    elements.memorySearchResult.classList.remove("empty");
+    elements.memorySearchResult.textContent =
+      `Đã xóa. Biên nhận ${result.receipt.receiptId}; ` +
+      `đã đối soát: ${result.receipt.stores.join(", ")}. ` +
+      "Biên nhận không tuyên bố xóa dữ liệu khỏi model weights.";
+    addActivity(`Đã xóa ký ức và nhận biên nhận ${result.receipt.receiptId}.`, "success");
+    await refreshMemory();
+  } catch (error) {
+    addActivity(`Xóa ký ức lỗi: ${error.message}`, "error");
+    await refreshMemory();
+  }
+}
+
+async function exportMemory() {
+  try {
+    const result = await fetchJson("/v1/memory/export");
+    const blob = new Blob([JSON.stringify(result, null, 2)], {
+      type: "application/json",
+    });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.download = `hina-memory-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    addActivity(`Đã xuất ${result.records.length} bản ghi ký ức và audit.`, "success");
+  } catch (error) {
+    addActivity(`Xuất ký ức lỗi: ${error.message}`, "error");
+  }
+}
+
+async function rebuildMemory() {
+  if (!window.confirm(
+    "Dựng lại chỉ mục tìm kiếm từ SQLite? Dữ liệu ký ức gốc không bị thay đổi.",
+  )) return;
+  try {
+    const result = await postJson("/v1/memory/rebuild", { action: "rebuild" });
+    addActivity(`Đã dựng lại chỉ mục cho ${result.recordCount} ký ức.`, "success");
+    await refreshMemory();
+  } catch (error) {
+    addActivity(`Dựng lại chỉ mục lỗi: ${error.message}`, "error");
+  }
+}
+
 async function refreshAll({ announce = true } = {}) {
   await Promise.all([
     refreshStatus(),
@@ -1162,6 +1529,7 @@ async function refreshAll({ announce = true } = {}) {
     refreshChatStatus(),
     refreshSpeech(),
     refreshTts(),
+    refreshMemory(),
   ]);
   if (announce) {
     addActivity("Đã làm mới control plane, metrics và error log.", "success");
@@ -1460,6 +1828,18 @@ elements.invalidButton.addEventListener("click", () => sendEvent({ invalid: true
 elements.replayButton.addEventListener("click", requestReplay);
 elements.binaryButton.addEventListener("click", sendBinary);
 elements.clearActivityButton.addEventListener("click", () => elements.activityLog.replaceChildren());
+elements.refreshMemoryButton.addEventListener("click", refreshMemory);
+elements.proposeMemoryButton.addEventListener("click", proposeMemory);
+elements.searchMemoryButton.addEventListener("click", searchMemory);
+elements.memorySearchInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    searchMemory();
+  }
+});
+elements.exportMemoryButton.addEventListener("click", exportMemory);
+elements.rebuildMemoryButton.addEventListener("click", rebuildMemory);
+window.addEventListener("hashchange", renderDashboardRoute);
 
 window.addEventListener("beforeunload", () => {
   if (state.socket?.readyState === WebSocket.OPEN) {
@@ -1482,6 +1862,7 @@ window.addEventListener("beforeunload", () => {
 window.addEventListener("pagehide", cancelTtsOnPageExit);
 
 updateConnection(false);
+renderDashboardRoute();
 refreshAll({ announce: false });
 connectWebSocket();
 setInterval(() => {
@@ -1492,4 +1873,5 @@ setInterval(() => {
   refreshChatStatus();
   refreshSpeech();
   refreshTts();
+  refreshMemory();
 }, 5000);

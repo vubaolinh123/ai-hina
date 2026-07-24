@@ -4,7 +4,7 @@
 
 Đọc `HINA_AI_MASTER_PLAN_VI.md` trước khi thay đổi kiến trúc hoặc mở module mới. Chỉ một module sản phẩm được ở write phase tại một thời điểm.
 
-Module active hiện tại: **M05 — Speech output, turn-taking và barge-in**. M01,
+Module active hiện tại: **M06 — Long-term memory có consent và chống poisoning**. M01,
 M02 và M03 đã qua fast unit/contract/startup gate; repeat/soak/deep release
 verification được hoãn tới khi owner yêu cầu. M04-S1/S2 đã qua fast gate,
 real-provider smoke và independent review; P1 native inference timeout đã đóng
@@ -15,7 +15,13 @@ unit/contract/governance/startup đều xanh và real VieNeu CPU smoke đã sinh
 Đúng một independent reviewer đã PASS candidate, không có P0/P1; page-unload
 cancellation P2 đã sửa, còn voice-consent P2 tiếp tục chặn public/production
 promotion. Owner vẫn thực hiện manual feature testing và báo lỗi bằng
-correlation ID. Không mở M06 trước khi owner cho phép tiếp tục.
+correlation ID. Ngày 2026-07-25 owner chỉ thị “tiếp tục task tiếp theo”, được ghi
+nhận là cho phép chuyển từ candidate M05 sang M06 trong fast-development mode.
+M06 đồng thời sở hữu việc tổ chức lại Dev Console thành dashboard nhiều trang
+logic để owner quản lý memory và các module đã chạy thật. M06-S1 hiện là runnable
+candidate: fast unit/contract/governance/startup và browser workflow đều xanh;
+owner tiếp theo tự manual acceptance. Không mở M07 trước khi candidate M06 qua
+independent review theo yêu cầu trước đó của owner và owner cho phép tiếp tục.
 
 Legacy AIRI skill paths dưới `D:\ProjectAiri` mặc định ánh xạ sang repository
 hiện tại `D:\ProjectHinaAI`, trừ khi owner chỉ định workspace khác.

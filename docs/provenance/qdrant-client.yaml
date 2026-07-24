@@ -1,0 +1,22 @@
+name: qdrant-client
+upstream_url: https://github.com/qdrant/qdrant-client
+revision: 961c21aa930e3e9a0e8b7402cec5dc46b82612c7
+release: v1.18.0
+distribution:
+  kind: pypi-wheel
+  filename: qdrant_client-1.18.0-py3-none-any.whl
+  sha256: 093aa8cf8a420ee3ad2a68b007e1378d7992b2600e0b53c193fc172674f659cd
+original_paths: []
+license_spdx: Apache-2.0
+copyright: "Copyright Qdrant authors and contributors"
+imported_at: 2026-07-25
+destination_paths:
+  - pyproject.toml
+  - uv.lock
+  - packages/memory/src/hina_memory/index.py
+modifications:
+  - "Pinned runtime dependency; no upstream source or snippet copied."
+  - "Wrapped as a derived index with SQLite as source of truth."
+  - "Configured in persistent local mode without a network listener."
+reviewed_by: primary_orchestrator
+approved_by: primary_orchestrator_for_local_development

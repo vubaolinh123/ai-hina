@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +22,8 @@ class RuntimePaths:
     audit_log: Path | None = None
     safety_manifest: Path | None = None
     persona_spec: Path | None = None
+    memory_database: Path | None = None
+    memory_index: Path | None = None
 
 
 class HinaRuntimeApplication:
@@ -36,6 +38,7 @@ class HinaRuntimeApplication:
         model_gateway: Any | None = None,
         speech_service: Any | None = None,
         tts_service: Any | None = None,
+        memory_service: Any | None = None,
     ) -> None:
         self.config = config
         self.paths = paths
@@ -52,6 +55,7 @@ class HinaRuntimeApplication:
         self.conversation: Any | None = None
         self.speech_service: Any | None = speech_service
         self.tts_service: Any | None = tts_service
+        self.memory_service: Any | None = memory_service
 
     @property
     def address(self) -> tuple[str, int]:
@@ -85,6 +89,7 @@ class HinaRuntimeApplication:
         conversation = None
         speech_service = self.speech_service
         tts_service = self.tts_service
+        memory_service = self.memory_service
         try:
             model_gateway = self.model_gateway
             if model_gateway is None:
@@ -99,6 +104,36 @@ class HinaRuntimeApplication:
                     ModelGatewayConfig.from_env(),
                     LocalResourceScheduler(NvidiaSmiTelemetry()),
                 )
+            if self.paths.memory_database is not None or self.paths.memory_index is not None:
+                if self.paths.memory_database is None or self.paths.memory_index is None:
+                    raise ValueError("memory_database and memory_index must be configured together")
+                if safety_policy is None:
+                    raise ValueError("long-term memory requires safety policy configuration")
+                if memory_service is None:
+                    from hina_memory import (
+                        LexicalHashEmbedder,
+                        MemoryConfig,
+                        MemoryService,
+                        MemoryStore,
+                        QdrantLocalMemoryIndex,
+                    )
+
+                    memory_config = replace(
+                        MemoryConfig.from_env(root=ROOT),
+                        database_path=self.paths.memory_database.resolve(),
+                        index_path=self.paths.memory_index.resolve(),
+                    )
+                    memory_service = MemoryService(
+                        memory_config,
+                        MemoryStore(memory_config.database_path),
+                        QdrantLocalMemoryIndex(
+                            memory_config.index_path,
+                            memory_config.collection_name,
+                            LexicalHashEmbedder(memory_config.vector_size),
+                        ),
+                        safety_policy.sanitize_input,
+                    )
+                    await memory_service.start()
             if self.paths.persona_spec is not None:
                 if safety_policy is None:
                     raise ValueError("persona_spec requires safety policy configuration")
@@ -108,6 +143,7 @@ class HinaRuntimeApplication:
                     model_gateway,
                     safety_policy,
                     PersonaSpec.load(self.paths.persona_spec.resolve()),
+                    long_term_memory=memory_service,
                     on_error=self._log_conversation_error,
                 )
             if speech_service is None:
@@ -167,6 +203,7 @@ class HinaRuntimeApplication:
                 conversation_service=conversation,
                 speech_service=speech_service,
                 tts_service=tts_service,
+                memory_service=memory_service,
                 build_commit=self.build_commit,
             )
             await server.start()
@@ -177,6 +214,8 @@ class HinaRuntimeApplication:
                 await speech_service.close()
             if tts_service is not None:
                 await tts_service.close()
+            if memory_service is not None:
+                await memory_service.close()
             store.close()
             raise
         self.store = store
@@ -186,6 +225,7 @@ class HinaRuntimeApplication:
         self.conversation = conversation
         self.speech_service = speech_service
         self.tts_service = tts_service
+        self.memory_service = memory_service
         self.metrics.set_gauge(
             "hina_runtime_ready",
             1,
@@ -205,12 +245,14 @@ class HinaRuntimeApplication:
         conversation = self.conversation
         speech_service = self.speech_service
         tts_service = self.tts_service
+        memory_service = self.memory_service
         self.server = None
         self.store = None
         self.safety_policy = None
         self.conversation = None
         self.speech_service = None
         self.tts_service = None
+        self.memory_service = None
         if server is not None:
             await server.stop()
         if conversation is not None:
@@ -219,6 +261,8 @@ class HinaRuntimeApplication:
             await speech_service.close()
         if tts_service is not None:
             await tts_service.close()
+        if memory_service is not None:
+            await memory_service.close()
         if store is not None:
             store.close()
 

@@ -1,9 +1,9 @@
 # Hina Dev Console
 
 This is the owner-facing local application for manually exercising the real
-M01 runtime, M02 safety policy, M03 local text brain, M04 local speech input and
-M05 local Vietnamese speech output. It contains no simulated AI response,
-transcript or audio.
+M01 runtime, M02 safety policy, M03 local text brain, M04 local speech input,
+M05 local Vietnamese speech output and M06 consent-gated long-term memory. It
+contains no simulated AI response, transcript, audio or memory.
 
 From the repository root:
 
@@ -22,6 +22,15 @@ and deduplicate durable echo events, replay a stream, round-trip a binary media
 frame, inspect bounded metrics and redacted error records, evaluate real
 capability policy, operate emergency stop/mute/feature flags/revocation, and
 inspect the SHA-256 chained safety audit.
+The UI is an admin-style hash-routed dashboard:
+
+- `#/overview` shows runtime readiness and describes each area;
+- `#/companion` groups text chat, STT and TTS;
+- `#/memory` handles candidate consent and active memory lifecycle;
+- `#/safety` contains policy, sanitation, moderation and audit controls;
+- `#/runtime` groups events, replay, binary frames, metrics, errors and activity.
+
+Every page explains its purpose in plain Vietnamese for non-developers.
 It also reports real local model/VRAM state and supports starting, polling,
 interrupting and replaying moderated chat turns. Provider output stays internal
 until the complete response passes outbound moderation.
@@ -34,6 +43,12 @@ through pinned VieNeu ONNX int8, play the returned 48 kHz mono WAV, and cancel
 or stop playback when the owner starts speaking. Complete text passes pre-TTS
 moderation before inference; voice cloning and runtime audio/text retention are
 disabled.
+M06 proposes sanitized candidates without auto-promotion. Owner decisions,
+versions, trust, source, sensitivity and TTL are authoritative in SQLite.
+Qdrant runs in persistent local mode as a rebuildable derived index. Search
+hits are revalidated against SQLite; deletion returns a receipt only after both
+stores reconcile. Owner memory enters chat only as delimited untrusted user-role
+data and is never retrieved for public/viewer turns.
 
 After updating the source, restart the running console so its Python process
-loads the new safety, text-brain and speech modules.
+loads the new safety, text-brain, speech and memory modules.

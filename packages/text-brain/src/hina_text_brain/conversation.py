@@ -128,6 +128,7 @@ class ConversationService:
         *,
         memory: ShortTermMemory | None = None,
         context_composer: ContextComposer | None = None,
+        long_term_memory: Any | None = None,
         on_error: Callable[[dict[str, str]], None] | None = None,
     ) -> None:
         if safety_policy is None:
@@ -139,6 +140,7 @@ class ConversationService:
         self.context_composer = context_composer or ContextComposer(
             persona,
             self.memory,
+            long_term_memory=long_term_memory,
         )
         self.on_error = on_error
         self._turns: dict[str, TurnRecord] = {}
@@ -288,6 +290,7 @@ class ConversationService:
             context = await self.context_composer.compose(
                 record.session_id,
                 sanitized_user,
+                source=record.source,
             )
             record.prompt_version = context.prompt_version
             record.context_summary = context.as_json()

@@ -34,6 +34,22 @@
         "Hina instantiates the pinned ONNX engine through version-specific internal APIs so both model and codec snapshots remain exact-revision local paths.",
         "Hina restricts the integration to CPU int8, one allowlisted preset voice, audio watermarking, bounded admission, cancellation, pre-TTS moderation and no retention or voice cloning."
       ]
+    },
+    {
+      "name": "qdrant-client",
+      "source_url": "https://github.com/qdrant/qdrant-client",
+      "revision": "v1.18.0@961c21aa930e3e9a0e8b7402cec5dc46b82612c7",
+      "license_spdx": "Apache-2.0",
+      "source_hash": "sha256:093aa8cf8a420ee3ad2a68b007e1378d7992b2600e0b53c193fc172674f659cd",
+      "destination_paths": [
+        "pyproject.toml",
+        "uv.lock",
+        "packages/memory/src/hina_memory/index.py"
+      ],
+      "modifications": [
+        "Used as a pinned PyPI dependency behind Hina's DerivedMemoryIndex interface; no upstream source file or snippet was copied.",
+        "Hina uses persistent local mode with no network listener and treats the vector collection as rebuildable derived state rather than authoritative memory."
+      ]
     }
   ]
 }

@@ -51,6 +51,10 @@ Independent review found no P0/P1 or acceptance blocker. Its page-unload P2 was
 closed with best-effort `sendBeacon`/keepalive provider cancellation; the
 remaining voice-consent P2 is intentionally retained as a release blocker.
 
+Ngày 2026-07-25, owner chỉ thị tiếp tục task tiếp theo. Quyết định này cho phép
+chuyển fast-development write phase sang M06; các deep performance/consent gate
+của M05 vẫn chưa được mô tả là đã pass.
+
 ## Known release blockers
 
 - CPU performance is above the RTF and first-audio promotion targets; a later

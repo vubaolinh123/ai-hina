@@ -22,6 +22,8 @@ async def _run(args: argparse.Namespace) -> None:
             audit_log=args.audit_log,
             safety_manifest=args.safety_manifest,
             persona_spec=args.persona_spec,
+            memory_database=args.memory_database,
+            memory_index=args.memory_index,
         ),
         build_commit=os.environ.get("HINA_BUILD_COMMIT", "development"),
     )
@@ -40,6 +42,8 @@ async def _run(args: argparse.Namespace) -> None:
                 "auditLog": str(args.audit_log.resolve()),
                 "safetyManifest": str(args.safety_manifest.resolve()),
                 "personaSpec": str(args.persona_spec.resolve()),
+                "memoryDatabase": str(args.memory_database.resolve()),
+                "memoryIndex": str(args.memory_index.resolve()),
             },
             ensure_ascii=False,
         ),
@@ -79,6 +83,16 @@ def main() -> int:
         "--persona-spec",
         type=Path,
         default=ROOT / "packages" / "text-brain" / "personas" / "hina.v1.json",
+    )
+    parser.add_argument(
+        "--memory-database",
+        type=Path,
+        default=ROOT / "var" / "data" / "hina-memory.sqlite3",
+    )
+    parser.add_argument(
+        "--memory-index",
+        type=Path,
+        default=ROOT / "var" / "data" / "hina-memory-qdrant",
     )
     args = parser.parse_args()
     try:

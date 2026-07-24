@@ -163,6 +163,7 @@ class ControlPlaneServer:
         conversation_service: Any | None = None,
         speech_service: Any | None = None,
         tts_service: Any | None = None,
+        memory_service: Any | None = None,
         build_commit: str | None = None,
     ) -> None:
         self.config = config
@@ -175,6 +176,7 @@ class ControlPlaneServer:
         self.conversation_service = conversation_service
         self.speech_service = speech_service
         self.tts_service = tts_service
+        self.memory_service = memory_service
         self.build_commit = build_commit or os.environ.get("HINA_BUILD_COMMIT", "development")
         self._server: asyncio.AbstractServer | None = None
         self._started_at = 0.0
@@ -434,6 +436,20 @@ class ControlPlaneServer:
             body = await self._speech_status()
         elif path == "/v1/tts/status":
             body = await self._tts_status()
+        elif path == "/v1/memory/status":
+            body = await self._memory_call("status")
+        elif path == "/v1/memory/candidates":
+            status = _parse_memory_candidate_query(parsed_target.query)
+            body = await self._memory_call("candidates", status=status)
+        elif path == "/v1/memory/records":
+            _require_empty_query(parsed_target.query)
+            body = await self._memory_call("records")
+        elif path == "/v1/memory/search":
+            query, limit = _parse_memory_search_query(parsed_target.query)
+            body = await self._memory_call("search", query, limit=limit)
+        elif path == "/v1/memory/export":
+            _require_empty_query(parsed_target.query)
+            body = await self._memory_call("export")
         elif _chat_route(path, "turns"):
             body = await self._chat_call("get_turn", _chat_route(path, "turns"))
         elif _chat_route(path, "sessions"):
@@ -469,6 +485,26 @@ class ControlPlaneServer:
             return self._safety_call("moderate", payload)
         if path == "/v1/chat/turns":
             return await self._chat_call("start_turn", payload)
+        if path == "/v1/memory/candidates":
+            return await self._memory_call("propose", payload)
+        candidate_id = _memory_item_route(path, "candidates", "decision")
+        if candidate_id is not None:
+            return await self._memory_call("decide", candidate_id, payload)
+        for suffix, operation in (
+            ("correct", "correct"),
+            ("pin", "set_pinned"),
+            ("delete", "delete"),
+        ):
+            memory_id = _memory_item_route(path, "records", suffix)
+            if memory_id is not None:
+                return await self._memory_call(operation, memory_id, payload)
+        if path == "/v1/memory/rebuild":
+            if payload != {"action": "rebuild"}:
+                raise PrimitiveError(
+                    RuntimeErrorCode.HTTP_BAD_REQUEST,
+                    "memory rebuild request is invalid",
+                )
+            return await self._memory_call("rebuild")
         turn_id = _chat_route(path, "turns", suffix="cancel")
         if turn_id is not None:
             if payload:
@@ -954,6 +990,34 @@ class ControlPlaneServer:
             )
         return result
 
+    async def _memory_call(
+        self,
+        operation: str,
+        *args: Any,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        if self.memory_service is None:
+            raise PrimitiveError(
+                "E_MEMORY_UNAVAILABLE",  # type: ignore[arg-type]
+                "long-term memory service is unavailable",
+            )
+        try:
+            result = await getattr(self.memory_service, operation)(*args, **kwargs)
+        except Exception as exc:
+            code = getattr(exc, "code", "")
+            if not isinstance(code, str) or not code.startswith("E_MEMORY_"):
+                raise
+            raise PrimitiveError(  # type: ignore[arg-type]
+                code,
+                getattr(exc, "detail", "memory request was rejected"),
+            ) from exc
+        if not isinstance(result, dict):
+            raise PrimitiveError(
+                "E_MEMORY_UNAVAILABLE",  # type: ignore[arg-type]
+                "long-term memory service returned invalid data",
+            )
+        return result
+
     async def _serve_static_file(self, writer: asyncio.StreamWriter, route: str) -> None:
         assert self.static_dir is not None
         filename, content_type = _STATIC_FILES[route]
@@ -999,10 +1063,22 @@ class ControlPlaneServer:
         writer.write(response.encode("ascii"))
         await self._drain(writer)
 
+        awaiting_pong = False
         while not writer.is_closing():
             try:
-                frame = await self._read_websocket_frame(reader)
+                try:
+                    frame = await self._read_websocket_frame(reader)
+                except TimeoutError:
+                    if awaiting_pong:
+                        raise PrimitiveError(
+                            RuntimeErrorCode.WEBSOCKET_PROTOCOL,
+                            "WebSocket peer did not answer the keepalive ping",
+                        )
+                    await self._write_websocket_frame(writer, 0x9, b"hina")
+                    awaiting_pong = True
+                    continue
                 if frame.opcode == 0x1:
+                    awaiting_pong = False
                     response_body = self._handle_text_message(frame.payload)
                     encoded_response = json.dumps(
                         response_body,
@@ -1021,6 +1097,7 @@ class ControlPlaneServer:
                         encoded_response,
                     )
                 elif frame.opcode == 0x2:
+                    awaiting_pong = False
                     media = BinaryMediaFrame.decode(frame.payload)
                     self._record_metric(
                         "hina_realtime_messages_total",
@@ -1032,8 +1109,10 @@ class ControlPlaneServer:
                     await self._write_websocket_frame(writer, 0x8, frame.payload[:125])
                     return
                 elif frame.opcode == 0x9:
+                    awaiting_pong = False
                     await self._write_websocket_frame(writer, 0xA, frame.payload)
                 elif frame.opcode == 0xA:
+                    awaiting_pong = False
                     continue
                 else:
                     raise PrimitiveError(RuntimeErrorCode.WEBSOCKET_PROTOCOL, "unsupported WebSocket opcode")
@@ -1145,11 +1224,8 @@ class ControlPlaneServer:
         raise PrimitiveError(RuntimeErrorCode.EVENT_REJECTED, "realtime message kind is unknown")
 
     async def _read_websocket_frame(self, reader: asyncio.StreamReader) -> _WebSocketFrame:
-        try:
-            async with asyncio.timeout(self.config.idle_timeout_seconds):
-                return await self._read_websocket_frame_within_timeout(reader)
-        except TimeoutError as exc:
-            raise PrimitiveError(RuntimeErrorCode.WEBSOCKET_PROTOCOL, "WebSocket frame timed out") from exc
+        async with asyncio.timeout(self.config.idle_timeout_seconds):
+            return await self._read_websocket_frame_within_timeout(reader)
 
     async def _read_websocket_frame_within_timeout(
         self,
@@ -1319,6 +1395,19 @@ class ControlPlaneServer:
 
     @staticmethod
     def _http_status_for(code: RuntimeErrorCode) -> HTTPStatus:
+        code_value = str(code)
+        if code_value == "E_MEMORY_NOT_FOUND":
+            return HTTPStatus.NOT_FOUND
+        if code_value in {
+            "E_MEMORY_VERSION_CONFLICT",
+            "E_MEMORY_CONTRADICTION",
+            "E_MEMORY_STATE",
+        }:
+            return HTTPStatus.CONFLICT
+        if code_value == "E_MEMORY_DELETE_PENDING" or code_value.startswith(
+            "E_MEMORY_INDEX_"
+        ) or code_value == "E_MEMORY_UNAVAILABLE":
+            return HTTPStatus.SERVICE_UNAVAILABLE
         if code is RuntimeErrorCode.FRAME_TOO_LARGE:
             return HTTPStatus.REQUEST_HEADER_FIELDS_TOO_LARGE
         if code is RuntimeErrorCode.CONNECTION_LIMIT:
@@ -1450,6 +1539,58 @@ def _tts_cancel_route(path: str) -> str | None:
     ):
         return None
     return parts[3]
+
+
+def _memory_item_route(path: str, collection: str, suffix: str) -> str | None:
+    parts = path.strip("/").split("/")
+    if (
+        len(parts) != 5
+        or parts[:3] != ["v1", "memory", collection]
+        or parts[-1] != suffix
+    ):
+        return None
+    return parts[3]
+
+
+def _require_empty_query(query: str) -> None:
+    if query:
+        raise PrimitiveError(
+            RuntimeErrorCode.HTTP_BAD_REQUEST,
+            "query parameters are not supported for this route",
+        )
+
+
+def _parse_memory_candidate_query(query: str) -> str | None:
+    parsed = parse_qs(query, keep_blank_values=True)
+    if set(parsed) - {"status"} or len(parsed.get("status", [])) > 1:
+        raise PrimitiveError(
+            RuntimeErrorCode.HTTP_BAD_REQUEST,
+            "memory candidate query is invalid",
+        )
+    return parsed.get("status", [None])[0]
+
+
+def _parse_memory_search_query(query: str) -> tuple[str, int | None]:
+    parsed = parse_qs(query, keep_blank_values=True)
+    if set(parsed) - {"q", "limit"} or len(parsed.get("q", [])) != 1:
+        raise PrimitiveError(
+            RuntimeErrorCode.HTTP_BAD_REQUEST,
+            "memory search query is invalid",
+        )
+    raw_limit = parsed.get("limit", [None])
+    if len(raw_limit) > 1:
+        raise PrimitiveError(
+            RuntimeErrorCode.HTTP_BAD_REQUEST,
+            "memory search limit is invalid",
+        )
+    try:
+        limit = None if raw_limit[0] is None else int(raw_limit[0])
+    except ValueError as exc:
+        raise PrimitiveError(
+            RuntimeErrorCode.HTTP_BAD_REQUEST,
+            "memory search limit is invalid",
+        ) from exc
+    return parsed["q"][0], limit
 
 
 def _read_recent_error_records(path: Path, limit: int) -> list[dict[str, Any]]:

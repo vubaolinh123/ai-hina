@@ -35,6 +35,16 @@ class ProvenanceTests(unittest.TestCase):
         self.assertTrue(
             any("no upstream source" in item.lower() for item in vieneu["modifications"])
         )
+        qdrant = by_name["qdrant-client"]
+        self.assertEqual("Apache-2.0", qdrant["license_spdx"])
+        self.assertIn("v1.18.0@", qdrant["revision"])
+        self.assertEqual(
+            "sha256:093aa8cf8a420ee3ad2a68b007e1378d7992b2600e0b53c193fc172674f659cd",
+            qdrant["source_hash"],
+        )
+        self.assertTrue(
+            any("no upstream source" in item.lower() for item in qdrant["modifications"])
+        )
 
     def test_model_and_asset_registries_exist(self) -> None:
         self.assertTrue((ROOT / "ml" / "models" / "manifests" / "README.md").is_file())

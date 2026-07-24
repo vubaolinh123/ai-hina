@@ -704,6 +704,156 @@
           }
         }
       }
+    },
+    "/v1/memory/status": {
+      "get": {
+        "operationId": "getMemoryStatus",
+        "responses": {
+          "200": {
+            "description": "Authoritative store, derived index and consent workflow status."
+          }
+        }
+      }
+    },
+    "/v1/memory/candidates": {
+      "get": {
+        "operationId": "listMemoryCandidates",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["pending", "quarantined", "promoted", "rejected", "deleted"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Consent candidates visible to the local owner."
+          }
+        }
+      },
+      "post": {
+        "operationId": "proposeMemoryCandidate",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["source", "sessionId", "kind", "topic", "content", "confidence", "sensitivity", "expiresAt", "correlationId"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sanitized candidate awaiting explicit owner consent."
+          }
+        }
+      }
+    },
+    "/v1/memory/candidates/{candidateId}/decision": {
+      "post": {
+        "operationId": "decideMemoryCandidate",
+        "parameters": [
+          {
+            "name": "candidateId",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "string", "format": "uuid"}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["action", "expectedVersion"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {"description": "Candidate was promoted or rejected by the owner."},
+          "409": {"description": "Candidate version or topic conflicts with current state."}
+        }
+      }
+    },
+    "/v1/memory/records": {
+      "get": {
+        "operationId": "listMemoryRecords",
+        "responses": {
+          "200": {"description": "Active long-term memories from SQLite."}
+        }
+      }
+    },
+    "/v1/memory/search": {
+      "get": {
+        "operationId": "searchMemory",
+        "parameters": [
+          {"name": "q", "in": "query", "required": true, "schema": {"type": "string"}},
+          {"name": "limit", "in": "query", "required": false, "schema": {"type": "integer", "minimum": 1, "maximum": 20}}
+        ],
+        "responses": {
+          "200": {"description": "Derived hits revalidated against active authoritative records."}
+        }
+      }
+    },
+    "/v1/memory/export": {
+      "get": {
+        "operationId": "exportMemory",
+        "responses": {
+          "200": {"description": "Auditable owner export including active records, tombstones and audit actions."}
+        }
+      }
+    },
+    "/v1/memory/records/{memoryId}/correct": {
+      "post": {
+        "operationId": "correctMemory",
+        "parameters": [
+          {"name": "memoryId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
+        ],
+        "responses": {
+          "200": {"description": "Memory corrected with optimistic version control."}
+        }
+      }
+    },
+    "/v1/memory/records/{memoryId}/pin": {
+      "post": {
+        "operationId": "pinMemory",
+        "parameters": [
+          {"name": "memoryId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
+        ],
+        "responses": {
+          "200": {"description": "Memory pin state changed by the owner."}
+        }
+      }
+    },
+    "/v1/memory/records/{memoryId}/delete": {
+      "post": {
+        "operationId": "deleteMemory",
+        "parameters": [
+          {"name": "memoryId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}
+        ],
+        "responses": {
+          "200": {"description": "Deletion receipt after authoritative and derived stores reconcile."},
+          "503": {"description": "Deletion is still waiting for derived-store reconciliation."}
+        }
+      }
+    },
+    "/v1/memory/rebuild": {
+      "post": {
+        "operationId": "rebuildMemoryIndex",
+        "responses": {
+          "200": {"description": "Derived index rebuilt from active authoritative records."}
+        }
+      }
     }
   },
   "components": {

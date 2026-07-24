@@ -16,7 +16,7 @@
       <div class="brand">
         <div class="brand-mark" aria-hidden="true">H</div>
         <div>
-          <p class="eyebrow">LOCAL RUNTIME / M01 + M02 + M03 + M04 + M05</p>
+          <p class="eyebrow">LOCAL RUNTIME / M01–M06</p>
           <h1>Hina Dev Console</h1>
         </div>
       </div>
@@ -26,8 +26,49 @@
       </div>
     </header>
 
-    <main>
-      <section class="hero" aria-labelledby="heroTitle">
+    <div class="dashboard-shell">
+      <aside class="sidebar" aria-label="Điều hướng chức năng">
+        <p class="sidebar-label">KHU VỰC QUẢN LÝ</p>
+        <nav class="dashboard-nav">
+          <a href="#/overview" data-dashboard-nav="overview">
+            <span class="nav-icon" aria-hidden="true">01</span>
+            <span><strong>Tổng quan</strong><small>Tình trạng toàn hệ thống</small></span>
+          </a>
+          <a href="#/companion" data-dashboard-nav="companion">
+            <span class="nav-icon" aria-hidden="true">02</span>
+            <span><strong>Trò chuyện & giọng nói</strong><small>Chat, nghe và nói</small></span>
+          </a>
+          <a href="#/memory" data-dashboard-nav="memory">
+            <span class="nav-icon" aria-hidden="true">03</span>
+            <span><strong>Ký ức</strong><small>Duyệt và quản lý ghi nhớ</small></span>
+          </a>
+          <a href="#/safety" data-dashboard-nav="safety">
+            <span class="nav-icon" aria-hidden="true">04</span>
+            <span><strong>An toàn</strong><small>Quyền hạn và kiểm duyệt</small></span>
+          </a>
+          <a href="#/runtime" data-dashboard-nav="runtime">
+            <span class="nav-icon" aria-hidden="true">05</span>
+            <span><strong>Runtime & chẩn đoán</strong><small>Event, metric và lỗi</small></span>
+          </a>
+        </nav>
+        <div class="sidebar-note">
+          <strong>Chạy cục bộ</strong>
+          <span>Console chỉ kết nối tới <code>127.0.0.1</code>. Dữ liệu không tự gửi ra Internet.</span>
+        </div>
+      </aside>
+
+      <main class="dashboard-main">
+      <section class="page-heading" aria-live="polite">
+        <div>
+          <p id="pageEyebrow" class="eyebrow">DASHBOARD</p>
+          <h2 id="pageTitle">Tổng quan hệ thống</h2>
+          <p id="pageDescription">
+            Xem nhanh Hina đang sẵn sàng ở mức nào và chọn khu vực cần thao tác.
+          </p>
+        </div>
+      </section>
+
+      <section class="hero" data-dashboard-page="overview" aria-labelledby="heroTitle">
         <div>
           <p class="eyebrow">OWNER TEST SURFACE</p>
           <h2 id="heroTitle">Runtime thật với chat và giọng nói local</h2>
@@ -48,7 +89,7 @@
         </div>
       </section>
 
-      <section class="status-grid" aria-label="Trạng thái runtime">
+      <section class="status-grid" data-dashboard-page="overview" aria-label="Trạng thái runtime">
         <article class="stat">
           <span>Runtime</span>
           <strong id="healthValue">Đang kiểm tra…</strong>
@@ -71,8 +112,31 @@
         </article>
       </section>
 
+      <section class="overview-grid" data-dashboard-page="overview" aria-label="Các khu vực chức năng">
+        <a class="overview-card" href="#/companion">
+          <span class="overview-number">01</span>
+          <h3>Trò chuyện & giọng nói</h3>
+          <p>Dùng để nhắn tin với Hina, chuyển giọng nói thành chữ và phát câu trả lời bằng giọng Việt trên máy.</p>
+        </a>
+        <a class="overview-card" href="#/memory">
+          <span class="overview-number">02</span>
+          <h3>Ký ức có kiểm soát</h3>
+          <p>Dùng để đề xuất điều Hina nên nhớ; chỉ dữ liệu bạn bấm duyệt mới được đưa vào ký ức dài hạn.</p>
+        </a>
+        <a class="overview-card" href="#/safety">
+          <span class="overview-number">03</span>
+          <h3>Trung tâm an toàn</h3>
+          <p>Dùng để kiểm tra quyền, dừng khẩn cấp, lọc dữ liệu đầu vào và xem lịch sử quyết định an toàn.</p>
+        </a>
+        <a class="overview-card" href="#/runtime">
+          <span class="overview-number">04</span>
+          <h3>Runtime & chẩn đoán</h3>
+          <p>Dùng để kiểm tra luồng sự kiện, dữ liệu đã lưu, chỉ số vận hành và mã lỗi khi một tính năng gặp sự cố.</p>
+        </a>
+      </section>
+
       <div class="workspace-grid">
-        <section class="panel brain-panel" aria-labelledby="brainTitle">
+        <section class="panel brain-panel" data-dashboard-page="companion" aria-labelledby="brainTitle">
           <div class="panel-heading">
             <div>
               <p class="eyebrow">M03-S1 / LOCAL MODEL</p>
@@ -80,6 +144,11 @@
             </div>
             <button id="refreshModelButton" class="text-button" type="button">Làm mới</button>
           </div>
+          <p class="panel-copy feature-purpose">
+            <strong>Mục đích:</strong> cho biết Hina đang dùng chương trình AI
+            và model nào để suy nghĩ, model có truy cập được không và máy còn đủ
+            tài nguyên hay không. “Unavailable” nghĩa là chat sẽ báo lỗi thật.
+          </p>
           <div class="safety-banner">
             <div>
               <span>Gateway</span>
@@ -113,6 +182,11 @@
               </div>
               <span id="chatPersonaBadge" class="protocol-pill">Đang đọc persona…</span>
             </div>
+            <p class="panel-copy">
+              Dùng để gửi một lượt hội thoại thật tới model local. Replay xem lại
+              các lượt của phiên hiện tại; Clear memory chỉ xóa hội thoại ngắn
+              hạn, không xóa ký ức dài hạn ở trang Ký ức.
+            </p>
             <div class="chat-grid">
               <div>
                 <div id="chatMessages" class="chat-messages" aria-live="polite">
@@ -165,7 +239,7 @@
           </div>
         </section>
 
-        <section class="panel speech-panel" aria-labelledby="speechTitle">
+        <section class="panel speech-panel" data-dashboard-page="companion" aria-labelledby="speechTitle">
           <div class="panel-heading">
             <div>
               <p class="eyebrow">M04 / BINARY WAV + VAD + FASTER-WHISPER</p>
@@ -242,7 +316,7 @@
           </div>
         </section>
 
-        <section class="panel tts-panel" aria-labelledby="ttsTitle">
+        <section class="panel tts-panel" data-dashboard-page="companion" aria-labelledby="ttsTitle">
           <div class="panel-heading">
             <div>
               <p class="eyebrow">M05 / VIENEU ONNX INT8 + PRE-TTS MODERATION</p>
@@ -306,7 +380,140 @@
           </div>
         </section>
 
-        <section class="panel safety-panel" aria-labelledby="safetyTitle">
+        <section class="panel memory-panel" data-dashboard-page="memory" aria-labelledby="memoryTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">M06 / CONSENT-GATED LONG-TERM MEMORY</p>
+              <h2 id="memoryTitle">Ký ức dài hạn của Hina</h2>
+            </div>
+            <div class="button-row">
+              <button id="refreshMemoryButton" class="text-button" type="button">Làm mới</button>
+              <button id="exportMemoryButton" class="text-button" type="button">Xuất dữ liệu</button>
+            </div>
+          </div>
+          <p class="panel-copy feature-purpose">
+            <strong>Mục đích:</strong> lưu những thông tin ổn định như sở thích,
+            cách xưng hô hoặc thông tin bạn muốn Hina nhớ ở các phiên sau. Hina
+            không tự ghi nhớ: mọi đề xuất phải được bạn bấm “Duyệt”.
+          </p>
+
+          <div class="safety-banner">
+            <div>
+              <span>Dịch vụ ký ức</span>
+              <strong id="memoryAvailability">Đang đọc…</strong>
+            </div>
+            <div>
+              <span>Chờ bạn duyệt</span>
+              <strong id="memoryPendingValue">0</strong>
+            </div>
+            <div>
+              <span>Đang sử dụng</span>
+              <strong id="memoryActiveValue">0</strong>
+            </div>
+            <div>
+              <span>Đồng bộ chỉ mục</span>
+              <strong id="memoryIndexValue">—</strong>
+            </div>
+          </div>
+
+          <div class="memory-columns">
+            <div class="safety-block">
+              <h3>1. Đề xuất điều cần nhớ</h3>
+              <p class="panel-copy">
+                Dùng khi có một dữ kiện bạn muốn Hina nhớ lâu. Nội dung được lọc
+                thông tin nhạy cảm trước, sau đó nằm trong danh sách chờ chứ chưa
+                ảnh hưởng tới câu trả lời.
+              </p>
+              <div class="field-grid">
+                <div>
+                  <label for="memorySourceSelect">Nguồn thông tin</label>
+                  <select id="memorySourceSelect">
+                    <option value="owner.console" selected>Bạn nhập trực tiếp</option>
+                    <option value="authenticated.user">Người dùng đã xác thực</option>
+                    <option value="viewer.chat">Khán giả / chat ngoài</option>
+                    <option value="public.chat">Kênh chat công khai</option>
+                    <option value="web.research">Nghiên cứu trên web</option>
+                  </select>
+                  <small class="field-help">Nguồn ngoài luôn có mức tin cậy thấp hơn và vẫn cần bạn duyệt.</small>
+                </div>
+                <div>
+                  <label for="memoryKindInput">Loại ký ức</label>
+                  <input id="memoryKindInput" maxlength="64" value="preference" placeholder="Ví dụ: preference">
+                  <small class="field-help">Nhóm dữ liệu, ví dụ preference (sở thích) hoặc profile (hồ sơ).</small>
+                </div>
+              </div>
+              <label for="memoryTopicInput">Chủ đề duy nhất</label>
+              <input id="memoryTopicInput" maxlength="128" placeholder="Ví dụ: đồ uống yêu thích">
+              <small class="field-help">Hina chặn hai ký ức cùng chủ đề để tránh âm thầm ghi đè hoặc mâu thuẫn.</small>
+              <label for="memoryContentInput">Nội dung cần nhớ</label>
+              <textarea id="memoryContentInput" rows="4" maxlength="2000" placeholder="Ví dụ: Linh thích cà phê ít đường."></textarea>
+              <div class="field-grid">
+                <div>
+                  <label for="memorySensitivitySelect">Mức riêng tư</label>
+                  <select id="memorySensitivitySelect">
+                    <option value="personal" selected>Cá nhân</option>
+                    <option value="public">Công khai</option>
+                    <option value="sensitive">Nhạy cảm</option>
+                  </select>
+                  <small class="field-help">Nhãn giúp các module sau biết cách hạn chế sử dụng dữ liệu.</small>
+                </div>
+                <div>
+                  <label for="memoryConfidenceInput">Độ chắc chắn (0–1)</label>
+                  <input id="memoryConfidenceInput" type="number" min="0" max="1" step="0.05" value="0.9">
+                  <small class="field-help">1 là bạn chắc chắn hoàn toàn; số thấp dùng cho dữ kiện còn cần kiểm tra.</small>
+                </div>
+              </div>
+              <label for="memoryExpiryInput">Tự hết hạn (không bắt buộc)</label>
+              <input id="memoryExpiryInput" type="datetime-local">
+              <small class="field-help">Dùng cho thông tin tạm thời. Ký ức đã ghim sẽ không tự hết hạn.</small>
+              <button id="proposeMemoryButton" class="button button-primary full-width" type="button">
+                Tạo đề xuất — chưa ghi nhớ ngay
+              </button>
+              <div id="memoryCandidateResult" class="data-box empty">
+                Chưa có đề xuất mới.
+              </div>
+            </div>
+
+            <div class="safety-block">
+              <h3>2. Danh sách chờ quyết định</h3>
+              <p class="panel-copy">
+                “Duyệt” mới biến đề xuất thành ký ức được dùng trong chat của
+                owner. “Từ chối” giữ lại dấu vết quyết định nhưng không đưa nội
+                dung vào ngữ cảnh hội thoại.
+              </p>
+              <div id="memoryCandidateList" class="stack-list memory-list">
+                <p class="empty">Chưa có đề xuất đang chờ.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="sanitation-section">
+            <div class="panel-heading compact-heading">
+              <div>
+                <p class="eyebrow">AUTHORITATIVE SQLITE / DERIVED QDRANT</p>
+                <h3>3. Tìm và quản lý ký ức đã duyệt</h3>
+              </div>
+              <button id="rebuildMemoryButton" class="button button-secondary" type="button">
+                Dựng lại chỉ mục tìm kiếm
+              </button>
+            </div>
+            <p class="panel-copy">
+              Tìm kiếm dùng chỉ mục local để chọn ứng viên, rồi kiểm tra lại
+              SQLite trước khi hiển thị. Sửa cập nhật nội dung, ghim ngăn hết hạn,
+              còn xóa chỉ cấp biên nhận sau khi cả SQLite và chỉ mục đã đồng bộ.
+            </p>
+            <div class="inline-control memory-search">
+              <input id="memorySearchInput" placeholder="Nhập chủ đề hoặc nội dung cần tìm…">
+              <button id="searchMemoryButton" class="button button-primary" type="button">Tìm ký ức</button>
+            </div>
+            <div id="memorySearchResult" class="data-box empty">Chưa tìm kiếm.</div>
+            <div id="memoryRecordList" class="stack-list memory-list">
+              <p class="empty">Chưa có ký ức đã duyệt.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel safety-panel" data-dashboard-page="safety" aria-labelledby="safetyTitle">
           <div class="panel-heading">
             <div>
               <p class="eyebrow">M02 / POLICY AUTHORITY</p>
@@ -314,6 +521,11 @@
             </div>
             <button id="refreshSafetyButton" class="text-button" type="button">Làm mới</button>
           </div>
+          <p class="panel-copy feature-purpose">
+            <strong>Mục đích:</strong> kiểm soát Hina được phép làm gì trước khi
+            thao tác xảy ra. Đây là nơi dừng khẩn cấp, tắt output, thử chính sách
+            và kiểm tra dấu vết audit khi có hành vi bị chặn.
+          </p>
 
           <div id="safetyBanner" class="safety-banner">
             <div>
@@ -343,6 +555,10 @@
               </p>
               <label for="capabilitySelect">Capability</label>
               <select id="capabilitySelect"></select>
+              <small class="field-help">
+                Capability là một quyền cụ thể, ví dụ ghi nhớ, quan sát hoặc điều
+                khiển game. Kết quả ask nghĩa là phải có owner xác nhận.
+              </small>
               <div class="field-grid">
                 <div>
                   <label for="trustSelect">Trust level</label>
@@ -368,7 +584,8 @@
             <div class="safety-block">
               <h3>Operator controls</h3>
               <p class="panel-copy">
-                Các thay đổi bên dưới áp dụng vào policy state và được hash-chain audit.
+                Emergency stop chặn hành động mới; mute chỉ tắt output. Mọi thay
+                đổi bên dưới áp dụng ngay vào policy state và được hash-chain audit.
               </p>
               <div class="button-row">
                 <button id="emergencyStopButton" class="button button-danger" type="button">
@@ -383,11 +600,19 @@
               </div>
 
               <h3 class="subheading">Feature flags</h3>
+              <p class="panel-copy">
+                Công tắc tổng để bật hoặc tắt cả một nhóm tính năng rủi ro. OFF
+                khiến policy từ chối nhóm đó ngay cả khi capability riêng cho phép.
+              </p>
               <div id="featureFlags" class="toggle-list">
                 <p class="empty">Đang đọc feature flags…</p>
               </div>
 
               <h3 class="subheading">Capability revocation</h3>
+              <p class="panel-copy">
+                Thu hồi một quyền cụ thể cho tới khi bạn bấm Unrevoke. Dùng khi
+                muốn khóa tạm một hành vi mà không dừng toàn bộ Hina.
+              </p>
               <div class="inline-control">
                 <select id="revocationSelect"></select>
                 <button id="revocationButton" class="button button-secondary" type="button">
@@ -404,6 +629,11 @@
                 <h3>Input sanitation</h3>
               </div>
             </div>
+            <p class="panel-copy">
+              Dùng để xem dữ liệu từ chat, web, game hoặc OCR sẽ được chuẩn hóa,
+              che email/token và phát hiện prompt injection ra sao trước khi đi
+              vào ngữ cảnh AI. ContextBundle chỉ tạo được từ evidence hợp lệ.
+            </p>
             <div class="sanitation-grid">
               <div>
                 <label for="inputSourceSelect">Nguồn dữ liệu</label>
@@ -444,6 +674,11 @@
                 <h3>Moderation lab</h3>
               </div>
             </div>
+            <p class="panel-copy">
+              Dùng để thử bốn cổng kiểm duyệt: input trước LLM, pre_tool trước
+              công cụ, pre_tts trước giọng nói và outbound trước khi phát nội dung.
+              Kết quả block/quarantine sẽ ngăn luồng tiếp tục.
+            </p>
             <div class="sanitation-grid">
               <div>
                 <div class="field-grid">
@@ -492,13 +727,18 @@
                 <h3>Safety audit gần đây</h3>
               </div>
             </div>
+            <p class="panel-copy">
+              Dùng để đối chiếu ai đã yêu cầu quyền gì, policy cho phép hay từ
+              chối và chuỗi log có còn nguyên vẹn hay không. Hash giúp phát hiện
+              bản ghi cũ bị sửa.
+            </p>
             <div id="safetyAuditList" class="stack-list">
               <p class="empty">Chưa có audit record.</p>
             </div>
           </div>
         </section>
 
-        <section class="panel event-panel" aria-labelledby="eventTitle">
+        <section class="panel event-panel" data-dashboard-page="runtime" aria-labelledby="eventTitle">
           <div class="panel-heading">
             <div>
               <p class="eyebrow">REALTIME EVENT LAB</p>
@@ -506,6 +746,11 @@
             </div>
             <span class="protocol-pill">hina.realtime.v1</span>
           </div>
+          <p class="panel-copy feature-purpose">
+            <strong>Mục đích:</strong> gửi một sự kiện thật qua WebSocket để kiểm
+            tra runtime có xác thực contract, ghi journal SQLite và chống xử lý
+            lặp hay không. “Gửi event lỗi” chủ động tạo lỗi an toàn để kiểm log.
+          </p>
 
           <label for="messageInput">Nội dung echo</label>
           <textarea id="messageInput" rows="3" maxlength="4096">Xin chào Hina — kiểm tra event thật từ Dev Console.</textarea>
@@ -545,7 +790,7 @@
           </div>
         </section>
 
-        <section class="panel" aria-labelledby="replayTitle">
+        <section class="panel" data-dashboard-page="runtime" aria-labelledby="replayTitle">
           <div class="panel-heading">
             <div>
               <p class="eyebrow">SQLITE JOURNAL</p>
@@ -563,7 +808,7 @@
           <div id="replayResult" class="data-box empty">Chưa có dữ liệu replay.</div>
         </section>
 
-        <section class="panel" aria-labelledby="binaryTitle">
+        <section class="panel" data-dashboard-page="runtime" aria-labelledby="binaryTitle">
           <div class="panel-heading">
             <div>
               <p class="eyebrow">OPCODE 2 / HINA HEADER</p>
@@ -581,7 +826,7 @@
           <div id="binaryResult" class="data-box empty">Chưa gửi binary.</div>
         </section>
 
-        <section class="panel metrics-panel" aria-labelledby="metricsTitle">
+        <section class="panel metrics-panel" data-dashboard-page="runtime" aria-labelledby="metricsTitle">
           <div class="panel-heading">
             <div>
               <p class="eyebrow">BOUNDED OBSERVABILITY</p>
@@ -589,6 +834,10 @@
             </div>
             <button id="refreshMetricsButton" class="text-button" type="button">Làm mới</button>
           </div>
+          <p class="panel-copy">
+            Dùng để theo dõi số lần runtime xử lý từng loại thao tác và phát hiện
+            lỗi tăng bất thường. Đây là số liệu thật từ tiến trình đang chạy.
+          </p>
           <div class="table-wrap">
             <table>
               <thead>
@@ -606,7 +855,7 @@
           </div>
         </section>
 
-        <section class="panel errors-panel" aria-labelledby="errorsTitle">
+        <section class="panel errors-panel" data-dashboard-page="runtime" aria-labelledby="errorsTitle">
           <div class="panel-heading">
             <div>
               <p class="eyebrow">REDACTED JSONL</p>
@@ -623,7 +872,7 @@
           </div>
         </section>
 
-        <section class="panel activity-panel" aria-labelledby="activityTitle">
+        <section class="panel activity-panel" data-dashboard-page="runtime" aria-labelledby="activityTitle">
           <div class="panel-heading">
             <div>
               <p class="eyebrow">LIVE CLIENT LOG</p>
@@ -631,13 +880,18 @@
             </div>
             <button id="clearActivityButton" class="text-button" type="button">Xóa</button>
           </div>
+          <p class="panel-copy">
+            Dùng để xem các thao tác vừa thực hiện trên trình duyệt này. Nhật ký
+            tạm thời này giúp bạn đối chiếu thời điểm thao tác với mã lỗi bên trên.
+          </p>
           <ol id="activityLog" class="activity-log" aria-live="polite"></ol>
         </section>
       </div>
-    </main>
+      </main>
+    </div>
 
     <footer>
-      <span>Hina AI · M01–M05 local companion console</span>
+      <span>Hina AI · M01–M06 local companion dashboard</span>
       <span>Dừng dịch vụ bằng <kbd>Ctrl</kbd> + <kbd>C</kbd></span>
     </footer>
   </body>

@@ -1,0 +1,95 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M06-S1-consent-memory-dashboard",
+  "module_id": "M06",
+  "objective": "Deliver a runnable owner-facing long-term-memory vertical slice with SQLite as the authoritative store, Qdrant local mode as a rebuildable derived vector index, explicit candidate-to-consent-to-promotion workflow, provenance/trust/sensitivity/TTL/version fields, scoped retrieval into chat as untrusted data, correction/pin/export/delete operations, deletion receipts after reconciliation, and a dashboard-style Dev Console that groups related real features into understandable navigable pages.",
+  "non_goals": [
+    "Do not auto-promote any chat, model, web, screen, OCR or public input into long-term memory.",
+    "Do not treat Qdrant or the lexical embedding as the source of truth or claim the M06 semantic-retrieval quality gate.",
+    "Do not put retrieved memory into the system role or allow memory text to override persona or safety policy.",
+    "Do not expose memory or Qdrant outside loopback or add a cloud dependency.",
+    "Do not claim deletion from already-trained model weights or adapters.",
+    "Do not add M07 avatar functionality in this slice.",
+    "Do not preserve the old single-page wall of panels; navigation must expose grouped dashboard views without fake data."
+  ],
+  "base_sha": "37d4121f52f400ca8fcafbfce07783ac2e2cf232",
+  "branch": "codex/M06-memory-dashboard",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    ".env.example",
+    "AGENTS.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "README.md",
+    "apps/core-runtime/",
+    "apps/dev-console/",
+    "docs/modules/M05-speech-output.md",
+    "docs/modules/M06-*",
+    "docs/provenance/",
+    "package.json",
+    "packages/contracts/openapi/control-plane.v1.json",
+    "packages/memory/",
+    "packages/text-brain/",
+    "pyproject.toml",
+    "tests/governance/",
+    "third_party/",
+    "tools/dev/",
+    "uv.lock"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "adapters/",
+    "assets/",
+    "packages/contracts/schemas/v1/event-envelope.schema.json",
+    "workers/"
+  ],
+  "contracts": [
+    "SQLite append-only candidate/event/audit data is authoritative; Qdrant contains only derived vectors and payload metadata and must be fully rebuildable.",
+    "Every candidate records source, trust, owner, confidence, sensitivity, TTL, status, content hash, timestamp and version.",
+    "No candidate is promoted without an explicit owner decision; public and untrusted sources are never auto-promoted.",
+    "Sanitation runs before candidate persistence. Injection-bearing input is quarantined without storing its raw content.",
+    "Retrieval revalidates every Qdrant result against active authoritative SQLite rows, owner scope, expiry and sensitivity before use.",
+    "Owner memory is retrieved only for owner.console turns and is inserted into a delimited user-role context block labeled untrusted memory data.",
+    "Delete redacts active SQLite content, removes the vector, clears candidate/cache state and returns a DeletionReceipt only after reconciliation.",
+    "The browser dashboard uses hash routes so refresh and navigation stay inside the loopback app; no feature is represented by canned backend data.",
+    "Every dashboard page and functional group includes plain-language purpose and usage notes for non-developers."
+  ],
+  "allowed_dependencies": [
+    "Python 3.12+ standard library and existing Hina runtime, contracts, safety and text-brain packages.",
+    "qdrant-client 1.18.0 in persistent local mode, pinned in uv.lock and wrapped behind Hina's derived-index interface.",
+    "Existing dependency-free HTML, CSS and JavaScript Dev Console; no frontend framework migration in this slice."
+  ],
+  "oss_candidates": [
+    "https://github.com/qdrant/qdrant-client/tree/v1.18.0",
+    "https://pypi.org/project/qdrant-client/1.18.0/",
+    "https://qdrant.tech/documentation/quickstart/"
+  ],
+  "acceptance_criteria": [
+    "Unit tests cover migrations, candidate sanitation/quarantine, explicit promotion, provenance fields, public-source no-auto-promotion, owner isolation, expiry, contradiction-safe retrieval, correction/pin and exact-version conflicts.",
+    "Crash-safe tests cover SQLite promotion plus pending Qdrant outbox, idempotent reconciliation, orphan-vector cleanup and full rebuild.",
+    "Delete tests prove no receipt is returned before SQLite, Qdrant, candidate queue and derived cache are reconciled.",
+    "Conversation tests prove owner memory is added only as a delimited untrusted user-role block and never retrieved for public/viewer/authenticated turns.",
+    "Runtime endpoints provide status, candidates, decisions, records, search, correction, pin, export and delete with stable errors and redacted logs.",
+    "Dev Console dashboard has header, responsive sidebar/navbar and grouped Overview, Companion, Memory, Safety and Runtime pages.",
+    "All existing web controls remain reachable and functional after navigation, while every page and feature group explains its purpose in plain Vietnamese.",
+    "Fast unit, contract, governance/provenance, JavaScript syntax and Dev Console startup smoke remain green.",
+    "Browser verification on 127.0.0.1 confirms navigation, responsive layout, readable annotations and a real memory candidate-to-promotion-to-search workflow."
+  ],
+  "required_test_commands": [
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-MemoryUnit.ps1",
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-FastUnit.ps1",
+    "pnpm test:contracts",
+    "uv run --frozen python -m unittest discover -s tests/governance -p \"test_*.py\"",
+    "uv run --frozen python tools/license/check_provenance.py",
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Start-HinaDevConsole.ps1 -Port 0 -NoBrowser -StartupCheck"
+  ],
+  "latency_or_quality_budget": {
+    "max_candidate_characters": 2000,
+    "max_active_records_per_owner": 10000,
+    "default_retrieval_limit": 5,
+    "max_retrieval_limit": 20,
+    "context_memory_byte_budget": 8192,
+    "dashboard_route_switch_target_milliseconds": 100,
+    "retrieval_target_milliseconds": 100
+  },
+  "output_artifact_dir": "artifacts/verification/M06/"
+}

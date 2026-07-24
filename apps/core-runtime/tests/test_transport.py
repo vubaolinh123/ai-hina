@@ -106,6 +106,16 @@ class TransportValueTests(unittest.TestCase):
                 "/v1/safety/sanitize",
                 "/v1/safety/context",
                 "/v1/safety/moderate",
+                "/v1/memory/status",
+                "/v1/memory/candidates",
+                "/v1/memory/candidates/{candidateId}/decision",
+                "/v1/memory/records",
+                "/v1/memory/search",
+                "/v1/memory/export",
+                "/v1/memory/records/{memoryId}/correct",
+                "/v1/memory/records/{memoryId}/pin",
+                "/v1/memory/records/{memoryId}/delete",
+                "/v1/memory/rebuild",
             },
         )
         self.assertEqual(asyncapi["asyncapi"], "3.0.0")
@@ -201,6 +211,37 @@ class TransportServerTests(unittest.IsolatedAsyncioTestCase):
             )
             self.assertNotIn("attacker.example", json.dumps(records))
 
+    async def test_idle_websocket_stays_alive_when_browser_answers_ping(self) -> None:
+        server = ControlPlaneServer(
+            TransportConfig(port=0, idle_timeout_seconds=0.05),
+        )
+        await server.start()
+        host, port = server.address
+        try:
+            reader, writer = await asyncio.open_connection(host, port)
+            writer.write(self._handshake(host, port, origin=f"http://{host}:{port}"))
+            await writer.drain()
+            response = await reader.readuntil(b"\r\n\r\n")
+            self.assertIn(b"101 Switching Protocols", response)
+
+            first, second = await asyncio.wait_for(reader.readexactly(2), timeout=0.2)
+            self.assertEqual((first & 0x0F, second & 0x7F), (0x9, 4))
+            ping_payload = await reader.readexactly(4)
+            self.assertEqual(ping_payload, b"hina")
+            writer.write(self._masked_frame(0xA, ping_payload))
+            await writer.drain()
+
+            first, second = await asyncio.wait_for(reader.readexactly(2), timeout=0.2)
+            self.assertEqual((first & 0x0F, second & 0x7F), (0x9, 4))
+            self.assertEqual(await reader.readexactly(4), b"hina")
+            writer.write(self._masked_frame(0x8, b""))
+            await writer.drain()
+            await reader.read()
+            writer.close()
+            await writer.wait_closed()
+        finally:
+            await server.stop()
+
     @staticmethod
     def _handshake(host: str, port: int, *, origin: str) -> bytes:
         key = base64.b64encode(os.urandom(16)).decode("ascii")
@@ -215,6 +256,14 @@ class TransportServerTests(unittest.IsolatedAsyncioTestCase):
             f"Origin: {origin}\r\n"
             "\r\n"
         ).encode("ascii")
+
+    @staticmethod
+    def _masked_frame(opcode: int, payload: bytes) -> bytes:
+        if len(payload) > 125:
+            raise ValueError("test control frame is too large")
+        mask = b"\x11\x22\x33\x44"
+        masked = bytes(value ^ mask[index % 4] for index, value in enumerate(payload))
+        return bytes((0x80 | opcode, 0x80 | len(payload))) + mask + masked
 
 
 if __name__ == "__main__":
