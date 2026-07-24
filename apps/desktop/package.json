@@ -1,0 +1,25 @@
+{
+  "name": "@hina/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sandboxed Electron and Vue operator stage for Hina AI",
+  "license": "MIT",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "typecheck": "vue-tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
+    "build": "vite build && tsc -p tsconfig.node.json",
+    "start": "electron .",
+    "test": "pnpm run build && node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "vue": "3.5.40"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.1",
+    "@vitejs/plugin-vue": "6.0.8",
+    "electron": "43.2.0",
+    "typescript": "6.0.3",
+    "vite": "8.1.5",
+    "vue-tsc": "3.3.8"
+  }
+}

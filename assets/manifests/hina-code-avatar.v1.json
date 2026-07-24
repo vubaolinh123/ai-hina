@@ -42,6 +42,16 @@
       "path": "apps/dev-console/public/app.js",
       "role": "renderer-safe runtime state and observed audio-amplitude binding",
       "sha256": "796189a4357f8ba573cd445f2f3bc2d52b3f39bd5f47782ffde7e45262f815db"
+    },
+    {
+      "path": "apps/desktop/src/App.vue",
+      "role": "desktop Vue stage and original inline SVG geometry",
+      "sha256": "c876dbba980676b7ac1a4192ac896d580acc918d010b96e182e8385d8a8adb19"
+    },
+    {
+      "path": "apps/desktop/src/style.css",
+      "role": "desktop avatar styling, expressions and state animation",
+      "sha256": "6f132c244be85ef5447e5c729c1e89e656e268420dcc45e5ac3d9da554657b6a"
     }
   ],
   "runtime": {

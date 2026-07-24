@@ -4,7 +4,7 @@ Hina AI là dự án local-first xây dựng AI VTuber tiếng Việt theo kiế
 mô-đun. Hội thoại, speech, memory, avatar, perception, Minecraft và livestream
 được tách bằng contract rõ ràng để có thể phát triển và rollback độc lập.
 
-Trạng thái hiện tại: **M07 — avatar stage đang có vertical slice chạy thật để
+Trạng thái hiện tại: **M07 — avatar stage và desktop đang có vertical slice chạy thật để
 owner test**. M01 runtime spine, M02 safety, M03 text brain, M04 speech input,
 M05 speech output và M06 memory đã qua fast gate; M06 cũng đã qua independent
 review không có P0/P1. Hina Dev Console hiện là dashboard nhiều
@@ -149,8 +149,21 @@ nhận cue `speech.output` cho vòng đời speaking/idle.
 
 Visual hiện tại là SVG/CSS gốc của repository và được ghi provenance tại
 `assets/manifests/hina-code-avatar.v1.json`. UI luôn báo `VRM chưa tải`; đây
-không phải VRM/Live2D và lip-sync hiện chưa nhận dạng nguyên âm. Electron/Vue,
-three-vrm, licensed avatar asset và performance/soak gate thuộc slice M07 kế tiếp.
+không phải VRM/Live2D và lip-sync hiện chưa nhận dạng nguyên âm. Three-vrm,
+licensed avatar asset và performance/soak gate thuộc slice M07 kế tiếp.
+
+### Mở ứng dụng desktop
+
+Giữ Dev Console/control plane chạy ở terminal thứ nhất, rồi mở terminal thứ hai:
+
+```powershell
+pnpm start:desktop
+```
+
+Đây là ứng dụng Electron/Vue thật, không phải ảnh hoặc demo giả. Desktop đọc
+avatar và safety state qua typed preload IPC; renderer không có Node, filesystem,
+database, model hay quyền gọi network trực tiếp. Nếu control plane chưa chạy,
+ứng dụng hiện lỗi offline và chỉ dẫn `pnpm start:dev-console`.
 
 ## Vòng lặp phát triển nhanh
 

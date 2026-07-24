@@ -50,6 +50,118 @@
         "Used as a pinned PyPI dependency behind Hina's DerivedMemoryIndex interface; no upstream source file or snippet was copied.",
         "Hina uses persistent local mode with no network listener and treats the vector collection as rebuildable derived state rather than authoritative memory."
       ]
+    },
+    {
+      "name": "electron",
+      "source_url": "https://github.com/electron/electron",
+      "revision": "npm:electron@43.2.0",
+      "license_spdx": "MIT",
+      "source_hash": "sha512-80zvrgG7ZRXD+tD0IyLvrnN9n+veSxadMRsMaC9wKKP3iUbtC7rGM8+dVuCmOb0Rrwwv8ESW4awnUZh9Hbp1fA==",
+      "destination_paths": [
+        "package.json",
+        "pnpm-lock.yaml",
+        "apps/desktop/package.json",
+        "apps/desktop/electron"
+      ],
+      "modifications": [
+        "Used as an exact npm development dependency for the local desktop main and preload processes; no upstream source file or snippet was copied.",
+        "Hina enables Chromium sandboxing and context isolation, disables Node integration and webview, and exposes only six named preload operations."
+      ]
+    },
+    {
+      "name": "vue",
+      "source_url": "https://github.com/vuejs/core",
+      "revision": "npm:vue@3.5.40",
+      "license_spdx": "MIT",
+      "source_hash": "sha512-+8PJ4SJXdn/cHGImF4CKdxlWHIN5Dkt7DoufRREM6h6uVCx2m7QxgcEQmmzyOK8A9mcafg7sFbJFYsdFVubTig==",
+      "destination_paths": [
+        "package.json",
+        "pnpm-lock.yaml",
+        "apps/desktop/package.json",
+        "apps/desktop/src"
+      ],
+      "modifications": [
+        "Used as an exact npm renderer dependency; no upstream source file or snippet was copied.",
+        "The Hina renderer contains only presentation state and calls a repository-owned typed preload facade."
+      ]
+    },
+    {
+      "name": "vite",
+      "source_url": "https://github.com/vitejs/vite",
+      "revision": "npm:vite@8.1.5",
+      "license_spdx": "MIT",
+      "source_hash": "sha512-7ULLwsCdYx/nRyrpiEwvqb5TFHrMVZyBt+rg/OAXT7rgj/z+DtTDyKFeLAdDkubDVDKD8jOsndmy7m55XcfUsw==",
+      "destination_paths": [
+        "package.json",
+        "pnpm-lock.yaml",
+        "apps/desktop/package.json",
+        "apps/desktop/vite.config.ts"
+      ],
+      "modifications": [
+        "Used as an exact npm build dependency; no upstream source file or snippet was copied.",
+        "The build uses repository-authored local-file paths and emits no remote runtime dependency."
+      ]
+    },
+    {
+      "name": "@vitejs/plugin-vue",
+      "source_url": "https://github.com/vitejs/vite-plugin-vue",
+      "revision": "npm:@vitejs/plugin-vue@6.0.8",
+      "license_spdx": "MIT",
+      "source_hash": "sha512-0ZjgOg7oO6farnNGup7yvoM/YXZV84OZxHAwtflItNa/6zzQyVb5LNxyea3FEKEX2XlagIKzrlH7wwxkKgtiew==",
+      "destination_paths": [
+        "pnpm-lock.yaml",
+        "apps/desktop/package.json",
+        "apps/desktop/vite.config.ts"
+      ],
+      "modifications": [
+        "Used as an exact npm build dependency for Vue single-file components; no upstream source file or snippet was copied."
+      ]
+    },
+    {
+      "name": "typescript",
+      "source_url": "https://github.com/microsoft/TypeScript",
+      "revision": "npm:typescript@6.0.3",
+      "license_spdx": "Apache-2.0",
+      "source_hash": "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==",
+      "destination_paths": [
+        "pnpm-lock.yaml",
+        "apps/desktop/package.json",
+        "apps/desktop/tsconfig.app.json",
+        "apps/desktop/tsconfig.node.json"
+      ],
+      "modifications": [
+        "Used as an exact npm build and type-check dependency; no upstream source file or snippet was copied.",
+        "TypeScript 7 is deliberately excluded because vue-tsc 3.3.8 cannot resolve the compiler subpath after the TypeScript 7 package export change."
+      ]
+    },
+    {
+      "name": "vue-tsc",
+      "source_url": "https://github.com/vuejs/language-tools",
+      "revision": "npm:vue-tsc@3.3.8",
+      "license_spdx": "MIT",
+      "source_hash": "sha512-xXmYlVQpcwJDWyGlqbHrGVOl1h3UOsASymRibrHc+iy9j/UNnOrOn4u+fntHz4D6Cs74RtapeqVV6CzJeg+UlA==",
+      "destination_paths": [
+        "pnpm-lock.yaml",
+        "apps/desktop/package.json"
+      ],
+      "modifications": [
+        "Used as an exact npm Vue type-check dependency; no upstream source file or snippet was copied."
+      ]
+    },
+    {
+      "name": "@types/node",
+      "source_url": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/node",
+      "revision": "npm:@types/node@26.1.1",
+      "license_spdx": "MIT",
+      "source_hash": "sha512-nxAkRSVkN1Y0JC1W8ky/fTfkGsMmcrRsbx+3XoZE+rMOX71kLYTV7fLXpqud1GpbpP5TuffXFqfX7fH2GgZREw==",
+      "destination_paths": [
+        "pnpm-lock.yaml",
+        "apps/desktop/package.json",
+        "apps/desktop/tsconfig.node.json"
+      ],
+      "modifications": [
+        "Used as an exact npm type-definition dependency; no upstream source file or snippet was copied."
+      ]
     }
   ]
 }

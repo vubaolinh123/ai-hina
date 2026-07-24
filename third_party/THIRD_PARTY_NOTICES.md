@@ -53,3 +53,25 @@ blocked pending owner review.
 No qdrant-client source file or snippet is copied into this repository. Hina
 uses the pinned local-mode API behind its own derived-index boundary. SQLite
 remains authoritative and the Qdrant collection can be reconciled or rebuilt.
+
+## M07 desktop build stack
+
+The local operator desktop uses these exact npm packages:
+
+- Electron 43.2.0 — MIT — https://github.com/electron/electron
+- Vue 3.5.40 — MIT — https://github.com/vuejs/core
+- Vite 8.1.5 — MIT — https://github.com/vitejs/vite
+- @vitejs/plugin-vue 6.0.8 — MIT —
+  https://github.com/vitejs/vite-plugin-vue
+- TypeScript 6.0.3 — Apache-2.0 —
+  https://github.com/microsoft/TypeScript
+- vue-tsc 3.3.8 — MIT — https://github.com/vuejs/language-tools
+- @types/node 26.1.1 — MIT —
+  https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/node
+
+Each registry artifact is pinned by version and integrity in `pnpm-lock.yaml`
+and `third_party/code.lock.json`. No source file or snippet from these projects
+is copied into Hina. Electron, Vite, the Vue plugin, TypeScript, vue-tsc and
+@types/node are development/runtime-host tooling; Vue is the renderer runtime
+dependency. TypeScript 7 is not used because it is currently incompatible with
+the pinned Vue type checker.

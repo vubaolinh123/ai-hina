@@ -46,6 +46,26 @@ class ProvenanceTests(unittest.TestCase):
         self.assertTrue(
             any("no upstream source" in item.lower() for item in qdrant["modifications"])
         )
+        desktop_dependencies = {
+            "electron": ("MIT", "npm:electron@43.2.0"),
+            "vue": ("MIT", "npm:vue@3.5.40"),
+            "vite": ("MIT", "npm:vite@8.1.5"),
+            "@vitejs/plugin-vue": ("MIT", "npm:@vitejs/plugin-vue@6.0.8"),
+            "typescript": ("Apache-2.0", "npm:typescript@6.0.3"),
+            "vue-tsc": ("MIT", "npm:vue-tsc@3.3.8"),
+            "@types/node": ("MIT", "npm:@types/node@26.1.1"),
+        }
+        for name, (license_spdx, revision) in desktop_dependencies.items():
+            component = by_name[name]
+            self.assertEqual(license_spdx, component["license_spdx"])
+            self.assertEqual(revision, component["revision"])
+            self.assertTrue(component["source_hash"].startswith("sha512-"))
+            self.assertTrue(
+                any(
+                    "no upstream source" in item.lower()
+                    for item in component["modifications"]
+                )
+            )
 
     def test_model_and_asset_registries_exist(self) -> None:
         self.assertTrue((ROOT / "ml" / "models" / "manifests" / "README.md").is_file())

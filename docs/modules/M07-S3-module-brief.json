@@ -1,0 +1,93 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M07-S3-electron-vue-operator-shell",
+  "module_id": "M07",
+  "objective": "Deliver a runnable Electron 43 and Vue 3 desktop shell for the M07 avatar stage. The local packaged renderer must have Node integration disabled, Chromium sandbox and context isolation enabled, and access only a narrow typed preload API whose main-process handlers call the existing 127.0.0.1 control plane. The shell must display real avatar and safety status, allow labeled manual preview/reset/mute/emergency controls, and clearly retain the repository-original code-native fallback while VRM asset selection remains pending.",
+  "non_goals": [
+    "Do not load remote web content, use webview, enable Node integration, expose ipcRenderer directly or provide a generic IPC/fetch/file/shell bridge.",
+    "Do not read SQLite, Qdrant, model files, provider objects, environment secrets or arbitrary filesystem paths from the renderer.",
+    "Do not add a VRM/Live2D/motion asset or claim that the code-native fallback is a VRM.",
+    "Do not duplicate conversation, memory, safety or avatar business policy in Vue.",
+    "Do not add an installer, auto-updater, code signing or public network binding in this slice.",
+    "Do not run packaging, repeat, dropped-frame or soak release gates during fast development.",
+    "Do not open M08."
+  ],
+  "base_sha": "13175940da130535bbb784ae38c18eb749233103",
+  "branch": "codex/M07-avatar-stage",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "AGENTS.md",
+    "README.md",
+    ".gitignore",
+    "apps/desktop/",
+    "assets/manifests/hina-code-avatar.v1.json",
+    "docs/modules/M07-*",
+    "package.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    "third_party/code.lock.json",
+    "third_party/THIRD_PARTY_NOTICES.md",
+    "tools/dev/"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "adapters/",
+    "apps/core-runtime/",
+    "apps/dev-console/",
+    "packages/avatar/",
+    "packages/contracts/",
+    "packages/memory/",
+    "packages/safety-policy/",
+    "packages/text-brain/",
+    "workers/"
+  ],
+  "contracts": [
+    "BrowserWindow loads only repository-built local files with nodeIntegration false, contextIsolation true, sandbox true and webSecurity true; popup and unexpected navigation are denied.",
+    "Preload exposes one frozen window.hinaDesktop object with named methods only; ipcRenderer, send, invoke, shell, filesystem and generic channel names never cross into the renderer.",
+    "Main-process IPC handlers use a fixed operation-to-loopback-route allowlist and reject unknown operations, unexpected cue fields, non-owner cue sources and non-loopback control-plane base URLs.",
+    "Vue renderer contains presentation state only and never imports Electron, Node built-ins, database/model packages or runtime provider modules.",
+    "Desktop status is real control-plane data or an explicit offline error; it is never replaced with canned avatar, safety, latency or resource values.",
+    "Manual preview remains labeled manual-preview and uses owner.console; mute and emergency controls call the existing safety authority.",
+    "The desktop visual is covered by the repository-original asset manifest and reports vrmLoaded false until a separately licensed asset and adapter are approved."
+  ],
+  "allowed_dependencies": [
+    "electron 43.2.0 (MIT), pinned as a development dependency.",
+    "vue 3.5.40 (MIT), pinned as the renderer dependency.",
+    "vite 8.1.5 and @vitejs/plugin-vue 6.0.8 (MIT), pinned for local build only.",
+    "typescript 6.0.3 (Apache-2.0), vue-tsc 3.3.8 and @types/node 26.1.1 (MIT), pinned for type checking/build only. TypeScript 7 is excluded because vue-tsc 3.3.8 cannot resolve its non-exported compiler subpath.",
+    "Existing Hina loopback control-plane HTTP endpoints; no new network service."
+  ],
+  "oss_candidates": [
+    "https://github.com/electron/electron/tree/v43.2.0",
+    "https://github.com/vuejs/core/tree/v3.5.40",
+    "https://github.com/vitejs/vite/tree/v8.1.5",
+    "https://github.com/vitejs/vite-plugin-vue/tree/plugin-vue@6.0.8",
+    "https://github.com/vuejs/language-tools/tree/v3.3.8"
+  ],
+  "acceptance_criteria": [
+    "Dependency lock and third-party provenance record exact versions, source repositories, licenses and that no upstream source file was copied.",
+    "Type checking and production build pass for Electron main/preload and Vue renderer.",
+    "Static security tests prove context isolation, sandbox, disabled Node integration, local-file loading, denied popup/navigation and the absence of generic IPC exposure.",
+    "Control-client unit tests prove only fixed loopback status/cue/reset/safety operations are allowed and response/error text is bounded.",
+    "Vue stage visibly distinguishes offline, runtime, manual-preview and tts-playback modes and reports code-native fallback with vrmLoaded false.",
+    "Desktop smoke launches the built local renderer in a hidden Electron window against the running loopback control plane and exits cleanly without a renderer crash.",
+    "Root fast startup behavior and existing Dev Console remain unchanged.",
+    "README documents start:desktop as a real app command and explains that the control plane must be running."
+  ],
+  "required_test_commands": [
+    "pnpm --filter @hina/desktop typecheck",
+    "pnpm --filter @hina/desktop test",
+    "pnpm --filter @hina/desktop build",
+    "pnpm smoke:desktop",
+    "uv run --frozen python -m unittest discover -s tests/governance -p \"test_*.py\"",
+    "uv run --frozen python tools/license/check_provenance.py"
+  ],
+  "latency_or_quality_budget": {
+    "desktop_status_poll_interval_milliseconds": 250,
+    "control_request_timeout_milliseconds": 5000,
+    "renderer_exposed_api_methods_maximum": 6,
+    "desktop_smoke_timeout_seconds": 20,
+    "deep_frame_and_av_gate_deferred": true
+  },
+  "output_artifact_dir": "artifacts/verification/M07/"
+}
