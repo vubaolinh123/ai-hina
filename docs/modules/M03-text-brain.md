@@ -1,10 +1,10 @@
 # M03 — Text brain
 
-- Status: in progress
+- Status: fast implementation complete; independent review and owner acceptance pending
 - Branch: `codex/M03-text-brain`
 - Base: `6c21754`
-- Completed slice: `M03-S1 — local model gateway, health and resource lease`
-- Next slice: `M03-S2 — turn FSM, persona, short-term memory and real chat Console`
+- Completed slices: `M03-S1`, `M03-S2`
+- Next action: independent review, then owner manual application test
 
 ## M03-S1 implementation
 
@@ -34,3 +34,35 @@
 Model download and model-quality promotion are intentionally outside this
 slice. `HINA_MODEL_PROVIDER`, `HINA_MODEL_BASE_URL`, `HINA_MODEL_NAME` and
 optional `HINA_MODEL_API_KEY` select an already-running local provider.
+
+## M03-S2 implementation
+
+- Versioned frozen `hina.local.vi.v1` persona is separate from dynamic,
+  session-scoped relationship state.
+- Turn FSM enforces idle/listening/thinking/speaking/interrupted/error and one
+  active turn per session.
+- Context composer keeps the newest complete memory turns inside 65536 bytes and
+  always states that no current screen/camera/game observation exists.
+- Input must pass M02 moderation before context. Full provider output must pass
+  outbound moderation before it reaches the browser or memory.
+- Short-term memory stores successful sanitized pairs only; replay and clear are
+  real runtime endpoints.
+- Typed tool proposal JSON is schema-checked and pre-tool moderated. It is
+  inspectable but no executor exists.
+- Dev Console starts, polls, interrupts, replays and clears chat turns against
+  the actual configured local provider.
+- Turn failures are written to the redacted JSONL error log with turn, session,
+  input hash and correlation identifiers but no raw input/output.
+
+## M03-S2 fast gate
+
+- [x] Text brain unit 22/22, including cancellation lease release.
+- [x] Safety unit 22/22 and core runtime 32/32.
+- [x] Contract suite 28 Python + 13 Node.
+- [x] Real Dev Console startup/shutdown smoke.
+- [x] Real-machine unavailable-provider probe returns `E_MODEL_UNAVAILABLE`,
+  no assistant text, no raw email in logs, and a reportable correlation ID.
+
+The 200+ golden conversation/model-quality benchmark, TTFT/tokens-per-second
+baseline and deep repeat/soak gate remain deferred under the owner's fast
+development rule. No model is quality-promoted by this implementation gate.

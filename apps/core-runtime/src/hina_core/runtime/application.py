@@ -7,6 +7,7 @@ from typing import Any
 from .durable import DurableStore
 from .error_log import JsonlErrorLogger
 from .observability import MetricRegistry
+from .primitives import PrimitiveError, RuntimeErrorCode
 from .transport import ControlPlaneServer, TransportConfig
 
 
@@ -17,6 +18,7 @@ class RuntimePaths:
     static_dir: Path | None = None
     audit_log: Path | None = None
     safety_manifest: Path | None = None
+    persona_spec: Path | None = None
 
 
 class HinaRuntimeApplication:
@@ -42,6 +44,7 @@ class HinaRuntimeApplication:
         self.server: ControlPlaneServer | None = None
         self.safety_policy: Any | None = None
         self.model_gateway: Any | None = model_gateway
+        self.conversation: Any | None = None
 
     @property
     def address(self) -> tuple[str, int]:
@@ -72,38 +75,54 @@ class HinaRuntimeApplication:
             )
             safety_policy = SafetyPolicyService(manifest, audit)
         store = DurableStore(self.paths.database.resolve())
-        model_gateway = self.model_gateway
-        if model_gateway is None:
-            from hina_text_brain import (
-                LocalResourceScheduler,
-                ModelGateway,
-                ModelGatewayConfig,
-                NvidiaSmiTelemetry,
-            )
-
-            model_gateway = ModelGateway(
-                ModelGatewayConfig.from_env(),
-                LocalResourceScheduler(NvidiaSmiTelemetry()),
-            )
-        server = ControlPlaneServer(
-            self.config,
-            durable_store=store,
-            error_logger=self.error_logger,
-            metrics=self.metrics,
-            static_dir=self.paths.static_dir,
-            safety_policy=safety_policy,
-            model_gateway=model_gateway,
-            build_commit=self.build_commit,
-        )
+        conversation = None
         try:
+            model_gateway = self.model_gateway
+            if model_gateway is None:
+                from hina_text_brain import (
+                    LocalResourceScheduler,
+                    ModelGateway,
+                    ModelGatewayConfig,
+                    NvidiaSmiTelemetry,
+                )
+
+                model_gateway = ModelGateway(
+                    ModelGatewayConfig.from_env(),
+                    LocalResourceScheduler(NvidiaSmiTelemetry()),
+                )
+            if self.paths.persona_spec is not None:
+                if safety_policy is None:
+                    raise ValueError("persona_spec requires safety policy configuration")
+                from hina_text_brain import ConversationService, PersonaSpec
+
+                conversation = ConversationService(
+                    model_gateway,
+                    safety_policy,
+                    PersonaSpec.load(self.paths.persona_spec.resolve()),
+                    on_error=self._log_conversation_error,
+                )
+            server = ControlPlaneServer(
+                self.config,
+                durable_store=store,
+                error_logger=self.error_logger,
+                metrics=self.metrics,
+                static_dir=self.paths.static_dir,
+                safety_policy=safety_policy,
+                model_gateway=model_gateway,
+                conversation_service=conversation,
+                build_commit=self.build_commit,
+            )
             await server.start()
         except Exception:
+            if conversation is not None:
+                await conversation.close()
             store.close()
             raise
         self.store = store
         self.server = server
         self.safety_policy = safety_policy
         self.model_gateway = model_gateway
+        self.conversation = conversation
         self.metrics.set_gauge(
             "hina_runtime_ready",
             1,
@@ -120,10 +139,30 @@ class HinaRuntimeApplication:
     async def stop(self) -> None:
         server = self.server
         store = self.store
+        conversation = self.conversation
         self.server = None
         self.store = None
         self.safety_policy = None
+        self.conversation = None
         if server is not None:
             await server.stop()
+        if conversation is not None:
+            await conversation.close()
         if store is not None:
             store.close()
+
+    def _log_conversation_error(self, record: dict[str, str]) -> None:
+        self.error_logger.log_error(
+            PrimitiveError(
+                RuntimeErrorCode.OPERATION_FAILED,
+                record["errorCode"],
+            ),
+            component="text_brain.conversation",
+            operation="turn",
+            correlation_id=record["correlationId"],
+            context={
+                "turnId": record["turnId"],
+                "sessionId": record["sessionId"],
+                "inputHash": record["inputHash"],
+            },
+        )

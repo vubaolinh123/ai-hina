@@ -104,6 +104,64 @@
           <div id="modelStatusBox" class="data-box empty">
             Chưa có trạng thái model gateway.
           </div>
+          <div class="chat-section">
+            <div class="panel-heading compact-heading">
+              <div>
+                <p class="eyebrow">M03-S2 / MODERATED TEXT TURN</p>
+                <h3>Chat với Hina qua model local thật</h3>
+              </div>
+              <span id="chatPersonaBadge" class="protocol-pill">Đang đọc persona…</span>
+            </div>
+            <div class="chat-grid">
+              <div>
+                <div id="chatMessages" class="chat-messages" aria-live="polite">
+                  <p class="empty">Chưa có lượt chat hoàn tất trong phiên này.</p>
+                </div>
+                <div class="field-grid">
+                  <div>
+                    <label for="chatSourceSelect">Nguồn input</label>
+                    <select id="chatSourceSelect">
+                      <option value="owner.console" selected>owner.console</option>
+                      <option value="authenticated.user">authenticated.user</option>
+                      <option value="viewer.chat">viewer.chat</option>
+                      <option value="public.chat">public.chat</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label>Session</label>
+                    <div id="chatSessionValue" class="inline-value">—</div>
+                  </div>
+                </div>
+                <label for="chatInput">Tin nhắn</label>
+                <textarea id="chatInput" rows="3" maxlength="16384" placeholder="Nhập tin nhắn cho Hina…"></textarea>
+                <div class="button-row">
+                  <button id="sendChatButton" class="button button-primary" type="button">
+                    Gửi turn thật
+                  </button>
+                  <button id="cancelChatButton" class="button button-danger" type="button" disabled>
+                    Interrupt
+                  </button>
+                  <button id="replayChatButton" class="button button-secondary" type="button">
+                    Replay
+                  </button>
+                  <button id="clearChatButton" class="button button-secondary" type="button">
+                    Clear memory
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label>Turn FSM / correlation</label>
+                <div id="chatTurnResult" class="data-box empty">
+                  Chưa có turn đang chạy.
+                </div>
+                <p class="panel-copy">
+                  Token từ provider được buffer nội bộ và chỉ hiện sau khi toàn
+                  bộ câu trả lời qua outbound moderation. Partial output bị lỗi
+                  hoặc bị cancel sẽ không xuất hiện ở đây.
+                </p>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section class="panel safety-panel" aria-labelledby="safetyTitle">

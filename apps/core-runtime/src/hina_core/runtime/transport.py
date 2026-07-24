@@ -157,6 +157,7 @@ class ControlPlaneServer:
         static_dir: Path | None = None,
         safety_policy: Any | None = None,
         model_gateway: Any | None = None,
+        conversation_service: Any | None = None,
         build_commit: str | None = None,
     ) -> None:
         self.config = config
@@ -166,6 +167,7 @@ class ControlPlaneServer:
         self.static_dir = static_dir.resolve() if static_dir is not None else None
         self.safety_policy = safety_policy
         self.model_gateway = model_gateway
+        self.conversation_service = conversation_service
         self.build_commit = build_commit or os.environ.get("HINA_BUILD_COMMIT", "development")
         self._server: asyncio.AbstractServer | None = None
         self._started_at = 0.0
@@ -354,7 +356,7 @@ class ControlPlaneServer:
 
         body: dict[str, Any]
         if request.method == "POST":
-            body = self._serve_safety_post(path, request)
+            body = await self._serve_post(path, request)
         elif path == "/v1/health":
             body = {
                 "status": "ready",
@@ -409,6 +411,12 @@ class ControlPlaneServer:
                     "model gateway is unavailable",
                 )
             body = await self.model_gateway.status()
+        elif path == "/v1/chat/status":
+            body = await self._chat_call("status")
+        elif _chat_route(path, "turns"):
+            body = await self._chat_call("get_turn", _chat_route(path, "turns"))
+        elif _chat_route(path, "sessions"):
+            body = await self._chat_call("replay", _chat_route(path, "sessions"))
         else:
             self._record_metric("hina_http_requests_total", operation="not_found", status="error")
             await self._send_json_response(
@@ -420,8 +428,14 @@ class ControlPlaneServer:
         self._record_metric("hina_http_requests_total", operation=path[4:], status="ok")
         await self._send_json_response(writer, HTTPStatus.OK, body)
 
-    def _serve_safety_post(self, path: str, request: _HttpRequest) -> dict[str, Any]:
-        payload = _parse_json_body(request)
+    async def _serve_post(self, path: str, request: _HttpRequest) -> dict[str, Any]:
+        if path.startswith("/v1/safety/"):
+            body_error = RuntimeErrorCode.SAFETY_BAD_REQUEST
+        elif path.startswith("/v1/chat/"):
+            body_error = RuntimeErrorCode.CHAT_BAD_REQUEST
+        else:
+            body_error = RuntimeErrorCode.HTTP_BAD_REQUEST
+        payload = _parse_json_body(request, error_code=body_error)
         if path == "/v1/safety/evaluate":
             return self._safety_call("evaluate", payload)
         if path == "/v1/safety/control":
@@ -432,6 +446,24 @@ class ControlPlaneServer:
             return self._safety_call("create_context", payload)
         if path == "/v1/safety/moderate":
             return self._safety_call("moderate", payload)
+        if path == "/v1/chat/turns":
+            return await self._chat_call("start_turn", payload)
+        turn_id = _chat_route(path, "turns", suffix="cancel")
+        if turn_id is not None:
+            if payload:
+                raise PrimitiveError(
+                    RuntimeErrorCode.CHAT_BAD_REQUEST,
+                    "cancel request body must be empty",
+                )
+            return await self._chat_call("cancel_turn", turn_id)
+        session_id = _chat_route(path, "sessions", suffix="clear")
+        if session_id is not None:
+            if payload != {"action": "clear"}:
+                raise PrimitiveError(
+                    RuntimeErrorCode.CHAT_BAD_REQUEST,
+                    "clear request body is invalid",
+                )
+            return await self._chat_call("clear_session", session_id)
         raise PrimitiveError(RuntimeErrorCode.HTTP_BAD_REQUEST, "POST route was not found")
 
     def _safety_call(self, operation: str, *args: Any) -> dict[str, Any]:
@@ -456,6 +488,40 @@ class ControlPlaneServer:
             ) from exc
         if not isinstance(result, dict):
             raise PrimitiveError(RuntimeErrorCode.SAFETY_UNAVAILABLE, "safety policy returned invalid data")
+        return result
+
+    async def _chat_call(self, operation: str, *args: Any) -> dict[str, Any]:
+        if self.conversation_service is None:
+            raise PrimitiveError(
+                RuntimeErrorCode.CHAT_UNAVAILABLE,
+                "conversation service is unavailable",
+            )
+        try:
+            result = await getattr(self.conversation_service, operation)(*args)
+        except Exception as exc:
+            code = getattr(exc, "code", "")
+            if code == "E_TURN_NOT_FOUND":
+                runtime_code = RuntimeErrorCode.CHAT_NOT_FOUND
+            elif code == "E_TURN_ACTIVE":
+                runtime_code = RuntimeErrorCode.CHAT_CONFLICT
+            elif isinstance(code, str) and (
+                code.startswith("E_CHAT_")
+                or code.startswith("E_TURN_")
+                or code.startswith("E_CONTEXT_")
+                or code.startswith("E_PERSONA_")
+            ):
+                runtime_code = RuntimeErrorCode.CHAT_BAD_REQUEST
+            else:
+                raise
+            raise PrimitiveError(
+                runtime_code,
+                getattr(exc, "detail", "conversation request was rejected"),
+            ) from exc
+        if not isinstance(result, dict):
+            raise PrimitiveError(
+                RuntimeErrorCode.CHAT_UNAVAILABLE,
+                "conversation service returned invalid data",
+            )
         return result
 
     async def _serve_static_file(self, writer: asyncio.StreamWriter, route: str) -> None:
@@ -829,6 +895,12 @@ class ControlPlaneServer:
             return HTTPStatus.SERVICE_UNAVAILABLE
         if code is RuntimeErrorCode.SAFETY_UNAVAILABLE:
             return HTTPStatus.SERVICE_UNAVAILABLE
+        if code is RuntimeErrorCode.CHAT_UNAVAILABLE:
+            return HTTPStatus.SERVICE_UNAVAILABLE
+        if code is RuntimeErrorCode.CHAT_NOT_FOUND:
+            return HTTPStatus.NOT_FOUND
+        if code is RuntimeErrorCode.CHAT_CONFLICT:
+            return HTTPStatus.CONFLICT
         return HTTPStatus.BAD_REQUEST
 
     def _log_error(
@@ -907,20 +979,36 @@ def _parse_safety_audit_limit(query: str) -> int:
     return limit
 
 
-def _parse_json_body(request: _HttpRequest) -> dict[str, Any]:
+def _parse_json_body(
+    request: _HttpRequest,
+    *,
+    error_code: RuntimeErrorCode,
+) -> dict[str, Any]:
     content_type = request.headers.get("content-type", "").partition(";")[0].strip().lower()
     if content_type != "application/json" or not request.body:
-        raise PrimitiveError(RuntimeErrorCode.SAFETY_BAD_REQUEST, "JSON request body is required")
+        raise PrimitiveError(error_code, "JSON request body is required")
     try:
         value = json.loads(
             request.body.decode("utf-8"),
             object_pairs_hook=_reject_duplicate_pairs,
         )
     except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
-        raise PrimitiveError(RuntimeErrorCode.SAFETY_BAD_REQUEST, "request body is invalid JSON") from exc
+        raise PrimitiveError(error_code, "request body is invalid JSON") from exc
     if not isinstance(value, dict):
-        raise PrimitiveError(RuntimeErrorCode.SAFETY_BAD_REQUEST, "request body must be an object")
+        raise PrimitiveError(error_code, "request body must be an object")
     return value
+
+
+def _chat_route(path: str, collection: str, *, suffix: str | None = None) -> str | None:
+    parts = path.strip("/").split("/")
+    expected_length = 5 if suffix is not None else 4
+    if (
+        len(parts) != expected_length
+        or parts[:3] != ["v1", "chat", collection]
+        or (suffix is not None and parts[-1] != suffix)
+    ):
+        return None
+    return parts[3]
 
 
 def _read_recent_error_records(path: Path, limit: int) -> list[dict[str, Any]]:

@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[3]
 APP_ROOT = Path(__file__).resolve().parents[1]
 STATIC_DIR = ROOT / "apps" / "dev-console" / "public"
 SAFETY_ROOT = ROOT / "packages" / "safety-policy"
+PERSONA_PATH = ROOT / "packages" / "text-brain" / "personas" / "hina.v1.json"
 sys.path.insert(0, str(ROOT / "packages" / "contracts" / "src"))
 sys.path.insert(0, str(SAFETY_ROOT / "src"))
 sys.path.insert(0, str(APP_ROOT / "src"))
@@ -25,6 +26,7 @@ from hina_core.runtime import (  # noqa: E402
     TransportConfig,
 )
 from hina_core.runtime.transport_client import get_json, post_json  # noqa: E402
+from hina_text_brain import TextBrainError  # noqa: E402
 
 
 class _StubModelGateway:
@@ -54,6 +56,20 @@ class _StubModelGateway:
             },
             "available": False,
         }
+
+    async def stream_chat(self, messages: list[dict[str, str]]):
+        self.last_messages = messages
+        yield "Xin chào từ local provider kiểm thử."
+
+
+class _FailingModelGateway(_StubModelGateway):
+    async def stream_chat(self, messages: list[dict[str, str]]):
+        raise TextBrainError(
+            "E_MODEL_UNAVAILABLE",
+            "injected local provider failure",
+            retryable=True,
+        )
+        yield ""  # pragma: no cover
 
 
 async def _get(host: str, port: int, target: str) -> tuple[int, dict[str, str], bytes]:
@@ -113,6 +129,7 @@ class DevConsoleTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn(b"/v1/safety/sanitize", script)
                 self.assertIn(b"/v1/safety/moderate", script)
                 self.assertIn(b"/v1/model/status", script)
+                self.assertIn(b"/v1/chat/turns", script)
                 self.assertNotIn(b"unknown_capability", script)
                 self.assertNotIn(b"generated_code_execution", script)
                 self.assertNotIn(b"fake AI", script)
@@ -191,6 +208,53 @@ class DevConsoleTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(OSError):
                 await asyncio.open_connection(host, port)
 
+    async def test_chat_failure_is_correlated_and_never_logs_raw_input(self) -> None:
+        with tempfile.TemporaryDirectory(dir=APP_ROOT) as temporary_directory:
+            directory = Path(temporary_directory)
+            application = HinaRuntimeApplication(
+                TransportConfig(port=0),
+                RuntimePaths(
+                    database=directory / "runtime.sqlite3",
+                    error_log=directory / "runtime.jsonl",
+                    audit_log=directory / "safety-audit.jsonl",
+                    safety_manifest=SAFETY_ROOT / "manifests" / "default.v1.json",
+                    persona_spec=PERSONA_PATH,
+                ),
+                model_gateway=_FailingModelGateway(),
+            )
+            await application.start()
+            host, port = application.address
+            secret = "owner-private@example.test"
+            try:
+                started = await post_json(
+                    host,
+                    port,
+                    "/v1/chat/turns",
+                    {
+                        "sessionId": "12121212-1212-4212-8212-121212121212",
+                        "source": "owner.console",
+                        "text": f"Xin chào {secret}",
+                    },
+                )
+                turn = started.body
+                for _ in range(100):
+                    turn = (
+                        await get_json(host, port, f"/v1/chat/turns/{turn['turnId']}")
+                    ).body
+                    if turn["outcome"] != "running":
+                        break
+                    await asyncio.sleep(0.01)
+                self.assertEqual(
+                    (turn["outcome"], turn["errorCode"]),
+                    ("error", "E_MODEL_UNAVAILABLE"),
+                )
+                log_text = (directory / "runtime.jsonl").read_text(encoding="utf-8")
+                self.assertIn("text_brain.conversation", log_text)
+                self.assertIn(turn["correlationId"], log_text)
+                self.assertNotIn(secret, log_text)
+            finally:
+                await application.stop()
+
     async def test_safety_controls_are_real_audited_and_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory(dir=APP_ROOT) as temporary_directory:
             directory = Path(temporary_directory)
@@ -202,8 +266,10 @@ class DevConsoleTests(unittest.IsolatedAsyncioTestCase):
                     static_dir=STATIC_DIR,
                     audit_log=directory / "safety-audit.jsonl",
                     safety_manifest=SAFETY_ROOT / "manifests" / "default.v1.json",
+                    persona_spec=PERSONA_PATH,
                 ),
                 build_commit="safety-test",
+                model_gateway=_StubModelGateway(),
             )
             await application.start()
             host, port = application.address
@@ -362,6 +428,55 @@ class DevConsoleTests(unittest.IsolatedAsyncioTestCase):
                     ("block", "generated_code_execution"),
                 )
                 self.assertIsNone(moderated.body["sanitizedText"])
+
+                chat = await post_json(
+                    host,
+                    port,
+                    "/v1/chat/turns",
+                    {
+                        "sessionId": session,
+                        "source": "owner.console",
+                        "text": "Xin chào Hina",
+                    },
+                )
+                self.assertEqual(chat.status, HTTPStatus.OK)
+                turn_id = chat.body["turnId"]
+                completed = chat.body
+                for _ in range(100):
+                    response = await get_json(host, port, f"/v1/chat/turns/{turn_id}")
+                    completed = response.body
+                    if completed["outcome"] != "running":
+                        break
+                    await asyncio.sleep(0.01)
+                self.assertEqual(completed["outcome"], "completed")
+                self.assertEqual(
+                    completed["assistant"],
+                    "Xin chào từ local provider kiểm thử.",
+                )
+
+                replay = await get_json(host, port, f"/v1/chat/sessions/{session}")
+                self.assertEqual(replay.body["turnCount"], 1)
+                cleared = await post_json(
+                    host,
+                    port,
+                    f"/v1/chat/sessions/{session}/clear",
+                    {"action": "clear"},
+                )
+                self.assertTrue(cleared.body["cleared"])
+
+                bad_chat = await post_json(
+                    host,
+                    port,
+                    "/v1/chat/turns",
+                    {
+                        "sessionId": session,
+                        "source": "owner.console",
+                        "text": "valid text",
+                        "prompt": "must-not-bypass-context-composer",
+                    },
+                )
+                self.assertEqual(bad_chat.status, HTTPStatus.BAD_REQUEST)
+                self.assertEqual(bad_chat.body["errorCode"], "E_CHAT_BAD_REQUEST")
             finally:
                 await application.stop()
 

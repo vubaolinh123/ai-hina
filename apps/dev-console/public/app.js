@@ -3,6 +3,8 @@ const state = {
   lastEnvelope: null,
   safetyStatus: null,
   lastSanitation: null,
+  activeChatTurnId: null,
+  chatPollTimer: null,
   sessionId: localStorage.getItem("hina.console.session") || crypto.randomUUID(),
 };
 
@@ -28,6 +30,16 @@ const elements = Object.fromEntries(
     "modelResourceValue",
     "modelCircuitValue",
     "modelStatusBox",
+    "chatPersonaBadge",
+    "chatMessages",
+    "chatSourceSelect",
+    "chatSessionValue",
+    "chatInput",
+    "sendChatButton",
+    "cancelChatButton",
+    "replayChatButton",
+    "clearChatButton",
+    "chatTurnResult",
     "refreshSafetyButton",
     "safetyBanner",
     "emergencyState",
@@ -215,6 +227,167 @@ async function refreshModel() {
     elements.modelStatusBox.classList.remove("empty");
     elements.modelStatusBox.textContent = error.message;
     addActivity(`Không đọc được model gateway: ${error.message}`, "error");
+  }
+}
+
+function appendChatMessage(role, text, meta = "") {
+  if (elements.chatMessages.querySelector(".empty")) {
+    elements.chatMessages.replaceChildren();
+  }
+  const article = document.createElement("article");
+  article.className = `chat-message chat-${role}`;
+  const heading = document.createElement("div");
+  heading.className = "entry-meta";
+  const label = document.createElement("strong");
+  label.textContent = role === "assistant" ? "Hina" : role === "user" ? "Bạn" : "Runtime";
+  const detail = document.createElement("span");
+  detail.textContent = meta;
+  heading.append(label, detail);
+  const content = document.createElement("p");
+  content.className = "entry-message";
+  content.textContent = text;
+  article.append(heading, content);
+  elements.chatMessages.append(article);
+  elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+}
+
+function renderChatReplay(replay) {
+  elements.chatMessages.replaceChildren();
+  if (replay.turns.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "empty";
+    empty.textContent = "Chưa có lượt chat hoàn tất trong phiên này.";
+    elements.chatMessages.append(empty);
+    return;
+  }
+  for (const turn of replay.turns) {
+    appendChatMessage("user", turn.user, turn.turnId.slice(0, 8));
+    appendChatMessage("assistant", turn.assistant, turn.completedAt);
+  }
+}
+
+async function refreshChatStatus() {
+  try {
+    const status = await fetchJson("/v1/chat/status");
+    elements.chatPersonaBadge.textContent =
+      `${status.persona.name} · ${status.persona.promptVersion}`;
+    elements.chatSessionValue.textContent = state.sessionId;
+    elements.chatSessionValue.title = state.sessionId;
+  } catch (error) {
+    elements.chatPersonaBadge.textContent = "chat unavailable";
+    addActivity(`Không đọc được chat status: ${error.message}`, "error");
+  }
+}
+
+async function replayChat() {
+  try {
+    const replay = await fetchJson(`/v1/chat/sessions/${state.sessionId}`);
+    renderChatReplay(replay);
+    addActivity(`Replay ${replay.turnCount} turn short-term memory.`, "info");
+  } catch (error) {
+    addActivity(`Replay chat lỗi: ${error.message}`, "error");
+  }
+}
+
+function renderTurnSnapshot(turn) {
+  elements.chatTurnResult.classList.remove("empty");
+  elements.chatTurnResult.textContent = JSON.stringify(turn, null, 2);
+}
+
+async function pollChatTurn(turnId) {
+  try {
+    const turn = await fetchJson(`/v1/chat/turns/${turnId}`);
+    renderTurnSnapshot(turn);
+    if (turn.outcome === "running") {
+      state.chatPollTimer = window.setTimeout(() => pollChatTurn(turnId), 150);
+      return;
+    }
+    state.activeChatTurnId = null;
+    state.chatPollTimer = null;
+    elements.sendChatButton.disabled = false;
+    elements.cancelChatButton.disabled = true;
+    if (turn.outcome === "completed") {
+      await replayChat();
+      addActivity(`Chat turn ${turn.turnId} hoàn tất qua ${turn.promptVersion}.`, "success");
+    } else if (turn.outcome === "interrupted") {
+      appendChatMessage("runtime", "Turn đã bị interrupt; không có partial output được phát.", turn.turnId);
+      addActivity(`Chat turn ${turn.turnId} interrupted.`, "info");
+    } else {
+      appendChatMessage(
+        "runtime",
+        `${turn.errorCode || "E_CHAT_FAILED"}: ${turn.errorMessage || "turn failed"}`,
+        turn.correlationId,
+      );
+      addActivity(
+        `Chat turn lỗi ${turn.errorCode || "E_CHAT_FAILED"} · correlation ${turn.correlationId}.`,
+        "error",
+      );
+      await refreshErrors();
+    }
+    await Promise.all([refreshChatStatus(), refreshModel(), refreshSafety()]);
+  } catch (error) {
+    state.activeChatTurnId = null;
+    state.chatPollTimer = null;
+    elements.sendChatButton.disabled = false;
+    elements.cancelChatButton.disabled = true;
+    addActivity(`Không poll được chat turn: ${error.message}`, "error");
+  }
+}
+
+async function startChatTurn() {
+  const text = elements.chatInput.value.trim();
+  if (!text || state.activeChatTurnId) return;
+  try {
+    const turn = await postJson("/v1/chat/turns", {
+      sessionId: state.sessionId,
+      source: elements.chatSourceSelect.value,
+      text,
+    });
+    state.activeChatTurnId = turn.turnId;
+    elements.sendChatButton.disabled = true;
+    elements.cancelChatButton.disabled = false;
+    elements.chatInput.value = "";
+    appendChatMessage("user", text, "pending moderation");
+    renderTurnSnapshot(turn);
+    await pollChatTurn(turn.turnId);
+  } catch (error) {
+    addActivity(`Không start được chat turn: ${error.message}`, "error");
+  }
+}
+
+async function cancelChatTurn() {
+  if (!state.activeChatTurnId) return;
+  try {
+    const turnId = state.activeChatTurnId;
+    const turn = await postJson(`/v1/chat/turns/${turnId}/cancel`, {});
+    renderTurnSnapshot(turn);
+    if (state.chatPollTimer !== null) {
+      clearTimeout(state.chatPollTimer);
+    }
+    state.activeChatTurnId = null;
+    state.chatPollTimer = null;
+    elements.sendChatButton.disabled = false;
+    elements.cancelChatButton.disabled = true;
+    appendChatMessage("runtime", "Turn đã bị interrupt; partial output đã bị loại.", turnId);
+    addActivity(`Đã interrupt chat turn ${turnId}.`, "info");
+  } catch (error) {
+    addActivity(`Interrupt chat lỗi: ${error.message}`, "error");
+  }
+}
+
+async function clearChatSession() {
+  if (state.activeChatTurnId) return;
+  try {
+    const result = await postJson(`/v1/chat/sessions/${state.sessionId}/clear`, {
+      action: "clear",
+    });
+    renderChatReplay({ turns: [] });
+    elements.chatTurnResult.classList.add("empty");
+    elements.chatTurnResult.textContent = "Short-term memory đã được xóa.";
+    addActivity(`Clear chat memory · existed=${result.cleared}.`, "success");
+    await refreshChatStatus();
+  } catch (error) {
+    addActivity(`Clear chat memory lỗi: ${error.message}`, "error");
   }
 }
 
@@ -496,6 +669,7 @@ async function refreshAll({ announce = true } = {}) {
     refreshErrors(),
     refreshSafety(),
     refreshModel(),
+    refreshChatStatus(),
   ]);
   if (announce) {
     addActivity("Đã làm mới control plane, metrics và error log.", "success");
@@ -720,6 +894,16 @@ elements.connectButton.addEventListener("click", connectWebSocket);
 elements.refreshAllButton.addEventListener("click", () => refreshAll());
 elements.refreshSafetyButton.addEventListener("click", refreshSafety);
 elements.refreshModelButton.addEventListener("click", refreshModel);
+elements.sendChatButton.addEventListener("click", startChatTurn);
+elements.cancelChatButton.addEventListener("click", cancelChatTurn);
+elements.replayChatButton.addEventListener("click", replayChat);
+elements.clearChatButton.addEventListener("click", clearChatSession);
+elements.chatInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    startChatTurn();
+  }
+});
 elements.evaluateSafetyButton.addEventListener("click", evaluateSafety);
 elements.emergencyStopButton.addEventListener("click", () => applySafetyControl("emergency_stop"));
 elements.emergencyResetButton.addEventListener("click", () => applySafetyControl("emergency_reset"));
@@ -749,6 +933,9 @@ window.addEventListener("beforeunload", () => {
   if (state.socket?.readyState === WebSocket.OPEN) {
     state.socket.close(1000, "page unload");
   }
+  if (state.chatPollTimer !== null) {
+    clearTimeout(state.chatPollTimer);
+  }
 });
 
 updateConnection(false);
@@ -759,4 +946,5 @@ setInterval(() => {
   refreshMetrics();
   refreshSafety();
   refreshModel();
+  refreshChatStatus();
 }, 5000);

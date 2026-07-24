@@ -1,6 +1,6 @@
 # Hina core runtime
 
-M01-S2 đến M01-S7 và M02-S1 cung cấp runtime nền tảng cho các module sau:
+M01-S2 đến M01-S7, M02 và M03 text vertical slice cung cấp runtime nền tảng:
 
 - bounded async queues, deadline, cancellation và idempotency;
 - SQLite journal/outbox/inbox với lease, ACK/NACK và ordered replay;
@@ -12,6 +12,8 @@ M01-S2 đến M01-S7 và M02-S1 cung cấp runtime nền tảng cho các module 
 - deterministic test providers và idempotent turn replay harness;
 - Hina Dev Console chạy lâu dài để owner thao tác với runtime thật.
 - capability policy, emergency controls và hash-chained safety audit.
+- local model gateway, live GPU lease, persona, turn FSM và short-term memory.
+- REST chat start/poll/interrupt/replay/clear; lỗi có correlation trong JSONL.
 
 ## Chạy ứng dụng
 
@@ -39,6 +41,7 @@ pnpm start:control
 ```powershell
 pnpm test:fast
 pnpm test:safety
+pnpm test:text-brain
 pnpm smoke:m01-s2
 pnpm smoke:m01-s3
 pnpm smoke:m01-s4

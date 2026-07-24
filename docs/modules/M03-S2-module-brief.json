@@ -1,0 +1,71 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M03-S2-turn-fsm-persona-memory-chat",
+  "module_id": "M03",
+  "objective": "Deliver a runnable text-only conversation vertical slice with a strict turn FSM, cancellation, immutable versioned Hina persona, session relationship state, bounded short-term conversation memory, safe context composition, typed tool proposals without execution, replay APIs, and a Dev Console chat surface backed only by the real local model gateway.",
+  "non_goals": [
+    "Do not provide fake/canned assistant messages when the local model is unavailable.",
+    "Do not persist long-term memory, train model weights or learn directly from conversation text.",
+    "Do not execute proposed tools or accept generated shell, JavaScript, PowerShell or Python.",
+    "Do not claim current vision, screen, game or camera awareness in this text-only slice.",
+    "Do not stream unmoderated partial model output to the browser, TTS or another outbound consumer."
+  ],
+  "base_sha": "788e642",
+  "branch": "codex/M03-text-brain",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "AGENTS.md",
+    "README.md",
+    "apps/core-runtime/",
+    "apps/dev-console/",
+    "docs/modules/M03-*",
+    "packages/contracts/openapi/control-plane.v1.json",
+    "packages/text-brain/",
+    "tools/dev/"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "packages/contracts/schemas/v1/event-envelope.schema.json",
+    "packages/safety-policy/",
+    "workers/",
+    "adapters/",
+    "ml/",
+    "assets/",
+    "third_party/"
+  ],
+  "contracts": [
+    "A session has at most one active turn and every transition follows the published idle/listening/thinking/speaking/interrupted/error FSM.",
+    "Only sanitized input with an allow moderation decision enters model context.",
+    "Provider tokens remain private until the complete response passes outbound moderation; blocked or partial output is never returned as assistant text.",
+    "Persona content is loaded from a versioned immutable spec while relationship state is dynamic, bounded and session-scoped.",
+    "Short-term memory stores only successful sanitized user/assistant pairs and evicts oldest complete turns to meet item and byte budgets.",
+    "No-current-vision and no-hidden-reasoning instructions are present in every composed system prompt.",
+    "A tool proposal must match one exact typed schema and pass pre-tool moderation; it is returned for inspection only and never executed.",
+    "Cancellation releases the model resource lease and produces an interrupted terminal outcome without storing partial output."
+  ],
+  "allowed_dependencies": [
+    "Python 3.12+ standard library and existing Hina safety/runtime/text-brain modules."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "Deterministic fake-provider tests cover success, model unavailable, partial stream, outbound block, context overflow and cancellation.",
+    "FSM tests reject illegal transitions and verify interruption does not become a completed assistant turn.",
+    "Memory tests prove complete-turn eviction, session isolation, replay and clear.",
+    "Persona tests prove frozen spec/version, dynamic relationship progression and no-current-vision prompt invariant.",
+    "Typed tool proposal tests reject malformed and executable fields and never call an executor.",
+    "Dev Console can start, poll, cancel, replay and clear a real chat session; with no provider it displays the actual error state."
+  ],
+  "required_test_commands": [
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-TextBrainUnit.ps1",
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-FastUnit.ps1",
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Start-HinaDevConsole.ps1 -Port 0 -NoBrowser -StartupCheck"
+  ],
+  "latency_or_quality_budget": {
+    "max_active_turns_per_session": 1,
+    "max_memory_turns": 24,
+    "max_memory_bytes": 65536,
+    "cancellation_target_milliseconds": 250,
+    "browser_poll_interval_milliseconds": 150
+  },
+  "output_artifact_dir": "artifacts/verification/M03/"
+}

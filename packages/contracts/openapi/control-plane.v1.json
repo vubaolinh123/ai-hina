@@ -96,6 +96,168 @@
         }
       }
     },
+    "/v1/chat/status": {
+      "get": {
+        "operationId": "getChatStatus",
+        "responses": {
+          "200": {
+            "description": "Persona, memory and active text-turn status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chat/turns": {
+      "post": {
+        "operationId": "startChatTurn",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatTurnRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Accepted turn snapshot. Poll the turn resource for completion.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatTurnSnapshot"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chat/turns/{turnId}": {
+      "get": {
+        "operationId": "getChatTurn",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TurnId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current or terminal turn snapshot.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatTurnSnapshot"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chat/turns/{turnId}/cancel": {
+      "post": {
+        "operationId": "cancelChatTurn",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TurnId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Interrupted or already-terminal turn snapshot.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatTurnSnapshot"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chat/sessions/{sessionId}": {
+      "get": {
+        "operationId": "replayChatSession",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SessionId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded successful short-term turn replay.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatReplay"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chat/sessions/{sessionId}/clear": {
+      "post": {
+        "operationId": "clearChatSession",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/SessionId"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "action"
+                ],
+                "properties": {
+                  "action": {
+                    "const": "clear"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cleared in-memory conversation window and relationship state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatReplay"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/errors": {
       "get": {
         "operationId": "getRecentErrors",
@@ -310,6 +472,26 @@
     }
   },
   "components": {
+    "parameters": {
+      "TurnId": {
+        "name": "turnId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "SessionId": {
+        "name": "sessionId",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    },
     "schemas": {
       "Health": {
         "type": "object",
@@ -530,6 +712,195 @@
           },
           "available": {
             "type": "boolean"
+          }
+        }
+      },
+      "ChatStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "persona",
+          "memory",
+          "activeTurns",
+          "trackedTurns",
+          "outboundPartialStreaming",
+          "toolExecution"
+        ],
+        "properties": {
+          "persona": {
+            "type": "object"
+          },
+          "memory": {
+            "type": "object"
+          },
+          "activeTurns": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "trackedTurns": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 256
+          },
+          "outboundPartialStreaming": {
+            "const": false
+          },
+          "toolExecution": {
+            "const": false
+          }
+        }
+      },
+      "ChatTurnRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sessionId",
+          "source",
+          "text"
+        ],
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "source": {
+            "enum": [
+              "owner.console",
+              "authenticated.user",
+              "public.chat",
+              "viewer.chat"
+            ]
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "ChatTurnSnapshot": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "turnId",
+          "sessionId",
+          "correlationId",
+          "state",
+          "stateHistory",
+          "outcome",
+          "createdAt",
+          "user",
+          "assistant",
+          "promptVersion",
+          "context",
+          "toolProposal",
+          "errorCode",
+          "errorMessage"
+        ],
+        "properties": {
+          "turnId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "correlationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "enum": [
+              "idle",
+              "listening",
+              "thinking",
+              "speaking",
+              "interrupted",
+              "error"
+            ]
+          },
+          "stateHistory": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "outcome": {
+            "enum": [
+              "running",
+              "completed",
+              "interrupted",
+              "error"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "user": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "assistant": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "promptVersion": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "context": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "toolProposal": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "errorCode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "errorMessage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ChatReplay": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "sessionId",
+          "turnCount",
+          "relationship"
+        ],
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "turnCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 24
+          },
+          "relationship": {
+            "type": "object"
           }
         }
       },

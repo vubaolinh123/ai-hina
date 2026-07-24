@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import sys
 import unittest
 from pathlib import Path
@@ -43,6 +44,19 @@ class ScriptedProvider:
 
     async def unload(self) -> None:
         self.unloads += 1
+
+
+class BlockingProvider(ScriptedProvider):
+    def __init__(self) -> None:
+        super().__init__([])
+        self.started = asyncio.Event()
+        self.release = asyncio.Event()
+
+    async def stream_chat(self, messages: list[dict[str, str]]) -> AsyncIterator[str]:
+        self.calls += 1
+        self.started.set()
+        await self.release.wait()
+        yield "late"
 
 
 async def _collect(gateway: ModelGateway) -> str:
@@ -135,6 +149,22 @@ class GatewayTests(unittest.IsolatedAsyncioTestCase):
         current_time += 6
         self.assertEqual(await _collect(gateway), "recovered")
         self.assertEqual((await gateway.status())["circuit"]["state"], "closed")
+
+    async def test_cancellation_releases_active_resource_lease(self) -> None:
+        provider = BlockingProvider()
+        scheduler = LocalResourceScheduler(StaticTelemetry())
+        gateway = ModelGateway(
+            ModelGatewayConfig(model="test-model", model_vram_mib=1_024),
+            scheduler,
+            provider=provider,
+        )
+        task = asyncio.create_task(_collect(gateway))
+        await asyncio.wait_for(provider.started.wait(), timeout=1)
+        self.assertEqual((await scheduler.snapshot()).active_leases, 1)
+        task.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+        self.assertEqual((await scheduler.snapshot()).active_leases, 0)
 
 
 if __name__ == "__main__":

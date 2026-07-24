@@ -405,6 +405,61 @@ main {
   border-top: 1px solid var(--border);
 }
 
+.chat-section {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.chat-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+  gap: 20px;
+}
+
+.chat-messages {
+  min-height: 180px;
+  max-height: 420px;
+  overflow-y: auto;
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+}
+
+.chat-message {
+  padding: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.chat-message + .chat-message {
+  margin-top: 10px;
+}
+
+.chat-user {
+  border-left: 3px solid var(--accent);
+}
+
+.chat-assistant {
+  border-left: 3px solid var(--success);
+}
+
+.chat-runtime {
+  border-left: 3px solid var(--danger);
+}
+
+.inline-value {
+  overflow: hidden;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .sanitation-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -674,6 +729,10 @@ kbd {
   }
 
   .sanitation-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .chat-grid {
     grid-template-columns: 1fr;
   }
 }

@@ -21,6 +21,7 @@ async def _run(args: argparse.Namespace) -> None:
             error_log=args.log,
             audit_log=args.audit_log,
             safety_manifest=args.safety_manifest,
+            persona_spec=args.persona_spec,
         ),
         build_commit=os.environ.get("HINA_BUILD_COMMIT", "development"),
     )
@@ -38,6 +39,7 @@ async def _run(args: argparse.Namespace) -> None:
                 "errorLog": str(args.log.resolve()),
                 "auditLog": str(args.audit_log.resolve()),
                 "safetyManifest": str(args.safety_manifest.resolve()),
+                "personaSpec": str(args.persona_spec.resolve()),
             },
             ensure_ascii=False,
         ),
@@ -72,6 +74,11 @@ def main() -> int:
         "--safety-manifest",
         type=Path,
         default=ROOT / "packages" / "safety-policy" / "manifests" / "default.v1.json",
+    )
+    parser.add_argument(
+        "--persona-spec",
+        type=Path,
+        default=ROOT / "packages" / "text-brain" / "personas" / "hina.v1.json",
     )
     args = parser.parse_args()
     try:
