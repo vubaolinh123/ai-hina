@@ -18,11 +18,14 @@ from .primitives import (
     RuntimeErrorCode,
     wait_controlled,
 )
+from .transport import BinaryMediaFrame, ControlPlaneServer, TransportConfig
 
 __all__ = [
     "BoundedAsyncQueue",
     "AckResult",
+    "BinaryMediaFrame",
     "CancellationToken",
+    "ControlPlaneServer",
     "Deadline",
     "DurableEvent",
     "DurableSnapshot",
@@ -35,5 +38,6 @@ __all__ = [
     "OverflowPolicy",
     "PrimitiveError",
     "RuntimeErrorCode",
+    "TransportConfig",
     "wait_controlled",
 ]

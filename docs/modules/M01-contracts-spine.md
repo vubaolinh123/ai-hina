@@ -7,7 +7,8 @@
   - `M01-S1 — contract catalog and EventEnvelope v1`
   - `M01-S2 — bounded queues, deadlines, cancellation and idempotency`
   - `M01-S3 — durable journal/outbox/inbox, ACK, resume and replay`
-- Next slice: `M01-S4 — control plane, realtime WebSocket and binary-media transport`
+  - `M01-S4 — control plane, realtime WebSocket and binary-media transport`
+- Next slice: `M01-S5 — service registry/supervisor and lifecycle`
 
 ## Slice sequence
 
@@ -70,5 +71,20 @@
 - [x] Expected durable conflict writes one redacted JSONL error record.
 - [x] Focused fast unit suite passes once on the owner machine.
 
-M01 remains open after M01-S3. Do not start M02 until every M01 slice and the
+## M01-S4 fast gate
+
+- [x] Validated module brief with standard-library-only transport scope.
+- [x] OpenAPI, AsyncAPI and fixed binary-media header contracts are published.
+- [x] Control plane exposes bounded health/version/config JSON on loopback only.
+- [x] WebSocket version 13 requires the `hina.realtime.v1` subprotocol, masked
+  client frames and local browser origin.
+- [x] Event messages pass EventEnvelope v1 validation and durable events are
+  journaled before acceptance; reconnect can resume bounded journal batches.
+- [x] Binary media round-trips with opcode 2 and never enters base64 JSON.
+- [x] Invalid event, external origin and unmasked frame paths fail closed and
+  write redacted local error records with stable codes.
+- [x] Owner can run an ephemeral demo or a persistent server.
+- [x] Focused fast suite passes once with all M01-S2 through M01-S4 tests.
+
+M01 remains open after M01-S4. Do not start M02 until every M01 slice and the
 M01 integration gate pass.

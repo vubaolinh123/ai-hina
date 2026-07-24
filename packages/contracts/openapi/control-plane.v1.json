@@ -1,0 +1,176 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Hina local control plane",
+    "version": "1.0.0",
+    "description": "Loopback-only read control surface for the Hina core runtime."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8765"
+    }
+  ],
+  "paths": {
+    "/v1/health": {
+      "get": {
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "description": "Runtime readiness and bounded connection status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/version": {
+      "get": {
+        "operationId": "getVersion",
+        "responses": {
+          "200": {
+            "description": "Build and protocol versions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Version"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/config": {
+      "get": {
+        "operationId": "getPublicConfig",
+        "responses": {
+          "200": {
+            "description": "Non-secret effective transport limits.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicConfig"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Health": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "service",
+          "uptimeSeconds",
+          "activeConnections"
+        ],
+        "properties": {
+          "status": {
+            "const": "ready"
+          },
+          "service": {
+            "const": "hina-core-runtime"
+          },
+          "uptimeSeconds": {
+            "type": "number",
+            "minimum": 0
+          },
+          "activeConnections": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "Version": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "service",
+          "buildCommit",
+          "controlApi",
+          "realtimeProtocol",
+          "binaryMediaVersion"
+        ],
+        "properties": {
+          "service": {
+            "const": "hina-core-runtime"
+          },
+          "buildCommit": {
+            "type": "string"
+          },
+          "controlApi": {
+            "const": "v1"
+          },
+          "realtimeProtocol": {
+            "const": "hina.realtime.v1"
+          },
+          "binaryMediaVersion": {
+            "const": 1
+          }
+        }
+      },
+      "PublicConfig": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "host",
+          "port",
+          "loopbackOnly",
+          "limits"
+        ],
+        "properties": {
+          "host": {
+            "type": "string",
+            "description": "Numeric loopback address only."
+          },
+          "port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "loopbackOnly": {
+            "const": true
+          },
+          "limits": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "httpHeaderBytes",
+              "textFrameBytes",
+              "binaryFrameBytes",
+              "connections"
+            ],
+            "properties": {
+              "httpHeaderBytes": {
+                "type": "integer",
+                "minimum": 1024
+              },
+              "textFrameBytes": {
+                "type": "integer",
+                "minimum": 1024
+              },
+              "binaryFrameBytes": {
+                "type": "integer",
+                "minimum": 26
+              },
+              "connections": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

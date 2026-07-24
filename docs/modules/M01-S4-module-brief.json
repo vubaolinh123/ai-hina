@@ -1,0 +1,68 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M01-S4-local-control-realtime",
+  "module_id": "M01",
+  "objective": "Deliver a runnable loopback-only control plane with health/version/config endpoints plus a bounded WebSocket realtime transport for validated EventEnvelope v1 JSON and non-base64 binary media frames.",
+  "non_goals": [
+    "Do not expose the service outside loopback, add browser authentication, TLS termination or a public network deployment.",
+    "Do not implement service supervision, model inference, speech, memory, avatar, game or livestream behavior.",
+    "Do not add an external HTTP or WebSocket dependency and do not run repeat/soak/full workflow verification."
+  ],
+  "base_sha": "3f2a793781558a4a6a7e6d4076cb0fb8812bac0b",
+  "branch": "module/M01-spine",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "AGENTS.md",
+    "apps/core-runtime/",
+    "docs/modules/M01-S4-*",
+    "docs/modules/M01-contracts-spine.md",
+    "packages/contracts/openapi/",
+    "packages/contracts/asyncapi/",
+    "packages/contracts/binary-media-frame.v1.json",
+    "tools/dev/Run-M01S4Demo.ps1",
+    "tools/dev/Start-HinaControlPlane.ps1",
+    "package.json"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "workers/",
+    "adapters/",
+    "ml/",
+    "assets/",
+    "third_party/"
+  ],
+  "contracts": [
+    "The server binds only to a numeric loopback address and refuses non-loopback hosts before opening a socket.",
+    "GET /v1/health, /v1/version and /v1/config return bounded JSON responses and never expose secrets.",
+    "The /v1/realtime WebSocket accepts only RFC 6455 version 13 masked client frames and enforces explicit header, text, binary and connection limits.",
+    "Text event messages pass the existing EventEnvelope v1 runtime validator; durable envelopes are journaled before an acceptance response.",
+    "Binary media uses a fixed versioned header and a WebSocket binary frame; media bytes are never embedded as base64 JSON.",
+    "Malformed, oversized, unknown or unmasked input fails closed with a stable protocol error and a redacted local log record."
+  ],
+  "allowed_dependencies": [
+    "Python 3.12+ standard library and the existing local hina-contracts and hina-core runtime packages."
+  ],
+  "oss_candidates": [
+    "RFC 6455 protocol semantics as an interoperability reference; no upstream source code is copied."
+  ],
+  "acceptance_criteria": [
+    "A single demo command starts the server on an ephemeral loopback port and reports healthy control endpoints.",
+    "A valid EventEnvelope v1 crosses WebSocket as JSON and receives an acceptance response; a duplicate durable envelope is acknowledged without another journal row.",
+    "A binary media payload round-trips as opcode 2 with its media identifier, sequence and bytes intact and with no base64 JSON field.",
+    "Invalid JSON/event input is rejected with a stable error code and produces a redacted JSONL error record.",
+    "Focused unit tests cover loopback enforcement, control endpoints, WebSocket text/binary frames, durable duplicate suppression and protocol rejection."
+  ],
+  "required_test_commands": [
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-FastUnit.ps1",
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Run-M01S4Demo.ps1"
+  ],
+  "latency_or_quality_budget": {
+    "fast_unit_seconds": 8,
+    "demo_seconds": 8,
+    "max_http_header_bytes": 16384,
+    "max_text_frame_bytes": 1114112,
+    "max_binary_frame_bytes": 2097152,
+    "max_connections": 16
+  },
+  "output_artifact_dir": "artifacts/verification/M01/"
+}

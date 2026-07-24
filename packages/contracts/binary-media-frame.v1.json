@@ -1,0 +1,57 @@
+{
+  "schemaVersion": "1.0",
+  "name": "HinaBinaryMediaFrame",
+  "websocketOpcode": 2,
+  "byteOrder": "network-big-endian",
+  "headerBytes": 26,
+  "maxFrameBytes": 2097152,
+  "fields": [
+    {
+      "name": "magic",
+      "offset": 0,
+      "bytes": 4,
+      "encoding": "ascii",
+      "constant": "HINA"
+    },
+    {
+      "name": "version",
+      "offset": 4,
+      "bytes": 1,
+      "encoding": "uint8",
+      "constant": 1
+    },
+    {
+      "name": "flags",
+      "offset": 5,
+      "bytes": 1,
+      "encoding": "uint8",
+      "allowedMask": 1,
+      "bits": {
+        "0": "end_of_stream"
+      }
+    },
+    {
+      "name": "sequence",
+      "offset": 6,
+      "bytes": 4,
+      "encoding": "uint32"
+    },
+    {
+      "name": "mediaId",
+      "offset": 10,
+      "bytes": 16,
+      "encoding": "uuid-bytes"
+    },
+    {
+      "name": "payload",
+      "offset": 26,
+      "bytes": "remaining",
+      "encoding": "opaque-binary"
+    }
+  ],
+  "invariants": [
+    "The WebSocket message is opcode 2 and is never represented as base64 JSON.",
+    "Unknown magic, versions or flag bits fail closed.",
+    "Sequence is an unsigned 32-bit integer scoped to mediaId."
+  ]
+}

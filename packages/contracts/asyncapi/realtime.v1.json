@@ -1,0 +1,109 @@
+{
+  "asyncapi": "3.0.0",
+  "info": {
+    "title": "Hina local realtime plane",
+    "version": "1.0.0",
+    "description": "Validated EventEnvelope JSON and binary media over a loopback WebSocket."
+  },
+  "servers": {
+    "local": {
+      "host": "127.0.0.1:8765",
+      "pathname": "/v1/realtime",
+      "protocol": "ws",
+      "description": "Loopback only; RFC 6455 subprotocol hina.realtime.v1."
+    }
+  },
+  "channels": {
+    "realtime": {
+      "address": "/v1/realtime",
+      "messages": {
+        "event": {
+          "$ref": "#/components/messages/EventMessage"
+        },
+        "resume": {
+          "$ref": "#/components/messages/ResumeMessage"
+        },
+        "binaryMedia": {
+          "$ref": "#/components/messages/BinaryMediaMessage"
+        }
+      }
+    }
+  },
+  "operations": {
+    "receiveRealtime": {
+      "action": "receive",
+      "channel": {
+        "$ref": "#/channels/realtime"
+      },
+      "messages": [
+        {
+          "$ref": "#/channels/realtime/messages/event"
+        },
+        {
+          "$ref": "#/channels/realtime/messages/resume"
+        },
+        {
+          "$ref": "#/channels/realtime/messages/binaryMedia"
+        }
+      ]
+    }
+  },
+  "components": {
+    "messages": {
+      "EventMessage": {
+        "name": "event",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "envelope"
+          ],
+          "properties": {
+            "kind": {
+              "const": "event"
+            },
+            "envelope": {
+              "$ref": "../schemas/v1/event-envelope.schema.json"
+            }
+          }
+        }
+      },
+      "ResumeMessage": {
+        "name": "resume",
+        "contentType": "application/json",
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "streamId",
+            "afterSequence"
+          ],
+          "properties": {
+            "kind": {
+              "const": "resume"
+            },
+            "streamId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "afterSequence": {
+              "type": "integer",
+              "minimum": -1
+            }
+          }
+        }
+      },
+      "BinaryMediaMessage": {
+        "name": "binaryMedia",
+        "contentType": "application/octet-stream",
+        "payload": {
+          "$ref": "../binary-media-frame.v1.json"
+        }
+      }
+    }
+  }
+}
