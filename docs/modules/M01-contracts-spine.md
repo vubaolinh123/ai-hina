@@ -1,6 +1,6 @@
 # M01 — Contracts, config, lifecycle and observability spine
 
-- Status: in progress
+- Status: complete for fast development; deep release verification deferred
 - Branch: `module/M01-spine`
 - Base: `aa7138e`
 - Completed slices:
@@ -11,7 +11,7 @@
   - `M01-S5 — service registry/supervisor and lifecycle`
   - `M01-S6 — observability, ResourceLease, test providers and replay harness`
   - `M01-S7 — owner-facing persistent Dev Console`
-- Next: `M01 integration gate` (chỉ chạy khi owner yêu cầu deep verification)
+- Next: `M02 — Safety, permissions, moderation và audit`
 
 ## Slice sequence
 
@@ -98,5 +98,6 @@
   application shutdown.
 - [x] Fast suite pass 30/30; contract suite pass 28 Python và 13 Node tests.
 
-Các product slice M01 đã có mã chạy. M01 vẫn mở vì integration/deep gate được
-owner chủ động hoãn. Không mở M02 trước khi gate này pass.
+M01 được fast-promote trên SHA `bcbd59e9453dc63ab305d331ba73c9a7983e189c`
+sau automated acceptance và owner continuation signal. Repeat/soak/deep release
+verification vẫn được hoãn tới khi owner yêu cầu.
