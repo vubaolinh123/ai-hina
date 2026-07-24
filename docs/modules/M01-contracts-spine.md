@@ -3,8 +3,10 @@
 - Status: in progress
 - Branch: `module/M01-spine`
 - Base: `aa7138e`
-- Completed slice: `M01-S1 — contract catalog and EventEnvelope v1`
-- Next slice: `M01-S2 — bounded queues, deadlines, cancellation and idempotency`
+- Completed slices:
+  - `M01-S1 — contract catalog and EventEnvelope v1`
+  - `M01-S2 — bounded queues, deadlines, cancellation and idempotency`
+- Next slice: `M01-S3 — durable journal/outbox/inbox, ACK, resume and replay`
 
 ## Slice sequence
 
@@ -41,5 +43,17 @@
 - [x] Independent QA and safety review pass on frozen SHA.
 - [x] Slice evidence recorded and pushed.
 
-M01 remains open after M01-S1. Do not start M02 until every M01 slice and the
+## M01-S2 fast gate
+
+- [x] Validated module brief with standard-library-only scope.
+- [x] Hard-cap queue supports wait, reject-new and drop-oldest policies.
+- [x] Monotonic deadlines and cooperative cancellation clean pending waits.
+- [x] Concurrent duplicate operations coalesce; completed results replay until
+  TTL expiry and the registry remains bounded.
+- [x] Owner CLI demo shows queue/drop/timeout/cancel/deduplicate behavior.
+- [x] Expected failures write redacted JSONL records with stable error codes and
+  correlation IDs.
+- [x] Focused fast unit suite passes once on the owner machine.
+
+M01 remains open after M01-S2. Do not start M02 until every M01 slice and the
 M01 integration gate pass.

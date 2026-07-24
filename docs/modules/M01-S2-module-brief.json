@@ -1,0 +1,62 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M01-S2-runtime-primitives",
+  "module_id": "M01",
+  "objective": "Deliver a runnable Python vertical slice for bounded queues, monotonic deadlines, cooperative cancellation and bounded in-memory idempotency, with a local CLI demo and redacted JSONL error records.",
+  "non_goals": [
+    "Do not implement durable journal, outbox, inbox, ACK or replay persistence; those belong to M01-S3.",
+    "Do not implement WebSocket/control-plane transport, service supervision, model inference, speech, memory, avatar, game or livestream behavior.",
+    "Do not add external runtime dependencies or run deep/repeat/soak verification in fast-development mode."
+  ],
+  "base_sha": "1a10c007e3fa5bc3dbbec068ecc9d3a3f72ffed4",
+  "branch": "module/M01-spine",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "AGENTS.md",
+    "apps/core-runtime/",
+    "docs/modules/M01-S2-*",
+    "docs/modules/M01-contracts-spine.md",
+    "tools/dev/Invoke-FastUnit.ps1",
+    "tools/dev/Run-M01S2Demo.ps1",
+    "package.json"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "packages/contracts/",
+    "workers/",
+    "adapters/",
+    "ml/",
+    "assets/",
+    "third_party/"
+  ],
+  "contracts": [
+    "Queue capacity is a hard upper bound and overflow behavior is explicit.",
+    "Deadlines use monotonic time and fail with a stable error code.",
+    "Cancellation is cooperative, idempotent and carries a redacted reason.",
+    "Concurrent operations with one idempotency key execute the side effect once; completed results replay until TTL expiry.",
+    "Every demo failure record is local JSONL with stable error code and correlation ID, with secret-like fields redacted."
+  ],
+  "allowed_dependencies": [
+    "Python 3.12+ standard library only."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "Reject, drop-oldest and wait overflow policies never exceed configured queue capacity.",
+    "Deadline and cancellation interrupt waits without leaking pending asyncio tasks.",
+    "Concurrent and replayed idempotent calls execute the side effect exactly once while registry memory remains bounded.",
+    "The owner can run one PowerShell demo command and see queue, timeout, cancellation and deduplication results as JSON.",
+    "Expected demo failures create redacted JSONL records under var/logs without writing secrets.",
+    "The focused unit suite completes once on the owner machine in fast-development mode."
+  ],
+  "required_test_commands": [
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-FastUnit.ps1",
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Run-M01S2Demo.ps1"
+  ],
+  "latency_or_quality_budget": {
+    "fast_unit_seconds": 5,
+    "demo_seconds": 5,
+    "queue_capacity_overrun": 0,
+    "duplicate_side_effects": 0
+  },
+  "output_artifact_dir": "artifacts/verification/M01/"
+}
