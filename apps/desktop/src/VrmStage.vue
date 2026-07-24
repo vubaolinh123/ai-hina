@@ -20,11 +20,24 @@ const KNOWN_EXPRESSIONS = [
   "relaxed",
   "surprised",
   "aa",
+  "ih",
+  "ou",
+  "ee",
+  "oh",
 ] as const;
+const VISEME_EXPRESSIONS = Object.freeze({
+  A: "aa",
+  I: "ih",
+  U: "ou",
+  E: "ee",
+  O: "oh",
+} as const);
 
 const props = defineProps<{
   state: AvatarState;
   expression: string;
+  viseme: AvatarStatus["viseme"];
+  intensity: number;
 }>();
 const emit = defineEmits<{
   ready: [details: { displayName: string; source: "bundled-vrm-1.0" }];
@@ -58,9 +71,15 @@ function applyExpression(): void {
   if (expression !== "neutral") {
     manager.setValue(expression, profile.expressionWeight);
   }
-  // This mouth weight follows the real backend speaking state only. It is a
-  // visibly labeled placeholder, not audio-amplitude or phoneme alignment.
-  manager.setValue("aa", profile.stateDrivenMouth);
+  const vowelExpression = VISEME_EXPRESSIONS[
+    props.viseme as keyof typeof VISEME_EXPRESSIONS
+  ];
+  if (vowelExpression && props.state === "speaking") {
+    manager.setValue(
+      vowelExpression,
+      Math.min(1, Math.max(0, Number(props.intensity) || 0)),
+    );
+  }
 }
 
 function resize(): void {
@@ -182,7 +201,7 @@ onMounted(async () => {
 });
 
 watch(
-  () => [props.state, props.expression],
+  () => [props.state, props.expression, props.viseme, props.intensity],
   applyExpression,
 );
 

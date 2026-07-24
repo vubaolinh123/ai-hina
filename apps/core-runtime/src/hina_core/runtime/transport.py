@@ -37,6 +37,7 @@ _MAX_ERROR_LOG_SCAN_BYTES = 4 * 1024 * 1024
 _STATIC_FILES = {
     "/": ("index.html", "text/html; charset=utf-8"),
     "/index.html": ("index.html", "text/html; charset=utf-8"),
+    "/audio-viseme.js": ("audio-viseme.js", "text/javascript; charset=utf-8"),
     "/app.js": ("app.js", "text/javascript; charset=utf-8"),
     "/styles.css": ("styles.css", "text/css; charset=utf-8"),
 }

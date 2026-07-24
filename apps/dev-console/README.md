@@ -54,10 +54,12 @@ Qdrant runs in persistent local mode as a rebuildable derived index. Search
 hits are revalidated against SQLite; deletion returns a receipt only after both
 stores reconcile. Owner memory enters chat only as delimited untrusted user-role
 data and is never retrieved for public/viewer turns.
-M07 displays the typed avatar states from the runtime and analyzes the real WAV
-already playing in the browser to drive mouth amplitude. Manual visual checks
-are labeled `manual-preview`. The current repository-original SVG/CSS asset is
-an honest fallback (`vrmLoaded=false`), not a VRM or Live2D model.
+M07 displays typed avatar states from the runtime and analyzes the real WAV
+already playing in the browser to derive bounded `A/I/U/E/O` visemes and mouth
+intensity. This is an explicitly labeled audio-spectral heuristic, not
+phoneme-accurate alignment. Manual visual checks are labeled `manual-preview`.
+The web stage keeps the repository-original SVG/CSS fallback; the separate
+Electron/Vue app loads a licensed VRM 1.0 development sample.
 
 After updating the source, restart the running console so its Python process
 loads the new safety, text-brain, speech, memory and avatar modules.

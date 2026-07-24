@@ -48,6 +48,9 @@ class AvatarStageServiceTests(unittest.TestCase):
         self.assertEqual(status["viseme"], "sil")
         self.assertEqual(status["intensity"], 1.0)
         self.assertFalse(status["asset"]["vrmLoaded"])
+        self.assertEqual(
+            status["lipSync"]["mode"], "observed-audio-spectral-viseme"
+        )
         self.assertFalse(status["lipSync"]["phonemeAccurate"])
 
     def test_untrusted_sources_and_unknown_fields_fail_closed(self) -> None:

@@ -24,6 +24,12 @@ const state = {
   avatarAnalyser: null,
   avatarAudioFrame: null,
   avatarPlaybackActive: false,
+  avatarVisemeStabilizer: null,
+  avatarVisemeCueBusy: false,
+  avatarVisemeCuePromise: null,
+  avatarPublishedViseme: "sil",
+  avatarPublishedIntensity: 0,
+  avatarLastVisemeCueAt: 0,
   sessionId: localStorage.getItem("hina.console.session") || crypto.randomUUID(),
 };
 
@@ -168,6 +174,7 @@ const elements = Object.fromEntries(
     "avatarModeCaption",
     "avatarStateValue",
     "avatarExpressionValue",
+    "avatarVisemeValue",
     "avatarSourceValue",
     "avatarSequenceValue",
     "avatarPreviewState",
@@ -335,10 +342,14 @@ function renderAvatarStatus(status) {
   elements.avatarViewport.dataset.expression = status.expression;
   elements.avatarStateValue.textContent = avatarStateLabels[status.state] || status.state;
   elements.avatarExpressionValue.textContent = status.expression;
+  elements.avatarVisemeValue.textContent =
+    `${status.viseme} · ${Math.round(status.intensity * 100)}%`;
   elements.avatarSourceValue.textContent = status.source;
   elements.avatarSequenceValue.textContent = String(status.sequence);
   elements.avatarStateCaption.textContent = status.state.toUpperCase();
-  elements.avatarModeCaption.textContent = `${status.mode} · ${status.expression}`;
+  elements.avatarModeCaption.textContent =
+    `${status.mode} · ${status.expression} · ${status.viseme} ${Math.round(status.intensity * 100)}%`;
+  elements.avatarViewport.dataset.viseme = status.viseme;
   elements.avatarAssetBadge.textContent = status.asset.vrmLoaded
     ? "VRM LOADED"
     : "CODE-NATIVE FALLBACK · VRM CHƯA TẢI";
@@ -349,6 +360,8 @@ function renderAvatarStatus(status) {
     {
       state: status.state,
       expression: status.expression,
+      viseme: status.viseme,
+      intensity: status.intensity,
       source: status.source,
       mode: status.mode,
       sequence: status.sequence,
@@ -387,7 +400,7 @@ async function refreshAvatar({ logFailure = false } = {}) {
   }
 }
 
-async function applyAvatarCue(cue, { announce = true } = {}) {
+async function applyAvatarCue(cue, { announce = true, logFailure = true } = {}) {
   try {
     const status = await postJson("/v1/avatar/cues", cue);
     renderAvatarStatus(status);
@@ -399,7 +412,9 @@ async function applyAvatarCue(cue, { announce = true } = {}) {
     }
     return status;
   } catch (error) {
-    addActivity(`Avatar cue lỗi: ${error.message}`, "error");
+    if (logFailure) {
+      addActivity(`Avatar cue lỗi: ${error.message}`, "error");
+    }
     return null;
   }
 }
@@ -432,7 +447,7 @@ async function ensureAvatarAudioAnalyser() {
     state.avatarAudioSource =
       state.avatarAudioContext.createMediaElementSource(elements.ttsPreview);
     state.avatarAnalyser = state.avatarAudioContext.createAnalyser();
-    state.avatarAnalyser.fftSize = 256;
+    state.avatarAnalyser.fftSize = 1_024;
     state.avatarAnalyser.smoothingTimeConstant = 0.55;
     state.avatarAudioSource.connect(state.avatarAnalyser);
     state.avatarAnalyser.connect(state.avatarAudioContext.destination);
@@ -444,44 +459,94 @@ async function ensureAvatarAudioAnalyser() {
 
 function startAvatarAudioAnimation() {
   if (!state.avatarAnalyser) return;
+  if (!globalThis.HinaAudioViseme) {
+    throw new Error("audio-derived viseme classifier chưa được tải");
+  }
   if (state.avatarAudioFrame !== null) {
     cancelAnimationFrame(state.avatarAudioFrame);
   }
-  const samples = new Uint8Array(state.avatarAnalyser.fftSize);
+  const timeSamples = new Uint8Array(state.avatarAnalyser.fftSize);
+  const frequencySamples = new Uint8Array(state.avatarAnalyser.frequencyBinCount);
+  state.avatarVisemeStabilizer = globalThis.HinaAudioViseme.createVisemeStabilizer(2);
   const renderFrame = () => {
     if (!state.avatarPlaybackActive || elements.ttsPreview.paused) {
       state.avatarAudioFrame = null;
       setAvatarMouth(0);
       return;
     }
-    state.avatarAnalyser.getByteTimeDomainData(samples);
-    let energy = 0;
-    for (const sample of samples) {
-      const normalized = (sample - 128) / 128;
-      energy += normalized * normalized;
-    }
-    const rms = Math.sqrt(energy / samples.length);
-    setAvatarMouth(Math.min(1, rms * 5.5));
+    state.avatarAnalyser.getByteTimeDomainData(timeSamples);
+    state.avatarAnalyser.getByteFrequencyData(frequencySamples);
+    const observed = globalThis.HinaAudioViseme.classifyAudioViseme(
+      timeSamples,
+      frequencySamples,
+      state.avatarAudioContext.sampleRate,
+      state.avatarAnalyser.fftSize,
+    );
+    const stable = state.avatarVisemeStabilizer.push(observed);
+    setAvatarMouth(stable.intensity);
+    elements.avatarViewport.dataset.viseme = stable.viseme;
+    publishObservedViseme(stable, performance.now());
     state.avatarAudioFrame = requestAnimationFrame(renderFrame);
   };
   renderFrame();
 }
 
+function publishObservedViseme(observed, nowMilliseconds) {
+  const changed =
+    observed.viseme !== state.avatarPublishedViseme
+    || Math.abs(observed.intensity - state.avatarPublishedIntensity) >= 0.08;
+  if (
+    !changed
+    || state.avatarVisemeCueBusy
+    || nowMilliseconds - state.avatarLastVisemeCueAt < 100
+  ) {
+    return;
+  }
+  state.avatarPublishedViseme = observed.viseme;
+  state.avatarPublishedIntensity = observed.intensity;
+  state.avatarLastVisemeCueAt = nowMilliseconds;
+  state.avatarVisemeCueBusy = true;
+  const pendingCue = applyAvatarCue(
+    {
+      source: "speech.output",
+      state: "speaking",
+      expression: "happy",
+      viseme: observed.viseme,
+      intensity: observed.intensity,
+      mode: "tts-playback",
+      correlationId: state.ttsCorrelationId,
+      sessionId: state.sessionId,
+      utteranceId: state.ttsUtteranceId,
+    },
+    { announce: false, logFailure: false },
+  );
+  state.avatarVisemeCuePromise = pendingCue;
+  void pendingCue.finally(() => {
+    if (state.avatarVisemeCuePromise === pendingCue) {
+      state.avatarVisemeCuePromise = null;
+      state.avatarVisemeCueBusy = false;
+    }
+  });
+}
+
 async function beginAvatarPlayback() {
   state.avatarPlaybackActive = true;
+  state.avatarPublishedViseme = "sil";
+  state.avatarPublishedIntensity = 0;
+  state.avatarLastVisemeCueAt = 0;
   try {
     await ensureAvatarAudioAnalyser();
     startAvatarAudioAnimation();
   } catch (error) {
-    addActivity(`Lip-sync amplitude không khởi động được: ${error.message}`, "error");
+    addActivity(`Lip-sync viseme không khởi động được: ${error.message}`, "error");
   }
   await applyAvatarCue(
     {
       source: "speech.output",
       state: "speaking",
       expression: "happy",
-      viseme: "A",
-      intensity: 0.25,
+      viseme: "sil",
+      intensity: 0,
       mode: "tts-playback",
       correlationId: state.ttsCorrelationId,
       sessionId: state.sessionId,
@@ -494,11 +559,15 @@ async function beginAvatarPlayback() {
 async function finishAvatarPlayback() {
   if (!state.avatarPlaybackActive) return;
   state.avatarPlaybackActive = false;
+  state.avatarVisemeStabilizer?.reset();
   if (state.avatarAudioFrame !== null) {
     cancelAnimationFrame(state.avatarAudioFrame);
     state.avatarAudioFrame = null;
   }
   setAvatarMouth(0);
+  if (state.avatarVisemeCuePromise) {
+    await state.avatarVisemeCuePromise;
+  }
   await applyAvatarCue(
     {
       source: "speech.output",

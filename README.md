@@ -10,9 +10,9 @@ M05 speech output và M06 memory đã qua fast gate; M06 cũng đã qua independ
 review không có P0/P1. Hina Dev Console hiện là dashboard nhiều
 trang có chat text thật qua Ollama/OpenAI-compatible local, microphone/WAV tiếng
 Việt qua faster-whisper, giọng Việt qua VieNeu-TTS ONNX int8 và ký ức dài hạn
-SQLite + Qdrant local. Trang Avatar Stage đọc turn state thật và mở miệng theo
-biên độ WAV TTS đang phát; không dùng câu trả lời, transcript, audio, memory hay
-backend state giả.
+SQLite + Qdrant local. Trang Avatar Stage đọc turn state thật và suy ra khẩu hình
+`A/I/U/E/O` từ chính phổ WAV TTS đang phát; không dùng câu trả lời, transcript,
+audio, memory hay backend state giả.
 
 ## Chạy ứng dụng hiện có
 
@@ -49,7 +49,7 @@ Giao diện cho phép:
   đã đồng bộ.
 - xem avatar code-native phản ứng theo `idle | listening | thinking | speaking |
   interrupted | error` từ runtime thật;
-- xem miệng chuyển động theo Web Audio amplitude của WAV TTS thật, kiểm tra cue
+- xem miệng chuyển động theo viseme phổ âm thanh của WAV TTS thật, kiểm tra cue
   thủ công có nhãn `manual-preview`, mute hoặc emergency stop từ cùng safety backend.
 
 Ứng dụng không có câu trả lời AI dựng sẵn. Nếu provider/model chưa sẵn sàng,
@@ -144,12 +144,12 @@ khỏi model weights đã train.
 
 Mở navbar **Avatar Stage** để xem state renderer-safe do control plane cung cấp.
 Khi chat đang chạy, stage nhận trực tiếp state của turn FSM. Khi WAV TTS phát,
-browser đo biên độ audio thật bằng Web Audio API và điều khiển độ mở miệng; backend
-nhận cue `speech.output` cho vòng đời speaking/idle.
+browser dùng Web Audio API để suy ra viseme `A/I/U/E/O` và cường độ từ tín hiệu
+thật; backend nhận cue `speech.output` trong toàn bộ vòng đời speaking/idle.
 
 Dev Console dùng SVG/CSS gốc của repository và được ghi provenance tại
-`assets/manifests/hina-code-avatar.v1.json`. Browser mở miệng theo biên độ WAV
-TTS thật nhưng chưa nhận dạng nguyên âm.
+`assets/manifests/hina-code-avatar.v1.json`. Classifier là heuristic phổ âm thanh,
+không phải forced alignment hoặc căn phoneme chính xác và không lưu analyser/audio.
 
 ### Mở ứng dụng desktop
 
@@ -169,6 +169,8 @@ Desktop tải real VRM 1.0 bằng Three.js/`@pixiv/three-vrm`. Asset hiện tạ
 local với SHA-256 và embedded VRM Public License 1.0 đã kiểm tra. Đây là model
 phát triển có thể thay thế để kiểm thử renderer, không phải thiết kế Hina cuối
 cùng và UI luôn ghi rõ điều đó. Nếu VRM lỗi, desktop tự giữ SVG fallback.
+Các expression vowel của VRM đọc cùng viseme/intensity đã được backend kiểm tra,
+không còn dùng khẩu hình giả cố định theo state `speaking`.
 
 ## Vòng lặp phát triển nhanh
 

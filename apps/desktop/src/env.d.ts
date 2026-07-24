@@ -13,6 +13,8 @@ type AvatarStatus = {
   sequence: number;
   state: AvatarState;
   expression: string;
+  viseme: "sil" | "A" | "I" | "U" | "E" | "O";
+  intensity: number;
   source: string;
   mode: "runtime" | "manual-preview" | "tts-playback";
   updatedAt: string;

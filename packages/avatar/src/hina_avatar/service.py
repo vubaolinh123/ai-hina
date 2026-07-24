@@ -158,7 +158,7 @@ class AvatarStageService:
                 "live2dLoaded": False,
             },
             "lipSync": {
-                "mode": "observed-audio-amplitude",
+                "mode": "observed-audio-spectral-viseme",
                 "phonemeAccurate": False,
             },
         }

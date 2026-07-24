@@ -91,7 +91,7 @@ test("motion profile covers every state and keeps unknown expressions neutral", 
     assert.ok(profile.expressionWeight >= 0 && profile.expressionWeight <= 1);
     assert.ok(profile.breathAmplitude >= 0 && profile.breathAmplitude <= 0.02);
     assert.ok(profile.headAmplitude >= 0 && profile.headAmplitude <= 0.02);
-    assert.ok(profile.stateDrivenMouth >= 0 && profile.stateDrivenMouth <= 0.12);
+    assert.equal("stateDrivenMouth" in profile, false);
   }
   assert.deepEqual(motion.expressionAliases, {
     neutral: "neutral",
@@ -102,7 +102,14 @@ test("motion profile covers every state and keeps unknown expressions neutral", 
   });
   const stage = read("src/VrmStage.vue");
   assert.match(stage, /const expression = alias \?\? "neutral"/);
-  assert.match(stage, /not audio-amplitude or phoneme alignment/);
+  assert.match(stage, /A:\s*"aa"/);
+  assert.match(stage, /I:\s*"ih"/);
+  assert.match(stage, /U:\s*"ou"/);
+  assert.match(stage, /E:\s*"ee"/);
+  assert.match(stage, /O:\s*"oh"/);
+  assert.match(stage, /props\.viseme/);
+  assert.match(stage, /props\.intensity/);
+  assert.doesNotMatch(stage, /stateDrivenMouth/);
 });
 
 test("control client accepts numeric loopback only and validates mutations", () => {

@@ -1,11 +1,11 @@
 # M07 — Avatar stage và operator desktop
 
-- Status: M07-S1/S2/S3/S4 runnable candidate; M07 remains active
+- Status: M07-S1/S2/S3/S4/S5 runnable candidate; M07 remains active
 - Branch: `codex/M07-avatar-stage`
 - Base: `ac29424e4dc58f42f9eeeb9f7a7f2408ad5c2f4f`
 - Active slices: M07-S1 avatar state/control plane, M07-S2 code-native runtime
   stage, M07-S3 sandboxed Electron/Vue operator shell, M07-S4 real VRM
-  development stage
+  development stage, M07-S5 audio-derived viseme pipeline
 
 ## Runnable target
 
@@ -20,11 +20,11 @@ không đọc database, model, Qdrant hay provider nội bộ. Public/viewer inp
 
 ## Deferred M07 deliverables
 
-Final owner-approved Hina identity asset, phoneme/viseme alignment,
+Final owner-approved Hina identity asset, phoneme-accurate alignment,
 dropped-frame/A-V benchmark và soak tám giờ được giữ cho các slice M07 tiếp
 theo. Không được đánh dấu M07 complete khi các phần này chưa có evidence.
 
-## Implemented in M07-S1/S2/S3/S4
+## Implemented in M07-S1/S2/S3/S4/S5
 
 - `packages/avatar`: typed renderer-safe state/cue service, trusted-source
   allowlist, bounded history, neutral fallback và recovery khỏi terminal state.
@@ -34,7 +34,8 @@ theo. Không được đánh dấu M07 complete khi các phần này chưa có e
 - Dev Console có route Avatar Stage, visual SVG/CSS original, manual preview có
   nhãn rõ, trạng thái safety thật và renderer snapshot không chứa DB/model.
 - TTS playback gửi cue `speech.output`; Web Audio analyser dùng sample của WAV
-  thật để điều khiển độ mở miệng, không tuyên bố phoneme-accurate.
+  thật để phân loại heuristic `sil/A/I/U/E/O` và intensity, không tuyên bố
+  phoneme-accurate và không gửi/lưu raw analyser data.
 - Asset manifest ghi license, quyền sử dụng và SHA-256 của source visual.
 - `apps/desktop`: ứng dụng Electron 43/Vue 3 chạy thật từ local files; renderer
   bật Chromium sandbox + context isolation, tắt Node integration/webview/remote
@@ -55,8 +56,8 @@ theo. Không được đánh dấu M07 complete khi các phần này chưa có e
   Load lỗi tự về SVG code-native; backend `asset.vrmLoaded` không bị sửa thành
   true giả vì renderer-local load state được báo riêng.
 - State/expression thật điều khiển deterministic head/breath/expression motion.
-  Miệng Electron chỉ là speaking-state placeholder có nhãn, chưa tuyên bố
-  amplitude/phoneme-accurate.
+  Web SVG và desktop VRM dùng cùng viseme/intensity đã được backend kiểm tra;
+  VRM map A/I/U/E/O sang `aa/ih/ou/ee/oh`, không còn speaking-state fake mouth.
 
 ## Fast evidence
 
@@ -81,3 +82,8 @@ theo. Không được đánh dấu M07 complete khi các phần này chưa có e
   thật và trả `vrmLoaded=true`.
 - Governance 12 tests pass; provenance validator ghi nhận 13 imported
   components và đối chiếu embedded VRM meta với manifest.
+- Audio-viseme pure Node: 8/8 tests pass (silence, A/I/U/E/O, stabilizer và
+  invalid input); avatar backend 5/5 và Dev Console integration 8/8 pass.
+- Real VieNeu browser workflow: WAV 48 kHz phát thật; backend quan sát
+  `speaking → U/O/A` với intensity tới 1.0, sau đó `idle | sil | 0`. Lip-sync
+  status là `observed-audio-spectral-viseme`, `phonemeAccurate=false`.

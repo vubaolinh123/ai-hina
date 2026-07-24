@@ -305,13 +305,18 @@ class DevConsoleTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIn(b'data-dashboard-page="avatar"', html)
                 self.assertIn(b'id="avatarViewport"', html)
                 self.assertIn(b'id="avatarMouth"', html)
+                self.assertIn(b'id="avatarVisemeValue"', html)
                 self.assertIn("CODE-NATIVE FALLBACK".encode(), html)
-                self.assertIn("chưa phải model VRM".encode(), html)
+                self.assertIn("ứng dụng desktop riêng đã có renderer VRM".encode(), html)
                 self.assertIn(b'id="dashboardMain"', html)
                 self.assertIn(b'class="page-guide"', html)
                 self.assertIn("Khi nào dùng:".encode(), html)
                 self.assertIn("Dừng khẩn cấp".encode(), html)
                 self.assertIn("Mục đích:".encode(), html)
+                self.assertLess(
+                    html.index(b'src="/audio-viseme.js"'),
+                    html.index(b'src="/app.js"'),
+                )
 
                 status, _, styles = await _get(host, port, "/styles.css")
                 self.assertEqual(status, HTTPStatus.OK)
@@ -350,6 +355,16 @@ class DevConsoleTests(unittest.IsolatedAsyncioTestCase):
                 self.assertNotIn(b"unknown_capability", script)
                 self.assertNotIn(b"generated_code_execution", script)
                 self.assertNotIn(b"fake AI", script)
+
+                status, headers, classifier = await _get(
+                    host, port, "/audio-viseme.js"
+                )
+                self.assertEqual(status, HTTPStatus.OK)
+                self.assertEqual(
+                    headers["content-type"], "text/javascript; charset=utf-8"
+                )
+                self.assertIn(b"classifyAudioViseme", classifier)
+                self.assertIn(b"audio_spectral_heuristic", classifier)
 
                 status, _, body = await _get(host, port, "/v1/metrics")
                 self.assertEqual(status, HTTPStatus.OK)

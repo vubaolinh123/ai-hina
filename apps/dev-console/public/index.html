@@ -9,6 +9,7 @@
     >
     <title>Hina Dev Console</title>
     <link rel="stylesheet" href="/styles.css">
+    <script src="/audio-viseme.js" defer></script>
     <script src="/app.js" defer></script>
   </head>
   <body>
@@ -250,15 +251,15 @@
         <article class="panel avatar-viewport-panel">
           <div class="panel-heading">
             <div>
-              <p class="eyebrow">M07-S1/S2 / REAL RUNTIME CUES</p>
+              <p class="eyebrow">M07-S1–S5 / REAL RUNTIME CUES</p>
               <h2 id="avatarStageTitle">Sân khấu của Hina</h2>
             </div>
             <button id="refreshAvatarButton" class="text-button" type="button">Làm mới</button>
           </div>
           <p class="panel-copy feature-purpose">
             <strong>Mục đích:</strong> biến state của hội thoại và TTS thành phản
-            ứng nhìn thấy được. Đây là visual SVG/CSS gốc của dự án để kiểm thử
-            luồng chạy thật; chưa phải model VRM hoặc Live2D.
+            ứng nhìn thấy được. Trang web dùng visual SVG/CSS gốc để kiểm thử
+            luồng chạy thật; ứng dụng desktop riêng đã có renderer VRM.
           </p>
 
           <div
@@ -281,7 +282,7 @@
             >
               <title id="hinaAvatarTitle">Hina code-native avatar</title>
               <desc id="hinaAvatarDescription">
-                Visual gốc dùng để hiển thị state và độ mở miệng từ audio TTS thật.
+                Visual gốc dùng để hiển thị state và khẩu hình suy ra từ audio TTS thật.
               </desc>
               <defs>
                 <linearGradient id="avatarHairGradient" x1="0" x2="1" y1="0" y2="1">
@@ -350,6 +351,7 @@
           <div class="avatar-status-grid">
             <div><span>State hiện tại</span><strong id="avatarStateValue">—</strong></div>
             <div><span>Biểu cảm</span><strong id="avatarExpressionValue">—</strong></div>
+            <div><span>Khẩu hình</span><strong id="avatarVisemeValue">—</strong></div>
             <div><span>Nguồn cue</span><strong id="avatarSourceValue">—</strong></div>
             <div><span>Sequence</span><strong id="avatarSequenceValue">0</strong></div>
           </div>
@@ -391,9 +393,15 @@
           <div class="avatar-control-block avatar-limitations">
             <h3>Giới hạn hiện tại</h3>
             <ul>
-              <li><strong>VRM:</strong> chưa tải; visual hiện tại là SVG gốc.</li>
-              <li><strong>Lip-sync:</strong> theo biên độ audio thật, chưa nhận dạng nguyên âm.</li>
-              <li><strong>Desktop app:</strong> Electron/Vue sẽ được thêm ở slice kế tiếp.</li>
+              <li><strong>Web:</strong> dùng SVG gốc; VRM chạy trong ứng dụng desktop.</li>
+              <li>
+                <strong>Lip-sync:</strong> suy ra A/I/U/E/O từ phổ audio thật;
+                đây là heuristic, chưa căn chính xác từng phoneme.
+              </li>
+              <li>
+                <strong>Desktop:</strong> Electron/Vue + VRM 1.0 đã chạy được,
+                nhưng model hiện tại chỉ là sample phát triển, chưa phải Hina cuối cùng.
+              </li>
             </ul>
           </div>
 

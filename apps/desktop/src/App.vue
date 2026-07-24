@@ -28,11 +28,41 @@ let safetyRefreshPending = false;
 
 const stageState = computed(() => avatar.value?.state ?? "error");
 const stageExpression = computed(() => avatar.value?.expression ?? "concerned");
+const stageViseme = computed(() => avatar.value?.viseme ?? "sil");
+const stageIntensity = computed(() => (
+  avatar.value?.state === "speaking"
+    ? Math.min(1, Math.max(0, avatar.value.intensity))
+    : 0
+));
+const stageMouthRx = computed(() => {
+  const targetWidth = {
+    sil: 31,
+    A: 28,
+    I: 35,
+    U: 18,
+    E: 33,
+    O: 22,
+  }[stageViseme.value];
+  return 31 + (targetWidth - 31) * stageIntensity.value;
+});
+const stageMouthRy = computed(() => {
+  const targetHeight = {
+    sil: 0,
+    A: 25,
+    I: 14,
+    U: 19,
+    E: 16,
+    O: 23,
+  }[stageViseme.value];
+  return 7 + targetHeight * stageIntensity.value;
+});
 const connected = computed(() => runtime.value?.status === "ready");
 const snapshot = computed(() => avatar.value
   ? JSON.stringify({
       state: avatar.value.state,
       expression: avatar.value.expression,
+      viseme: avatar.value.viseme,
+      intensity: avatar.value.intensity,
       source: avatar.value.source,
       mode: avatar.value.mode,
       sequence: avatar.value.sequence,
@@ -203,6 +233,7 @@ onBeforeUnmount(() => {
         class="stage"
         :data-state="stageState"
         :data-expression="stageExpression"
+        :data-viseme="stageViseme"
         :data-vrm-loaded="vrmReady"
       >
         <div class="stage-topline">
@@ -219,6 +250,8 @@ onBeforeUnmount(() => {
           v-show="vrmReady"
           :state="stageState"
           :expression="stageExpression"
+          :viseme="stageViseme"
+          :intensity="stageIntensity"
           @ready="handleVrmReady"
           @failed="handleVrmFailure"
           @fps="vrmFps = $event"
@@ -264,8 +297,8 @@ onBeforeUnmount(() => {
               class="mouth"
               cx="260"
               cy="390"
-              rx="31"
-              :ry="stageState === 'speaking' ? 24 : 7"
+              :rx="stageMouthRx"
+              :ry="stageMouthRy"
             />
             <g class="hairpin">
               <path d="M130 196l66-39M136 218l67-37"/>
@@ -278,6 +311,7 @@ onBeforeUnmount(() => {
           <strong>{{ stateLabels[stageState] }}</strong>
           <span>
             {{ stageState }} · {{ avatar?.expression ?? "offline" }} ·
+            {{ stageViseme }} {{ Math.round(stageIntensity * 100) }}% ·
             {{ vrmReady ? `${vrmFps || "—"} FPS` : "SVG fallback" }}
           </span>
         </div>
@@ -296,6 +330,7 @@ onBeforeUnmount(() => {
         <div class="status-grid">
           <div><span>State</span><strong>{{ stateLabels[stageState] }}</strong></div>
           <div><span>Biểu cảm</span><strong>{{ avatar?.expression ?? "—" }}</strong></div>
+          <div><span>Khẩu hình</span><strong>{{ stageViseme }} · {{ Math.round(stageIntensity * 100) }}%</strong></div>
           <div><span>Nguồn cue</span><strong>{{ avatar?.source ?? "—" }}</strong></div>
           <div><span>Safety revision</span><strong>{{ safety?.state.revision ?? "—" }}</strong></div>
         </div>
@@ -341,7 +376,10 @@ onBeforeUnmount(() => {
             VRM: {{ vrmReady ? "đã tải sample official có license" : "chưa tải; đang dùng SVG" }}
           </span>
           <span>Nhân vật: sample phát triển, chưa phải thiết kế Hina cuối cùng</span>
-          <span>Miệng desktop: theo speaking state, chưa theo âm lượng/nguyên âm</span>
+          <span>
+            Miệng desktop: theo viseme phổ âm thanh thật khi Dev Console phát TTS;
+            đây là heuristic, chưa phải căn phoneme chính xác
+          </span>
           <span v-if="vrmError" class="inline-error">Lỗi VRM: {{ vrmError }}</span>
         </section>
 

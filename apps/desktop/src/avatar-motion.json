@@ -5,43 +5,37 @@
       "expression": "relaxed",
       "expressionWeight": 0.12,
       "breathAmplitude": 0.012,
-      "headAmplitude": 0.008,
-      "stateDrivenMouth": 0.0
+      "headAmplitude": 0.008
     },
     "listening": {
       "expression": "surprised",
       "expressionWeight": 0.18,
       "breathAmplitude": 0.01,
-      "headAmplitude": 0.012,
-      "stateDrivenMouth": 0.0
+      "headAmplitude": 0.012
     },
     "thinking": {
       "expression": "neutral",
       "expressionWeight": 0.0,
       "breathAmplitude": 0.008,
-      "headAmplitude": 0.018,
-      "stateDrivenMouth": 0.0
+      "headAmplitude": 0.018
     },
     "speaking": {
       "expression": "happy",
       "expressionWeight": 0.28,
       "breathAmplitude": 0.016,
-      "headAmplitude": 0.014,
-      "stateDrivenMouth": 0.12
+      "headAmplitude": 0.014
     },
     "interrupted": {
       "expression": "sad",
       "expressionWeight": 0.34,
       "breathAmplitude": 0.006,
-      "headAmplitude": 0.006,
-      "stateDrivenMouth": 0.0
+      "headAmplitude": 0.006
     },
     "error": {
       "expression": "sad",
       "expressionWeight": 0.42,
       "breathAmplitude": 0.004,
-      "headAmplitude": 0.004,
-      "stateDrivenMouth": 0.0
+      "headAmplitude": 0.004
     }
   },
   "expressionAliases": {

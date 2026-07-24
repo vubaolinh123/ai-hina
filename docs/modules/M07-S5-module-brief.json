@@ -1,0 +1,82 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M07-S5-audio-derived-viseme-pipeline",
+  "module_id": "M07",
+  "objective": "Convert the real Web Audio signal already observed during VieNeu WAV playback into bounded audio-spectral viseme cues, publish those renderer-safe cues to the avatar service at a maximum 10 Hz, and make both SVG and VRM presentations consume the same viseme/intensity state. The pipeline must remain explicitly heuristic and non-phoneme-accurate.",
+  "non_goals": [
+    "Do not infer visemes from raw TTS text, canned timelines, random animation or synthetic demo values in the product path.",
+    "Do not label the spectral heuristic as phoneme alignment, forced alignment or speech recognition.",
+    "Do not store raw audio, frequency bins, text or generated viseme timelines.",
+    "Do not change VieNeu model weights, provider inference or base model behavior.",
+    "Do not expose analyser data outside renderer-safe viseme/intensity cues.",
+    "Do not run deep latency/soak gates or mark M07 complete.",
+    "Do not open M08."
+  ],
+  "base_sha": "2b47db3dc882e87349775c203784a4fb2e6e69f2",
+  "branch": "codex/M07-avatar-stage",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "AGENTS.md",
+    "README.md",
+    "apps/desktop/",
+    "apps/dev-console/",
+    "apps/core-runtime/src/hina_core/runtime/transport.py",
+    "apps/core-runtime/tests/test_dev_console.py",
+    "assets/manifests/hina-code-avatar.v1.json",
+    "docs/modules/M07-*",
+    "packages/avatar/",
+    "tools/dev/Invoke-AvatarUnit.ps1"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "adapters/",
+    "packages/contracts/",
+    "packages/memory/",
+    "packages/safety-policy/",
+    "packages/text-brain/",
+    "third_party/",
+    "workers/speech/"
+  ],
+  "contracts": [
+    "Classifier input is only current Web Audio time/frequency byte arrays plus sample rate and FFT size; product output is one of sil/A/I/U/E/O, intensity 0..1 and accuracy audio_spectral_heuristic.",
+    "Silence threshold closes the mouth immediately; non-silence classification is stabilized before publication to reduce jitter.",
+    "Backend publication uses source speech.output, mode tts-playback and current correlation/session/utterance identifiers, at no more than 10 requests per second with only one request in flight.",
+    "Playback start no longer sends a fixed fake A viseme; playback finish sends sil with zero intensity.",
+    "Avatar service remains the validator/source of truth and continues to report phonemeAccurate false.",
+    "Desktop VRM maps only allowlisted avatar visemes to standard VRM vowel expression names and uses backend intensity; sil or unknown viseme closes all vowel expressions.",
+    "Raw audio arrays and frequency bins are not logged, persisted or sent to the backend.",
+    "Existing code-native SVG and VRM fallbacks remain functional."
+  ],
+  "allowed_dependencies": [
+    "Browser Web Audio AnalyserNode already used by M07-S2.",
+    "Existing avatar loopback cue API and @pixiv/three-vrm expression manager.",
+    "No new package, model, weight, voice or avatar asset."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "Pure Node unit tests cover silence, each output viseme class, bounded intensity, invalid input and stabilizer behavior.",
+    "Avatar unit tests continue to reject unknown visemes and report phonemeAccurate false with audio-spectral mode.",
+    "Dev Console syntax/startup tests pass and the classifier script loads before app.js.",
+    "Loopback static transport serves only the explicitly allowlisted audio-viseme.js path with JavaScript content type.",
+    "A real VieNeu WAV browser workflow observes at least one non-sil audio-derived viseme, intensity greater than zero and speaking state while audio is playing, then sil/idle after playback.",
+    "Desktop typecheck/tests/smoke pass and VRM expression mapping contains no speaking-state fake mouth weight.",
+    "Asset manifest hashes match the changed renderer sources.",
+    "No raw analyser arrays, audio or input text are added to logs or API payloads."
+  ],
+  "required_test_commands": [
+    "pnpm test:avatar",
+    "pnpm --filter @hina/desktop typecheck",
+    "pnpm --filter @hina/desktop test",
+    "pnpm smoke:desktop",
+    "pnpm smoke:dev-console",
+    "uv run --frozen python -m unittest discover -s tests/governance -p \"test_*.py\""
+  ],
+  "latency_or_quality_budget": {
+    "analyser_frame_budget_milliseconds": 16.7,
+    "backend_publish_interval_milliseconds": 100,
+    "backend_requests_in_flight_maximum": 1,
+    "deep_lip_sync_p95_gate_deferred": true,
+    "phoneme_accurate": false
+  },
+  "output_artifact_dir": "artifacts/verification/M07/"
+}
