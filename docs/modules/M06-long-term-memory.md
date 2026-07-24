@@ -1,6 +1,6 @@
 # M06 — Long-term memory có consent và chống poisoning
 
-- Status: runnable candidate; fast unit/startup/browser verification passed
+- Status: reviewed runnable candidate; fast unit/startup/browser verification passed
 - Branch: `codex/M06-memory-dashboard`
 - Base: `37d4121f52f400ca8fcafbfce07783ac2e2cf232`
 - Active slices: authoritative SQLite store, derived Qdrant index, safe chat retrieval và owner dashboard
@@ -25,6 +25,14 @@ dùng bằng tiếng Việt phổ thông.
 Recall@5/nDCG labeled benchmark, Qdrant server deployment, production embedding
 model, backup/restore rehearsal, fault injection toàn outbox và deep delete
 lineage vẫn được hoãn tới khi owner yêu cầu promotion/deep verification.
+
+Independent reviewer đã PASS frozen candidate
+`76986f53eb84de7bb276c22b925524c7442577a5` ngày 2026-07-25: không có P0/P1,
+memory unit, JavaScript syntax và Dev Console startup smoke đều xanh. Một P2
+được ghi backlog: orphan cleanup của derived Qdrant index chưa được tuyên bố an
+toàn cho nhiều owner dùng chung collection. Candidate hiện chỉ hỗ trợ local
+single-owner; phải owner-scope vector listing/delete hoặc dùng collection riêng
+và có regression test trước khi mở multi-owner/production promotion.
 
 ## Implemented
 
