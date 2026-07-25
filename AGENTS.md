@@ -24,7 +24,7 @@ xanh; independent reviewer PASS frozen SHA `76986f53eb84de7bb276c22b925524c74425
 không có P0/P1. P2 derived-index isolation được giữ trong backlog và M06 hiện
 chỉ hỗ trợ local single-owner. Ngày 2026-07-25 owner chỉ thị “tiếp tục các task
 tiếp theo đi”, được ghi nhận là cho phép mở M07 trong fast-development mode.
-M07-S1/S2/S3/S4/S5/S6/S7/S8 hiện là runnable candidate: avatar state/control plane, turn
+M07-S1/S2/S3/S4/S5/S6/S7/S8/S9 hiện là runnable candidate: avatar state/control plane, turn
 callback, stage code-native, Web Audio spectral viseme từ TTS thật và Electron/Vue
 operator shell sandboxed đã qua fast unit/contract/governance/startup/browser/
 desktop IPC smoke gate. Browser đã xác nhận cue `speech.output` chuyển stage sang
@@ -40,7 +40,10 @@ blink, nơ, má hồng, váy kín đáo và stage sticky; đây là prototype d�
 có license, chưa tuyên bố artwork độc quyền/final. M07-S8 thêm companion widget
 Electron transparent/frameless/always-on-top, native drag surface và đúng một
 Voice control chỉ lộ khi hover/focus; Operator window hiện hữu vẫn giữ nguyên.
-Real smoke xác nhận widget mode IPC, alpha PNG trong suốt và capture thật.
+M07-S9 thêm persistence `schemaVersion/x/y` đã validate/clamp trong userData và
+Operator-only hide/show/reset controls; không lưu dữ liệu hội thoại/audio.
+Real smoke xác nhận widget mode IPC, alpha PNG trong suốt, hover thật và
+hide/show/reset qua Operator.
 Chưa gọi independent reviewer trước khi module thực sự hoàn tất.
 
 Legacy AIRI skill paths dưới `D:\ProjectAiri` mặc định ánh xạ sang repository

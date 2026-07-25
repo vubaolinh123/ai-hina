@@ -48,8 +48,24 @@ type RuntimeHealth = {
 
 type DesktopWindowMode = "operator" | "widget";
 
+type WidgetStatus = {
+  available: true;
+  visible: boolean;
+  alwaysOnTop: boolean;
+  position: {
+    x: number;
+    y: number;
+  };
+};
+
 type HinaDesktopApi = {
   getWindowMode(): Promise<DesktopWindowMode>;
+  getWidgetStatus(): Promise<WidgetStatus>;
+  applyWidgetControl(control:
+    | { action: "show" }
+    | { action: "hide" }
+    | { action: "reset_position" }
+  ): Promise<WidgetStatus>;
   getAvatarStatus(): Promise<AvatarStatus>;
   applyAvatarCue(cue: {
     source: "owner.console";

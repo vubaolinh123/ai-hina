@@ -23,6 +23,7 @@ const stateLabels: Record<AvatarState, string> = {
 const avatar = ref<AvatarStatus | null>(null);
 const windowMode = ref<DesktopWindowMode | null>(null);
 const safety = ref<SafetyStatus | null>(null);
+const widgetStatus = ref<WidgetStatus | null>(null);
 const runtime = ref<RuntimeHealth | null>(null);
 const previewState = ref<AvatarState>("idle");
 const errorMessage = ref("");
@@ -38,6 +39,7 @@ const vrmPerformance = ref<FrameMetricsReport | null>(null);
 const vrmStageKey = ref(0);
 let avatarTimer: number | null = null;
 let safetyTimer: number | null = null;
+let widgetTimer: number | null = null;
 let avatarRefreshPending = false;
 let safetyRefreshPending = false;
 
@@ -134,10 +136,36 @@ async function refreshSafety(): Promise<void> {
   }
 }
 
+async function refreshWidget(): Promise<void> {
+  try {
+    widgetStatus.value = await window.hinaDesktop.getWidgetStatus();
+  } catch (error) {
+    errorMessage.value = error instanceof Error
+      ? error.message
+      : "E_DESKTOP_WIDGET_STATUS";
+  }
+}
+
 async function retryConnection(): Promise<void> {
   busy.value = true;
   try {
-    await Promise.all([refreshAvatar(), refreshSafety()]);
+    await Promise.all([refreshAvatar(), refreshSafety(), refreshWidget()]);
+  } finally {
+    busy.value = false;
+  }
+}
+
+async function applyWidgetControl(
+  action: "show" | "hide" | "reset_position",
+): Promise<void> {
+  busy.value = true;
+  try {
+    widgetStatus.value = await window.hinaDesktop.applyWidgetControl({ action });
+    errorMessage.value = "";
+  } catch (error) {
+    errorMessage.value = error instanceof Error
+      ? error.message
+      : "E_DESKTOP_WIDGET_CONTROL";
   } finally {
     busy.value = false;
   }
@@ -286,15 +314,20 @@ function stopPolling(): void {
     window.clearInterval(safetyTimer);
     safetyTimer = null;
   }
+  if (widgetTimer !== null) {
+    window.clearInterval(widgetTimer);
+    widgetTimer = null;
+  }
 }
 
 onMounted(async () => {
   windowMode.value = await window.hinaDesktop.getWindowMode();
   document.documentElement.dataset.windowMode = windowMode.value;
   if (windowMode.value !== "operator") return;
-  await Promise.all([refreshAvatar(), refreshSafety()]);
+  await Promise.all([refreshAvatar(), refreshSafety(), refreshWidget()]);
   avatarTimer = window.setInterval(refreshAvatar, 250);
   safetyTimer = window.setInterval(refreshSafety, 1_000);
+  widgetTimer = window.setInterval(refreshWidget, 1_000);
   window.addEventListener("beforeunload", stopPolling, { once: true });
 });
 
@@ -441,6 +474,55 @@ onBeforeUnmount(() => {
           <div><span>Safety revision</span><strong>{{ safety?.state.revision ?? "—" }}</strong></div>
           <div><span>Visual Hina</span><strong>{{ vrmPresentationId || "Đang tải…" }}</strong></div>
         </div>
+
+        <section class="control-card widget-settings-card">
+          <div class="presentation-heading">
+            <div>
+              <p class="eyebrow">DESKTOP WIDGET</p>
+              <h3>Quản lý widget avatar</h3>
+            </div>
+            <span class="presentation-status" :data-ready="widgetStatus?.visible">
+              {{ widgetStatus?.visible ? "Đang hiện" : "Đang ẩn" }}
+            </span>
+          </div>
+          <p>
+            Widget là avatar trong suốt nổi trên desktop. Kéo trực tiếp nhân vật
+            để di chuyển; vị trí hợp lệ sẽ được nhớ cho lần mở sau. Các nút này
+            chỉ quản lý cửa sổ, không thay đổi state hội thoại hay giọng nói.
+          </p>
+          <div class="status-grid widget-position-grid">
+            <div>
+              <span>Vị trí hiện tại</span>
+              <strong>
+                {{ widgetStatus ? `${widgetStatus.position.x}, ${widgetStatus.position.y}` : "Đang đọc…" }}
+              </strong>
+            </div>
+            <div>
+              <span>Luôn nổi</span>
+              <strong>{{ widgetStatus?.alwaysOnTop ? "Có" : "Không" }}</strong>
+            </div>
+          </div>
+          <div class="button-row">
+            <button
+              :disabled="busy || !widgetStatus?.visible"
+              @click="applyWidgetControl('hide')"
+            >
+              Ẩn widget
+            </button>
+            <button
+              :disabled="busy || widgetStatus?.visible"
+              @click="applyWidgetControl('show')"
+            >
+              Hiện widget
+            </button>
+            <button
+              :disabled="busy || !widgetStatus"
+              @click="applyWidgetControl('reset_position')"
+            >
+              Đặt lại vị trí
+            </button>
+          </div>
+        </section>
 
         <section class="control-card presentation-card">
           <div class="presentation-heading">

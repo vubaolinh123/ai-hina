@@ -1,13 +1,14 @@
 # M07 — Avatar stage và operator desktop
 
-- Status: M07-S1/S2/S3/S4/S5/S6/S7/S8 runnable candidate; M07 remains active
+- Status: M07-S1/S2/S3/S4/S5/S6/S7/S8/S9 runnable candidate; M07 remains active
 - Branch: `codex/M07-avatar-stage`
 - Base: `ac29424e4dc58f42f9eeeb9f7a7f2408ad5c2f4f`
 - Active slices: M07-S1 avatar state/control plane, M07-S2 code-native runtime
   stage, M07-S3 sandboxed Electron/Vue operator shell, M07-S4 real VRM
   development stage, M07-S5 audio-derived viseme pipeline, M07-S6 short-window
   performance telemetry and renderer recovery, M07-S7 colored Hina anime
-  presentation and natural standing pose, M07-S8 transparent desktop widget
+  presentation and natural standing pose, M07-S8 transparent desktop widget,
+  M07-S9 widget persistence and Operator controls
 
 ## Runnable target
 
@@ -28,7 +29,7 @@ theo. Không được đánh dấu M07 complete khi các phần này chưa có e
 Fast hidden Electron telemetry chỉ là development sample, không thay thế frozen
 profile ghi rõ resolution/FPS/avatar/OBS state/duration.
 
-## Implemented in M07-S1/S2/S3/S4/S5/S6/S7/S8
+## Implemented in M07-S1/S2/S3/S4/S5/S6/S7/S8/S9
 
 - `packages/avatar`: typed renderer-safe state/cue service, trusted-source
   allowlist, bounded history, neutral fallback và recovery khỏi terminal state.
@@ -90,6 +91,14 @@ profile ghi rõ resolution/FPS/avatar/OBS state/duration.
 - Project AIRI được xem như tài liệu tham khảo MIT ở commit
   `1a5372a0bb982a62805c77408a55a2c66a0ec14a`; không copy source, style hay thêm
   dependency AIRI. Hina vẫn dùng hợp đồng preload và security boundary riêng.
+- M07-S9 lưu duy nhất `schemaVersion/x/y` trong
+  `app.getPath("userData")/hina-widget-state.v1.json`. State hỏng, quá lớn hoặc
+  tọa độ không hợp lệ fail-closed về vị trí mặc định; tọa độ được clamp theo
+  work area của màn hình hiện có, hỗ trợ màn hình phụ có tọa độ âm.
+- Operator có giải thích rõ và ba nút **Ẩn widget / Hiện widget / Đặt lại vị
+  trí**. Đây là typed IPC chỉ cho Operator main frame; widget renderer không
+  được tự gọi các action này. Vị trí native drag được ghi debounce 250 ms và
+  không chứa dữ liệu avatar, hội thoại, audio hay PII.
 
 ## Fast evidence
 
@@ -135,3 +144,7 @@ profile ghi rõ resolution/FPS/avatar/OBS state/duration.
   60 FPS/drop 0%, native movable/always-on-top 440×623 content, drag/no-drag
   region và Voice ẩn ngoài focus/hover. Capture widget thật:
   `artifacts/verification/M07/hina-widget-latest.png`.
+- M07-S9 desktop test suite 23/23 xanh, gồm unit clamp/restore cho malformed
+  state, màn hình phụ âm và display removal. Real Electron smoke xác nhận
+  Operator hide/show/reset chạy thật, widget mode bị từ chối khi gọi widget
+  control IPC, cùng toàn bộ S8 transparency/VRM/hover gate vẫn xanh.

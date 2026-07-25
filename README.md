@@ -196,6 +196,13 @@ phím), widget không hiện control nào; khi hover/focus chỉ hiện đúng m
 có, không bật microphone và không tạo audio giả. Nhấn `Esc` để bỏ focus và ẩn
 nút ngay sau khi rời avatar.
 
+Trong panel Operator, nhóm **Quản lý widget avatar** giải thích ba thao tác
+**Ẩn widget / Hiện widget / Đặt lại vị trí**. Sau khi bạn kéo nhân vật sang
+màn hình hoặc vị trí khác, desktop ghi lại chỉ hai tọa độ số cùng version schema
+trong `userData`; khi đổi màn hình hoặc tháo màn hình cũ, vị trí được tự clamp
+vào work area còn lại. Không có nội dung chat, audio hay memory nào được lưu ở
+file này.
+
 ## Vòng lặp phát triển nhanh
 
 ```powershell

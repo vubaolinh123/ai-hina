@@ -1,0 +1,77 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M07-S9-widget-state-and-operator-controls",
+  "module_id": "M07",
+  "objective": "Make the real Hina desktop widget practical across restarts without adding chrome to the avatar: persist only its validated screen position in Electron userData, restore it inside an available multi-monitor work area, and add typed Operator-window controls to show, hide or reset the widget position.",
+  "non_goals": [
+    "Do not add another control, close button, title bar, settings card or status label on the widget itself.",
+    "Do not persist avatar, conversation, safety, audio, user text, monitor names or other personal content.",
+    "Do not accept arbitrary paths or arbitrary window coordinates from the renderer.",
+    "Do not add tray lifecycle, auto-start, click-through mode, resize/scale settings or a new dependency.",
+    "Do not open M08 or run the deferred frozen OBS benchmark/eight-hour soak."
+  ],
+  "base_sha": "57f32f32dbc14e5d451dd5405f531698787a39fb",
+  "branch": "codex/M07-avatar-stage",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "AGENTS.md",
+    "README.md",
+    "apps/desktop/",
+    "assets/manifests/",
+    "docs/modules/M07-*"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "adapters/",
+    "apps/core-runtime/",
+    "apps/dev-console/",
+    "packages/contracts/",
+    "packages/memory/",
+    "packages/safety-policy/",
+    "packages/text-brain/",
+    "third_party/",
+    "workers/"
+  ],
+  "contracts": [
+    "The state file path is fixed under Electron app userData and contains only schemaVersion, x and y integers.",
+    "Malformed, oversized, non-integer or unknown-version state fails closed to the current primary-display default without preventing desktop startup.",
+    "Restored coordinates are clamped fully inside the nearest currently available display work area, including negative-coordinate displays and display removal.",
+    "Native drag remains the only way the widget chooses arbitrary coordinates; renderer controls may request only show, hide or reset_position.",
+    "Only the trusted Operator main frame may invoke widget-control IPC; the widget renderer cannot hide, move or reset its own native window through IPC.",
+    "Position writes are debounced and bounded; failures are logged with a stable error code and do not crash the avatar.",
+    "Show uses non-activating behavior where supported so the widget does not steal typing focus from the owner.",
+    "The widget visual contract remains unchanged: transparent avatar plus exactly one hover/focus Voice control."
+  ],
+  "allowed_dependencies": [
+    "Existing Electron BrowserWindow/screen/app APIs and Node fs/promises/path.",
+    "Existing Vue operator shell and named preload boundary.",
+    "No new dependency, network source, model, texture or copied upstream implementation."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "Pure unit tests prove valid restore, malformed fallback, coordinate clamping, negative-coordinate display support and display-removal recovery.",
+    "Dragging the native widget schedules a debounced write of only schemaVersion/x/y to the fixed userData state path.",
+    "Restart restores the previous valid widget position inside an available work area.",
+    "The Operator panel explains and exposes show, hide and reset-position controls through named preload IPC.",
+    "Widget-control IPC rejects invocation from the widget renderer and rejects actions outside the fixed allowlist.",
+    "The widget still contains exactly one hover/focus Voice control and no new widget chrome.",
+    "Desktop typecheck, unit/security tests and one real Electron smoke pass."
+  ],
+  "required_test_commands": [
+    "pnpm --filter @hina/desktop typecheck",
+    "pnpm --filter @hina/desktop test",
+    "pnpm smoke:desktop",
+    "uv run --frozen python -m unittest discover -s tests/governance -p \"test_*.py\""
+  ],
+  "latency_or_quality_budget": {
+    "position_write_debounce_ms": 250,
+    "state_file_max_bytes": 1024,
+    "persisted_fields": 3,
+    "renderer_coordinate_inputs": 0,
+    "new_widget_controls": 0,
+    "new_dependencies": 0,
+    "deep_obs_benchmark_deferred": true,
+    "eight_hour_soak_deferred": true
+  },
+  "output_artifact_dir": "artifacts/verification/M07/"
+}

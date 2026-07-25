@@ -5,16 +5,28 @@ import {
   screen,
   type IpcMainInvokeEvent,
 } from "electron";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
   requestControl,
   validateAvatarCue,
   validateSafetyControl,
 } from "./control-client";
+import {
+  WIDGET_STATE_MAX_BYTES,
+  clampWidgetPosition,
+  defaultWidgetPosition,
+  parseWidgetPosition,
+  serializeWidgetPosition,
+  type Point,
+  type Size,
+  type WorkArea,
+} from "./widget-state";
 
 const CHANNELS = Object.freeze({
   windowMode: "hina:window:mode",
+  widgetStatus: "hina:widget:status",
+  widgetControl: "hina:widget:control",
   avatarStatus: "hina:avatar:status",
   avatarCue: "hina:avatar:cue",
   avatarReset: "hina:avatar:reset",
@@ -23,11 +35,127 @@ const CHANNELS = Object.freeze({
   runtimeHealth: "hina:runtime:health",
 });
 
+const WIDGET_SIZE: Size = Object.freeze({ width: 440, height: 620 });
+const WIDGET_STATE_FILENAME = "hina-widget-state.v1.json";
+
 let mainWindow: BrowserWindow | null = null;
 let widgetWindow: BrowserWindow | null = null;
 let smokeTimer: NodeJS.Timeout | null = null;
+let widgetPositionTimer: NodeJS.Timeout | null = null;
 
 type DesktopWindowMode = "operator" | "widget";
+type WidgetControlAction = "show" | "hide" | "reset_position";
+
+function availableWorkAreas(): WorkArea[] {
+  return screen.getAllDisplays().map((display) => ({
+    x: display.workArea.x,
+    y: display.workArea.y,
+    width: display.workArea.width,
+    height: display.workArea.height,
+  }));
+}
+
+function primaryWidgetPosition(): Point {
+  return defaultWidgetPosition(
+    screen.getPrimaryDisplay().workArea,
+    WIDGET_SIZE,
+  );
+}
+
+function widgetStatePath(): string {
+  return join(app.getPath("userData"), WIDGET_STATE_FILENAME);
+}
+
+async function loadWidgetPosition(): Promise<Point> {
+  const fallback = primaryWidgetPosition();
+  if (process.env.HINA_DESKTOP_SMOKE === "1") return fallback;
+  try {
+    const path = widgetStatePath();
+    const details = await stat(path);
+    if (details.size > WIDGET_STATE_MAX_BYTES) {
+      console.warn("[hina-desktop] E_DESKTOP_WIDGET_STATE_OVERSIZED");
+      return fallback;
+    }
+    const parsed = parseWidgetPosition(await readFile(path, "utf8"));
+    if (!parsed) {
+      console.warn("[hina-desktop] E_DESKTOP_WIDGET_STATE_INVALID");
+      return fallback;
+    }
+    return clampWidgetPosition(parsed, WIDGET_SIZE, availableWorkAreas());
+  } catch (error) {
+    if (
+      error
+      && typeof error === "object"
+      && "code" in error
+      && error.code === "ENOENT"
+    ) {
+      return fallback;
+    }
+    console.warn("[hina-desktop] E_DESKTOP_WIDGET_STATE_READ");
+    return fallback;
+  }
+}
+
+async function persistWidgetPosition(): Promise<void> {
+  if (
+    process.env.HINA_DESKTOP_SMOKE === "1"
+    || !widgetWindow
+    || widgetWindow.isDestroyed()
+  ) {
+    return;
+  }
+  try {
+    const [x = 0, y = 0] = widgetWindow.getPosition();
+    const path = widgetStatePath();
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, serializeWidgetPosition({ x, y }), "utf8");
+  } catch {
+    console.error("[hina-desktop] E_DESKTOP_WIDGET_STATE_WRITE");
+  }
+}
+
+function scheduleWidgetPositionWrite(): void {
+  if (process.env.HINA_DESKTOP_SMOKE === "1") return;
+  if (widgetPositionTimer) {
+    clearTimeout(widgetPositionTimer);
+  }
+  widgetPositionTimer = setTimeout(() => {
+    widgetPositionTimer = null;
+    void persistWidgetPosition();
+  }, 250);
+}
+
+function validateWidgetControl(value: unknown): WidgetControlAction {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("E_DESKTOP_WIDGET_CONTROL: control must be an object");
+  }
+  const record = value as Record<string, unknown>;
+  if (
+    Object.keys(record).join(",") !== "action"
+    || !["show", "hide", "reset_position"].includes(String(record.action))
+  ) {
+    throw new Error("E_DESKTOP_WIDGET_CONTROL: action is not allowlisted");
+  }
+  return record.action as WidgetControlAction;
+}
+
+function getWidgetStatus(): {
+  available: true;
+  visible: boolean;
+  alwaysOnTop: boolean;
+  position: Point;
+} {
+  if (!widgetWindow || widgetWindow.isDestroyed()) {
+    throw new Error("E_DESKTOP_WIDGET_WINDOW: widget window is unavailable");
+  }
+  const [x = 0, y = 0] = widgetWindow.getPosition();
+  return {
+    available: true,
+    visible: widgetWindow.isVisible(),
+    alwaysOnTop: widgetWindow.isAlwaysOnTop(),
+    position: { x, y },
+  };
+}
 
 function assertTrustedSender(event: IpcMainInvokeEvent): DesktopWindowMode {
   if (event.senderFrame !== event.sender.mainFrame) {
@@ -56,6 +184,34 @@ function hardenWindow(target: BrowserWindow): void {
 
 function registerIpcHandlers(): void {
   ipcMain.handle(CHANNELS.windowMode, (event) => assertTrustedSender(event));
+  ipcMain.handle(CHANNELS.widgetStatus, (event) => {
+    if (assertTrustedSender(event) !== "operator") {
+      throw new Error("E_DESKTOP_WIDGET_AUTHORITY: operator window required");
+    }
+    return getWidgetStatus();
+  });
+  ipcMain.handle(CHANNELS.widgetControl, (event, control: unknown) => {
+    if (assertTrustedSender(event) !== "operator") {
+      throw new Error("E_DESKTOP_WIDGET_AUTHORITY: operator window required");
+    }
+    if (!widgetWindow || widgetWindow.isDestroyed()) {
+      throw new Error("E_DESKTOP_WIDGET_WINDOW: widget window is unavailable");
+    }
+    const action = validateWidgetControl(control);
+    if (action === "hide") {
+      widgetWindow.hide();
+    } else if (action === "show") {
+      widgetWindow.setAlwaysOnTop(true, "floating");
+      widgetWindow.showInactive();
+    } else {
+      const position = primaryWidgetPosition();
+      widgetWindow.setPosition(position.x, position.y, false);
+      widgetWindow.setAlwaysOnTop(true, "floating");
+      widgetWindow.showInactive();
+      scheduleWidgetPositionWrite();
+    }
+    return getWidgetStatus();
+  });
   ipcMain.handle(CHANNELS.avatarStatus, (event) => {
     assertTrustedSender(event);
     return requestControl("avatar.status");
@@ -93,7 +249,7 @@ async function createWindows(): Promise<void> {
   const preloadPath = join(__dirname, "preload.js");
   const widgetWidth = 440;
   const widgetHeight = 620;
-  const workArea = screen.getPrimaryDisplay().workArea;
+  const widgetPosition = await loadWidgetPosition();
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -118,8 +274,8 @@ async function createWindows(): Promise<void> {
     },
   });
   widgetWindow = new BrowserWindow({
-    x: workArea.x + workArea.width - widgetWidth - 24,
-    y: workArea.y + workArea.height - widgetHeight - 24,
+    x: widgetPosition.x,
+    y: widgetPosition.y,
     width: widgetWidth,
     height: widgetHeight,
     frame: false,
@@ -161,7 +317,19 @@ async function createWindows(): Promise<void> {
   });
   widgetWindow.on("closed", () => {
     widgetWindow = null;
+    if (widgetPositionTimer) {
+      clearTimeout(widgetPositionTimer);
+      widgetPositionTimer = null;
+    }
   });
+  widgetWindow.on("close", () => {
+    if (widgetPositionTimer) {
+      clearTimeout(widgetPositionTimer);
+      widgetPositionTimer = null;
+    }
+    void persistWidgetPosition();
+  });
+  widgetWindow.on("move", scheduleWidgetPositionWrite);
 
   if (smoke) {
     const widgetLoaded = new Promise<void>((resolve, reject) => {
@@ -242,9 +410,10 @@ async function createWindows(): Promise<void> {
             return Promise.all([
               window.hinaDesktop.getRuntimeHealth(),
               window.hinaDesktop.getAvatarStatus(),
+              window.hinaDesktop.getWidgetStatus(),
               vrmReady,
               performance
-            ]).then(async ([health, avatar, vrmLoaded, performance]) => {
+            ]).then(async ([health, avatar, widgetStatus, vrmLoaded, performance]) => {
               const presentation = document.documentElement.dataset.avatarPresentation;
               const loadedTextureCount = Number(
                 document.documentElement.dataset.avatarTextureCount
@@ -309,6 +478,7 @@ async function createWindows(): Promise<void> {
               return {
                 runtime: health.status,
                 avatarState: avatar.state,
+                widgetStatus,
                 vrmLoaded,
                 presentation,
                 loadedTextureCount,
@@ -331,6 +501,15 @@ async function createWindows(): Promise<void> {
           || typeof snapshot.runtime !== "string"
           || !("avatarState" in snapshot)
           || typeof snapshot.avatarState !== "string"
+          || !("widgetStatus" in snapshot)
+          || !snapshot.widgetStatus
+          || typeof snapshot.widgetStatus !== "object"
+          || !("available" in snapshot.widgetStatus)
+          || snapshot.widgetStatus.available !== true
+          || !("visible" in snapshot.widgetStatus)
+          || snapshot.widgetStatus.visible !== true
+          || !("alwaysOnTop" in snapshot.widgetStatus)
+          || snapshot.widgetStatus.alwaysOnTop !== true
           || !("vrmLoaded" in snapshot)
           || snapshot.vrmLoaded !== true
           || !("presentation" in snapshot)
@@ -430,6 +609,14 @@ async function createWindows(): Promise<void> {
                   };
                   root.blur();
                   await new Promise((done) => setTimeout(done, 180));
+                  let widgetControlDenied = false;
+                  try {
+                    await window.hinaDesktop.applyWidgetControl({
+                      action: "reset_position"
+                    });
+                  } catch {
+                    widgetControlDenied = true;
+                  }
                   resolve({
                     mode: await window.hinaDesktop.getWindowMode(),
                     presentation:
@@ -445,6 +632,7 @@ async function createWindows(): Promise<void> {
                       .getPropertyValue("-webkit-app-region"),
                     controlCount:
                       document.querySelectorAll(".widget-control").length,
+                    widgetControlDenied,
                     hidden,
                     focused
                   });
@@ -523,6 +711,8 @@ async function createWindows(): Promise<void> {
           || widgetSnapshot.voiceDragRegion !== "no-drag"
           || !("controlCount" in widgetSnapshot)
           || widgetSnapshot.controlCount !== 1
+          || !("widgetControlDenied" in widgetSnapshot)
+          || widgetSnapshot.widgetControlDenied !== true
           || !("hidden" in widgetSnapshot)
           || !widgetSnapshot.hidden
           || typeof widgetSnapshot.hidden !== "object"
@@ -580,6 +770,52 @@ async function createWindows(): Promise<void> {
             }`,
           );
         }
+        const operatorContents = mainWindow?.webContents;
+        if (!operatorContents) {
+          throw new Error("E_DESKTOP_OPERATOR_WINDOW: operator window is unavailable");
+        }
+        const widgetControlSmoke: unknown =
+          await operatorContents.executeJavaScript(
+            `(async () => {
+              const hidden = await window.hinaDesktop.applyWidgetControl({
+                action: "hide"
+              });
+              const shown = await window.hinaDesktop.applyWidgetControl({
+                action: "show"
+              });
+              const reset = await window.hinaDesktop.applyWidgetControl({
+                action: "reset_position"
+              });
+              return { hidden, shown, reset };
+            })()`,
+            true,
+          );
+        if (
+          !widgetControlSmoke
+          || typeof widgetControlSmoke !== "object"
+          || !("hidden" in widgetControlSmoke)
+          || !widgetControlSmoke.hidden
+          || typeof widgetControlSmoke.hidden !== "object"
+          || !("visible" in widgetControlSmoke.hidden)
+          || widgetControlSmoke.hidden.visible !== false
+          || !("shown" in widgetControlSmoke)
+          || !widgetControlSmoke.shown
+          || typeof widgetControlSmoke.shown !== "object"
+          || !("visible" in widgetControlSmoke.shown)
+          || widgetControlSmoke.shown.visible !== true
+          || !("reset" in widgetControlSmoke)
+          || !widgetControlSmoke.reset
+          || typeof widgetControlSmoke.reset !== "object"
+          || !("visible" in widgetControlSmoke.reset)
+          || widgetControlSmoke.reset.visible !== true
+          || !widgetWindow.isVisible()
+        ) {
+          throw new Error(
+            `E_DESKTOP_WIDGET_CONTROL_SMOKE: ${
+              JSON.stringify(widgetControlSmoke).slice(0, 400)
+            }`,
+          );
+        }
         const capturePath = process.env.HINA_DESKTOP_CAPTURE_PATH?.trim();
         if (capturePath) {
           await mkdir(dirname(capturePath), { recursive: true });
@@ -606,6 +842,10 @@ async function createWindows(): Promise<void> {
             dragRegion: widgetSnapshot.dragRegion,
             voiceControlHiddenUntilHoverOrFocus: true,
             visibleControlCount: widgetSnapshot.controlCount,
+            operatorControls: {
+              hideShowReset: true,
+              widgetControlDeniedInWidget: widgetSnapshot.widgetControlDenied,
+            },
           },
           renderer: "loaded-local-file-with-typed-ipc",
         }));

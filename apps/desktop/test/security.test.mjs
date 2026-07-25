@@ -44,6 +44,8 @@ test("preload exposes named methods and never exposes raw ipcRenderer", () => {
   assert.doesNotMatch(preload, /shell|readFile|writeFile|exec\(/);
   for (const method of [
     "getWindowMode",
+    "getWidgetStatus",
+    "applyWidgetControl",
     "getAvatarStatus",
     "applyAvatarCue",
     "resetAvatar",
@@ -88,6 +90,11 @@ test("transparent widget keeps one hover Voice control and a native drag surface
   assert.match(main, /setVisibleOnAllWorkspaces\(true/);
   assert.match(main, /widgetWindow\.loadFile\(rendererPath\)/);
   assert.match(main, /CHANNELS\.windowMode/);
+  assert.match(main, /CHANNELS\.widgetStatus/);
+  assert.match(main, /CHANNELS\.widgetControl/);
+  assert.match(main, /E_DESKTOP_WIDGET_AUTHORITY: operator window required/);
+  assert.match(main, /reset_position/);
+  assert.match(main, /scheduleWidgetPositionWrite/);
 
   assert.match(widget, /class="desktop-widget"/);
   assert.match(widget, /class="widget-avatar-surface"/);
