@@ -5,7 +5,12 @@ import asyncio
 import json
 from pathlib import Path
 
-from hina_speech import FasterWhisperProvider, SpeechConfig, decode_and_normalize_wav
+from hina_speech import (
+    FasterWhisperProvider,
+    MoonshineProvider,
+    SpeechConfig,
+    decode_and_normalize_wav,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -14,14 +19,18 @@ ROOT = Path(__file__).resolve().parents[2]
 async def run(wav_path: Path) -> dict[str, object]:
     config = SpeechConfig.from_env(root=ROOT)
     audio = decode_and_normalize_wav(wav_path.read_bytes())
-    provider = FasterWhisperProvider(config)
+    provider = (
+        MoonshineProvider(config)
+        if config.provider == "moonshine"
+        else FasterWhisperProvider(config)
+    )
     try:
         result = await provider.transcribe(audio)
         status = await provider.status()
     finally:
         await provider.unload()
     return {
-        "provider": "faster-whisper",
+        "provider": config.provider,
         "model": config.model_id,
         "revision": config.model_revision,
         "device": status["effectiveDevice"],
@@ -34,7 +43,7 @@ async def run(wav_path: Path) -> dict[str, object]:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Run one real M04 faster-whisper inference.")
+    parser = argparse.ArgumentParser(description="Run one real M04 STT provider inference.")
     parser.add_argument("wav", type=Path)
     args = parser.parse_args()
     resolved = args.wav.resolve()

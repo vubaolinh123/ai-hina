@@ -155,7 +155,12 @@ class HinaRuntimeApplication:
                     on_state_change=avatar_service.observe_turn_state,
                 )
             if speech_service is None:
-                from hina_speech import FasterWhisperProvider, SpeechConfig, SpeechInputService
+                from hina_speech import (
+                    FasterWhisperProvider,
+                    MoonshineProvider,
+                    SpeechConfig,
+                    SpeechInputService,
+                )
 
                 speech_config = SpeechConfig.from_env(root=ROOT)
                 scheduler = getattr(model_gateway, "scheduler", None)
@@ -178,12 +183,17 @@ class HinaRuntimeApplication:
                         )
 
                     gpu_lease_factory = acquire_stt_lease
-                speech_service = SpeechInputService(
-                    speech_config,
-                    FasterWhisperProvider(
+                provider = (
+                    MoonshineProvider(speech_config)
+                    if speech_config.provider == "moonshine"
+                    else FasterWhisperProvider(
                         speech_config,
                         gpu_lease_factory=gpu_lease_factory,
-                    ),
+                    )
+                )
+                speech_service = SpeechInputService(
+                    speech_config,
+                    provider,
                     on_error=self._log_speech_error,
                 )
             if tts_service is None and safety_policy is not None:

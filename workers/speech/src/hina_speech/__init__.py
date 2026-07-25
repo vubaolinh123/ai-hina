@@ -13,11 +13,15 @@ from .capture import (
 from .config import (
     DEFAULT_MODEL_ID,
     DEFAULT_MODEL_REVISION,
+    DEFAULT_PROVIDER,
+    FASTER_WHISPER_MODEL_ID,
+    FASTER_WHISPER_MODEL_REVISION,
     SpeechConfig,
 )
 from .errors import SpeechError, TtsError
 from .model import NormalizedAudio, SttResult, SttSegment, TtsPcmChunk, TtsSynthesis, VadResult
 from .provider import FasterWhisperProvider, GpuLease, GpuLeaseFactory, SttProvider
+from .moonshine_provider import MoonshineProvider
 from .service import SpeechInputService
 from .tts_audio import pcm16_to_wav
 from .tts_config import (
@@ -44,6 +48,7 @@ __all__ = [
     "CaptureState",
     "DEFAULT_MODEL_ID",
     "DEFAULT_MODEL_REVISION",
+    "DEFAULT_PROVIDER",
     "DEFAULT_TTS_CODEC_ID",
     "DEFAULT_TTS_CODEC_REVISION",
     "DEFAULT_TTS_MODEL_ID",
@@ -52,6 +57,9 @@ __all__ = [
     "EnergyVad",
     "EnergyVadConfig",
     "FasterWhisperProvider",
+    "FASTER_WHISPER_MODEL_ID",
+    "FASTER_WHISPER_MODEL_REVISION",
+    "MoonshineProvider",
     "GpuLease",
     "GpuLeaseFactory",
     "MAX_AUDIO_BYTES",

@@ -22,7 +22,7 @@
     "smoke:m05-tts": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Run-M05RealTtsSmoke.ps1",
     "start:control": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Start-HinaControlPlane.ps1",
     "start:dev-console": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Start-HinaDevConsole.ps1",
-    "start:desktop": "pnpm --filter @hina/desktop build && pnpm --filter @hina/desktop start",
+    "start:desktop": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Start-HinaDesktop.ps1",
     "build:desktop": "pnpm --filter @hina/desktop build",
     "test:desktop": "pnpm --filter @hina/desktop test",
     "smoke:desktop": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Run-M07DesktopSmoke.ps1",

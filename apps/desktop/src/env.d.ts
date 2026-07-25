@@ -46,6 +46,17 @@ type RuntimeHealth = {
   uptimeSeconds: number;
 };
 
+type ChatTurn = {
+  turnId: string;
+  sessionId: string;
+  outcome: "running" | "completed" | "interrupted" | "failed";
+  text?: string;
+  assistant?: string;
+  errorCode?: string;
+  errorMessage?: string;
+  correlationId?: string;
+};
+
 type DesktopWindowMode = "operator" | "widget";
 
 type WidgetStatus = {
@@ -80,6 +91,20 @@ type HinaDesktopApi = {
     | { action: "emergency_reset" }
   ): Promise<unknown>;
   getRuntimeHealth(): Promise<RuntimeHealth>;
+  getChatStatus(): Promise<Record<string, unknown>>;
+  startChatTurn(payload: {
+    sessionId: string;
+    source: "owner.console";
+    text: string;
+  }): Promise<ChatTurn>;
+  getChatTurn(turnId: string): Promise<ChatTurn>;
+  cancelChatTurn(turnId: string): Promise<ChatTurn>;
+  synthesizeSpeech(payload: {
+    text: string;
+    utteranceId: string;
+    sessionId: string | null;
+    source: "owner.console";
+  }): Promise<Uint8Array>;
 };
 
 interface Window {

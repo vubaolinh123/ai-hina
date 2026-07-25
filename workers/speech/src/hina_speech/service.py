@@ -52,7 +52,7 @@ class SpeechInputService:
                 "targetSampleRateHz": 16_000,
             },
             "vad": {
-                "provider": "energy+faster-whisper-silero",
+                "provider": f"energy+{self.config.provider}",
                 "silenceGate": True,
             },
             "queue": {

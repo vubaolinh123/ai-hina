@@ -5,20 +5,24 @@ M04 owns microphone/audio input, WAV normalization, VAD and Vietnamese STT.
 The runnable Dev Console adapter records microphone PCM in the browser and
 sends an `audio/wav` binary body to the loopback runtime. The worker keeps audio
 in memory only, normalizes it to 16 kHz mono, rejects silence before inference,
-and lazily invokes pinned `faster-whisper`.
+and lazily invokes pinned `moonshine-voice`.
 
 Defaults:
 
-- provider: `faster-whisper 1.2.1`
-- model: `Systran/faster-whisper-small`
-- model revision: `536b0662742c02347bc0e980a01041f333bce120`
-- device/compute: CPU `int8`
+- provider: `moonshine-voice 0.0.73`
+- model: Vietnamese Base, architecture `1`
+- device: CPU
 - language/task: Vietnamese `vi`, `transcribe`
 - raw audio retention: disabled
 
 The first accepted speech request can download the pinned model into
-`var/cache/models/faster-whisper`. Set `HINA_STT_ALLOW_DOWNLOAD=false` for
-strict offline operation after preloading the model.
+`var/cache/models/moonshine`. Set `HINA_STT_ALLOW_DOWNLOAD=false` for strict
+offline operation after preloading the model. Set
+`HINA_STT_PROVIDER=faster-whisper` to roll back to the previous pinned provider.
+
+The Moonshine Python library is MIT, but its Vietnamese weights use the
+non-commercial Moonshine Community License. This candidate must not be promoted
+for commercial/public deployment until that model license is cleared.
 
 ## M05 speech output
 

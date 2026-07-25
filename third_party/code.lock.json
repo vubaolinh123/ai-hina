@@ -3,6 +3,23 @@
   "generated_at": "2026-07-25T00:00:00Z",
   "components": [
     {
+      "name": "moonshine-voice",
+      "source_url": "https://github.com/moonshine-ai/moonshine",
+      "revision": "v0.0.73",
+      "license_spdx": "MIT",
+      "model_license": "Moonshine Community License (non-commercial for Vietnamese weights)",
+      "source_hash": "sha256:fd9895bec46f929ac3747fb83bede3826f7a32c3d0c9559b4b2840fa5e6d2bcd",
+      "destination_paths": [
+        "pyproject.toml",
+        "uv.lock",
+        "workers/speech/src/hina_speech/moonshine_provider.py"
+      ],
+      "modifications": [
+        "Used as a pinned PyPI dependency behind Hina's SttProvider interface; no upstream source file or snippet was copied.",
+        "Vietnamese Base weights are fetched through the upstream verified manifest and remain non-commercial until separately cleared."
+      ]
+    },
+    {
       "name": "faster-whisper",
       "source_url": "https://github.com/SYSTRAN/faster-whisper",
       "revision": "v1.2.1@65882eee9f5cdbeeb2d877f1131d48cf241b327d",

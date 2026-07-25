@@ -9,6 +9,11 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
   requestControl,
+  requestChatCancel,
+  requestChatStart,
+  requestChatStatus,
+  requestChatTurn,
+  requestSpeechSynthesis,
   validateAvatarCue,
   validateSafetyControl,
 } from "./control-client";
@@ -33,6 +38,11 @@ const CHANNELS = Object.freeze({
   safetyStatus: "hina:safety:status",
   safetyControl: "hina:safety:control",
   runtimeHealth: "hina:runtime:health",
+  chatStatus: "hina:chat:status",
+  chatStart: "hina:chat:start",
+  chatTurn: "hina:chat:turn",
+  chatCancel: "hina:chat:cancel",
+  ttsSynthesize: "hina:tts:synthesize",
 });
 
 const WIDGET_SIZE: Size = Object.freeze({ width: 440, height: 620 });
@@ -240,6 +250,26 @@ function registerIpcHandlers(): void {
   ipcMain.handle(CHANNELS.runtimeHealth, (event) => {
     assertTrustedSender(event);
     return requestControl("runtime.health");
+  });
+  ipcMain.handle(CHANNELS.chatStatus, (event) => {
+    assertTrustedSender(event);
+    return requestChatStatus();
+  });
+  ipcMain.handle(CHANNELS.chatStart, (event, payload: unknown) => {
+    assertTrustedSender(event);
+    return requestChatStart(payload);
+  });
+  ipcMain.handle(CHANNELS.chatTurn, (event, turnId: unknown) => {
+    assertTrustedSender(event);
+    return requestChatTurn(turnId);
+  });
+  ipcMain.handle(CHANNELS.chatCancel, (event, turnId: unknown) => {
+    assertTrustedSender(event);
+    return requestChatCancel(turnId);
+  });
+  ipcMain.handle(CHANNELS.ttsSynthesize, (event, payload: unknown) => {
+    assertTrustedSender(event);
+    return requestSpeechSynthesis(payload);
   });
 }
 

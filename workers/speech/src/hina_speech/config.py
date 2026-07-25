@@ -9,15 +9,20 @@ from typing import Mapping
 from .errors import SpeechError
 
 
-DEFAULT_MODEL_ID = "Systran/faster-whisper-small"
-DEFAULT_MODEL_REVISION = "536b0662742c02347bc0e980a01041f333bce120"
+DEFAULT_PROVIDER = "moonshine"
+DEFAULT_MODEL_ID = "moonshine-vietnamese-base"
+DEFAULT_MODEL_REVISION = "0.0.73"
+FASTER_WHISPER_MODEL_ID = "Systran/faster-whisper-small"
+FASTER_WHISPER_MODEL_REVISION = "536b0662742c02347bc0e980a01041f333bce120"
 
 
 @dataclass(frozen=True, slots=True)
 class SpeechConfig:
+    provider: str = DEFAULT_PROVIDER
     model_id: str = DEFAULT_MODEL_ID
-    model_revision: str = DEFAULT_MODEL_REVISION
-    model_cache: Path = Path("var/cache/models/faster-whisper")
+    model_revision: str | None = None
+    model_cache: Path = Path("var/cache/models/moonshine")
+    model_arch: int = 1
     device: str = "cpu"
     compute_type: str = "int8"
     allow_download: bool = True
@@ -33,14 +38,29 @@ class SpeechConfig:
     raw_audio_retention: bool = False
 
     def __post_init__(self) -> None:
+        if self.provider not in {"moonshine", "faster-whisper"}:
+            raise SpeechError("E_STT_CONFIG", "STT provider is invalid")
+        if self.model_revision is None:
+            object.__setattr__(
+                self,
+                "model_revision",
+                DEFAULT_MODEL_REVISION
+                if self.provider == "moonshine"
+                else FASTER_WHISPER_MODEL_REVISION,
+            )
         if (
             not self.model_id
             or len(self.model_id) > 256
             or any(ord(char) < 0x20 or ord(char) == 0x7F for char in self.model_id)
         ):
             raise SpeechError("E_STT_CONFIG", "STT model identifier is invalid")
-        if re.fullmatch(r"[0-9a-f]{40}", self.model_revision) is None:
-            raise SpeechError("E_STT_CONFIG", "STT model revision must be a commit SHA")
+        assert self.model_revision is not None
+        if self.provider == "faster-whisper" and re.fullmatch(r"[0-9a-f]{40}", self.model_revision) is None:
+            raise SpeechError("E_STT_CONFIG", "faster-whisper model revision must be a commit SHA")
+        if self.provider == "moonshine" and re.fullmatch(r"\d+\.\d+\.\d+", self.model_revision) is None:
+            raise SpeechError("E_STT_CONFIG", "Moonshine package revision must be semver")
+        if isinstance(self.model_arch, bool) or not isinstance(self.model_arch, int) or self.model_arch not in {0, 1, 2, 3, 4, 5}:
+            raise SpeechError("E_STT_CONFIG", "Moonshine model architecture is invalid")
         if self.device not in {"cpu", "cuda"}:
             raise SpeechError("E_STT_CONFIG", "STT device must be cpu or cuda")
         allowed_compute = {"int8", "int8_float16", "float16", "float32"}
@@ -76,14 +96,20 @@ class SpeechConfig:
         values = env if env is not None else os.environ
         device = values.get("HINA_STT_DEVICE", "cpu").strip().lower()
         default_compute = "float16" if device == "cuda" else "int8"
-        cache_value = values.get("HINA_STT_MODEL_CACHE", "var/cache/models/faster-whisper")
+        provider = values.get("HINA_STT_PROVIDER", DEFAULT_PROVIDER).strip().lower()
+        default_model = DEFAULT_MODEL_ID if provider == "moonshine" else FASTER_WHISPER_MODEL_ID
+        default_revision = DEFAULT_MODEL_REVISION if provider == "moonshine" else FASTER_WHISPER_MODEL_REVISION
+        default_cache = "var/cache/models/moonshine" if provider == "moonshine" else "var/cache/models/faster-whisper"
+        cache_value = values.get("HINA_STT_MODEL_CACHE", default_cache)
         cache = Path(cache_value)
         if not cache.is_absolute() and root is not None:
             cache = root / cache
         return cls(
-            model_id=values.get("HINA_STT_MODEL", DEFAULT_MODEL_ID),
-            model_revision=values.get("HINA_STT_MODEL_REVISION", DEFAULT_MODEL_REVISION),
+            provider=provider,
+            model_id=values.get("HINA_STT_MODEL", default_model),
+            model_revision=values.get("HINA_STT_MODEL_REVISION", default_revision),
             model_cache=cache,
+            model_arch=_env_int(values, "HINA_STT_MODEL_ARCH", 1),
             device=device,
             compute_type=values.get("HINA_STT_COMPUTE_TYPE", default_compute),
             allow_download=_env_bool(values, "HINA_STT_ALLOW_DOWNLOAD", True),
@@ -97,7 +123,7 @@ class SpeechConfig:
 
     def public_status(self) -> dict[str, object]:
         return {
-            "provider": "faster-whisper",
+            "provider": self.provider,
             "model": self.model_id,
             "modelRevision": self.model_revision,
             "device": self.device,

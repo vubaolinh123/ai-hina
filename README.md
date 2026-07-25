@@ -9,7 +9,7 @@ owner test**. M01 runtime spine, M02 safety, M03 text brain, M04 speech input,
 M05 speech output và M06 memory đã qua fast gate; M06 cũng đã qua independent
 review không có P0/P1. Hina Dev Console hiện là dashboard nhiều
 trang có chat text thật qua Ollama/OpenAI-compatible local, microphone/WAV tiếng
-Việt qua faster-whisper, giọng Việt qua VieNeu-TTS ONNX int8 và ký ức dài hạn
+Việt qua Moonshine Voice, giọng Việt qua VieNeu-TTS ONNX int8 và ký ức dài hạn
 SQLite + Qdrant local. Trang Avatar Stage đọc turn state thật và suy ra khẩu hình
 `A/I/U/E/O` từ chính phổ WAV TTS đang phát; không dùng câu trả lời, transcript,
 audio, memory hay backend state giả.
@@ -81,11 +81,13 @@ Gateway từ chối endpoint ngoài loopback và không trả API key qua status
 
 ## Bật speech input tiếng Việt
 
-M04 dùng `faster-whisper==1.2.1` và model
-`Systran/faster-whisper-small` tại revision đã pin. CPU `int8` là mặc định an
-toàn trên Windows. Lần đầu một đoạn có speech đi qua VAD, provider có thể tải
-model khoảng 484 MB vào `var/cache/models/faster-whisper`; cache này không nằm
-trong Git.
+M04 dùng mặc định `moonshine-voice==0.0.73` với Vietnamese Base trên CPU.
+Lần đầu một đoạn có speech đi qua VAD, provider có thể tải model vào
+`var/cache/models/moonshine`; cache này không nằm trong Git. Faster-Whisper
+vẫn được giữ làm đường lui bằng `HINA_STT_PROVIDER=faster-whisper`.
+Thư viện Moonshine là MIT nhưng weight tiếng Việt dùng Moonshine Community
+License phi thương mại; candidate này chưa được phép promote cho mục đích
+thương mại/public nếu chưa xử lý license riêng.
 
 ```powershell
 pnpm start:dev-console
@@ -153,7 +155,7 @@ không phải forced alignment hoặc căn phoneme chính xác và không lưu a
 
 ### Mở ứng dụng desktop
 
-Giữ Dev Console/control plane chạy ở terminal thứ nhất, rồi mở terminal thứ hai:
+Chạy một lệnh duy nhất:
 
 ```powershell
 pnpm start:desktop
@@ -162,7 +164,13 @@ pnpm start:desktop
 Đây là ứng dụng Electron/Vue thật, không phải ảnh hoặc demo giả. Desktop đọc
 avatar và safety state qua typed preload IPC; renderer không có Node, filesystem,
 database, model hay quyền gọi network trực tiếp. Nếu control plane chưa chạy,
-ứng dụng hiện lỗi offline và chỉ dẫn `pnpm start:dev-console`.
+launcher tự mở service loopback ở nền và dừng service đó khi desktop đóng.
+Nếu service tạm offline, renderer retry theo backoff tối đa 30 giây thay vì
+gọi status mỗi 250 ms và spam lỗi.
+
+Cửa sổ operator là dashboard gồm Tổng quan, Chat với Hina, Avatar Stage và
+Runtime & Safety. Trang Chat gửi turn thật tới local LLM, hiển thị text trả lời
+và có thể phát cùng câu trả lời bằng VieNeu TTS; voice vẫn tuân theo global mute.
 
 Desktop tải real VRM 1.0 bằng Three.js/`@pixiv/three-vrm`. Base hiện tại là
 `VRM1_Constraint_Twist_Sample` chính thức của pixiv/VRM Consortium, được bundle

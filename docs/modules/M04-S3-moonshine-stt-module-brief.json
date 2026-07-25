@@ -1,0 +1,64 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M04-S3-moonshine-vietnamese-stt",
+  "module_id": "M04",
+  "objective": "Replace the default live Vietnamese STT provider with pinned Moonshine Voice 0.0.73 while preserving the Hina SttProvider contract and an explicit faster-whisper rollback option.",
+  "non_goals": [
+    "Do not claim a Vietnamese accuracy winner without a same-corpus Hina benchmark.",
+    "Do not remove the already proven faster-whisper provider or its cached weights.",
+    "Do not retain microphone audio or train from owner speech.",
+    "Do not promote Moonshine Vietnamese weights for commercial/public use while their non-commercial model license remains unresolved."
+  ],
+  "base_sha": "cc76f41f5d25026038b18b78d54ad7de13e9bd37",
+  "branch": "codex/M07-avatar-stage",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    ".env.example",
+    "README.md",
+    "apps/core-runtime/",
+    "docs/modules/M04-*",
+    "docs/provenance/",
+    "pyproject.toml",
+    "third_party/",
+    "tools/dev/",
+    "uv.lock",
+    "workers/speech/"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "packages/contracts/",
+    "packages/safety-policy/",
+    "packages/text-brain/"
+  ],
+  "contracts": [
+    "Moonshine is the default provider and language remains locked to vi/transcribe.",
+    "The provider consumes normalized 16 kHz mono samples and returns the existing SttResult contract.",
+    "Model loading remains lazy, bounded and local; failures return stable errors instead of fake transcripts.",
+    "HINA_STT_PROVIDER=faster-whisper is the documented rollback switch.",
+    "Raw owner audio is never persisted by Hina."
+  ],
+  "allowed_dependencies": [
+    "moonshine-voice 0.0.72 from PyPI behind SttProvider.",
+    "Moonshine Vietnamese Base weights downloaded through the upstream verified manifest.",
+    "Existing faster-whisper 1.2.1 rollback provider."
+  ],
+  "oss_candidates": [
+    "https://github.com/moonshine-ai/moonshine/tree/v0.0.72"
+  ],
+  "acceptance_criteria": [
+    "Unit tests cover lazy Moonshine loading, Vietnamese transcription mapping, timeout drain and provider selection.",
+    "Runtime status reports Moonshine as the configured provider.",
+    "Dependency and model license provenance is recorded.",
+    "The existing speech unit suite remains green."
+  ],
+  "required_test_commands": [
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-SpeechUnit.ps1"
+  ],
+  "latency_or_quality_budget": {
+    "target_sample_rate_hz": 16000,
+    "max_audio_seconds": 30,
+    "max_concurrent_transcriptions": 1,
+    "target_provider": "moonshine-vietnamese-base"
+  },
+  "output_artifact_dir": "artifacts/verification/M04/"
+}

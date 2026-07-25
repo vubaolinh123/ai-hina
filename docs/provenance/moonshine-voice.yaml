@@ -1,0 +1,24 @@
+name: moonshine-voice
+upstream_url: https://github.com/moonshine-ai/moonshine
+revision: v0.0.73
+release: v0.0.73
+distribution:
+  kind: pypi-wheel
+  filename: moonshine_voice-0.0.73
+  sha256: fd9895bec46f929ac3747fb83bede3826f7a32c3d0c9559b4b2840fa5e6d2bcd
+original_paths: []
+license_spdx: MIT
+model_license: Moonshine-Community-License-NonCommercial
+copyright: "Copyright Moonshine AI"
+imported_at: 2026-07-25
+destination_paths:
+  - pyproject.toml
+  - uv.lock
+  - workers/speech/src/hina_speech/moonshine_provider.py
+modifications:
+  - "Pinned runtime dependency; no upstream source or snippet copied."
+  - "Wrapped the public Transcriber API behind Hina SttProvider."
+  - "Vietnamese Base weights download on first use into the local Hina cache."
+  - "Vietnamese weights are non-commercial and cannot be promoted for commercial/public use without separate license clearance."
+reviewed_by: primary_orchestrator
+approved_by: primary_orchestrator

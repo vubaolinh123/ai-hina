@@ -10,6 +10,11 @@ const CHANNELS = Object.freeze({
   safetyStatus: "hina:safety:status",
   safetyControl: "hina:safety:control",
   runtimeHealth: "hina:runtime:health",
+  chatStatus: "hina:chat:status",
+  chatStart: "hina:chat:start",
+  chatTurn: "hina:chat:turn",
+  chatCancel: "hina:chat:cancel",
+  ttsSynthesize: "hina:tts:synthesize",
 });
 
 const hinaDesktop = Object.freeze({
@@ -24,6 +29,11 @@ const hinaDesktop = Object.freeze({
   applySafetyControl: (control: unknown) =>
     ipcRenderer.invoke(CHANNELS.safetyControl, control),
   getRuntimeHealth: () => ipcRenderer.invoke(CHANNELS.runtimeHealth),
+  getChatStatus: () => ipcRenderer.invoke(CHANNELS.chatStatus),
+  startChatTurn: (payload: unknown) => ipcRenderer.invoke(CHANNELS.chatStart, payload),
+  getChatTurn: (turnId: string) => ipcRenderer.invoke(CHANNELS.chatTurn, turnId),
+  cancelChatTurn: (turnId: string) => ipcRenderer.invoke(CHANNELS.chatCancel, turnId),
+  synthesizeSpeech: (payload: unknown) => ipcRenderer.invoke(CHANNELS.ttsSynthesize, payload),
 });
 
 contextBridge.exposeInMainWorld("hinaDesktop", hinaDesktop);

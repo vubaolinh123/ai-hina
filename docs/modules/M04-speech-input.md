@@ -10,12 +10,13 @@
 The Dev Console records the owner's microphone into an in-memory PCM WAV or
 accepts a local WAV file. The runtime decodes and normalizes that binary audio,
 runs a deterministic silence gate, and sends admitted Vietnamese speech to the
-real faster-whisper provider. The UI never fabricates a transcript when the
+real Moonshine Vietnamese Base provider. The UI never fabricates a transcript when the
 provider or model is unavailable.
 
-CPU int8 is the safe default for the first runnable slice. The STT model is
+CPU is the safe default for the current runnable slice. The STT model is
 loaded lazily and may be downloaded on the first transcription into
-`var/cache/models/faster-whisper`. CUDA is opt-in and must use the shared
+`var/cache/models/moonshine`. The previous faster-whisper provider remains an
+explicit rollback via `HINA_STT_PROVIDER=faster-whisper`. CUDA is opt-in and must use the shared
 resource scheduler; the runtime falls back to the configured CPU profile rather
 than bypassing the 2048 MiB VRAM headroom rule.
 

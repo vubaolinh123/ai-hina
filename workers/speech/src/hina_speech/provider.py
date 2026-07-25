@@ -302,6 +302,8 @@ def _model_is_cached(config: SpeechConfig) -> bool:
     if not cache.exists():
         return False
     revision = config.model_revision
+    if revision is None:
+        return False
     repo_folder = f"models--{config.model_id.replace('/', '--')}"
     candidates = (
         cache / repo_folder / "snapshots" / revision,

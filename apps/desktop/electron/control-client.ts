@@ -9,7 +9,8 @@ type ControlOperation =
   | "avatar.reset"
   | "safety.status"
   | "safety.control"
-  | "runtime.health";
+  | "runtime.health"
+  | "chat.status";
 
 type OperationSpec = {
   method: "GET" | "POST";
@@ -23,6 +24,7 @@ const OPERATIONS: Readonly<Record<ControlOperation, OperationSpec>> = Object.fre
   "safety.status": { method: "GET", path: "/v1/safety/status" },
   "safety.control": { method: "POST", path: "/v1/safety/control" },
   "runtime.health": { method: "GET", path: "/v1/health" },
+  "chat.status": { method: "GET", path: "/v1/chat/status" },
 });
 
 const AVATAR_STATES = new Set([
@@ -162,6 +164,133 @@ export async function requestControl(
     throw new Error(`${code}: ${message}`);
   }
   return result;
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[4-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function validateUuid(value: unknown, code: string): string {
+  if (typeof value !== "string" || !UUID_PATTERN.test(value)) {
+    throw new Error(`${code}: identifier is invalid`);
+  }
+  return value;
+}
+
+function validateChatText(value: unknown): string {
+  if (typeof value !== "string" || value.trim().length < 1 || value.length > 16_384) {
+    throw new Error("E_DESKTOP_CHAT_REQUEST: text is invalid");
+  }
+  return value.trim();
+}
+
+export async function requestChatStatus(): Promise<JsonObject> {
+  return requestControl("chat.status" as ControlOperation);
+}
+
+export async function requestChatStart(raw: unknown): Promise<JsonObject> {
+  if (!isObject(raw) || Object.keys(raw).some((key) => !["sessionId", "source", "text"].includes(key))
+    || Object.keys(raw).length !== 3
+    || raw.source !== "owner.console") {
+    throw new Error("E_DESKTOP_CHAT_REQUEST: fields are invalid");
+  }
+  return requestPath("POST", "/v1/chat/turns", {
+    sessionId: validateUuid(raw.sessionId, "E_DESKTOP_CHAT_REQUEST"),
+    source: "owner.console",
+    text: validateChatText(raw.text),
+  });
+}
+
+export async function requestChatTurn(turnId: unknown): Promise<JsonObject> {
+  return requestPath("GET", `/v1/chat/turns/${validateUuid(turnId, "E_DESKTOP_CHAT_REQUEST")}`);
+}
+
+export async function requestChatCancel(turnId: unknown): Promise<JsonObject> {
+  return requestPath(
+    "POST",
+    `/v1/chat/turns/${validateUuid(turnId, "E_DESKTOP_CHAT_REQUEST")}/cancel`,
+    {},
+  );
+}
+
+export async function requestSpeechSynthesis(raw: unknown): Promise<Uint8Array> {
+  if (!isObject(raw)
+    || Object.keys(raw).length !== 4
+    || !["text", "utteranceId", "sessionId", "source"].every((key) => key in raw)
+    || raw.source !== "owner.console") {
+    throw new Error("E_DESKTOP_TTS_REQUEST: fields are invalid");
+  }
+  validateUuid(raw.utteranceId, "E_DESKTOP_TTS_REQUEST");
+  if (raw.sessionId !== null) validateUuid(raw.sessionId, "E_DESKTOP_TTS_REQUEST");
+  const response = await requestBinaryPath("POST", "/v1/tts/synthesis", raw);
+  if (new TextDecoder().decode(response.subarray(0, 4)) !== "RIFF") {
+    throw new Error("E_DESKTOP_TTS_RESPONSE: response is not WAV");
+  }
+  return response;
+}
+
+async function requestPath(
+  method: "GET" | "POST",
+  path: string,
+  payload?: JsonObject,
+): Promise<JsonObject> {
+  const baseUrl = parseControlBaseUrl(
+    process.env.HINA_CONTROL_BASE_URL ?? DEFAULT_CONTROL_BASE,
+  );
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}${path}`, {
+      method,
+      cache: "no-store",
+      headers: { Accept: "application/json", ...(payload ? { "Content-Type": "application/json" } : {}) },
+      body: payload ? JSON.stringify(payload) : undefined,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MILLISECONDS),
+    });
+  } catch {
+    throw new Error("E_DESKTOP_CONTROL_OFFLINE: Hina control plane is unavailable");
+  }
+  const text = await response.text();
+  let result: unknown;
+  try {
+    result = JSON.parse(text);
+  } catch {
+    throw new Error("E_DESKTOP_RESPONSE: control response is not valid JSON");
+  }
+  if (!isObject(result)) throw new Error("E_DESKTOP_RESPONSE: control response must be an object");
+  if (!response.ok) {
+    throw new Error(`${typeof result.errorCode === "string" ? result.errorCode : `HTTP_${response.status}`}: ${typeof result.message === "string" ? result.message : "control request failed"}`);
+  }
+  return result;
+}
+
+async function requestBinaryPath(
+  method: "GET" | "POST",
+  path: string,
+  payload: JsonObject,
+): Promise<Uint8Array> {
+  const baseUrl = parseControlBaseUrl(
+    process.env.HINA_CONTROL_BASE_URL ?? DEFAULT_CONTROL_BASE,
+  );
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}${path}`, {
+      method,
+      cache: "no-store",
+      headers: { Accept: "audio/wav", "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(120_000),
+    });
+  } catch {
+    throw new Error("E_DESKTOP_CONTROL_OFFLINE: Hina control plane is unavailable");
+  }
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.byteLength > 8 * 1024 * 1024) throw new Error("E_DESKTOP_RESPONSE: audio response exceeds desktop limit");
+  if (!response.ok) {
+    const text = new TextDecoder().decode(bytes);
+    let result: unknown;
+    try { result = JSON.parse(text); } catch { result = null; }
+    const record = isObject(result) ? result : {};
+    throw new Error(`${typeof record.errorCode === "string" ? record.errorCode : `HTTP_${response.status}`}: ${typeof record.message === "string" ? record.message : "speech synthesis failed"}`);
+  }
+  return bytes;
 }
 
 function isObject(value: unknown): value is JsonObject {

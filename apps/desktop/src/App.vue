@@ -10,6 +10,7 @@ import type { FrameMetricsReport } from "./frame-metrics.mjs";
 
 const VrmStage = defineAsyncComponent(() => import("./VrmStage.vue"));
 const DesktopWidget = defineAsyncComponent(() => import("./DesktopWidget.vue"));
+type DashboardPage = "overview" | "chat" | "avatar" | "runtime";
 
 const stateLabels: Record<AvatarState, string> = {
   idle: "Nghỉ",
@@ -28,6 +29,15 @@ const runtime = ref<RuntimeHealth | null>(null);
 const previewState = ref<AvatarState>("idle");
 const errorMessage = ref("");
 const busy = ref(false);
+const activePage = ref<DashboardPage>("avatar");
+const chatInput = ref("");
+const chatMessages = ref<Array<{ role: "user" | "assistant" | "system"; text: string }>>([]);
+const chatBusy = ref(false);
+const chatError = ref("");
+const chatVoiceEnabled = ref(true);
+const chatSessionId = crypto.randomUUID();
+let chatPollTimer: number | null = null;
+let activeChatTurnId: string | null = null;
 const vrmReady = ref(false);
 const vrmError = ref("");
 const vrmFps = ref(0);
@@ -42,6 +52,108 @@ let safetyTimer: number | null = null;
 let widgetTimer: number | null = null;
 let avatarRefreshPending = false;
 let safetyRefreshPending = false;
+let controlRetryAt = 0;
+let controlRetryDelay = 1_000;
+
+function controlRequestAllowed(): boolean {
+  return Date.now() >= controlRetryAt;
+}
+
+function noteControlFailure(error: unknown): void {
+  const message = error instanceof Error ? error.message : "E_DESKTOP_CONTROL_OFFLINE";
+  errorMessage.value = message;
+  if (message.includes("E_DESKTOP_CONTROL_OFFLINE")) {
+    controlRetryAt = Date.now() + controlRetryDelay;
+    controlRetryDelay = Math.min(controlRetryDelay * 2, 30_000);
+  }
+}
+
+function resetControlBackoff(): void {
+  controlRetryAt = 0;
+  controlRetryDelay = 1_000;
+}
+
+function appendChatMessage(role: "user" | "assistant" | "system", text: string): void {
+  chatMessages.value.push({ role, text });
+}
+
+async function playAssistantVoice(text: string): Promise<void> {
+  if (!chatVoiceEnabled.value || safety.value?.state.muted || !text.trim()) return;
+  const bytes = await window.hinaDesktop.synthesizeSpeech({
+    text,
+    utteranceId: crypto.randomUUID(),
+    sessionId: chatSessionId,
+    source: "owner.console",
+  });
+  const wavBuffer = Uint8Array.from(bytes).buffer;
+  const url = URL.createObjectURL(new Blob([wavBuffer], { type: "audio/wav" }));
+  const audio = new Audio(url);
+  audio.addEventListener("ended", () => URL.revokeObjectURL(url), { once: true });
+  await audio.play();
+}
+
+async function pollDesktopChat(turnId: string): Promise<void> {
+  try {
+    const turn = await window.hinaDesktop.getChatTurn(turnId);
+    if (turn.outcome === "running") {
+      chatPollTimer = window.setTimeout(() => void pollDesktopChat(turnId), 180);
+      return;
+    }
+    activeChatTurnId = null;
+    chatBusy.value = false;
+    if (turn.outcome === "completed" && turn.assistant) {
+      appendChatMessage("assistant", turn.assistant);
+      try {
+        await playAssistantVoice(turn.assistant);
+      } catch (error) {
+        chatError.value = error instanceof Error ? error.message : "E_DESKTOP_TTS";
+      }
+    } else if (turn.outcome === "interrupted") {
+      appendChatMessage("system", "Cuộc trò chuyện đã được dừng.");
+    } else {
+      const failure = `${turn.errorCode ?? "E_CHAT_FAILED"}: ${turn.errorMessage ?? "AI không thể trả lời."}`;
+      chatError.value = failure;
+      appendChatMessage("system", failure);
+    }
+  } catch (error) {
+    activeChatTurnId = null;
+    chatBusy.value = false;
+    chatError.value = error instanceof Error ? error.message : "E_DESKTOP_CHAT";
+  }
+}
+
+async function sendDesktopChat(): Promise<void> {
+  const text = chatInput.value.trim();
+  if (!text || chatBusy.value) return;
+  chatBusy.value = true;
+  chatError.value = "";
+  appendChatMessage("user", text);
+  chatInput.value = "";
+  try {
+    const turn = await window.hinaDesktop.startChatTurn({
+      sessionId: chatSessionId,
+      source: "owner.console",
+      text,
+    });
+    activeChatTurnId = turn.turnId;
+    await pollDesktopChat(turn.turnId);
+  } catch (error) {
+    chatBusy.value = false;
+    chatError.value = error instanceof Error ? error.message : "E_DESKTOP_CHAT";
+    appendChatMessage("system", chatError.value);
+  }
+}
+
+async function cancelDesktopChat(): Promise<void> {
+  if (!activeChatTurnId) return;
+  try {
+    await window.hinaDesktop.cancelChatTurn(activeChatTurnId);
+  } catch (error) {
+    chatError.value = error instanceof Error ? error.message : "E_DESKTOP_CHAT_CANCEL";
+  }
+  activeChatTurnId = null;
+  chatBusy.value = false;
+}
 
 const stageState = computed(() => avatar.value?.state ?? "error");
 const stageExpression = computed(() => avatar.value?.expression ?? "concerned");
@@ -104,22 +216,20 @@ const snapshot = computed(() => avatar.value
   : "Chưa nhận được snapshot từ control plane.");
 
 async function refreshAvatar(): Promise<void> {
-  if (avatarRefreshPending) return;
+  if (avatarRefreshPending || !controlRequestAllowed()) return;
   avatarRefreshPending = true;
   try {
     avatar.value = await window.hinaDesktop.getAvatarStatus();
     errorMessage.value = "";
   } catch (error) {
-    errorMessage.value = error instanceof Error
-      ? error.message
-      : "E_DESKTOP_CONTROL_OFFLINE";
+    noteControlFailure(error);
   } finally {
     avatarRefreshPending = false;
   }
 }
 
 async function refreshSafety(): Promise<void> {
-  if (safetyRefreshPending) return;
+  if (safetyRefreshPending || !controlRequestAllowed()) return;
   safetyRefreshPending = true;
   try {
     const [nextSafety, nextRuntime] = await Promise.all([
@@ -130,25 +240,25 @@ async function refreshSafety(): Promise<void> {
     runtime.value = nextRuntime;
   } catch (error) {
     runtime.value = null;
-    errorMessage.value = error instanceof Error ? error.message : "E_DESKTOP_SAFETY";
+    noteControlFailure(error);
   } finally {
     safetyRefreshPending = false;
   }
 }
 
 async function refreshWidget(): Promise<void> {
+  if (!controlRequestAllowed()) return;
   try {
     widgetStatus.value = await window.hinaDesktop.getWidgetStatus();
   } catch (error) {
-    errorMessage.value = error instanceof Error
-      ? error.message
-      : "E_DESKTOP_WIDGET_STATUS";
+    noteControlFailure(error);
   }
 }
 
 async function retryConnection(): Promise<void> {
   busy.value = true;
   try {
+    resetControlBackoff();
     await Promise.all([refreshAvatar(), refreshSafety(), refreshWidget()]);
   } finally {
     busy.value = false;
@@ -318,6 +428,10 @@ function stopPolling(): void {
     window.clearInterval(widgetTimer);
     widgetTimer = null;
   }
+  if (chatPollTimer !== null) {
+    window.clearTimeout(chatPollTimer);
+    chatPollTimer = null;
+  }
 }
 
 onMounted(async () => {
@@ -354,20 +468,104 @@ onBeforeUnmount(() => {
       </div>
     </header>
 
+    <nav class="desktop-nav" aria-label="Điều hướng dashboard">
+      <button type="button" :class="{ active: activePage === 'overview' }" @click="activePage = 'overview'">
+        Tổng quan
+        <small>Nhìn nhanh trạng thái Hina</small>
+      </button>
+      <button type="button" :class="{ active: activePage === 'chat' }" @click="activePage = 'chat'">
+        Chat với Hina
+        <small>Gửi text và nghe câu trả lời</small>
+      </button>
+      <button type="button" :class="{ active: activePage === 'avatar' }" @click="activePage = 'avatar'">
+        Avatar Stage
+        <small>Xem biểu cảm và lip-sync</small>
+      </button>
+      <button type="button" :class="{ active: activePage === 'runtime' }" @click="activePage = 'runtime'">
+        Runtime & Safety
+        <small>Widget, mute và dừng khẩn cấp</small>
+      </button>
+    </nav>
+
     <section v-if="errorMessage" class="error-banner" role="alert">
       <strong>Không đọc được dữ liệu thật.</strong>
       <span>{{ errorMessage }}</span>
       <small>
-        Hãy chạy <code>pnpm start:dev-console</code> rồi bấm thử kết nối;
-        desktop cũng tự thử lại ở nền.
+        <code>pnpm start:desktop</code> sẽ tự khởi control plane. Nếu runtime vừa
+        khởi động lại, desktop sẽ chờ theo backoff thay vì gửi lỗi liên tục.
       </small>
       <button type="button" :disabled="busy" @click="retryConnection">
         Thử kết nối lại ngay
       </button>
     </section>
 
-    <section class="stage-grid">
+    <section v-if="activePage === 'overview'" class="dashboard-page overview-page">
+      <div class="page-heading">
+        <p class="eyebrow">DASHBOARD / TỔNG QUAN</p>
+        <h2>Chào bạn, đây là bảng điều khiển Hina</h2>
+        <p class="purpose">Các thẻ dưới đây cho biết Hina đang kết nối hay không, avatar đang làm gì và bạn có thể đi tới chức năng nào tiếp theo.</p>
+      </div>
+      <div class="overview-grid">
+        <article class="overview-card">
+          <span>Kết nối control plane</span>
+          <strong :data-good="connected">{{ connected ? "Đang hoạt động" : "Chưa sẵn sàng" }}</strong>
+          <p>{{ connected ? "Desktop đang đọc dữ liệu thật từ runtime local." : "Hãy chạy start:desktop; hệ thống sẽ tự khởi control plane." }}</p>
+        </article>
+        <article class="overview-card">
+          <span>Trạng thái Hina</span>
+          <strong>{{ stateLabels[stageState] }}</strong>
+          <p>Biểu cảm {{ avatar?.expression ?? "chưa có" }} · viseme {{ stageViseme }}.</p>
+        </article>
+        <article class="overview-card">
+          <span>Voice phản hồi</span>
+          <strong>{{ safety?.state.muted ? "Đang tắt" : "Đang bật" }}</strong>
+          <p>Vào Chat với Hina để gửi câu hỏi. Khi bật voice, câu trả lời sẽ phát thành WAV thật.</p>
+        </article>
+      </div>
+      <div class="quick-actions">
+        <button class="primary" type="button" @click="activePage = 'chat'">Mở chat với Hina</button>
+        <button type="button" @click="activePage = 'avatar'">Xem avatar</button>
+        <button type="button" @click="activePage = 'runtime'">Quản lý widget và Safety</button>
+      </div>
+    </section>
+
+    <section v-else-if="activePage === 'chat'" class="dashboard-page chat-page">
+      <div class="page-heading">
+        <p class="eyebrow">DASHBOARD / CHAT</p>
+        <h2>Nói chuyện với Hina bằng text và voice</h2>
+        <p class="purpose">Nhập câu hỏi bằng tiếng Việt. Hina trả về nội dung text trước, sau đó phát cùng nội dung bằng giọng VieNeu nếu Voice đang bật.</p>
+      </div>
+      <div class="chat-layout">
+        <div class="chat-messages" aria-live="polite">
+          <p v-if="chatMessages.length === 0" class="chat-empty">Chưa có tin nhắn. Hãy bắt đầu bằng một câu chào.</p>
+          <div v-for="(message, index) in chatMessages" :key="`${index}-${message.role}`" class="chat-message" :data-role="message.role">
+            <span>{{ message.role === 'user' ? 'Bạn' : message.role === 'assistant' ? 'Hina' : 'Hệ thống' }}</span>
+            <p>{{ message.text }}</p>
+          </div>
+        </div>
+        <form class="chat-composer" @submit.prevent="sendDesktopChat">
+          <label for="desktopChatInput">Bạn muốn nói gì với Hina?</label>
+          <textarea id="desktopChatInput" v-model="chatInput" rows="4" maxlength="16384" :disabled="chatBusy" placeholder="Ví dụ: Hina, hôm nay bạn thấy thế nào?"></textarea>
+          <div class="chat-options">
+            <label class="voice-toggle">
+              <input v-model="chatVoiceEnabled" type="checkbox">
+              <span>Phát voice trả lời</span>
+            </label>
+            <span class="chat-hint">Voice vẫn tuân theo nút mute Safety.</span>
+          </div>
+          <div class="button-row">
+            <button class="primary" type="submit" :disabled="chatBusy || !chatInput.trim()">Gửi cho Hina</button>
+            <button type="button" :disabled="!chatBusy" @click="cancelDesktopChat">Dừng lượt trả lời</button>
+            <button type="button" :disabled="busy || !safety" @click="toggleMute">{{ safety?.state.muted ? "Bật voice toàn hệ thống" : "Tắt voice toàn hệ thống" }}</button>
+          </div>
+          <p v-if="chatError" class="inline-error">{{ chatError }}</p>
+        </form>
+      </div>
+    </section>
+
+    <section v-else class="stage-grid" :data-page="activePage">
       <article
+        v-if="activePage === 'avatar'"
         class="stage"
         :data-state="stageState"
         :data-expression="stageExpression"

@@ -10,6 +10,7 @@ authors = [
 ]
 dependencies = [
   "faster-whisper==1.2.1",
+  "moonshine-voice==0.0.73",
   "qdrant-client==1.18.0",
   "vieneu==3.2.3",
 ]

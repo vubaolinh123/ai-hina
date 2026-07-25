@@ -6,12 +6,28 @@ const VrmStage = defineAsyncComponent(() => import("./VrmStage.vue"));
 const avatar = ref<AvatarStatus | null>(null);
 const safety = ref<SafetyStatus | null>(null);
 const busy = ref(false);
+const hovered = ref(false);
 const vrmReady = ref(false);
 const controlReady = ref(false);
 let avatarTimer: number | null = null;
 let safetyTimer: number | null = null;
 let avatarRefreshPending = false;
 let safetyRefreshPending = false;
+let controlRetryAt = 0;
+let controlRetryDelay = 1_000;
+
+function controlRequestAllowed(): boolean {
+  return Date.now() >= controlRetryAt;
+}
+
+function noteControlFailure(error: unknown, operation: string): void {
+  const message = error instanceof Error ? error.message : "E_DESKTOP_CONTROL_OFFLINE";
+  console.warn(`[hina-widget] ${operation}`, message);
+  if (message.includes("E_DESKTOP_CONTROL_OFFLINE")) {
+    controlRetryAt = Date.now() + controlRetryDelay;
+    controlRetryDelay = Math.min(controlRetryDelay * 2, 30_000);
+  }
+}
 
 const stageState = computed(() => avatar.value?.state ?? "error");
 const stageExpression = computed(() => avatar.value?.expression ?? "concerned");
@@ -34,32 +50,26 @@ function markWidgetReady(): void {
 }
 
 async function refreshAvatar(): Promise<void> {
-  if (avatarRefreshPending) return;
+  if (avatarRefreshPending || !controlRequestAllowed()) return;
   avatarRefreshPending = true;
   try {
     avatar.value = await window.hinaDesktop.getAvatarStatus();
     controlReady.value = true;
     markWidgetReady();
   } catch (error) {
-    console.error(
-      "[hina-widget] E_DESKTOP_WIDGET_AVATAR",
-      error instanceof Error ? error.message : "unknown error",
-    );
+    noteControlFailure(error, "E_DESKTOP_WIDGET_AVATAR");
   } finally {
     avatarRefreshPending = false;
   }
 }
 
 async function refreshSafety(): Promise<void> {
-  if (safetyRefreshPending) return;
+  if (safetyRefreshPending || !controlRequestAllowed()) return;
   safetyRefreshPending = true;
   try {
     safety.value = await window.hinaDesktop.getSafetyStatus();
   } catch (error) {
-    console.error(
-      "[hina-widget] E_DESKTOP_WIDGET_SAFETY",
-      error instanceof Error ? error.message : "unknown error",
-    );
+    noteControlFailure(error, "E_DESKTOP_WIDGET_SAFETY");
   } finally {
     safetyRefreshPending = false;
   }
@@ -142,9 +152,12 @@ onBeforeUnmount(() => {
   <main
     class="desktop-widget"
     :data-muted="muted"
+    :data-hovered="hovered"
     tabindex="0"
     aria-label="Hina desktop widget. Kéo nhân vật để di chuyển; rê chuột lên nhân vật để mở Voice."
     @keydown="blurWidget"
+    @pointerenter="hovered = true"
+    @pointerleave="hovered = false"
   >
     <section
       class="widget-avatar-surface"

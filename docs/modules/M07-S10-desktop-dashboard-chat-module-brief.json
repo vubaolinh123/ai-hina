@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M07-S10-desktop-dashboard-chat-reliability",
+  "module_id": "M07",
+  "objective": "Make the Electron app a runnable local dashboard with real text chat plus moderated TTS playback, visible hover Voice control on the transparent widget, and a start command that brings up the loopback control plane without offline polling spam.",
+  "non_goals": [
+    "Do not expose arbitrary HTTP, filesystem, shell or Node access to the renderer.",
+    "Do not fake chat or voice output when the local model or TTS provider is unavailable.",
+    "Do not add deep repeat, soak or release verification in this fast iteration."
+  ],
+  "base_sha": "cc76f41f5d25026038b18b78d54ad7de13e9bd37",
+  "branch": "codex/M07-avatar-stage",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "apps/desktop/",
+    "assets/manifests/hina-code-avatar.v1.json",
+    "docs/modules/M07-*",
+    "package.json",
+    "tools/dev/Start-HinaDesktop.ps1"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "packages/contracts/",
+    "packages/safety-policy/",
+    "packages/text-brain/",
+    "workers/speech/"
+  ],
+  "contracts": [
+    "Renderer calls only named preload methods backed by allowlisted loopback paths.",
+    "Text chat uses the existing conversation service and shows real completed, interrupted or failed outcomes.",
+    "Voice playback uses the existing moderated VieNeu TTS endpoint and respects global mute.",
+    "The transparent widget shows no controls at rest and exposes one Voice toggle on hover/focus.",
+    "Offline polling uses bounded exponential backoff and start:desktop auto-starts the local control plane when needed."
+  ],
+  "allowed_dependencies": [
+    "Existing Electron, Vue, local control-plane chat and TTS APIs."
+  ],
+  "oss_candidates": [
+    "https://github.com/moeru-ai/airi"
+  ],
+  "acceptance_criteria": [
+    "Desktop typecheck/build and security tests pass.",
+    "Chat page can start and cancel a real turn, display assistant text and request real WAV playback.",
+    "Widget Voice button remains no-drag and becomes visible on hover/focus.",
+    "start:desktop starts one hidden control-plane helper only when health is unavailable.",
+    "Control-plane offline errors back off instead of being emitted every 250 milliseconds."
+  ],
+  "required_test_commands": [
+    "pnpm --filter @hina/desktop test"
+  ],
+  "latency_or_quality_budget": {
+    "offline_retry_max_milliseconds": 30000,
+    "chat_poll_milliseconds": 180,
+    "tts_response_max_bytes": 8388608
+  },
+  "output_artifact_dir": "artifacts/verification/M07/"
+}

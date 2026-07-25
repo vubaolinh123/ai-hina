@@ -14,6 +14,7 @@ sys.path.insert(0, str(SPEECH_ROOT / "src"))
 
 from hina_speech import (  # noqa: E402
     FasterWhisperProvider,
+    MoonshineProvider,
     SpeechConfig,
     SpeechError,
     SpeechInputService,
@@ -93,6 +94,32 @@ class _FailingWhisperModel(_FakeWhisperModel):
         raise RuntimeError("simulated device inference failure")
 
 
+class _FakeMoonshineTranscriber:
+    def __init__(self, **kwargs) -> None:
+        self.kwargs = kwargs
+        self.closed = False
+
+    def transcribe_without_streaming(self, samples, *, sample_rate):
+        self.samples = samples
+        self.sample_rate = sample_rate
+        return SimpleNamespace(
+            lines=[
+                SimpleNamespace(
+                    text=" xin chào Hina ",
+                    start_time=0.0,
+                    duration=0.25,
+                    words=[
+                        SimpleNamespace(confidence=0.8),
+                        SimpleNamespace(confidence=1.0),
+                    ],
+                )
+            ]
+        )
+
+    def close(self) -> None:
+        self.closed = True
+
+
 class _FakeLease:
     def __init__(self) -> None:
         self.release_calls = 0
@@ -106,6 +133,32 @@ class _FakeLease:
 
 
 class ProviderTests(unittest.IsolatedAsyncioTestCase):
+    async def test_moonshine_is_default_and_maps_vietnamese_transcript(self) -> None:
+        created: list[_FakeMoonshineTranscriber] = []
+
+        def factory(**kwargs):
+            model = _FakeMoonshineTranscriber(**kwargs)
+            created.append(model)
+            return model
+
+        config = SpeechConfig(allow_download=False)
+        self.assertEqual(config.provider, "moonshine")
+        provider = MoonshineProvider(config, transcriber_factory=factory)
+        before = await provider.status()
+        self.assertFalse(before["modelLoaded"])
+
+        result = await provider.transcribe(
+            decode_and_normalize_wav(wav_bytes(duration_seconds=0.25))
+        )
+
+        self.assertEqual(result.text, "xin chào Hina")
+        self.assertEqual(result.language, "vi")
+        self.assertAlmostEqual(result.segments[0].confidence, 0.9)
+        self.assertEqual(created[0].sample_rate, 16_000)
+        self.assertEqual(created[0].kwargs["options"]["max_tokens_per_second"], 13.0)
+        await provider.close()
+        self.assertTrue(created[0].closed)
+
     async def test_provider_lazily_loads_pinned_model_and_locks_vi_transcribe(self) -> None:
         created: dict[str, object] = {}
 
@@ -302,6 +355,20 @@ class SpeechServiceTests(unittest.IsolatedAsyncioTestCase):
 
 
 class ConfigTests(unittest.TestCase):
+    def test_provider_selection_defaults_to_moonshine_with_whisper_rollback(self) -> None:
+        moonshine = SpeechConfig.from_env({})
+        self.assertEqual(moonshine.provider, "moonshine")
+        self.assertEqual(moonshine.model_id, "moonshine-vietnamese-base")
+        self.assertEqual(moonshine.model_revision, "0.0.73")
+
+        whisper = SpeechConfig.from_env({"HINA_STT_PROVIDER": "faster-whisper"})
+        self.assertEqual(whisper.provider, "faster-whisper")
+        self.assertEqual(whisper.model_id, "Systran/faster-whisper-small")
+        self.assertEqual(
+            whisper.model_revision,
+            "536b0662742c02347bc0e980a01041f333bce120",
+        )
+
     def test_language_translation_and_retention_cannot_be_enabled(self) -> None:
         with self.assertRaises(SpeechError):
             SpeechConfig(language="en")
