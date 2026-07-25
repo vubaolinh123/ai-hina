@@ -64,6 +64,11 @@ class SpeechOutputService:
             },
         }
 
+    async def warmup(self) -> None:
+        warmup = getattr(self.provider, "warmup", None)
+        if warmup is not None:
+            await warmup()
+
     async def synthesize(
         self,
         raw_text: str,

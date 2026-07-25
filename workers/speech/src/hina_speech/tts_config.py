@@ -63,13 +63,15 @@ class TtsConfig:
         ):
             if re.fullmatch(r"[0-9a-f]{40}", value) is None:
                 raise TtsError("E_TTS_CONFIG", f"TTS {name} must be a commit SHA")
-        if self.device != "cpu":
+        if self.device not in {"cpu", "cuda"}:
+            raise TtsError("E_TTS_CONFIG", "TTS device must be cpu or cuda")
+        if self.device == "cpu" and self.precision != "int8":
+            raise TtsError("E_TTS_CONFIG", "CPU TTS precision must be int8")
+        if self.device == "cuda" and self.precision not in {"float16", "bfloat16"}:
             raise TtsError(
                 "E_TTS_RESOURCE_LEASE",
-                "M05 fast slice permits CPU TTS only; CUDA requires ResourceLease integration",
+                "CUDA TTS requires an explicit GPU precision and ResourceLease profile",
             )
-        if self.precision != "int8":
-            raise TtsError("E_TTS_CONFIG", "M05 CPU TTS precision must be int8")
         if self.voice not in ALLOWED_TTS_VOICES:
             raise TtsError("E_TTS_VOICE", "TTS voice is not allowlisted")
         if self.style not in ALLOWED_TTS_STYLES:

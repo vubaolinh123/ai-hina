@@ -112,6 +112,7 @@ test("transparent widget keeps hover Voice/Mic controls and a native drag surfac
   assert.match(widget, /avatar\.value(?:\?\.|\.)intensity/);
   assert.match(widget, /getUserMedia/);
   assert.match(widget, /transcribeSpeech/);
+  assert.doesNotMatch(widget, /ScriptProcessorNode|createScriptProcessor/);
   assert.match(widget, /encodePcmWav/);
   const app = read("src/App.vue");
   assert.match(app, /Mic \/ STT \/ TTS/);
@@ -120,6 +121,11 @@ test("transparent widget keeps hover Voice/Mic controls and a native drag surfac
   assert.match(app, /transcribeSpeech/);
   assert.match(app, /synthesizeSpeech/);
   assert.match(app, /getUserMedia/);
+  assert.doesNotMatch(app, /ScriptProcessorNode|createScriptProcessor/);
+  assert.match(app, /Realtime/);
+  const recorder = read("src/microphone-recorder.ts");
+  assert.match(recorder, /AudioWorkletNode/);
+  assert.match(recorder, /hina-audio-capture-worklet\.js/);
 
   assert.match(style, /\.widget-avatar-surface[\s\S]*-webkit-app-region:\s*drag/);
   assert.match(style, /\.widget-voice-button[\s\S]*-webkit-app-region:\s*no-drag/);
@@ -128,6 +134,8 @@ test("transparent widget keeps hover Voice/Mic controls and a native drag surfac
     style,
     /\.widget-voice-controls[\s\S]*opacity:\s*0[\s\S]*visibility:\s*hidden[\s\S]*pointer-events:\s*none/,
   );
+  const index = read("index.html");
+  assert.match(index, /media-src 'self' blob:/);
   assert.match(style, /\.desktop-widget:hover \.widget-voice-controls/);
   assert.match(style, /\.desktop-widget:focus-within \.widget-voice-controls/);
   assert.match(

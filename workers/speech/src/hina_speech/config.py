@@ -66,8 +66,8 @@ class SpeechConfig:
         allowed_compute = {"int8", "int8_float16", "float16", "float32"}
         if self.compute_type not in allowed_compute:
             raise SpeechError("E_STT_CONFIG", "STT compute type is invalid")
-        if self.language != "vi" or self.task != "transcribe":
-            raise SpeechError("E_STT_CONFIG", "STT language/task lock must remain vi/transcribe")
+        if self.language not in {"auto", "vi"} or self.task != "transcribe":
+            raise SpeechError("E_STT_CONFIG", "STT language must be auto or vi")
         if self.raw_audio_retention:
             raise SpeechError("E_STT_CONFIG", "raw audio retention is unavailable in M04-S1")
         for value, name, lower, upper in (
@@ -119,6 +119,7 @@ class SpeechConfig:
             request_timeout_seconds=_env_float(values, "HINA_STT_TIMEOUT_SECONDS", 90),
             model_vram_mib=_env_int(values, "HINA_STT_MODEL_VRAM_MIB", 2_048),
             model_ram_mib=_env_int(values, "HINA_STT_MODEL_RAM_MIB", 2_048),
+            language=values.get("HINA_STT_LANGUAGE", "vi").strip().lower(),
         )
 
     def public_status(self) -> dict[str, object]:

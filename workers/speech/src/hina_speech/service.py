@@ -98,7 +98,7 @@ class SpeechInputService:
                 "correlationId": correlation_id,
                 "sessionId": session_id,
                 "source": source,
-                "language": "vi",
+                "language": self.config.language,
                 "task": "transcribe",
                 "speechDetected": vad.speech_detected,
                 "audio": {
@@ -124,7 +124,7 @@ class SpeechInputService:
                             0,
                             correlation_id,
                             session_id,
-                            {"text": "", "language": "vi", "speechDetected": False},
+                            {"text": "", "language": self.config.language, "speechDetected": False},
                         )
                     ],
                     "processingMilliseconds": round(
@@ -134,10 +134,15 @@ class SpeechInputService:
                 }
             async with self._inference:
                 result = await self.provider.transcribe(audio)
+            transcript = _sanitize_hallucinated_outro(
+                result.text,
+                duration_seconds=audio.duration_seconds,
+            )
             return {
                 **base,
+                "language": result.language,
                 "status": "transcribed",
-                "transcript": result.text,
+                "transcript": transcript,
                 "segments": [
                     {
                         "startSeconds": round(segment.start_seconds, 3),
@@ -257,7 +262,7 @@ def _events_for_result(
                 session_id,
                 {
                     "text": segment.text,
-                    "language": "vi",
+                    "language": result.language,
                     "startSeconds": round(segment.start_seconds, 3),
                     "endSeconds": round(segment.end_seconds, 3),
                     "confidence": round(segment.confidence, 6),
@@ -279,6 +284,32 @@ def _events_for_result(
         )
     )
     return events
+
+
+def _sanitize_hallucinated_outro(text: str, *, duration_seconds: float) -> str:
+    """Remove common video-outro hallucinations on very short microphone clips.
+
+    Whisper-family models can emit memorized outro text when a tiny clip has
+    weak acoustic evidence. We only touch the transcript for short audio and
+    only remove explicit outro prefixes; normal words such as "Hello, hello"
+    remain unchanged.
+    """
+    normalized = " ".join(text.split()).strip()
+    if duration_seconds > 4.0:
+        return normalized
+    lower = normalized.casefold()
+    prefixes = (
+        "cảm ơn các bạn đã theo dõi và sử dụng",
+        "cảm ơn các bạn đã theo dõi",
+        "cảm ơn các bạn đã xem",
+        "hãy đăng ký kênh",
+        "đừng quên đăng ký kênh",
+    )
+    for prefix in prefixes:
+        if lower.startswith(prefix):
+            remainder = normalized[len(prefix):].lstrip(" ,:.-")
+            return remainder
+    return normalized
 
 
 def _event(

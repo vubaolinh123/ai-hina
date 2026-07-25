@@ -204,7 +204,7 @@ class FasterWhisperProvider:
             samples = np.asarray(audio.samples, dtype=np.float32)
             raw_segments, info = model.transcribe(
                 samples,
-                language="vi",
+                language=None if self.config.language == "auto" else self.config.language,
                 task="transcribe",
                 beam_size=self.config.beam_size,
                 temperature=0,
@@ -238,7 +238,7 @@ class FasterWhisperProvider:
             transcript = " ".join(segment.text for segment in segments).strip()
             return SttResult(
                 text=transcript,
-                language="vi",
+                language=str(getattr(info, "language", self.config.language)),
                 language_probability=float(getattr(info, "language_probability", 1.0)),
                 duration_seconds=audio.duration_seconds,
                 segments=tuple(segments),

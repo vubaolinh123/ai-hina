@@ -10,7 +10,9 @@ type ControlOperation =
   | "safety.status"
   | "safety.control"
   | "runtime.health"
-  | "chat.status";
+  | "chat.status"
+  | "speech.status"
+  | "tts.status";
 
 type OperationSpec = {
   method: "GET" | "POST";
@@ -25,6 +27,8 @@ const OPERATIONS: Readonly<Record<ControlOperation, OperationSpec>> = Object.fre
   "safety.control": { method: "POST", path: "/v1/safety/control" },
   "runtime.health": { method: "GET", path: "/v1/health" },
   "chat.status": { method: "GET", path: "/v1/chat/status" },
+  "speech.status": { method: "GET", path: "/v1/speech/status" },
+  "tts.status": { method: "GET", path: "/v1/tts/status" },
 });
 
 const AVATAR_STATES = new Set([

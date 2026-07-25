@@ -45,6 +45,8 @@ const CHANNELS = Object.freeze({
   chatTurn: "hina:chat:turn",
   chatCancel: "hina:chat:cancel",
   speechTranscribe: "hina:speech:transcribe",
+  speechStatus: "hina:speech:status",
+  ttsStatus: "hina:tts:status",
   ttsSynthesize: "hina:tts:synthesize",
 });
 
@@ -294,6 +296,14 @@ function registerIpcHandlers(): void {
       return requestSpeechTranscription(audio, sessionId);
     },
   );
+  ipcMain.handle(CHANNELS.speechStatus, (event) => {
+    assertTrustedSender(event);
+    return requestControl("speech.status");
+  });
+  ipcMain.handle(CHANNELS.ttsStatus, (event) => {
+    assertTrustedSender(event);
+    return requestControl("tts.status");
+  });
   ipcMain.handle(CHANNELS.ttsSynthesize, (event, payload: unknown) => {
     assertTrustedSender(event);
     return requestSpeechSynthesis(payload);

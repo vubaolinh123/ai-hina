@@ -22,6 +22,7 @@ from hina_speech import (  # noqa: E402
     SttSegment,
     decode_and_normalize_wav,
 )
+from hina_speech.service import _sanitize_hallucinated_outro  # noqa: E402
 from test_audio_vad import wav_bytes  # noqa: E402
 
 
@@ -275,6 +276,19 @@ class ProviderTests(unittest.IsolatedAsyncioTestCase):
 
 
 class SpeechServiceTests(unittest.IsolatedAsyncioTestCase):
+    def test_short_clip_outro_hallucination_is_removed_without_touching_hello(self) -> None:
+        self.assertEqual(
+            _sanitize_hallucinated_outro(
+                "Cảm ơn các bạn đã theo dõi và sử dụng Hello, hello",
+                duration_seconds=1.2,
+            ),
+            "Hello, hello",
+        )
+        self.assertEqual(
+            _sanitize_hallucinated_outro("Hello, hello", duration_seconds=1.2),
+            "Hello, hello",
+        )
+
     async def test_silence_never_calls_provider_and_returns_empty_final(self) -> None:
         provider = _FakeProvider()
         service = SpeechInputService(SpeechConfig(), provider)

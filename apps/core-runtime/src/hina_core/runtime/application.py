@@ -210,6 +210,10 @@ class HinaRuntimeApplication:
                     moderator=safety_policy.moderate,
                     on_error=self._log_tts_error,
                 )
+                # The desktop profile warms the fixed GPU voice once so an
+                # owner's first chat does not pay model/enrollment latency.
+                if tts_config.device == "cuda":
+                    await tts_service.warmup()
             server = ControlPlaneServer(
                 self.config,
                 durable_store=store,

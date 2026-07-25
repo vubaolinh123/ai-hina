@@ -7,6 +7,10 @@ import {
   ref,
 } from "vue";
 import { encodePcmWav, mergeAudioChunks, resampleAudio } from "./audio-utils";
+import {
+  MicrophoneRecorder,
+  type MicrophoneCapture,
+} from "./microphone-recorder";
 import type { FrameMetricsReport } from "./frame-metrics.mjs";
 
 const VrmStage = defineAsyncComponent(() => import("./VrmStage.vue"));
@@ -43,19 +47,16 @@ const speechBusy = ref(false);
 const speechStatus = ref("Sẵn sàng. Bấm Thu mic, nói một câu rồi bấm Dừng & nhận dạng.");
 const speechTranscript = ref("");
 const speechCorrelationId = ref("");
+const speechRuntime = ref<SpeechRuntimeStatus | null>(null);
+const ttsRuntime = ref<TtsRuntimeStatus | null>(null);
+const speechLiveEnabled = ref(true);
 const speechTtsText = ref("Xin chào, mình là Hina. Đây là phần kiểm tra giọng nói tiếng Việt.");
 const speechTtsAudioUrl = ref("");
 let speechTtsAudio: HTMLAudioElement | null = null;
-let speechRecorder: {
-  stream: MediaStream;
-  context: AudioContext;
-  source: MediaStreamAudioSourceNode;
-  processor: ScriptProcessorNode;
-  sink: GainNode;
-  chunks: Float32Array[];
-  sampleCount: number;
-  stopping: boolean;
-} | null = null;
+let speechRecorder: MicrophoneRecorder | null = null;
+let speechLivePending = false;
+let speechLiveLastSubmittedAt = 0;
+let speechLiveEpoch = 0;
 let chatPollTimer: number | null = null;
 let activeChatTurnId: string | null = null;
 const vrmReady = ref(false);
@@ -128,6 +129,7 @@ async function pollDesktopChat(turnId: string): Promise<void> {
         await playAssistantVoice(turn.assistant);
       } catch (error) {
         chatError.value = error instanceof Error ? error.message : "E_DESKTOP_TTS";
+        console.error("[hina-chat] E_DESKTOP_TTS", chatError.value);
       }
     } else if (turn.outcome === "interrupted") {
       appendChatMessage("system", "Cuộc trò chuyện đã được dừng.");
@@ -188,46 +190,90 @@ function cleanupSpeechRecorder(): void {
   speechRecorder = null;
   speechRecording.value = false;
   if (!current) return;
-  current.processor.onaudioprocess = null;
-  current.source.disconnect();
-  current.processor.disconnect();
-  current.sink.disconnect();
-  current.stream.getTracks().forEach((track) => track.stop());
-  void current.context.close();
+  void current.stop();
 }
 
-async function stopSpeechTest(): Promise<void> {
-  const current = speechRecorder;
-  if (!current || current.stopping) return;
-  current.stopping = true;
-  speechRecorder = null;
-  speechRecording.value = false;
-  current.processor.onaudioprocess = null;
-  current.source.disconnect();
-  current.processor.disconnect();
-  current.sink.disconnect();
-  current.stream.getTracks().forEach((track) => track.stop());
-  const sampleRate = current.context.sampleRate;
-  await current.context.close();
-  if (current.sampleCount < sampleRate * 0.25) {
-    speechStatus.value = "Audio quá ngắn. Hãy nói ít nhất khoảng 0,25 giây.";
-    return;
-  }
-  const wav = encodePcmWav(
+function captureToWav(capture: Readonly<MicrophoneCapture>): Uint8Array {
+  return encodePcmWav(
     resampleAudio(
-      mergeAudioChunks(current.chunks, current.sampleCount),
-      sampleRate,
+      mergeAudioChunks(capture.chunks, capture.sampleCount),
+      capture.sampleRate,
       16_000,
     ),
     16_000,
   );
+}
+
+async function refreshSpeechRuntime(): Promise<void> {
+  try {
+    const [speech, tts] = await Promise.all([
+      window.hinaDesktop.getSpeechStatus(),
+      window.hinaDesktop.getTtsStatus(),
+    ]);
+    speechRuntime.value = speech;
+    ttsRuntime.value = tts;
+  } catch (error) {
+    console.error(
+      "[hina-speech-test] E_DESKTOP_STT_STATUS",
+      error instanceof Error ? error.message : "unknown error",
+    );
+  }
+}
+
+async function updateLiveTranscript(
+  capture: Readonly<MicrophoneCapture>,
+  epoch: number,
+): Promise<void> {
+  const elapsedSeconds = capture.sampleCount / capture.sampleRate;
+  const now = Date.now();
+  if (
+    !speechLiveEnabled.value
+    || elapsedSeconds < 1
+    || speechLivePending
+    || now - speechLiveLastSubmittedAt < 1_000
+  ) return;
+  const wav = captureToWav(capture);
+  if (wav.byteLength > 1_048_576) return;
+  speechLivePending = true;
+  speechLiveLastSubmittedAt = now;
+  try {
+    const result = await window.hinaDesktop.transcribeSpeech(wav, speechSessionId);
+    if (speechRecording.value && epoch === speechLiveEpoch) {
+      speechTranscript.value = result.transcript.trim();
+      speechCorrelationId.value = result.correlationId;
+      speechStatus.value = result.speechDetected
+        ? `Realtime: ${result.processingMilliseconds} ms · tiếp tục nói hoặc bấm Dừng.`
+        : "Realtime đang nghe; chưa phát hiện giọng nói rõ.";
+    }
+  } catch (error) {
+    if (speechRecording.value && epoch === speechLiveEpoch) {
+      const message = error instanceof Error ? error.message : "E_DESKTOP_STT_LIVE";
+      speechStatus.value = message;
+      console.error("[hina-speech-test] E_DESKTOP_STT_LIVE", message);
+    }
+  } finally {
+    speechLivePending = false;
+  }
+}
+
+async function stopSpeechTest(): Promise<void> {
+  const current = speechRecorder;
+  if (!current) return;
+  speechRecorder = null;
+  speechRecording.value = false;
+  speechLiveEpoch += 1;
+  const capture = await current.stop();
+  if (capture.sampleCount < capture.sampleRate * 0.25) {
+    speechStatus.value = "Audio quá ngắn. Hãy nói ít nhất khoảng 0,25 giây.";
+    return;
+  }
+  const wav = captureToWav(capture);
   if (wav.byteLength > 1_048_576) {
     speechStatus.value = "Audio vượt giới hạn 1 MiB. Hãy thử một câu ngắn hơn.";
     return;
   }
   speechBusy.value = true;
-  speechStatus.value = "Đang gửi WAV thật sang Moonshine để nhận dạng tiếng Việt…";
-  speechTranscript.value = "";
+  speechStatus.value = "Đang tạo transcript cuối bằng STT local…";
   speechCorrelationId.value = "";
   try {
     const result = await window.hinaDesktop.transcribeSpeech(wav, speechSessionId);
@@ -235,7 +281,7 @@ async function stopSpeechTest(): Promise<void> {
     speechCorrelationId.value = result.correlationId;
     speechStatus.value = result.speechDetected
       ? `STT hoàn tất trong ${result.processingMilliseconds} ms.`
-      : "Moonshine không phát hiện tiếng nói trong đoạn thu.";
+      : "STT không phát hiện tiếng nói trong đoạn thu.";
   } catch (error) {
     const message = error instanceof Error ? error.message : "E_DESKTOP_STT";
     speechStatus.value = message;
@@ -252,44 +298,21 @@ async function startSpeechTest(): Promise<void> {
     return;
   }
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        channelCount: 1,
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-      },
-      video: false,
+    speechLiveEpoch += 1;
+    const epoch = speechLiveEpoch;
+    speechLiveLastSubmittedAt = 0;
+    speechTranscript.value = "";
+    speechCorrelationId.value = "";
+    speechRecorder = await MicrophoneRecorder.start({
+      maximumSeconds: 30,
+      chunkNotificationMilliseconds: 250,
+      onChunk: (capture) => void updateLiveTranscript(capture, epoch),
+      onMaximumDuration: () => void stopSpeechTest(),
     });
-    const context = new window.AudioContext();
-    const source = context.createMediaStreamSource(stream);
-    const processor = context.createScriptProcessor(4096, 1, 1);
-    const sink = context.createGain();
-    sink.gain.value = 0;
-    speechRecorder = {
-      stream,
-      context,
-      source,
-      processor,
-      sink,
-      chunks: [],
-      sampleCount: 0,
-      stopping: false,
-    };
-    processor.onaudioprocess = (event) => {
-      if (!speechRecorder || speechRecorder.stopping) return;
-      const chunk = new Float32Array(event.inputBuffer.getChannelData(0));
-      speechRecorder.chunks.push(chunk);
-      speechRecorder.sampleCount += chunk.length;
-      if (speechRecorder.sampleCount / context.sampleRate >= 30) {
-        void stopSpeechTest();
-      }
-    };
-    source.connect(processor);
-    processor.connect(sink);
-    sink.connect(context.destination);
     speechRecording.value = true;
-    speechStatus.value = "Đang thu mic… nói một câu, sau đó bấm Dừng & nhận dạng.";
+    speechStatus.value = speechLiveEnabled.value
+      ? "Đang thu mic và cập nhật transcript realtime…"
+      : "Đang thu mic… nói một câu, sau đó bấm Dừng & nhận dạng.";
   } catch (error) {
     cleanupSpeechRecorder();
     const message = error instanceof Error ? error.message : "E_DESKTOP_MIC_PERMISSION";
@@ -625,7 +648,12 @@ onMounted(async () => {
   windowMode.value = await window.hinaDesktop.getWindowMode();
   document.documentElement.dataset.windowMode = windowMode.value;
   if (windowMode.value !== "operator") return;
-  await Promise.all([refreshAvatar(), refreshSafety(), refreshWidget()]);
+  await Promise.all([
+    refreshAvatar(),
+    refreshSafety(),
+    refreshWidget(),
+    refreshSpeechRuntime(),
+  ]);
   avatarTimer = window.setInterval(refreshAvatar, 250);
   safetyTimer = window.setInterval(refreshSafety, 1_000);
   widgetTimer = window.setInterval(refreshWidget, 1_000);
@@ -761,17 +789,35 @@ onBeforeUnmount(() => {
         <h2>Kiểm tra từng phần của hội thoại bằng giọng nói</h2>
         <p class="purpose">
           Trang này dùng dịch vụ thật, không dùng dữ liệu giả. Phần Mic → STT thu âm trực tiếp
-          rồi gửi WAV cho Moonshine. Phần TTS gửi đoạn text cho VieNeu và phát lại WAV Hina tạo ra.
+          và cập nhật transcript khi bạn còn đang nói. Phần TTS gửi đoạn text cho VieNeu và phát lại WAV Hina tạo ra.
         </p>
+      </div>
+      <div class="speech-runtime-strip" role="status">
+        <strong>Backend đang chạy</strong>
+        <span v-if="speechRuntime">
+          {{ speechRuntime.configured.provider }} · {{ speechRuntime.configured.model }} ·
+          {{ speechRuntime.provider.effectiveDevice.toUpperCase() }} /
+          {{ speechRuntime.configured.computeType }}
+        </span>
+        <span v-else>Chưa đọc được trạng thái STT.</span>
+        <span v-if="ttsRuntime">
+          · TTS {{ ttsRuntime.provider.effectiveDevice.toUpperCase() }} /
+          {{ ttsRuntime.provider.effectivePrecision }}
+        </span>
+        <button type="button" @click="refreshSpeechRuntime">Làm mới</button>
       </div>
       <div class="speech-test-grid">
         <article class="speech-test-card">
-          <p class="eyebrow">MIC → MOONSHINE STT</p>
+          <p class="eyebrow">MIC → LOCAL STT REALTIME</p>
           <h3>Hina nghe bạn nói</h3>
           <p>
-            Dùng khi cần kiểm tra quyền microphone hoặc xem Moonshine nhận dạng tiếng Việt có đúng
-            không. Audio chỉ được giữ trong bộ nhớ để xử lý lượt hiện tại.
+            Dùng khi cần kiểm tra quyền microphone và độ chính xác nhận dạng tiếng Việt/tiếng Anh.
+            Tên model cùng thiết bị GPU/CPU thật luôn hiện phía trên; audio chỉ nằm trong bộ nhớ của lượt hiện tại.
           </p>
+          <label class="speech-live-toggle">
+            <input v-model="speechLiveEnabled" type="checkbox" :disabled="speechRecording">
+            Cập nhật transcript realtime khi đang nói
+          </label>
           <div class="button-row">
             <button
               v-if="!speechRecording"
@@ -790,7 +836,7 @@ onBeforeUnmount(() => {
               type="button"
               @click="stopSpeechTest"
             >
-              Dừng &amp; nhận dạng
+              Dừng &amp; chốt transcript
             </button>
           </div>
           <div class="speech-result" aria-live="polite">

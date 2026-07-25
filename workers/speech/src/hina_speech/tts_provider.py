@@ -39,6 +39,19 @@ _CODEC_PATTERNS = (
     "moss_audio_tokenizer_encode.data",
     "moss_audio_tokenizer_encode.onnx",
 )
+_GPU_MODEL_PATTERNS = (
+    "config.json",
+    "update/config.json",
+    "update/model.safetensors",
+    "update/special_tokens_map.json",
+    "update/tokenizer.json",
+    "update/tokenizer_config.json",
+    "denoiser.onnx",
+    "speaker_encoder.onnx",
+    "tokenizer.json",
+    "tokenizer_config.json",
+    "special_tokens_map.json",
+)
 
 
 class TtsProvider(Protocol):
@@ -86,7 +99,16 @@ class VieneuTtsProvider:
             self.sdk_factory is not None
             or (
                 importlib.util.find_spec("vieneu") is not None
-                and importlib.util.find_spec("onnxruntime") is not None
+                and (
+                    (
+                        self.config.device == "cuda"
+                        and importlib.util.find_spec("torch") is not None
+                    )
+                    or (
+                        self.config.device == "cpu"
+                        and importlib.util.find_spec("onnxruntime") is not None
+                    )
+                )
                 and importlib.util.find_spec("huggingface_hub") is not None
             )
         )
@@ -102,14 +124,31 @@ class VieneuTtsProvider:
             "dependencyAvailable": dependency_available,
             "modelLoaded": self._model is not None,
             "modelCached": model_cached,
-            "effectiveDevice": "cpu",
-            "effectivePrecision": "int8",
+            "effectiveDevice": self.config.device,
+            "effectivePrecision": self.config.precision,
             "voice": self.config.voice,
             "sampleRateHz": 48_000,
             "downloadOnFirstUse": self.config.allow_download,
             "drainingTimedOutInference": draining,
             "lastErrorCode": self._last_error_code,
         }
+
+    async def warmup(self) -> None:
+        """Load and enroll the fixed voice before the first owner utterance."""
+        async with self._inference_lock:
+            worker = self._executor.submit(self._load_model_sync)
+            try:
+                await asyncio.wait_for(
+                    asyncio.shield(asyncio.wrap_future(worker)),
+                    timeout=self.config.request_timeout_seconds,
+                )
+            except TimeoutError as exc:
+                self._last_error_code = "E_TTS_TIMEOUT"
+                raise TtsError(
+                    "E_TTS_TIMEOUT",
+                    "VieNeu GPU warmup timed out",
+                    retryable=True,
+                ) from exc
 
     async def synthesize(
         self,
@@ -296,7 +335,11 @@ class VieneuTtsProvider:
                         repo_id=self.config.model_id,
                         revision=self.config.model_revision,
                         cache_dir=str(self.config.model_cache),
-                        allow_patterns=list(_MODEL_PATTERNS),
+                        allow_patterns=list(
+                            _GPU_MODEL_PATTERNS
+                            if self.config.device == "cuda"
+                            else _MODEL_PATTERNS
+                        ),
                         local_files_only=not self.config.allow_download,
                     )
                 )
@@ -305,7 +348,10 @@ class VieneuTtsProvider:
                         repo_id=self.config.codec_id,
                         revision=self.config.codec_revision,
                         cache_dir=str(self.config.model_cache),
-                        allow_patterns=list(_CODEC_PATTERNS),
+                        allow_patterns=(
+                            None if self.config.device == "cuda"
+                            else list(_CODEC_PATTERNS)
+                        ),
                         local_files_only=not self.config.allow_download,
                     )
                 )
@@ -329,6 +375,56 @@ def _create_pinned_vieneu(
 ) -> Any:
     from vieneu.base import BaseVieneuTTS
     from vieneu.v3turbo import V3TurboVieNeuTTS
+    if config.device == "cuda":
+        try:
+            import torch
+            if not torch.cuda.is_available():
+                raise TtsError("E_TTS_GPU_UNAVAILABLE", "CUDA is not available for VieNeu")
+        except TtsError:
+            raise
+        except Exception as exc:
+            raise TtsError(
+                "E_TTS_GPU_UNAVAILABLE",
+                "PyTorch with CUDA is required for GPU VieNeu TTS",
+                retryable=True,
+            ) from exc
+        model = V3TurboVieNeuTTS(
+            backbone_repo=str(model_snapshot),
+            model_subfolder="update",
+            moss_tokenizer=str(codec_snapshot),
+            device="cuda",
+            dtype=config.precision,
+            backend="pytorch",
+            max_batch_size=1,
+        )
+        if config.reference_voice_enabled:
+            _verify_reference_audio(config)
+            # Avoid torchaudio/FFmpeg path on Windows: decode the authorized
+            # WAV through soundfile and keep the actual VieNeu synthesis on CUDA.
+            import soundfile as sf
+            waveform, sample_rate = sf.read(
+                str(config.reference_audio_path),
+                dtype="float32",
+                always_2d=False,
+            )
+            speaker_emb, ref_codes = model.engine.prepare_reference(
+                waveform,
+                sr=int(sample_rate),
+                denoise=False,
+                use_ref_codes=True,
+            )
+            model._preset_voices[config.voice] = {
+                "description": "Owner-authorized synthetic Vietnamese Hina voice",
+                "gender": "female",
+                "style": config.style,
+                "speaker_emb": speaker_emb,
+                "codes": ref_codes,
+            }
+            model._default_voice = config.voice
+        elif config.voice not in {voice_id for _label, voice_id in model.list_preset_voices()}:
+            raise TtsError("E_TTS_VOICE", "the pinned preset voice is unavailable")
+        return model
+
     from vieneu._v3_turbo_engine.onnx_runtime_lite import OnnxV3LiteEngine
 
     model = V3TurboVieNeuTTS.__new__(V3TurboVieNeuTTS)
@@ -578,10 +674,21 @@ def _snapshots_are_cached(config: TtsConfig) -> bool:
     cache = config.model_cache
     if not cache.is_dir():
         return False
-    for repo_id, revision, required in (
-        (config.model_id, config.model_revision, "onnx_int8/vieneu_prefill.onnx"),
-        (config.codec_id, config.codec_revision, "moss_audio_tokenizer_decode_full.onnx"),
-    ):
+    requirements = (
+        (
+            config.model_id,
+            config.model_revision,
+            "update/model.safetensors" if config.device == "cuda"
+            else "onnx_int8/vieneu_prefill.onnx",
+        ),
+        (
+            config.codec_id,
+            config.codec_revision,
+            "model-00001-of-00001.safetensors" if config.device == "cuda"
+            else "moss_audio_tokenizer_decode_full.onnx",
+        ),
+    )
+    for repo_id, revision, required in requirements:
         repo = cache / f"models--{repo_id.replace('/', '--')}" / "snapshots" / revision
         if not (repo / required).is_file():
             return False

@@ -65,6 +65,38 @@ type SpeechTranscription = {
   correlationId: string;
 };
 
+type SpeechRuntimeStatus = {
+  available: boolean;
+  configured: {
+    provider: string;
+    model: string;
+    language: string;
+    device: string;
+    computeType: string;
+  };
+  provider: {
+    available: boolean;
+    modelLoaded: boolean;
+    effectiveDevice: string;
+    lastErrorCode: string | null;
+  };
+};
+
+type TtsRuntimeStatus = {
+  available: boolean;
+  configured: {
+    device: string;
+    precision: string;
+    model: string;
+  };
+  provider: {
+    effectiveDevice: string;
+    effectivePrecision: string;
+    modelLoaded: boolean;
+    lastErrorCode: string | null;
+  };
+};
+
 type DesktopWindowMode = "operator" | "widget";
 
 type WidgetStatus = {
@@ -111,6 +143,8 @@ type HinaDesktopApi = {
     audio: Uint8Array,
     sessionId: string,
   ): Promise<SpeechTranscription>;
+  getSpeechStatus(): Promise<SpeechRuntimeStatus>;
+  getTtsStatus(): Promise<TtsRuntimeStatus>;
   synthesizeSpeech(payload: {
     text: string;
     utteranceId: string;

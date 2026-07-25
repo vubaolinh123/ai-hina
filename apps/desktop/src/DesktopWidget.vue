@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref } from "vue";
 import { encodePcmWav, mergeAudioChunks, resampleAudio } from "./audio-utils";
+import { MicrophoneRecorder } from "./microphone-recorder";
 
 const VrmStage = defineAsyncComponent(() => import("./VrmStage.vue"));
 
@@ -20,16 +21,7 @@ let avatarRefreshPending = false;
 let safetyRefreshPending = false;
 let controlRetryAt = 0;
 let controlRetryDelay = 1_000;
-let recording: {
-  stream: MediaStream;
-  context: AudioContext;
-  source: MediaStreamAudioSourceNode;
-  processor: ScriptProcessorNode;
-  sink: GainNode;
-  chunks: Float32Array[];
-  sampleCount: number;
-  stopping: boolean;
-} | null = null;
+let recording: MicrophoneRecorder | null = null;
 let activeTurnId: string | null = null;
 
 function controlRequestAllowed(): boolean {
@@ -153,24 +145,17 @@ function handleVoiceError(error: unknown): void {
 
 async function finishMicCapture(): Promise<void> {
   const current = recording;
-  if (!current || current.stopping) return;
-  current.stopping = true;
+  if (!current) return;
   recording = null;
   micRecording.value = false;
-  current.processor.onaudioprocess = null;
-  current.source.disconnect();
-  current.processor.disconnect();
-  current.sink.disconnect();
-  current.stream.getTracks().forEach((track) => track.stop());
-  const sampleRate = current.context.sampleRate;
-  await current.context.close();
-  if (current.sampleCount < sampleRate * 0.25) {
+  const capture = await current.stop();
+  if (capture.sampleCount < capture.sampleRate * 0.25) {
     voiceStatus.value = "Đoạn ghi quá ngắn; hãy nói ít nhất một phần tư giây.";
     return;
   }
   const pcm = resampleAudio(
-    mergeAudioChunks(current.chunks, current.sampleCount),
-    sampleRate,
+    mergeAudioChunks(capture.chunks, capture.sampleCount),
+    capture.sampleRate,
     16_000,
   );
   const wav = encodePcmWav(pcm, 16_000);
@@ -214,44 +199,10 @@ async function toggleMic(): Promise<void> {
     return;
   }
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        channelCount: 1,
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-      },
-      video: false,
+    recording = await MicrophoneRecorder.start({
+      maximumSeconds: 30,
+      onMaximumDuration: () => void finishMicCapture(),
     });
-    const AudioContextClass = window.AudioContext;
-    const context = new AudioContextClass();
-    const source = context.createMediaStreamSource(stream);
-    const processor = context.createScriptProcessor(4096, 1, 1);
-    const sink = context.createGain();
-    sink.gain.value = 0;
-    const chunks: Float32Array[] = [];
-    recording = {
-      stream,
-      context,
-      source,
-      processor,
-      sink,
-      chunks,
-      sampleCount: 0,
-      stopping: false,
-    };
-    processor.onaudioprocess = (event) => {
-      if (!recording || recording.stopping) return;
-      const chunk = new Float32Array(event.inputBuffer.getChannelData(0));
-      recording.chunks.push(chunk);
-      recording.sampleCount += chunk.length;
-      if (recording.sampleCount / context.sampleRate >= 30) {
-        void finishMicCapture();
-      }
-    };
-    source.connect(processor);
-    processor.connect(sink);
-    sink.connect(context.destination);
     micRecording.value = true;
     voiceStatus.value = "Đang nghe… bấm Mic lần nữa để gửi câu nói.";
     await window.hinaDesktop.applyAvatarCue({
@@ -267,8 +218,7 @@ async function toggleMic(): Promise<void> {
 
 function streamCleanup(): void {
   if (!recording) return;
-  recording.stream.getTracks().forEach((track) => track.stop());
-  void recording.context.close();
+  void recording.stop();
   recording = null;
   micRecording.value = false;
 }
@@ -337,6 +287,7 @@ onBeforeUnmount(() => {
     aria-label="Hina desktop widget. Kéo nhân vật để di chuyển; rê chuột lên nhân vật để mở Voice và Mic."
     @keydown="blurWidget"
     @pointerenter="hovered = true"
+    @pointermove.passive="hovered = true"
     @pointerleave="hovered = false"
   >
     <section

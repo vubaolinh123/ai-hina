@@ -32,7 +32,7 @@
       ],
       "modifications": [
         "Used as a pinned PyPI dependency behind Hina's SttProvider interface; no upstream source file or snippet was copied.",
-        "Hina locks language=vi and task=transcribe, adds deterministic pre-VAD, bounded admission, no-retention and GPU ResourceLease enforcement."
+        "Hina supports vi/auto language detection, adds deterministic pre-VAD, bounded admission, no-retention and GPU ResourceLease enforcement."
       ]
     },
     {
@@ -48,8 +48,8 @@
       ],
       "modifications": [
         "Used as a pinned PyPI dependency behind Hina's TtsProvider interface; no upstream source file or snippet was copied.",
-        "Hina instantiates the pinned ONNX engine through version-specific internal APIs so both model and codec snapshots remain exact-revision local paths.",
-        "Hina restricts the integration to CPU int8, one allowlisted preset voice, audio watermarking, bounded admission, cancellation, pre-TTS moderation and no retention or voice cloning."
+        "Hina instantiates the pinned PyTorch CUDA engine through version-specific internal APIs, with exact-revision model and MOSS codec snapshots; the legacy ONNX path remains explicit CPU-only compatibility.",
+        "Hina restricts the integration to one allowlisted owner-authorized voice, audio watermarking, bounded admission, cancellation, pre-TTS moderation and no retention or arbitrary voice cloning."
       ]
     },
     {

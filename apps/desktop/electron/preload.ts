@@ -15,6 +15,8 @@ const CHANNELS = Object.freeze({
   chatTurn: "hina:chat:turn",
   chatCancel: "hina:chat:cancel",
   speechTranscribe: "hina:speech:transcribe",
+  speechStatus: "hina:speech:status",
+  ttsStatus: "hina:tts:status",
   ttsSynthesize: "hina:tts:synthesize",
 });
 
@@ -36,6 +38,8 @@ const hinaDesktop = Object.freeze({
   cancelChatTurn: (turnId: string) => ipcRenderer.invoke(CHANNELS.chatCancel, turnId),
   transcribeSpeech: (audio: Uint8Array, sessionId: string) =>
     ipcRenderer.invoke(CHANNELS.speechTranscribe, audio, sessionId),
+  getSpeechStatus: () => ipcRenderer.invoke(CHANNELS.speechStatus),
+  getTtsStatus: () => ipcRenderer.invoke(CHANNELS.ttsStatus),
   synthesizeSpeech: (payload: unknown) => ipcRenderer.invoke(CHANNELS.ttsSynthesize, payload),
 });
 
