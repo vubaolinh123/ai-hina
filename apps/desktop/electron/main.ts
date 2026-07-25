@@ -2,6 +2,7 @@ import {
   app,
   BrowserWindow,
   ipcMain,
+  screen,
   type IpcMainInvokeEvent,
 } from "electron";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -13,6 +14,7 @@ import {
 } from "./control-client";
 
 const CHANNELS = Object.freeze({
+  windowMode: "hina:window:mode",
   avatarStatus: "hina:avatar:status",
   avatarCue: "hina:avatar:cue",
   avatarReset: "hina:avatar:reset",
@@ -22,19 +24,38 @@ const CHANNELS = Object.freeze({
 });
 
 let mainWindow: BrowserWindow | null = null;
+let widgetWindow: BrowserWindow | null = null;
 let smokeTimer: NodeJS.Timeout | null = null;
 
-function assertTrustedSender(event: IpcMainInvokeEvent): void {
-  if (
-    !mainWindow
-    || event.sender !== mainWindow.webContents
-    || event.senderFrame !== event.sender.mainFrame
-  ) {
+type DesktopWindowMode = "operator" | "widget";
+
+function assertTrustedSender(event: IpcMainInvokeEvent): DesktopWindowMode {
+  if (event.senderFrame !== event.sender.mainFrame) {
     throw new Error("E_DESKTOP_IPC_SENDER: IPC is limited to the desktop main frame");
   }
+  if (mainWindow && event.sender === mainWindow.webContents) {
+    return "operator";
+  }
+  if (widgetWindow && event.sender === widgetWindow.webContents) {
+    return "widget";
+  }
+  throw new Error("E_DESKTOP_IPC_SENDER: IPC is limited to a known desktop window");
+}
+
+function hardenWindow(target: BrowserWindow): void {
+  target.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  target.webContents.on("will-navigate", (event, url) => {
+    if (url !== target.webContents.getURL()) {
+      event.preventDefault();
+    }
+  });
+  target.webContents.on("will-attach-webview", (event) => {
+    event.preventDefault();
+  });
 }
 
 function registerIpcHandlers(): void {
+  ipcMain.handle(CHANNELS.windowMode, (event) => assertTrustedSender(event));
   ipcMain.handle(CHANNELS.avatarStatus, (event) => {
     assertTrustedSender(event);
     return requestControl("avatar.status");
@@ -66,10 +87,13 @@ function registerIpcHandlers(): void {
   });
 }
 
-async function createWindow(): Promise<void> {
+async function createWindows(): Promise<void> {
   const smoke = process.env.HINA_DESKTOP_SMOKE === "1";
   const rendererPath = join(__dirname, "..", "dist", "index.html");
   const preloadPath = join(__dirname, "preload.js");
+  const widgetWidth = 440;
+  const widgetHeight = 620;
+  const workArea = screen.getPrimaryDisplay().workArea;
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -93,20 +117,61 @@ async function createWindow(): Promise<void> {
       backgroundThrottling: false,
     },
   });
-  mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-  mainWindow.webContents.on("will-navigate", (event, url) => {
-    if (url !== mainWindow?.webContents.getURL()) {
-      event.preventDefault();
-    }
+  widgetWindow = new BrowserWindow({
+    x: workArea.x + workArea.width - widgetWidth - 24,
+    y: workArea.y + workArea.height - widgetHeight - 24,
+    width: widgetWidth,
+    height: widgetHeight,
+    frame: false,
+    transparent: true,
+    hasShadow: false,
+    resizable: false,
+    movable: true,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    show: true,
+    opacity: smoke ? 0 : 1,
+    backgroundColor: "#00000000",
+    autoHideMenuBar: true,
+    title: "Hina Desktop Widget",
+    webPreferences: {
+      preload: preloadPath,
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      webSecurity: true,
+      webviewTag: false,
+      allowRunningInsecureContent: false,
+      backgroundThrottling: false,
+    },
   });
-  mainWindow.webContents.on("will-attach-webview", (event) => {
-    event.preventDefault();
-  });
+  widgetWindow.setAlwaysOnTop(true, "floating");
+  widgetWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+
+  hardenWindow(mainWindow);
+  hardenWindow(widgetWindow);
   mainWindow.on("closed", () => {
     mainWindow = null;
+    if (widgetWindow && !widgetWindow.isDestroyed()) {
+      widgetWindow.close();
+    }
+  });
+  widgetWindow.on("closed", () => {
+    widgetWindow = null;
   });
 
   if (smoke) {
+    const widgetLoaded = new Promise<void>((resolve, reject) => {
+      widgetWindow?.webContents.once("did-fail-load", (_event, code, description) => {
+        reject(new Error(
+          `E_DESKTOP_WIDGET_LOAD: ${code} ${description.slice(0, 120)}`,
+        ));
+      });
+      widgetWindow?.webContents.once("did-finish-load", () => resolve());
+    });
     mainWindow.webContents.once("did-fail-load", (_event, code, description) => {
       console.error(JSON.stringify({
         status: "error",
@@ -118,6 +183,7 @@ async function createWindow(): Promise<void> {
     });
     mainWindow.webContents.once("did-finish-load", async () => {
       try {
+        await widgetLoaded;
         const snapshot: unknown = await mainWindow?.webContents.executeJavaScript(
           `(() => {
             const vrmReady = new Promise((resolve, reject) => {
@@ -322,10 +388,202 @@ async function createWindow(): Promise<void> {
             }`,
           );
         }
+        if (!widgetWindow || widgetWindow.isDestroyed()) {
+          throw new Error("E_DESKTOP_WIDGET_WINDOW: widget window is unavailable");
+        }
+        const widgetSnapshot: unknown =
+          await widgetWindow.webContents.executeJavaScript(
+            `(() => new Promise((resolve, reject) => {
+              const deadline = Date.now() + 25000;
+              const check = async () => {
+                if (document.documentElement.dataset.widgetError) {
+                  reject(new Error(document.documentElement.dataset.widgetError));
+                  return;
+                }
+                if (document.documentElement.dataset.widgetReady === "true") {
+                  const root = document.querySelector(".desktop-widget");
+                  const controls = document.querySelector(".widget-voice-controls");
+                  const voice = document.getElementById("widgetVoiceButton");
+                  const avatarSurface = document.querySelector(".widget-avatar-surface");
+                  if (
+                    !(root instanceof HTMLElement)
+                    || !(controls instanceof HTMLElement)
+                    || !(voice instanceof HTMLButtonElement)
+                    || !(avatarSurface instanceof HTMLElement)
+                  ) {
+                    reject(new Error("E_DESKTOP_WIDGET_DOM"));
+                    return;
+                  }
+                  const hiddenStyle = getComputedStyle(controls);
+                  const hidden = {
+                    opacity: hiddenStyle.opacity,
+                    visibility: hiddenStyle.visibility,
+                    pointerEvents: hiddenStyle.pointerEvents
+                  };
+                  root.focus({ preventScroll: true });
+                  await new Promise((done) => setTimeout(done, 180));
+                  const focusedStyle = getComputedStyle(controls);
+                  const focused = {
+                    opacity: focusedStyle.opacity,
+                    visibility: focusedStyle.visibility,
+                    pointerEvents: focusedStyle.pointerEvents
+                  };
+                  root.blur();
+                  await new Promise((done) => setTimeout(done, 180));
+                  resolve({
+                    mode: await window.hinaDesktop.getWindowMode(),
+                    presentation:
+                      document.documentElement.dataset.avatarPresentation,
+                    loadedTextureCount: Number(
+                      document.documentElement.dataset.avatarTextureCount
+                    ),
+                    bodyBackground: getComputedStyle(document.body).backgroundColor,
+                    rootBackground: getComputedStyle(root).backgroundColor,
+                    dragRegion: getComputedStyle(avatarSurface)
+                      .getPropertyValue("-webkit-app-region"),
+                    voiceDragRegion: getComputedStyle(voice)
+                      .getPropertyValue("-webkit-app-region"),
+                    controlCount:
+                      document.querySelectorAll(".widget-control").length,
+                    hidden,
+                    focused
+                  });
+                  return;
+                }
+                if (Date.now() >= deadline) {
+                  reject(new Error("E_DESKTOP_WIDGET_SMOKE_TIMEOUT"));
+                  return;
+                }
+                setTimeout(check, 50);
+              };
+              check();
+            }))()`,
+            true,
+          );
+        widgetWindow.webContents.sendInputEvent({
+          type: "mouseMove",
+          x: 220,
+          y: 310,
+          movementX: 0,
+          movementY: 0,
+        });
+        await new Promise((resolve) => setTimeout(resolve, 180));
+        const widgetHoverSnapshot: unknown =
+          await widgetWindow.webContents.executeJavaScript(
+            `(() => {
+              const root = document.querySelector(".desktop-widget");
+              const controls = document.querySelector(".widget-voice-controls");
+              if (!(root instanceof HTMLElement) || !(controls instanceof HTMLElement)) {
+                throw new Error("E_DESKTOP_WIDGET_HOVER_DOM");
+              }
+              const style = getComputedStyle(controls);
+              return {
+                hovered: root.matches(":hover"),
+                opacity: style.opacity,
+                visibility: style.visibility,
+                pointerEvents: style.pointerEvents
+              };
+            })()`,
+            true,
+          );
+        widgetWindow.webContents.sendInputEvent({
+          type: "mouseLeave",
+          x: -1,
+          y: -1,
+          movementX: 0,
+          movementY: 0,
+        });
+        await new Promise((resolve) => setTimeout(resolve, 180));
+        const widgetSize = widgetWindow.getContentSize();
+        const widgetWidthActual = widgetSize[0] ?? 0;
+        const widgetHeightActual = widgetSize[1] ?? 0;
+        const widgetDiagnostic = (
+          widgetSnapshot && typeof widgetSnapshot === "object"
+            ? widgetSnapshot
+            : {}
+        ) as Record<string, unknown>;
+        if (
+          !widgetSnapshot
+          || typeof widgetSnapshot !== "object"
+          || !("mode" in widgetSnapshot)
+          || widgetSnapshot.mode !== "widget"
+          || !("presentation" in widgetSnapshot)
+          || widgetSnapshot.presentation !== "hina-kawaii-v0.1"
+          || !("loadedTextureCount" in widgetSnapshot)
+          || typeof widgetSnapshot.loadedTextureCount !== "number"
+          || !Number.isFinite(widgetSnapshot.loadedTextureCount)
+          || widgetSnapshot.loadedTextureCount < 8
+          || !("bodyBackground" in widgetSnapshot)
+          || widgetSnapshot.bodyBackground !== "rgba(0, 0, 0, 0)"
+          || !("rootBackground" in widgetSnapshot)
+          || widgetSnapshot.rootBackground !== "rgba(0, 0, 0, 0)"
+          || !("dragRegion" in widgetSnapshot)
+          || widgetSnapshot.dragRegion !== "drag"
+          || !("voiceDragRegion" in widgetSnapshot)
+          || widgetSnapshot.voiceDragRegion !== "no-drag"
+          || !("controlCount" in widgetSnapshot)
+          || widgetSnapshot.controlCount !== 1
+          || !("hidden" in widgetSnapshot)
+          || !widgetSnapshot.hidden
+          || typeof widgetSnapshot.hidden !== "object"
+          || !("opacity" in widgetSnapshot.hidden)
+          || widgetSnapshot.hidden.opacity !== "0"
+          || !("visibility" in widgetSnapshot.hidden)
+          || widgetSnapshot.hidden.visibility !== "hidden"
+          || !("pointerEvents" in widgetSnapshot.hidden)
+          || widgetSnapshot.hidden.pointerEvents !== "none"
+          || !("focused" in widgetSnapshot)
+          || !widgetSnapshot.focused
+          || typeof widgetSnapshot.focused !== "object"
+          || !("opacity" in widgetSnapshot.focused)
+          || widgetSnapshot.focused.opacity !== "1"
+          || !("visibility" in widgetSnapshot.focused)
+          || widgetSnapshot.focused.visibility !== "visible"
+          || !("pointerEvents" in widgetSnapshot.focused)
+          || widgetSnapshot.focused.pointerEvents !== "auto"
+          || !widgetHoverSnapshot
+          || typeof widgetHoverSnapshot !== "object"
+          || !("hovered" in widgetHoverSnapshot)
+          || widgetHoverSnapshot.hovered !== true
+          || !("opacity" in widgetHoverSnapshot)
+          || widgetHoverSnapshot.opacity !== "1"
+          || !("visibility" in widgetHoverSnapshot)
+          || widgetHoverSnapshot.visibility !== "visible"
+          || !("pointerEvents" in widgetHoverSnapshot)
+          || widgetHoverSnapshot.pointerEvents !== "auto"
+          || !widgetWindow.isAlwaysOnTop()
+          || !widgetWindow.isMovable()
+          || widgetWindow.isResizable()
+          || widgetWidthActual !== 440
+          || widgetHeightActual < 620
+          || widgetHeightActual > 624
+        ) {
+          throw new Error(
+            `E_DESKTOP_WIDGET_SMOKE: widget returned an invalid snapshot ${
+              JSON.stringify({
+                native: {
+                  alwaysOnTop: widgetWindow.isAlwaysOnTop(),
+                  movable: widgetWindow.isMovable(),
+                  resizable: widgetWindow.isResizable(),
+                  size: widgetSize,
+                },
+                focused: widgetDiagnostic.focused ?? null,
+                hidden: widgetDiagnostic.hidden ?? null,
+                drag: [
+                  widgetDiagnostic.dragRegion ?? null,
+                  widgetDiagnostic.voiceDragRegion ?? null,
+                ],
+                controls: widgetDiagnostic.controlCount ?? null,
+                hover: widgetHoverSnapshot,
+                snapshot: widgetSnapshot,
+              }).slice(0, 700)
+            }`,
+          );
+        }
         const capturePath = process.env.HINA_DESKTOP_CAPTURE_PATH?.trim();
-        if (capturePath && mainWindow) {
+        if (capturePath) {
           await mkdir(dirname(capturePath), { recursive: true });
-          const image = await mainWindow.webContents.capturePage();
+          const image = await widgetWindow.webContents.capturePage();
           await writeFile(capturePath, image.toPNG());
         }
         console.log(JSON.stringify({
@@ -339,6 +597,16 @@ async function createWindow(): Promise<void> {
           styledMaterialCount: snapshot.styledMaterialCount,
           performance: snapshot.performance,
           recovery: snapshot.recovery,
+          widget: {
+            mode: widgetSnapshot.mode,
+            transparent: true,
+            alwaysOnTop: true,
+            movable: true,
+            size: widgetSize,
+            dragRegion: widgetSnapshot.dragRegion,
+            voiceControlHiddenUntilHoverOrFocus: true,
+            visibleControlCount: widgetSnapshot.controlCount,
+          },
           renderer: "loaded-local-file-with-typed-ipc",
         }));
         app.quit();
@@ -360,7 +628,10 @@ async function createWindow(): Promise<void> {
     }, 30_000);
   }
 
-  await mainWindow.loadFile(rendererPath);
+  await Promise.all([
+    mainWindow.loadFile(rendererPath),
+    widgetWindow.loadFile(rendererPath),
+  ]);
 }
 
 app.on("before-quit", () => {
@@ -371,11 +642,11 @@ app.on("before-quit", () => {
 });
 app.whenReady().then(async () => {
   registerIpcHandlers();
-  await createWindow();
+  await createWindows();
 });
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) {
-    void createWindow();
+    void createWindows();
   }
 });
 app.on("window-all-closed", () => {

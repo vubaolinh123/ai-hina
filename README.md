@@ -187,6 +187,15 @@ fault-inject WebGL context loss → SVG fallback → VRM reload thành công. Đ
 là development sample ngắn; frozen OBS benchmark và soak voice/avatar tám giờ
 vẫn được hoãn cho tới khi owner yêu cầu deep gate.
 
+Khi chạy desktop, ngoài cửa sổ **Hina Avatar Stage** dành cho operator, app mở
+thêm một **Hina Desktop Widget** trong suốt. Widget không có khung hoặc nền
+chữ nhật, luôn nổi trên desktop và có thể kéo trực tiếp trên vùng avatar để
+di chuyển sang vị trí khác. Khi không rê chuột (hoặc không focus bằng bàn
+phím), widget không hiện control nào; khi hover/focus chỉ hiện đúng một nút
+**Voice**. Nút này chỉ bật/tắt tiếng đầu ra của Hina qua safety authority hiện
+có, không bật microphone và không tạo audio giả. Nhấn `Esc` để bỏ focus và ẩn
+nút ngay sau khi rời avatar.
+
 ## Vòng lặp phát triển nhanh
 
 ```powershell

@@ -24,7 +24,8 @@ test("BrowserWindow keeps renderer sandboxed and blocks navigation surfaces", ()
   assert.match(main, /will-navigate/);
   assert.match(main, /will-attach-webview/);
   assert.match(main, /loadFile\(rendererPath\)/);
-  assert.match(main, /event\.sender\s*!==\s*mainWindow\.webContents/);
+  assert.match(main, /event\.sender\s*===\s*mainWindow\.webContents/);
+  assert.match(main, /event\.sender\s*===\s*widgetWindow\.webContents/);
   assert.match(main, /event\.senderFrame\s*!==\s*event\.sender\.mainFrame/);
   assert.match(main, /window\.hinaDesktop\.getRuntimeHealth\(\)/);
   assert.match(main, /window\.hinaDesktop\.getAvatarStatus\(\)/);
@@ -42,6 +43,7 @@ test("preload exposes named methods and never exposes raw ipcRenderer", () => {
   assert.doesNotMatch(preload, /\bsend\s*:/);
   assert.doesNotMatch(preload, /shell|readFile|writeFile|exec\(/);
   for (const method of [
+    "getWindowMode",
     "getAvatarStatus",
     "applyAvatarCue",
     "resetAvatar",
@@ -56,6 +58,7 @@ test("preload exposes named methods and never exposes raw ipcRenderer", () => {
 test("Vue renderer has no direct network, Electron, Node or storage access", () => {
   const renderer = [
     read("src/App.vue"),
+    read("src/DesktopWidget.vue"),
     read("src/main.ts"),
     read("src/VrmStage.vue"),
     read("src/hina-presentation.mjs"),
@@ -65,6 +68,49 @@ test("Vue renderer has no direct network, Electron, Node or storage access", () 
   assert.doesNotMatch(renderer, /from\s+["']electron["']/);
   assert.doesNotMatch(renderer, /node:|indexedDB|localStorage|sessionStorage/);
   assert.doesNotMatch(renderer, /sqlite|qdrant|modelPath|process\.env/i);
+});
+
+test("transparent widget keeps one hover Voice control and a native drag surface", () => {
+  const main = read("electron/main.ts");
+  const widget = read("src/DesktopWidget.vue");
+  const style = read("src/style.css");
+
+  assert.match(main, /frame:\s*false/);
+  assert.match(main, /transparent:\s*true/);
+  assert.match(main, /hasShadow:\s*false/);
+  assert.match(main, /resizable:\s*false/);
+  assert.match(main, /movable:\s*true/);
+  assert.match(main, /alwaysOnTop:\s*true/);
+  assert.match(main, /skipTaskbar:\s*true/);
+  assert.match(main, /backgroundColor:\s*"#00000000"/);
+  assert.match(main, /screen\.getPrimaryDisplay\(\)\.workArea/);
+  assert.match(main, /setAlwaysOnTop\(true,\s*"floating"\)/);
+  assert.match(main, /setVisibleOnAllWorkspaces\(true/);
+  assert.match(main, /widgetWindow\.loadFile\(rendererPath\)/);
+  assert.match(main, /CHANNELS\.windowMode/);
+
+  assert.match(widget, /class="desktop-widget"/);
+  assert.match(widget, /class="widget-avatar-surface"/);
+  assert.match(widget, /class="widget-control widget-voice-button"/);
+  assert.equal((widget.match(/\bclass="widget-control\b/g) ?? []).length, 1);
+  assert.match(widget, /Voice ·/);
+  assert.match(widget, /action:\s*"set_mute"/);
+  assert.match(widget, /avatar\.value\?\.viseme/);
+  assert.match(widget, /avatar\.value(?:\?\.|\.)intensity/);
+  assert.doesNotMatch(widget, /microphone|mic\b|speech recognition/i);
+
+  assert.match(style, /\.widget-avatar-surface[\s\S]*-webkit-app-region:\s*drag/);
+  assert.match(style, /\.widget-voice-button[\s\S]*-webkit-app-region:\s*no-drag/);
+  assert.match(
+    style,
+    /\.widget-voice-controls[\s\S]*opacity:\s*0[\s\S]*visibility:\s*hidden[\s\S]*pointer-events:\s*none/,
+  );
+  assert.match(style, /\.desktop-widget:hover \.widget-voice-controls/);
+  assert.match(style, /\.desktop-widget:focus-within \.widget-voice-controls/);
+  assert.match(
+    style,
+    /html\[data-window-mode="widget"\][\s\S]*background:\s*transparent/,
+  );
 });
 
 test("VRM stage uses one fixed bundled asset and disposes graphics resources", () => {

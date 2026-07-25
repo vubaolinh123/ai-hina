@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 
 const CHANNELS = Object.freeze({
+  windowMode: "hina:window:mode",
   avatarStatus: "hina:avatar:status",
   avatarCue: "hina:avatar:cue",
   avatarReset: "hina:avatar:reset",
@@ -10,6 +11,7 @@ const CHANNELS = Object.freeze({
 });
 
 const hinaDesktop = Object.freeze({
+  getWindowMode: () => ipcRenderer.invoke(CHANNELS.windowMode),
   getAvatarStatus: () => ipcRenderer.invoke(CHANNELS.avatarStatus),
   applyAvatarCue: (cue: unknown) => ipcRenderer.invoke(CHANNELS.avatarCue, cue),
   resetAvatar: () => ipcRenderer.invoke(CHANNELS.avatarReset),

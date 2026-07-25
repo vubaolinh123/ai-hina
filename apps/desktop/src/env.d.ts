@@ -46,7 +46,10 @@ type RuntimeHealth = {
   uptimeSeconds: number;
 };
 
+type DesktopWindowMode = "operator" | "widget";
+
 type HinaDesktopApi = {
+  getWindowMode(): Promise<DesktopWindowMode>;
   getAvatarStatus(): Promise<AvatarStatus>;
   applyAvatarCue(cue: {
     source: "owner.console";

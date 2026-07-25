@@ -9,6 +9,7 @@ import {
 import type { FrameMetricsReport } from "./frame-metrics.mjs";
 
 const VrmStage = defineAsyncComponent(() => import("./VrmStage.vue"));
+const DesktopWidget = defineAsyncComponent(() => import("./DesktopWidget.vue"));
 
 const stateLabels: Record<AvatarState, string> = {
   idle: "Nghỉ",
@@ -20,6 +21,7 @@ const stateLabels: Record<AvatarState, string> = {
 };
 
 const avatar = ref<AvatarStatus | null>(null);
+const windowMode = ref<DesktopWindowMode | null>(null);
 const safety = ref<SafetyStatus | null>(null);
 const runtime = ref<RuntimeHealth | null>(null);
 const previewState = ref<AvatarState>("idle");
@@ -287,6 +289,9 @@ function stopPolling(): void {
 }
 
 onMounted(async () => {
+  windowMode.value = await window.hinaDesktop.getWindowMode();
+  document.documentElement.dataset.windowMode = windowMode.value;
+  if (windowMode.value !== "operator") return;
   await Promise.all([refreshAvatar(), refreshSafety()]);
   avatarTimer = window.setInterval(refreshAvatar, 250);
   safetyTimer = window.setInterval(refreshSafety, 1_000);
@@ -300,7 +305,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="desktop-shell">
+  <DesktopWidget v-if="windowMode === 'widget'" />
+  <main v-else-if="windowMode === 'operator'" class="desktop-shell">
     <header class="desktop-header">
       <div class="brand">
         <div class="brand-mark">H</div>

@@ -1,0 +1,83 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M07-S8-transparent-desktop-widget",
+  "module_id": "M07",
+  "objective": "Add a real transparent Hina desktop companion window alongside the existing operator window: the colored local VRM has no rectangular background, stays above normal windows, can be moved natively across the desktop by dragging the avatar, and reveals exactly one Voice control only while the avatar is hovered or keyboard-focused. The Voice control must call the existing typed safety mute boundary, while avatar state and viseme continue to come from the real loopback control plane.",
+  "non_goals": [
+    "Do not replace or remove the existing full operator window.",
+    "Do not add microphone capture, speech recognition, fake audio, fake conversation or a second voice state authority.",
+    "Do not copy Project AIRI source or UI; use its documented transparent-companion behavior only as a reference.",
+    "Do not add a native drag package, network source, model, texture or other dependency.",
+    "Do not persist screen coordinates, add tray lifecycle or open M08 in this slice.",
+    "Do not run the deferred frozen OBS benchmark or eight-hour soak in this iteration."
+  ],
+  "base_sha": "12d887508018809b58e481f9417c258d000f1c7f",
+  "branch": "codex/M07-avatar-stage",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "AGENTS.md",
+    "README.md",
+    "apps/desktop/",
+    "assets/manifests/",
+    "docs/modules/M07-*",
+    "tools/dev/Run-M07DesktopSmoke.ps1"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "adapters/",
+    "apps/core-runtime/",
+    "apps/dev-console/",
+    "packages/contracts/",
+    "packages/memory/",
+    "packages/safety-policy/",
+    "packages/text-brain/",
+    "third_party/",
+    "workers/"
+  ],
+  "contracts": [
+    "Electron creates separate operator and widget BrowserWindows from the same fixed local renderer file; both keep sandbox, context isolation, Node isolation, web security and navigation denial.",
+    "Only the exact main frame of one of the two known windows may use named preload methods; the window-mode method returns the mode derived from the trusted sender, not query text or renderer input.",
+    "The widget is frameless, transparent, shadowless, fixed-size, always-on-top, omitted from the taskbar and positioned inside the primary display work area.",
+    "The avatar surface uses Electron's native app drag region; the Voice button is an explicit no-drag island and no raw mouse coordinates cross IPC.",
+    "The widget DOM and page have transparent backgrounds. Outside hover or focus-within, Voice has zero opacity, hidden visibility and no pointer events; there is no other widget chrome, caption, card or status UI.",
+    "Voice means Hina speech-output mute only. It toggles the existing safety set_mute action and never claims to control microphone input.",
+    "Real backend state, expression, viseme and intensity remain the only product animation inputs; the widget does not synthesize state or audio.",
+    "The full operator window retains its existing preview, reset, safety, telemetry, fallback and recovery behavior."
+  ],
+  "allowed_dependencies": [
+    "Existing Electron, Vue, Three.js and @pixiv/three-vrm dependencies.",
+    "Existing fixed local Hina presentation and licensed VRM development sample.",
+    "Electron BrowserWindow transparent/frameless/always-on-top and CSS app-region platform APIs.",
+    "No new package, binary asset, network source or copied upstream implementation."
+  ],
+  "oss_candidates": [
+    "Project AIRI (MIT) at https://github.com/moeru-ai/airi, reviewed commit 1a5372a0bb982a62805c77408a55a2c66a0ec14a only as a transparent-companion boundary reference; no source, styling or dependency copied."
+  ],
+  "acceptance_criteria": [
+    "Starting the desktop creates the preserved operator window plus a visible transparent Hina widget without a rectangular page background.",
+    "The widget can be dragged by its avatar surface and remains bounded to a fixed-size movable native window.",
+    "No control is visible when the avatar is not hovered or keyboard-focused; hover/focus reveals exactly one clearly named Voice button.",
+    "The Voice button calls typed set_mute against the existing safety authority and reflects muted/unmuted state without microphone claims.",
+    "The widget renders the real local Hina VRM, polls real avatar/safety state and drives its mouth from the existing viseme/intensity values.",
+    "A real Electron smoke checks both windows, trusted mode IPC, local VRM presentation, transparency CSS, drag/no-drag regions, hover-hidden Voice and always-on-top native state.",
+    "Desktop typecheck, unit/security tests and one real Electron smoke pass."
+  ],
+  "required_test_commands": [
+    "pnpm --filter @hina/desktop typecheck",
+    "pnpm --filter @hina/desktop test",
+    "pnpm smoke:desktop",
+    "uv run --frozen python -m unittest discover -s tests/governance -p \"test_*.py\""
+  ],
+  "latency_or_quality_budget": {
+    "target_fps": 60,
+    "widget_width_px": 440,
+    "widget_height_px": 620,
+    "widget_visible_controls_when_idle": 0,
+    "widget_visible_controls_when_hovered": 1,
+    "new_runtime_network_sources": 0,
+    "new_dependencies": 0,
+    "deep_obs_benchmark_deferred": true,
+    "eight_hour_soak_deferred": true
+  },
+  "output_artifact_dir": "artifacts/verification/M07/"
+}

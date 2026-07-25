@@ -1,13 +1,13 @@
 # M07 — Avatar stage và operator desktop
 
-- Status: M07-S1/S2/S3/S4/S5/S6/S7 runnable candidate; M07 remains active
+- Status: M07-S1/S2/S3/S4/S5/S6/S7/S8 runnable candidate; M07 remains active
 - Branch: `codex/M07-avatar-stage`
 - Base: `ac29424e4dc58f42f9eeeb9f7a7f2408ad5c2f4f`
 - Active slices: M07-S1 avatar state/control plane, M07-S2 code-native runtime
   stage, M07-S3 sandboxed Electron/Vue operator shell, M07-S4 real VRM
   development stage, M07-S5 audio-derived viseme pipeline, M07-S6 short-window
   performance telemetry and renderer recovery, M07-S7 colored Hina anime
-  presentation and natural standing pose
+  presentation and natural standing pose, M07-S8 transparent desktop widget
 
 ## Runnable target
 
@@ -28,7 +28,7 @@ theo. Không được đánh dấu M07 complete khi các phần này chưa có e
 Fast hidden Electron telemetry chỉ là development sample, không thay thế frozen
 profile ghi rõ resolution/FPS/avatar/OBS state/duration.
 
-## Implemented in M07-S1/S2/S3/S4/S5/S6/S7
+## Implemented in M07-S1/S2/S3/S4/S5/S6/S7/S8
 
 - `packages/avatar`: typed renderer-safe state/cue service, trusted-source
   allowlist, bounded history, neutral fallback và recovery khỏi terminal state.
@@ -79,6 +79,17 @@ profile ghi rõ resolution/FPS/avatar/OBS state/duration.
   presentation được tách riêng.
 - Left avatar stage sticky theo viewport nên panel operator dài không còn đẩy
   canvas xuống dưới màn hình; khung hình thật hiển thị Hina từ đầu tới đầu gối.
+- M07-S8 tạo thêm cửa sổ companion Electron 440 px cố định (trên Windows vùng
+  nội dung đo được 440×623 do scale hệ điều hành), frameless, transparent,
+  shadowless, always-on-top, skip-taskbar và đặt mặc định trong work area màn
+  hình chính. Cửa sổ Operator đầy đủ vẫn giữ nguyên.
+- Widget dùng cùng renderer local và preload typed IPC; avatar surface là native
+  `-webkit-app-region: drag`, còn đúng một nút `Voice` là `no-drag`. Voice chỉ
+  gọi safety `set_mute` cho đầu ra giọng nói Hina, không phải microphone.
+  Ngoài hover/focus-within không có nút, caption, card hay background UI nào.
+- Project AIRI được xem như tài liệu tham khảo MIT ở commit
+  `1a5372a0bb982a62805c77408a55a2c66a0ec14a`; không copy source, style hay thêm
+  dependency AIRI. Hina vẫn dùng hợp đồng preload và security boundary riêng.
 
 ## Fast evidence
 
@@ -118,3 +129,9 @@ profile ghi rõ resolution/FPS/avatar/OBS state/duration.
   material, khoảng 60 FPS/drop 0%, WebGL fallback/recovery xanh; capture thật
   được ghi tại ignored artifact
   `artifacts/verification/M07/hina-kawaii-stage-latest.png`.
+- M07-S8 desktop typecheck pass; desktop test suite 18/18 xanh. Real Electron
+  smoke tạo đồng thời Operator + widget, xác nhận mode IPC `widget`, VRM
+  `hina-kawaii-v0.1`, 20 texture, transparency alpha thật ở bốn góc PNG,
+  60 FPS/drop 0%, native movable/always-on-top 440×623 content, drag/no-drag
+  region và Voice ẩn ngoài focus/hover. Capture widget thật:
+  `artifacts/verification/M07/hina-widget-latest.png`.
