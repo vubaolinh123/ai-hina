@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref } from "vue";
+import { createAutoListenDetector } from "./auto-listen-detector.mjs";
 import { encodePcmWav, mergeAudioChunks, resampleAudio } from "./audio-utils";
-import { MicrophoneRecorder } from "./microphone-recorder";
+import {
+  MicrophoneRecorder,
+  type MicrophoneCapture,
+} from "./microphone-recorder";
 
 const VrmStage = defineAsyncComponent(() => import("./VrmStage.vue"));
 
@@ -12,6 +16,7 @@ const hovered = ref(false);
 const vrmReady = ref(false);
 const controlReady = ref(false);
 const micRecording = ref(false);
+const autoListenEnabled = ref(false);
 const voiceBusy = ref(false);
 const voiceStatus = ref("");
 const chatSessionId = crypto.randomUUID();
@@ -23,6 +28,10 @@ let controlRetryAt = 0;
 let controlRetryDelay = 1_000;
 let recording: MicrophoneRecorder | null = null;
 let activeTurnId: string | null = null;
+let finishingCapture = false;
+let captureMode: "manual" | "auto" | null = null;
+let autoRestartTimer: number | null = null;
+const autoListenDetector = createAutoListenDetector();
 
 function controlRequestAllowed(): boolean {
   return Date.now() >= controlRetryAt;
@@ -112,8 +121,21 @@ async function playVoice(text: string): Promise<void> {
   });
   const url = URL.createObjectURL(new Blob([Uint8Array.from(bytes)], { type: "audio/wav" }));
   const audio = new Audio(url);
-  audio.addEventListener("ended", () => URL.revokeObjectURL(url), { once: true });
-  await audio.play();
+  await new Promise<void>((resolve, reject) => {
+    const cleanup = (): void => URL.revokeObjectURL(url);
+    audio.addEventListener("ended", () => {
+      cleanup();
+      resolve();
+    }, { once: true });
+    audio.addEventListener("error", () => {
+      cleanup();
+      reject(new Error("E_WIDGET_TTS_PLAYBACK: không thể phát giọng Hina"));
+    }, { once: true });
+    void audio.play().catch((error: unknown) => {
+      cleanup();
+      reject(error);
+    });
+  });
 }
 
 async function pollVoiceTurn(turnId: string): Promise<void> {
@@ -126,7 +148,9 @@ async function pollVoiceTurn(turnId: string): Promise<void> {
   if (turn.outcome === "completed" && turn.assistant) {
     voiceStatus.value = "Hina đang trả lời bằng giọng nói…";
     await playVoice(turn.assistant);
-    voiceStatus.value = "Đã trả lời. Bạn có thể bấm Mic để nói tiếp.";
+    voiceStatus.value = autoListenEnabled.value
+      ? "Hina đã trả lời. Auto nghe sẽ mở lại sau một nhịp."
+      : "Đã trả lời. Bạn có thể bấm Mic để nói tiếp.";
   } else if (turn.outcome === "interrupted") {
     voiceStatus.value = "Lượt nói đã được dừng.";
   } else {
@@ -143,14 +167,87 @@ function handleVoiceError(error: unknown): void {
   console.error("[hina-widget] E_WIDGET_VOICE", voiceStatus.value);
 }
 
-async function finishMicCapture(): Promise<void> {
+function clearAutoRestart(): void {
+  if (autoRestartTimer !== null) {
+    window.clearTimeout(autoRestartTimer);
+    autoRestartTimer = null;
+  }
+}
+
+function scheduleAutoListenRestart(): void {
+  clearAutoRestart();
+  if (!autoListenEnabled.value) return;
+  autoRestartTimer = window.setTimeout(() => {
+    autoRestartTimer = null;
+    if (autoListenEnabled.value && !voiceBusy.value && !micRecording.value) {
+      void startMicCapture("auto");
+    }
+  }, 450);
+}
+
+function monitorAutoListen(capture: Readonly<{
+  chunks: Float32Array[];
+  sampleCount: number;
+  sampleRate: number;
+}>): void {
+  if (
+    captureMode !== "auto"
+    || finishingCapture
+    || voiceBusy.value
+    || capture.chunks.length === 0
+  ) return;
+  const samples = capture.chunks[capture.chunks.length - 1];
+  if (!samples) return;
+  const decision = autoListenDetector.push(
+    samples,
+    performance.now(),
+    capture.sampleCount / capture.sampleRate,
+  );
+  if (decision.voiceDetected && !decision.shouldSubmit) {
+    voiceStatus.value = "Đang nghe bạn nói… Hina sẽ tự gửi khi bạn dừng lại.";
+  }
+  if (decision.shouldSubmit) {
+    void finishMicCapture();
+  }
+}
+
+async function restartSilentAutoCapture(): Promise<void> {
   const current = recording;
-  if (!current) return;
+  if (!current || captureMode !== "auto" || finishingCapture) return;
+  finishingCapture = true;
   recording = null;
   micRecording.value = false;
-  const capture = await current.stop();
+  captureMode = null;
+  try {
+    await current.stop();
+  } finally {
+    finishingCapture = false;
+    autoListenDetector.reset();
+    scheduleAutoListenRestart();
+  }
+}
+
+async function finishMicCapture(): Promise<void> {
+  if (finishingCapture) return;
+  const current = recording;
+  if (!current) return;
+  finishingCapture = true;
+  recording = null;
+  micRecording.value = false;
+  captureMode = null;
+  let capture: MicrophoneCapture;
+  try {
+    capture = await current.stop();
+  } catch (error) {
+    finishingCapture = false;
+    handleVoiceError(error);
+    scheduleAutoListenRestart();
+    return;
+  }
   if (capture.sampleCount < capture.sampleRate * 0.25) {
     voiceStatus.value = "Đoạn ghi quá ngắn; hãy nói ít nhất một phần tư giây.";
+    finishingCapture = false;
+    scheduleAutoListenRestart();
     return;
   }
   const pcm = resampleAudio(
@@ -161,6 +258,8 @@ async function finishMicCapture(): Promise<void> {
   const wav = encodePcmWav(pcm, 16_000);
   if (wav.byteLength > 1_048_576) {
     voiceStatus.value = "Audio vượt 1 MiB; hãy nói đoạn ngắn hơn.";
+    finishingCapture = false;
+    scheduleAutoListenRestart();
     return;
   }
   voiceBusy.value = true;
@@ -185,26 +284,37 @@ async function finishMicCapture(): Promise<void> {
     handleVoiceError(error);
   } finally {
     voiceBusy.value = false;
+    finishingCapture = false;
+    autoListenDetector.reset();
+    scheduleAutoListenRestart();
   }
 }
 
-async function toggleMic(): Promise<void> {
-  if (voiceBusy.value) return;
-  if (micRecording.value) {
-    await finishMicCapture();
-    return;
-  }
+async function startMicCapture(mode: "manual" | "auto"): Promise<void> {
+  if (voiceBusy.value || micRecording.value || finishingCapture) return;
   if (!navigator.mediaDevices?.getUserMedia) {
     voiceStatus.value = "Electron không cung cấp quyền microphone.";
     return;
   }
   try {
     recording = await MicrophoneRecorder.start({
-      maximumSeconds: 30,
-      onMaximumDuration: () => void finishMicCapture(),
+      maximumSeconds: mode === "auto" ? 15 : 30,
+      chunkNotificationMilliseconds: 100,
+      onChunk: mode === "auto" ? monitorAutoListen : undefined,
+      onMaximumDuration: () => {
+        if (mode === "auto" && !autoListenDetector.snapshot().voiceDetected) {
+          void restartSilentAutoCapture();
+        } else {
+          void finishMicCapture();
+        }
+      },
     });
+    captureMode = mode;
+    autoListenDetector.reset();
     micRecording.value = true;
-    voiceStatus.value = "Đang nghe… bấm Mic lần nữa để gửi câu nói.";
+    voiceStatus.value = mode === "auto"
+      ? "Auto nghe đang bật. Hãy nói, Hina sẽ tự gửi khi bạn dừng."
+      : "Đang nghe… bấm Mic lần nữa để gửi câu nói.";
     await window.hinaDesktop.applyAvatarCue({
       source: "owner.console",
       state: "listening",
@@ -216,11 +326,40 @@ async function toggleMic(): Promise<void> {
   }
 }
 
+async function toggleMic(): Promise<void> {
+  if (voiceBusy.value) return;
+  if (autoListenEnabled.value) {
+    autoListenEnabled.value = false;
+    clearAutoRestart();
+  }
+  if (micRecording.value) {
+    await finishMicCapture();
+    return;
+  }
+  await startMicCapture("manual");
+}
+
+async function toggleAutoListen(): Promise<void> {
+  if (voiceBusy.value) return;
+  autoListenEnabled.value = !autoListenEnabled.value;
+  clearAutoRestart();
+  if (!autoListenEnabled.value) {
+    streamCleanup();
+    voiceStatus.value = "Auto nghe đã tắt. Bấm Mic để nói thủ công.";
+    return;
+  }
+  if (micRecording.value) streamCleanup();
+  await startMicCapture("auto");
+}
+
 function streamCleanup(): void {
+  clearAutoRestart();
   if (!recording) return;
   void recording.stop();
   recording = null;
   micRecording.value = false;
+  captureMode = null;
+  autoListenDetector.reset();
 }
 
 function handleVrmReady(details: {
@@ -283,6 +422,7 @@ onBeforeUnmount(() => {
     class="desktop-widget"
     :data-muted="muted"
     :data-hovered="hovered"
+    :data-auto-listen="autoListenEnabled"
     tabindex="0"
     aria-label="Hina desktop widget. Kéo nhân vật để di chuyển; rê chuột lên nhân vật để mở Voice và Mic."
     @keydown="blurWidget"
@@ -310,6 +450,32 @@ onBeforeUnmount(() => {
 
     <div class="widget-voice-controls">
       <button
+        id="widgetMicButton"
+        class="widget-control widget-mic-button"
+        type="button"
+        :aria-pressed="micRecording && !autoListenEnabled"
+        :aria-label="micRecording && !autoListenEnabled ? 'Dừng microphone và gửi cho Hina' : 'Bật microphone để nói với Hina'"
+        :title="micRecording && !autoListenEnabled ? 'Dừng microphone và gửi cho Hina' : 'Bật microphone để nói với Hina'"
+        :disabled="voiceBusy || !safety"
+        @click="toggleMic"
+      >
+        <span aria-hidden="true">{{ micRecording && !autoListenEnabled ? "⏹" : "🎙️" }}</span>
+        <span>{{ micRecording && !autoListenEnabled ? "Dừng & gửi" : "Nói với Hina" }}</span>
+      </button>
+      <button
+        id="widgetAutoListenButton"
+        class="widget-control widget-auto-listen-button"
+        type="button"
+        :aria-pressed="autoListenEnabled"
+        :aria-label="autoListenEnabled ? 'Tắt tự động nghe' : 'Bật tự động nghe và trả lời'"
+        :title="autoListenEnabled ? 'Tắt tự động nghe' : 'Bật tự động nghe và trả lời'"
+        :disabled="voiceBusy || !safety"
+        @click="toggleAutoListen"
+      >
+        <span aria-hidden="true">{{ autoListenEnabled ? "🟢" : "⚪" }}</span>
+        <span>Auto nghe · {{ autoListenEnabled ? "Đang bật" : "Đang tắt" }}</span>
+      </button>
+      <button
         id="widgetVoiceButton"
         class="widget-control widget-voice-button"
         type="button"
@@ -321,19 +487,6 @@ onBeforeUnmount(() => {
       >
         <span aria-hidden="true">{{ muted ? "🔇" : "🔊" }}</span>
         <span>Voice · {{ muted ? "Bật giọng" : "Tắt giọng" }}</span>
-      </button>
-      <button
-        id="widgetMicButton"
-        class="widget-control widget-mic-button"
-        type="button"
-        :aria-pressed="micRecording"
-        :aria-label="micRecording ? 'Dừng microphone và gửi cho Hina' : 'Bật microphone để nói với Hina'"
-        :title="micRecording ? 'Dừng microphone và gửi cho Hina' : 'Bật microphone để nói với Hina'"
-        :disabled="voiceBusy || !safety"
-        @click="toggleMic"
-      >
-        <span aria-hidden="true">{{ micRecording ? "⏹" : "🎙️" }}</span>
-        <span>{{ micRecording ? "Dừng Mic" : "Mic · Nói với Hina" }}</span>
       </button>
       <small v-if="voiceStatus" class="widget-voice-status" role="status">
         {{ voiceStatus }}

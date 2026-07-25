@@ -1,0 +1,67 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M07-S12-widget-auto-listen-tts-quality",
+  "module_id": "M07",
+  "objective": "Make widget voice conversation discoverable and usable without the Dashboard, add opt-in silence-ended auto listening, preserve full-band owner voice reference quality, and document evidence-backed Vietnamese TTS upgrade candidates.",
+  "non_goals": [
+    "Do not enable microphone capture until the owner explicitly presses Mic or enables Auto nghe.",
+    "Do not retain microphone recordings, transcripts or generated WAV beyond the existing runtime policy.",
+    "Do not install WSL/Docker, download an unreviewed model, add cloud credentials or silently switch TTS providers.",
+    "Do not claim that three minutes of generated MP3 data is sufficient for production-quality model fine-tuning."
+  ],
+  "base_sha": "42c2bf4",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "apps/desktop/",
+    "docs/modules/M07-S12-*",
+    "docs/research/M07-*",
+    "tools/dev/prepare_hina_voice_profile.py",
+    "workers/speech/README.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "packages/contracts/",
+    "packages/safety-policy/",
+    "packages/text-brain/"
+  ],
+  "contracts": [
+    "Widget controls remain hidden at rest and appear beside the avatar on hover/focus.",
+    "Manual Mic and Auto nghe are independent explicit owner actions; Auto nghe stops while Hina is thinking or speaking and resumes only after playback ends.",
+    "Auto nghe uses bounded in-memory audio, local RMS speech/silence detection and the existing typed STT, chat and TTS IPC routes.",
+    "Global mute prevents TTS playback but never fakes a successful synthesis.",
+    "The owner voice anchor remains hash-bound, mono and 44.1 kHz to avoid discarding source timbre before VieNeu enrollment."
+  ],
+  "allowed_dependencies": [
+    "Existing Electron, Vue, Web Audio, ffmpeg/ffprobe, local STT/chat/TTS routes and current pinned Python dependencies."
+  ],
+  "oss_candidates": [
+    "https://github.com/pnnbao97/VieNeu-TTS",
+    "https://github.com/dangvansam/viet-tts",
+    "https://github.com/fishaudio/fish-speech",
+    "https://github.com/resemble-ai/chatterbox",
+    "https://github.com/QwenLM/Qwen3-TTS"
+  ],
+  "acceptance_criteria": [
+    "Desktop typecheck, unit/security tests and real Electron widget smoke pass.",
+    "Hover/focus exposes visible Mic, Auto nghe and Voice buttons adjacent to the avatar.",
+    "Auto nghe waits for owner speech, submits after bounded silence, completes STT to chat to TTS, waits for audio playback to end, then rearms.",
+    "The regenerated local voice anchor is 44.1 kHz mono and real VieNeu CUDA smoke produces a WAV.",
+    "The TTS research note distinguishes Vietnamese support, license, Windows feasibility, latency/VRAM risk and recommends a benchmark order without fake quality claims."
+  ],
+  "required_test_commands": [
+    "pnpm --filter @hina/desktop typecheck",
+    "pnpm --filter @hina/desktop test",
+    "pnpm smoke:desktop",
+    "pnpm prepare:voice",
+    "uv run --frozen python tools/dev/m05_real_tts_smoke.py"
+  ],
+  "latency_or_quality_budget": {
+    "auto_listen_silence_milliseconds": 750,
+    "auto_listen_max_seconds": 15,
+    "manual_capture_max_seconds": 30,
+    "capture_max_bytes": 1048576,
+    "reference_sample_rate_hz": 44100
+  },
+  "output_artifact_dir": "artifacts/verification/M07/"
+}

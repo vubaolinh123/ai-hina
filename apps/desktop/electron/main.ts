@@ -679,12 +679,14 @@ async function createWindows(): Promise<void> {
                   const controls = document.querySelector(".widget-voice-controls");
                   const voice = document.getElementById("widgetVoiceButton");
                   const mic = document.getElementById("widgetMicButton");
+                  const autoListen = document.getElementById("widgetAutoListenButton");
                   const avatarSurface = document.querySelector(".widget-avatar-surface");
                   if (
                     !(root instanceof HTMLElement)
                     || !(controls instanceof HTMLElement)
                     || !(voice instanceof HTMLButtonElement)
                     || !(mic instanceof HTMLButtonElement)
+                    || !(autoListen instanceof HTMLButtonElement)
                     || !(avatarSurface instanceof HTMLElement)
                   ) {
                     reject(new Error("E_DESKTOP_WIDGET_DOM"));
@@ -730,6 +732,8 @@ async function createWindows(): Promise<void> {
                     controlCount:
                       document.querySelectorAll(".widget-control").length,
                     micDragRegion: getComputedStyle(mic)
+                      .getPropertyValue("-webkit-app-region"),
+                    autoListenDragRegion: getComputedStyle(autoListen)
                       .getPropertyValue("-webkit-app-region"),
                     widgetControlDenied,
                     hidden,
@@ -809,8 +813,9 @@ async function createWindows(): Promise<void> {
           || !("voiceDragRegion" in widgetSnapshot)
           || widgetSnapshot.voiceDragRegion !== "no-drag"
           || !("controlCount" in widgetSnapshot)
-          || widgetSnapshot.controlCount !== 2
+          || widgetSnapshot.controlCount !== 3
           || (widgetSnapshot as Record<string, unknown>).micDragRegion !== "no-drag"
+          || (widgetSnapshot as Record<string, unknown>).autoListenDragRegion !== "no-drag"
           || !("widgetControlDenied" in widgetSnapshot)
           || widgetSnapshot.widgetControlDenied !== true
           || !("hidden" in widgetSnapshot)

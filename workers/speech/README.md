@@ -53,7 +53,8 @@ pnpm prepare:voice
 
 The command audits every clip, records SHA-256 and duration metadata in
 `var/cache/voices/hina/hina-profile.json`, and creates a normalized
-`hina-profile-anchor.wav`. The desktop launcher automatically uses that anchor
+`hina-profile-anchor.wav` at 44.1 kHz mono so VieNeu's reference codec keeps
+the source timbre. The desktop launcher automatically uses that anchor
 on the next start. VieNeu v3 Turbo is a zero-shot reference-voice model: it
 does not fine-tune model weights from a folder of MP3s, and its enrollment
 window is capped at eight seconds. All clips are included in the local manifest

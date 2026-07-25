@@ -26,6 +26,7 @@ from typing import Any
 
 
 MAX_REFERENCE_SECONDS = 8.0
+REFERENCE_SAMPLE_RATE_HZ = 44_100
 MIN_CLIP_SECONDS = 0.5
 MAX_SOURCE_SECONDS = 300.0
 
@@ -75,7 +76,7 @@ def _normalize(source: Path, destination: Path, ffmpeg: str) -> None:
         "-ac",
         "1",
         "-ar",
-        "16000",
+        str(REFERENCE_SAMPLE_RATE_HZ),
         "-af",
         "loudnorm=I=-20:TP=-2:LRA=7",
         str(destination),
@@ -128,6 +129,7 @@ def build_profile(input_dir: Path, output_dir: Path, *, force: bool = False) -> 
         "schemaVersion": 1,
         "provider": "vieneu",
         "modelReferenceLimitSeconds": MAX_REFERENCE_SECONDS,
+        "anchorSampleRateHz": REFERENCE_SAMPLE_RATE_HZ,
         "sourceDirectory": str(input_dir),
         "clipCount": len(entries),
         "eligibleClipCount": len(eligible),

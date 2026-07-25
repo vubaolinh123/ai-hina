@@ -104,14 +104,18 @@ test("transparent widget keeps hover Voice/Mic controls and a native drag surfac
   assert.match(widget, /class="widget-avatar-surface"/);
   assert.match(widget, /class="widget-control widget-voice-button"/);
   assert.match(widget, /id="widgetMicButton"/);
-  assert.equal((widget.match(/\bclass="widget-control\b/g) ?? []).length, 2);
+  assert.match(widget, /id="widgetAutoListenButton"/);
+  assert.equal((widget.match(/\bclass="widget-control\b/g) ?? []).length, 3);
   assert.match(widget, /Voice ·/);
-  assert.match(widget, /Mic · Nói với Hina/);
+  assert.match(widget, /Nói với Hina/);
+  assert.match(widget, /Auto nghe/);
   assert.match(widget, /action:\s*"set_mute"/);
   assert.match(widget, /avatar\.value\?\.viseme/);
   assert.match(widget, /avatar\.value(?:\?\.|\.)intensity/);
   assert.match(widget, /getUserMedia/);
   assert.match(widget, /transcribeSpeech/);
+  assert.match(widget, /monitorAutoListen/);
+  assert.match(widget, /await new Promise<void>/);
   assert.doesNotMatch(widget, /ScriptProcessorNode|createScriptProcessor/);
   assert.match(widget, /encodePcmWav/);
   const app = read("src/App.vue");
@@ -130,6 +134,7 @@ test("transparent widget keeps hover Voice/Mic controls and a native drag surfac
   assert.match(style, /\.widget-avatar-surface[\s\S]*-webkit-app-region:\s*drag/);
   assert.match(style, /\.widget-voice-button[\s\S]*-webkit-app-region:\s*no-drag/);
   assert.match(style, /\.widget-mic-button[\s\S]*-webkit-app-region:\s*no-drag/);
+  assert.match(style, /\.widget-auto-listen-button[\s\S]*-webkit-app-region:\s*no-drag/);
   assert.match(
     style,
     /\.widget-voice-controls[\s\S]*opacity:\s*0[\s\S]*visibility:\s*hidden[\s\S]*pointer-events:\s*none/,
