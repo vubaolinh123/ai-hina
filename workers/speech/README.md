@@ -43,6 +43,23 @@ The first accepted request can download the pinned model and codec into
 for strict offline use. The desktop launcher fails closed when CUDA/PyTorch is
 not available; it never silently switches to the ONNX CPU backend.
 
+### Owner voice profile
+
+Place owner-authorized MP3 clips in `voice_demo` and run:
+
+```powershell
+pnpm prepare:voice
+```
+
+The command audits every clip, records SHA-256 and duration metadata in
+`var/cache/voices/hina/hina-profile.json`, and creates a normalized
+`hina-profile-anchor.wav`. The desktop launcher automatically uses that anchor
+on the next start. VieNeu v3 Turbo is a zero-shot reference-voice model: it
+does not fine-tune model weights from a folder of MP3s, and its enrollment
+window is capped at eight seconds. All clips are included in the local manifest
+for provenance and future fine-tuning work; only the selected contiguous anchor
+is used at runtime so speech remains natural and enrollment is deterministic.
+
 Run one real moderated inference and keep a WAV under the ignored `var/tmp`
 folder for manual listening:
 

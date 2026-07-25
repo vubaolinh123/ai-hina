@@ -25,6 +25,14 @@ if (-not $env:HINA_TTS_DEVICE) { $env:HINA_TTS_DEVICE = "cuda" }
 if (-not $env:HINA_TTS_PRECISION) { $env:HINA_TTS_PRECISION = "bfloat16" }
 if (-not $env:HINA_TTS_CODEC) { $env:HINA_TTS_CODEC = "OpenMOSS-Team/MOSS-Audio-Tokenizer-Nano" }
 if (-not $env:HINA_TTS_CODEC_REVISION) { $env:HINA_TTS_CODEC_REVISION = "6aa02b01e445cc585582cf0ba480bc3ea6c8dd68" }
+# If the owner has prepared the local voice profile, use its deterministic
+# <=8-second anchor and bind it to its SHA-256. Otherwise keep the checked-in
+# consent-bound reference WAV as the safe default.
+$profileAnchor = Join-Path $repoRoot "var\cache\voices\hina\hina-profile-anchor.wav"
+if (-not $env:HINA_TTS_REFERENCE_AUDIO -and (Test-Path -LiteralPath $profileAnchor)) {
+    $env:HINA_TTS_REFERENCE_AUDIO = $profileAnchor
+    $env:HINA_TTS_REFERENCE_SHA256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $profileAnchor).Hash.ToLowerInvariant()
+}
 if (-not $env:HINA_BUILD_COMMIT) {
     $buildCommit = & git -C $repoRoot rev-parse HEAD
     if ($LASTEXITCODE -eq 0) {

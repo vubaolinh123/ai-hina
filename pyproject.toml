@@ -11,6 +11,7 @@ authors = [
 dependencies = [
   "faster-whisper==1.2.1",
   "moonshine-voice==0.0.73",
+  "onnxruntime==1.27.0",
   "qdrant-client==1.18.0",
   "torch==2.11.0+cu128",
   "torchaudio==2.11.0+cu128; python_version == '3.12' and sys_platform == 'win32'",

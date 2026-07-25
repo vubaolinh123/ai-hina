@@ -53,6 +53,22 @@
       ]
     },
     {
+      "name": "onnxruntime",
+      "source_url": "https://github.com/microsoft/onnxruntime",
+      "revision": "v1.27.0",
+      "license_spdx": "MIT",
+      "source_hash": "sha256:20c321cf187ba496e648acf6b4cf90b4d398b0d17c2a77fdaeba365b908cc1c1",
+      "destination_paths": [
+        "pyproject.toml",
+        "uv.lock",
+        "workers/speech/src/hina_speech/tts_provider.py"
+      ],
+      "modifications": [
+        "Pinned as a direct runtime dependency because VieNeu's speaker enrollment imports ONNX Runtime even when PyTorch synthesis runs on CUDA.",
+        "The CUDA execution provider is not forced on the current Windows GPU profile; the upstream speaker enrollment remains a one-time CPU compatibility step."
+      ]
+    },
+    {
       "name": "qdrant-client",
       "source_url": "https://github.com/qdrant/qdrant-client",
       "revision": "v1.18.0@961c21aa930e3e9a0e8b7402cec5dc46b82612c7",

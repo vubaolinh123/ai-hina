@@ -20,6 +20,7 @@
     "smoke:dev-console": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Start-HinaDevConsole.ps1 -Port 0 -NoBrowser -StartupCheck",
     "smoke:m04-stt": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Run-M04RealSttSmoke.ps1",
     "smoke:m05-tts": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Run-M05RealTtsSmoke.ps1",
+    "prepare:voice": "uv run --frozen python tools/dev/prepare_hina_voice_profile.py --force",
     "start:control": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Start-HinaControlPlane.ps1",
     "start:model": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Start-HinaModelProvider.ps1 -PullMissingModel",
     "start:dev-console": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Start-HinaDevConsole.ps1",
