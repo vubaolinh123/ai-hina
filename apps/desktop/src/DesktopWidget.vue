@@ -9,12 +9,27 @@ const busy = ref(false);
 const hovered = ref(false);
 const vrmReady = ref(false);
 const controlReady = ref(false);
+const micRecording = ref(false);
+const voiceBusy = ref(false);
+const voiceStatus = ref("");
+const chatSessionId = crypto.randomUUID();
 let avatarTimer: number | null = null;
 let safetyTimer: number | null = null;
 let avatarRefreshPending = false;
 let safetyRefreshPending = false;
 let controlRetryAt = 0;
 let controlRetryDelay = 1_000;
+let recording: {
+  stream: MediaStream;
+  context: AudioContext;
+  source: MediaStreamAudioSourceNode;
+  processor: ScriptProcessorNode;
+  sink: GainNode;
+  chunks: Float32Array[];
+  sampleCount: number;
+  stopping: boolean;
+} | null = null;
+let activeTurnId: string | null = null;
 
 function controlRequestAllowed(): boolean {
   return Date.now() >= controlRetryAt;
@@ -94,6 +109,222 @@ async function toggleVoice(): Promise<void> {
   }
 }
 
+function mergeAudioChunks(chunks: Float32Array[], sampleCount: number): Float32Array {
+  const merged = new Float32Array(sampleCount);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk.subarray(0, Math.max(0, sampleCount - offset)), offset);
+    offset += chunk.length;
+    if (offset >= sampleCount) break;
+  }
+  return merged;
+}
+
+function resampleAudio(samples: Float32Array, sourceRate: number, targetRate: number): Float32Array {
+  if (sourceRate === targetRate) return samples;
+  const targetLength = Math.max(1, Math.round(samples.length * targetRate / sourceRate));
+  const result = new Float32Array(targetLength);
+  for (let index = 0; index < targetLength; index += 1) {
+    const sourcePosition = index * (samples.length - 1) / Math.max(1, targetLength - 1);
+    const lower = Math.floor(sourcePosition);
+    const upper = Math.min(samples.length - 1, lower + 1);
+    const weight = sourcePosition - lower;
+    result[index] = samples[lower] * (1 - weight) + samples[upper] * weight;
+  }
+  return result;
+}
+
+function encodePcmWav(samples: Float32Array, sampleRate: number): Uint8Array {
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buffer);
+  const writeAscii = (offset: number, value: string) => {
+    for (let index = 0; index < value.length; index += 1) {
+      view.setUint8(offset + index, value.charCodeAt(index));
+    }
+  };
+  writeAscii(0, "RIFF");
+  view.setUint32(4, 36 + samples.length * 2, true);
+  writeAscii(8, "WAVE");
+  writeAscii(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeAscii(36, "data");
+  view.setUint32(40, samples.length * 2, true);
+  for (let index = 0; index < samples.length; index += 1) {
+    const sample = Math.max(-1, Math.min(1, samples[index] ?? 0));
+    view.setInt16(44 + index * 2, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+  }
+  return new Uint8Array(buffer);
+}
+
+async function playVoice(text: string): Promise<void> {
+  if (muted.value || !text.trim()) return;
+  const bytes = await window.hinaDesktop.synthesizeSpeech({
+    text,
+    utteranceId: crypto.randomUUID(),
+    sessionId: chatSessionId,
+    source: "owner.console",
+  });
+  const url = URL.createObjectURL(new Blob([Uint8Array.from(bytes)], { type: "audio/wav" }));
+  const audio = new Audio(url);
+  audio.addEventListener("ended", () => URL.revokeObjectURL(url), { once: true });
+  await audio.play();
+}
+
+async function pollVoiceTurn(turnId: string): Promise<void> {
+  const turn = await window.hinaDesktop.getChatTurn(turnId);
+  if (turn.outcome === "running") {
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 180));
+    return pollVoiceTurn(turnId);
+  }
+  activeTurnId = null;
+  if (turn.outcome === "completed" && turn.assistant) {
+    voiceStatus.value = "Hina đang trả lời bằng giọng nói…";
+    await playVoice(turn.assistant);
+    voiceStatus.value = "Đã trả lời. Bạn có thể bấm Mic để nói tiếp.";
+  } else if (turn.outcome === "interrupted") {
+    voiceStatus.value = "Lượt nói đã được dừng.";
+  } else {
+    throw new Error(
+      `${turn.errorCode ?? "E_CHAT_FAILED"}: ${turn.errorMessage ?? "Hina không thể trả lời."}`,
+    );
+  }
+}
+
+function handleVoiceError(error: unknown): void {
+  activeTurnId = null;
+  voiceBusy.value = false;
+  voiceStatus.value = error instanceof Error ? error.message : "E_WIDGET_VOICE";
+  console.error("[hina-widget] E_WIDGET_VOICE", voiceStatus.value);
+}
+
+async function finishMicCapture(): Promise<void> {
+  const current = recording;
+  if (!current || current.stopping) return;
+  current.stopping = true;
+  recording = null;
+  micRecording.value = false;
+  current.processor.onaudioprocess = null;
+  current.source.disconnect();
+  current.processor.disconnect();
+  current.sink.disconnect();
+  current.stream.getTracks().forEach((track) => track.stop());
+  const sampleRate = current.context.sampleRate;
+  await current.context.close();
+  if (current.sampleCount < sampleRate * 0.25) {
+    voiceStatus.value = "Đoạn ghi quá ngắn; hãy nói ít nhất một phần tư giây.";
+    return;
+  }
+  const pcm = resampleAudio(
+    mergeAudioChunks(current.chunks, current.sampleCount),
+    sampleRate,
+    16_000,
+  );
+  const wav = encodePcmWav(pcm, 16_000);
+  if (wav.byteLength > 1_048_576) {
+    voiceStatus.value = "Audio vượt 1 MiB; hãy nói đoạn ngắn hơn.";
+    return;
+  }
+  voiceBusy.value = true;
+  voiceStatus.value = "Đang nhận diện giọng nói bằng Moonshine…";
+  try {
+    const transcription = await window.hinaDesktop.transcribeSpeech(wav, chatSessionId);
+    const text = transcription.transcript.trim();
+    if (!text) {
+      voiceStatus.value = "Hina không nghe thấy câu nói; hãy thử lại.";
+      return;
+    }
+    voiceStatus.value = `Bạn: ${text}`;
+    const turn = await window.hinaDesktop.startChatTurn({
+      sessionId: chatSessionId,
+      source: "owner.console",
+      text,
+    });
+    activeTurnId = turn.turnId;
+    voiceStatus.value = "Hina đang suy nghĩ…";
+    await pollVoiceTurn(turn.turnId);
+  } catch (error) {
+    handleVoiceError(error);
+  } finally {
+    voiceBusy.value = false;
+  }
+}
+
+async function toggleMic(): Promise<void> {
+  if (voiceBusy.value) return;
+  if (micRecording.value) {
+    await finishMicCapture();
+    return;
+  }
+  if (!navigator.mediaDevices?.getUserMedia) {
+    voiceStatus.value = "Electron không cung cấp quyền microphone.";
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+      video: false,
+    });
+    const AudioContextClass = window.AudioContext;
+    const context = new AudioContextClass();
+    const source = context.createMediaStreamSource(stream);
+    const processor = context.createScriptProcessor(4096, 1, 1);
+    const sink = context.createGain();
+    sink.gain.value = 0;
+    const chunks: Float32Array[] = [];
+    recording = {
+      stream,
+      context,
+      source,
+      processor,
+      sink,
+      chunks,
+      sampleCount: 0,
+      stopping: false,
+    };
+    processor.onaudioprocess = (event) => {
+      if (!recording || recording.stopping) return;
+      const chunk = new Float32Array(event.inputBuffer.getChannelData(0));
+      recording.chunks.push(chunk);
+      recording.sampleCount += chunk.length;
+      if (recording.sampleCount / context.sampleRate >= 30) {
+        void finishMicCapture();
+      }
+    };
+    source.connect(processor);
+    processor.connect(sink);
+    sink.connect(context.destination);
+    micRecording.value = true;
+    voiceStatus.value = "Đang nghe… bấm Mic lần nữa để gửi câu nói.";
+    await window.hinaDesktop.applyAvatarCue({
+      source: "owner.console",
+      state: "listening",
+      mode: "manual-preview",
+    });
+  } catch (error) {
+    streamCleanup();
+    handleVoiceError(error);
+  }
+}
+
+function streamCleanup(): void {
+  if (!recording) return;
+  recording.stream.getTracks().forEach((track) => track.stop());
+  void recording.context.close();
+  recording = null;
+  micRecording.value = false;
+}
+
 function handleVrmReady(details: {
   displayName: string;
   presentationId: string;
@@ -145,6 +376,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   window.removeEventListener("beforeunload", stopPolling);
   stopPolling();
+  streamCleanup();
 });
 </script>
 
@@ -154,7 +386,7 @@ onBeforeUnmount(() => {
     :data-muted="muted"
     :data-hovered="hovered"
     tabindex="0"
-    aria-label="Hina desktop widget. Kéo nhân vật để di chuyển; rê chuột lên nhân vật để mở Voice."
+    aria-label="Hina desktop widget. Kéo nhân vật để di chuyển; rê chuột lên nhân vật để mở Voice và Mic."
     @keydown="blurWidget"
     @pointerenter="hovered = true"
     @pointerleave="hovered = false"
@@ -191,6 +423,22 @@ onBeforeUnmount(() => {
         <span aria-hidden="true">{{ muted ? "🔇" : "🔊" }}</span>
         <span>Voice · {{ muted ? "Bật giọng" : "Tắt giọng" }}</span>
       </button>
+      <button
+        id="widgetMicButton"
+        class="widget-control widget-mic-button"
+        type="button"
+        :aria-pressed="micRecording"
+        :aria-label="micRecording ? 'Dừng microphone và gửi cho Hina' : 'Bật microphone để nói với Hina'"
+        :title="micRecording ? 'Dừng microphone và gửi cho Hina' : 'Bật microphone để nói với Hina'"
+        :disabled="voiceBusy || !safety"
+        @click="toggleMic"
+      >
+        <span aria-hidden="true">{{ micRecording ? "⏹" : "🎙️" }}</span>
+        <span>{{ micRecording ? "Dừng Mic" : "Mic · Nói với Hina" }}</span>
+      </button>
+      <small v-if="voiceStatus" class="widget-voice-status" role="status">
+        {{ voiceStatus }}
+      </small>
     </div>
   </main>
 </template>

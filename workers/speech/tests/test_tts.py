@@ -26,10 +26,12 @@ from hina_speech import (  # noqa: E402
     TtsPcmChunk,
     TtsSynthesis,
     VieneuTtsProvider,
+    adaptive_speaking_rate,
     normalize_tts_text,
     pcm16_to_wav,
     split_tts_chunks,
 )
+from hina_speech.tts_provider import _wsola_speed_up  # noqa: E402
 
 
 CORRELATION_ID = "11111111-1111-4111-8111-111111111111"
@@ -124,6 +126,34 @@ class TextAndAudioTests(unittest.TestCase):
         chunks = split_tts_chunks(text.strip(), max_characters=64)
         self.assertTrue(all(0 < len(chunk) <= 64 for chunk in chunks))
         self.assertEqual(" ".join(chunks).split(), text.split())
+
+    def test_expressive_cues_use_only_supported_vieneu_tokens(self) -> None:
+        value = normalize_tts_text(
+            "[yawns] Ưm... [chuckles] Hina đây. "
+            "[takes a deep breath] Bình tĩnh nhé. [clears throat] Bắt đầu thôi. "
+            "[smacks lips]"
+        )
+        self.assertNotIn("yawns", value)
+        self.assertNotIn("smacks lips", value)
+        self.assertIn("[chuckle]", value)
+        self.assertIn("[sigh]", value)
+        self.assertIn("[clear throat]", value)
+
+    def test_adaptive_rate_is_normal_for_short_text_and_bounded_for_long_text(self) -> None:
+        self.assertEqual(adaptive_speaking_rate("Xin chào."), 1.0)
+        self.assertGreater(adaptive_speaking_rate("a" * 240), 1.0)
+        self.assertEqual(adaptive_speaking_rate("a" * 2_000), 1.18)
+
+    def test_wsola_shortens_long_audio_without_non_finite_samples(self) -> None:
+        import numpy as np
+
+        sample_rate = 48_000
+        time_axis = np.arange(sample_rate, dtype=np.float32) / sample_rate
+        samples = np.sin(2 * np.pi * 220 * time_axis).astype(np.float32)
+        paced = _wsola_speed_up(samples, 1.18, sample_rate_hz=sample_rate)
+        self.assertGreater(len(paced), sample_rate * 0.8)
+        self.assertLess(len(paced), sample_rate * 0.9)
+        self.assertTrue(np.isfinite(paced).all())
 
     def test_pcm16_wav_is_mono_and_uses_requested_sample_rate(self) -> None:
         wav = pcm16_to_wav(struct.pack("<hhh", 1, -2, 3), sample_rate_hz=48_000)
@@ -254,7 +284,7 @@ class SpeechOutputServiceTests(unittest.IsolatedAsyncioTestCase):
 
 
 class VieneuProviderTests(unittest.IsolatedAsyncioTestCase):
-    async def test_provider_downloads_exact_revisions_and_disables_cloning(self) -> None:
+    async def test_provider_downloads_exact_revisions_and_keeps_fixed_voice(self) -> None:
         downloads: list[dict[str, object]] = []
         fake_model = _FakeVieNeu()
         with tempfile.TemporaryDirectory() as temp:
@@ -283,6 +313,8 @@ class VieneuProviderTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(downloads[0]["revision"], DEFAULT_TTS_MODEL_REVISION)
         self.assertEqual(downloads[1]["revision"], DEFAULT_TTS_CODEC_REVISION)
         self.assertEqual(downloads[0]["local_files_only"], False)
+        self.assertIn("speaker_encoder.onnx", downloads[0]["allow_patterns"])
+        self.assertIn("denoiser.onnx", downloads[0]["allow_patterns"])
         self.assertEqual(len(factory_calls), 1)
         self.assertEqual(fake_model.calls[0]["voice"], DEFAULT_TTS_VOICE)
         self.assertEqual(fake_model.calls[0]["apply_watermark"], True)

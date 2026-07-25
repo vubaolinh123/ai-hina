@@ -1,9 +1,8 @@
 # M05 — Speech output, turn-taking and barge-in
 
 - Status: fast-development candidate; implementation, local fast evidence and independent review complete
-- Branch: `codex/M05-speech-output`
-- Base: `d459032242fa60ced8c7c6a2e5f2a553a47eddc7`
-- Active slices: `M05-S1` provider/service, `M05-S2` runtime/UI, `M05-S3` turn voice/cancel
+- Branch: `main`
+- Active slices: `M05-S1` provider/service, `M05-S2` runtime/UI, `M05-S3` turn voice/cancel, `M05-S4` owner reference voice
 
 ## Runnable result
 
@@ -13,10 +12,20 @@ existing `pre_tts` moderation surface before provider invocation. Generated
 audio stays in memory and is returned as binary WAV; it is not stored or used
 for training.
 
-The first allowlisted voice is the upstream built-in `Trúc Ly` preset. M05 does
-not expose reference audio, voice enrollment or voice cloning. If the provider,
-model, codec or voice manifest is unavailable, the UI must show the real error
+The default allowlisted voice is `Hina Anime AI v1`, enrolled at runtime from
+the owner-provided ElevenLabs synthetic reference. The source is hash-bound by
+`assets/manifests/hina-anime-elevenlabs-voice.v1.json`; this is zero-shot
+reference enrollment, not training or fine-tuning of VieNeu weights. Arbitrary
+reference uploads remain disabled. If the provider, model, codec, speaker
+encoder or reference manifest is unavailable, the UI must show the real error
 and correlation ID rather than playing fake or placeholder audio.
+
+VieNeu v3 Turbo supports `[chuckle]`, `[sigh]` and `[clear throat]`. Hina
+normalizes aliases such as `[chuckles]`, `[laughs]`, `[sighs]`, `[clears
+throat]` and approximates `[takes a deep breath]` as `[sigh]`. Unsupported
+tags such as `[yawns]`, `[gasps]` and `[smacks lips]` are removed instead of
+being spoken literally. Long text uses a bounded pitch-preserving WSOLA
+post-process from 1.00x to 1.18x; short text stays at normal speed.
 
 Implemented surfaces:
 
@@ -60,9 +69,11 @@ của M05 vẫn chưa được mô tả là đã pass.
 - CPU performance is above the RTF and first-audio promotion targets; a later
   optimization may require a ResourceLease-protected GPU backend or a different
   reviewed model.
-- The upstream preset is distributed in the Apache-2.0 wheel, but independent
-  speaker-consent evidence is not published. Local owner evaluation is allowed;
-  public/production promotion remains blocked pending consent review.
+- The fixed synthetic reference is authorized for local owner use according to
+  the owner statement recorded in its manifest. The raw source MP3 remains
+  outside Git; deleting the canonical reference WAV and manifest revokes local
+  enrollment. Public/production promotion still requires a separate quality
+  and licensing review.
 
 ## Deferred promotion evidence
 

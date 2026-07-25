@@ -64,6 +64,7 @@ class TtsSynthesis:
     chunks: tuple[TtsPcmChunk, ...]
     first_chunk_milliseconds: float
     processing_milliseconds: float
+    speaking_rate: float = 1.0
 
     @property
     def pcm16(self) -> bytes:

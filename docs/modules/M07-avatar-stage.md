@@ -85,8 +85,9 @@ profile ghi rõ resolution/FPS/avatar/OBS state/duration.
   shadowless, always-on-top, skip-taskbar và đặt mặc định trong work area màn
   hình chính. Cửa sổ Operator đầy đủ vẫn giữ nguyên.
 - Widget dùng cùng renderer local và preload typed IPC; avatar surface là native
-  `-webkit-app-region: drag`, còn đúng một nút `Voice` là `no-drag`. Voice chỉ
-  gọi safety `set_mute` cho đầu ra giọng nói Hina, không phải microphone.
+  `-webkit-app-region: drag`, còn hai nút `Voice`/`Mic` là `no-drag`. Voice gọi
+  safety `set_mute` cho đầu ra giọng nói Hina; Mic thu WAV trong RAM rồi chạy
+  Moonshine → chat → VieNeu thật.
   Ngoài hover/focus-within không có nút, caption, card hay background UI nào.
 - Project AIRI được xem như tài liệu tham khảo MIT ở commit
   `1a5372a0bb982a62805c77408a55a2c66a0ec14a`; không copy source, style hay thêm

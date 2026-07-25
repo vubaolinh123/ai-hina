@@ -2,6 +2,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
 $controlScript = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "Start-HinaControlPlane.ps1"))
+$modelScript = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "Start-HinaModelProvider.ps1"))
 $healthUrl = "http://127.0.0.1:8765/v1/health"
 $logDirectory = [System.IO.Path]::GetFullPath((Join-Path $repoRoot "var\logs"))
 if (-not $controlScript.StartsWith($repoRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
@@ -25,6 +26,10 @@ function Test-HinaControlPlane {
 $controlProcess = $null
 $startedControlPlane = $false
 try {
+    & $modelScript -PullMissingModel
+    if (-not $?) {
+        throw "Local model provider bootstrap failed."
+    }
     if (-not (Test-HinaControlPlane)) {
         Write-Host "[hina-desktop] Control plane chưa chạy; đang tự khởi động..."
         $stdoutPath = Join-Path $logDirectory "desktop-control.stdout.log"

@@ -3,6 +3,7 @@ import {
   BrowserWindow,
   ipcMain,
   screen,
+  session,
   type IpcMainInvokeEvent,
 } from "electron";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
@@ -14,6 +15,7 @@ import {
   requestChatStatus,
   requestChatTurn,
   requestSpeechSynthesis,
+  requestSpeechTranscription,
   validateAvatarCue,
   validateSafetyControl,
 } from "./control-client";
@@ -42,6 +44,7 @@ const CHANNELS = Object.freeze({
   chatStart: "hina:chat:start",
   chatTurn: "hina:chat:turn",
   chatCancel: "hina:chat:cancel",
+  speechTranscribe: "hina:speech:transcribe",
   ttsSynthesize: "hina:tts:synthesize",
 });
 
@@ -267,10 +270,43 @@ function registerIpcHandlers(): void {
     assertTrustedSender(event);
     return requestChatCancel(turnId);
   });
+  ipcMain.handle(
+    CHANNELS.speechTranscribe,
+    (event, audio: unknown, sessionId: unknown) => {
+      assertTrustedSender(event);
+      return requestSpeechTranscription(audio, sessionId);
+    },
+  );
   ipcMain.handle(CHANNELS.ttsSynthesize, (event, payload: unknown) => {
     assertTrustedSender(event);
     return requestSpeechSynthesis(payload);
   });
+}
+
+function registerMediaPermissions(): void {
+  const isKnownWindow = (webContents: Electron.WebContents): boolean => (
+    (mainWindow !== null && webContents === mainWindow.webContents)
+    || (widgetWindow !== null && webContents === widgetWindow.webContents)
+  );
+  session.defaultSession.setPermissionCheckHandler(
+    (webContents, permission, _origin, details) => (
+      permission === "media"
+      && details.mediaType === "audio"
+      && webContents !== null
+      && isKnownWindow(webContents)
+    ),
+  );
+  session.defaultSession.setPermissionRequestHandler(
+    (webContents, permission, callback, details) => {
+      const mediaTypes = "mediaTypes" in details ? details.mediaTypes : undefined;
+      callback(
+        permission === "media"
+        && mediaTypes?.includes("audio") === true
+        && mediaTypes.includes("video") === false
+        && isKnownWindow(webContents),
+      );
+    },
+  );
 }
 
 async function createWindows(): Promise<void> {
@@ -613,11 +649,13 @@ async function createWindows(): Promise<void> {
                   const root = document.querySelector(".desktop-widget");
                   const controls = document.querySelector(".widget-voice-controls");
                   const voice = document.getElementById("widgetVoiceButton");
+                  const mic = document.getElementById("widgetMicButton");
                   const avatarSurface = document.querySelector(".widget-avatar-surface");
                   if (
                     !(root instanceof HTMLElement)
                     || !(controls instanceof HTMLElement)
                     || !(voice instanceof HTMLButtonElement)
+                    || !(mic instanceof HTMLButtonElement)
                     || !(avatarSurface instanceof HTMLElement)
                   ) {
                     reject(new Error("E_DESKTOP_WIDGET_DOM"));
@@ -662,6 +700,8 @@ async function createWindows(): Promise<void> {
                       .getPropertyValue("-webkit-app-region"),
                     controlCount:
                       document.querySelectorAll(".widget-control").length,
+                    micDragRegion: getComputedStyle(mic)
+                      .getPropertyValue("-webkit-app-region"),
                     widgetControlDenied,
                     hidden,
                     focused
@@ -740,7 +780,8 @@ async function createWindows(): Promise<void> {
           || !("voiceDragRegion" in widgetSnapshot)
           || widgetSnapshot.voiceDragRegion !== "no-drag"
           || !("controlCount" in widgetSnapshot)
-          || widgetSnapshot.controlCount !== 1
+          || widgetSnapshot.controlCount !== 2
+          || (widgetSnapshot as Record<string, unknown>).micDragRegion !== "no-drag"
           || !("widgetControlDenied" in widgetSnapshot)
           || widgetSnapshot.widgetControlDenied !== true
           || !("hidden" in widgetSnapshot)
@@ -911,6 +952,7 @@ app.on("before-quit", () => {
   }
 });
 app.whenReady().then(async () => {
+  registerMediaPermissions();
   registerIpcHandlers();
   await createWindows();
 });

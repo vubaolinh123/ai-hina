@@ -36,7 +36,7 @@ from .tts_config import (
 )
 from .tts_provider import TtsProvider, VieneuTtsProvider
 from .tts_service import SpeechOutputService
-from .tts_text import normalize_tts_text, split_tts_chunks
+from .tts_text import adaptive_speaking_rate, normalize_tts_text, split_tts_chunks
 from .vad import EnergyVad, EnergyVadConfig
 
 __all__ = [
@@ -80,6 +80,7 @@ __all__ = [
     "TARGET_SAMPLE_RATE_HZ",
     "VadResult",
     "decode_and_normalize_wav",
+    "adaptive_speaking_rate",
     "normalize_tts_text",
     "pcm16_to_wav",
     "split_tts_chunks",

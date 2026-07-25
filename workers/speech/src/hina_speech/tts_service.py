@@ -138,6 +138,7 @@ class SpeechOutputService:
                 "durationSeconds": round(synthesis.duration_seconds, 3),
                 "firstChunkMilliseconds": synthesis.first_chunk_milliseconds,
                 "processingMilliseconds": synthesis.processing_milliseconds,
+                "speakingRate": synthesis.speaking_rate,
                 "totalMilliseconds": round((time.monotonic() - started) * 1_000, 3),
                 "audioBytes": len(wav),
                 "audioWav": wav,

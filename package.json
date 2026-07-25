@@ -21,6 +21,7 @@
     "smoke:m04-stt": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Run-M04RealSttSmoke.ps1",
     "smoke:m05-tts": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Run-M05RealTtsSmoke.ps1",
     "start:control": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Start-HinaControlPlane.ps1",
+    "start:model": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Start-HinaModelProvider.ps1 -PullMissingModel",
     "start:dev-console": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Start-HinaDevConsole.ps1",
     "start:desktop": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Start-HinaDesktop.ps1",
     "build:desktop": "pnpm --filter @hina/desktop build",

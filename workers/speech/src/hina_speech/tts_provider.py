@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import importlib.util
 import math
 import threading
@@ -13,12 +14,15 @@ from typing import Any, Protocol
 from .errors import TtsError
 from .model import TtsPcmChunk, TtsSynthesis
 from .tts_config import TtsConfig
+from .tts_text import adaptive_speaking_rate
 
 
 SnapshotDownloader = Callable[..., str]
 SdkFactory = Callable[[Path, Path, TtsConfig], Any]
 
 _MODEL_PATTERNS = (
+    "denoiser.onnx",
+    "speaker_encoder.onnx",
     "onnx_int8/config.json",
     "onnx_int8/tokenizer.json",
     "onnx_int8/vieneu_acoustic_cached.onnx",
@@ -207,6 +211,7 @@ class VieneuTtsProvider:
         output: list[TtsPcmChunk] = []
         sample_cursor = 0
         max_samples = round(self.config.max_audio_seconds * 48_000)
+        speaking_rate = adaptive_speaking_rate(" ".join(chunks))
         try:
             for text in chunks:
                 stream = model.infer_stream(
@@ -216,7 +221,7 @@ class VieneuTtsProvider:
                     max_chars=self.config.max_chunk_characters,
                     apply_watermark=True,
                 )
-                text_pcm = bytearray()
+                text_samples: list[Any] = []
                 text_start = sample_cursor / 48_000
                 for samples in stream:
                     if cancel_event.is_set():
@@ -224,12 +229,18 @@ class VieneuTtsProvider:
                         if close is not None:
                             close()
                         raise TtsError("E_TTS_CANCELLED", "TTS utterance was cancelled")
-                    pcm = _float_samples_to_pcm16(samples)
-                    if not pcm:
+                    values = _float_samples(samples)
+                    if values.size == 0:
                         continue
                     if first_chunk_ms is None:
                         first_chunk_ms = (time.monotonic() - started) * 1_000
-                    text_pcm.extend(pcm)
+                    text_samples.append(values)
+                if text_samples:
+                    import numpy as np
+
+                    joined = np.concatenate(text_samples)
+                    paced = _wsola_speed_up(joined, speaking_rate, sample_rate_hz=48_000)
+                    pcm = _float_samples_to_pcm16(paced)
                     sample_cursor += len(pcm) // 2
                     if sample_cursor > max_samples:
                         cancel_event.set()
@@ -237,11 +248,13 @@ class VieneuTtsProvider:
                             "E_TTS_AUDIO_TOO_LONG",
                             "TTS output exceeds the duration limit",
                         )
-                if text_pcm:
+                else:
+                    pcm = b""
+                if pcm:
                     output.append(
                         TtsPcmChunk(
                             text=text,
-                            pcm16=bytes(text_pcm),
+                            pcm16=pcm,
                             start_seconds=text_start,
                             end_seconds=sample_cursor / 48_000,
                         )
@@ -257,6 +270,7 @@ class VieneuTtsProvider:
                 chunks=tuple(output),
                 first_chunk_milliseconds=round(first_chunk_ms or 0.0, 3),
                 processing_milliseconds=round((time.monotonic() - started) * 1_000, 3),
+                speaking_rate=speaking_rate,
             )
         except TtsError:
             raise
@@ -331,28 +345,208 @@ def _create_pinned_vieneu(
     model._preset_voices = {}
     model._default_voice = None
     model._load_v3_voices()
-    if config.voice not in {voice_id for _label, voice_id in model.list_preset_voices()}:
+    if config.reference_voice_enabled:
+        _verify_reference_audio(config)
+        model.engine.speaker_encoder = _NumpyOnnxSpeakerEncoder(
+            model_snapshot / "speaker_encoder.onnx"
+        )
+        model.add_voice(
+            config.voice,
+            config.reference_audio_path,
+            denoise=True,
+            use_ref_codes=True,
+            description="Owner-authorized synthetic Vietnamese Hina voice",
+            gender="female",
+            style=config.style,
+            save=False,
+        )
+    elif config.voice not in {voice_id for _label, voice_id in model.list_preset_voices()}:
         raise TtsError("E_TTS_VOICE", "the pinned preset voice is unavailable")
     model.max_batch_size = 1
     model._batch_engine = None
     return model
 
 
+class _NumpyOnnxSpeakerEncoder:
+    """Torch-free 16 kHz log-mel frontend for VieNeu's frozen speaker encoder."""
+
+    def __init__(self, model_path: Path) -> None:
+        import onnxruntime as ort
+
+        if not model_path.is_file():
+            raise TtsError("E_TTS_VOICE_REFERENCE", "speaker encoder artifact is missing")
+        self._session = ort.InferenceSession(
+            str(model_path),
+            providers=["CPUExecutionProvider"],
+        )
+        self._input = self._session.get_inputs()[0].name
+        self._output = self._session.get_outputs()[0].name
+
+    def embed(self, wav: Any, sample_rate_hz: int) -> Any:
+        import numpy as np
+
+        samples = np.asarray(wav, dtype=np.float32).reshape(-1)
+        if samples.size == 0:
+            raise TtsError("E_TTS_VOICE_REFERENCE", "reference WAV is empty")
+        if sample_rate_hz != 16_000:
+            target_size = max(1, round(samples.size * 16_000 / sample_rate_hz))
+            source_axis = np.arange(samples.size, dtype=np.float64)
+            target_axis = np.linspace(0, samples.size - 1, target_size)
+            samples = np.interp(target_axis, source_axis, samples).astype(np.float32)
+        samples = samples[: 16_000 * 30]
+        features = _kaldi_style_fbank(samples, sample_rate_hz=16_000, mel_bins=80)
+        result = self._session.run(
+            [self._output],
+            {self._input: features[None].astype(np.float32)},
+        )[0]
+        embedding = np.asarray(result[0], dtype=np.float32).reshape(-1)
+        if embedding.size != 192 or not np.isfinite(embedding).all():
+            raise TtsError(
+                "E_TTS_VOICE_REFERENCE",
+                "speaker encoder returned an invalid embedding",
+            )
+        return embedding
+
+
+def _kaldi_style_fbank(samples: Any, *, sample_rate_hz: int, mel_bins: int) -> Any:
+    import numpy as np
+
+    frame_length = round(sample_rate_hz * 0.025)
+    frame_shift = round(sample_rate_hz * 0.010)
+    fft_size = 1 << (frame_length - 1).bit_length()
+    values = np.asarray(samples, dtype=np.float32).reshape(-1)
+    if values.size < frame_length:
+        values = np.pad(values, (0, frame_length - values.size))
+    frame_count = 1 + (values.size - frame_length) // frame_shift
+    offsets = np.arange(frame_count)[:, None] * frame_shift
+    frames = values[offsets + np.arange(frame_length)[None, :]].copy()
+    frames -= frames.mean(axis=1, keepdims=True)
+    frames[:, 1:] -= 0.97 * frames[:, :-1].copy()
+    frames[:, 0] *= 1.0 - 0.97
+    frames *= np.hamming(frame_length).astype(np.float32)
+    power = np.abs(np.fft.rfft(frames, n=fft_size, axis=1)) ** 2
+
+    low_hz = 20.0
+    high_hz = sample_rate_hz / 2
+    to_mel = lambda frequency: 1127.0 * np.log1p(frequency / 700.0)
+    from_mel = lambda mel: 700.0 * np.expm1(mel / 1127.0)
+    mel_points = np.linspace(to_mel(low_hz), to_mel(high_hz), mel_bins + 2)
+    hz_points = from_mel(mel_points)
+    bins = np.floor((fft_size + 1) * hz_points / sample_rate_hz).astype(int)
+    filters = np.zeros((mel_bins, power.shape[1]), dtype=np.float32)
+    for index in range(mel_bins):
+        left, center, right = bins[index : index + 3]
+        center = max(center, left + 1)
+        right = max(right, center + 1)
+        filters[index, left:center] = (
+            np.arange(left, center, dtype=np.float32) - left
+        ) / (center - left)
+        filters[index, center:right] = (
+            right - np.arange(center, right, dtype=np.float32)
+        ) / (right - center)
+    feature = np.log(np.maximum(power @ filters.T, 1e-10)).astype(np.float32)
+    feature -= feature.mean(axis=0, keepdims=True)
+    return feature
+
+
 def _float_samples_to_pcm16(samples: Any) -> bytes:
+    values = _float_samples(samples)
+    if values.size == 0:
+        return b""
+    import numpy as np
+
+    clipped = np.clip(values, -1.0, 1.0)
+    return (clipped * 32_767.0).astype("<i2").tobytes()
+
+
+def _float_samples(samples: Any) -> Any:
     try:
         import numpy as np
 
         values = np.asarray(samples, dtype=np.float32).reshape(-1)
-        if values.size == 0:
-            return b""
         if not np.isfinite(values).all():
             raise TtsError("E_TTS_AUDIO", "TTS provider returned non-finite samples")
-        clipped = np.clip(values, -1.0, 1.0)
-        return (clipped * 32_767.0).astype("<i2").tobytes()
+        return values
     except TtsError:
         raise
     except Exception as exc:
         raise TtsError("E_TTS_AUDIO", "TTS provider returned invalid samples") from exc
+
+
+def _verify_reference_audio(config: TtsConfig) -> None:
+    path = config.reference_audio_path
+    if not path.is_file():
+        raise TtsError("E_TTS_VOICE_REFERENCE", "the authorized Hina reference WAV is missing")
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    if not hmac_compare_digest(digest, config.reference_audio_sha256):
+        raise TtsError(
+            "E_TTS_VOICE_REFERENCE",
+            "the authorized Hina reference WAV failed its SHA-256 check",
+        )
+
+
+def hmac_compare_digest(left: str, right: str) -> bool:
+    import hmac
+
+    return hmac.compare_digest(left, right)
+
+
+def _wsola_speed_up(samples: Any, rate: float, *, sample_rate_hz: int) -> Any:
+    import numpy as np
+
+    values = np.asarray(samples, dtype=np.float32).reshape(-1)
+    if values.size == 0 or rate <= 1.0005:
+        return values.copy()
+    bounded_rate = min(1.18, max(1.0, float(rate)))
+    frame = max(320, round(sample_rate_hz * 0.04))
+    overlap = max(80, round(sample_rate_hz * 0.01))
+    synthesis_hop = frame - overlap
+    analysis_hop = max(synthesis_hop + 1, round(synthesis_hop * bounded_rate))
+    search = max(40, round(sample_rate_hz * 0.005))
+    if values.size <= frame + search:
+        target = max(1, round(values.size / bounded_rate))
+        positions = np.linspace(0, values.size - 1, target)
+        return np.interp(positions, np.arange(values.size), values).astype(np.float32)
+
+    estimated = max(frame, round(values.size / bounded_rate) + frame)
+    output = np.zeros(estimated, dtype=np.float32)
+    output[:frame] = values[:frame]
+    input_position = 0
+    output_position = synthesis_hop
+    fade = np.linspace(0.0, 1.0, overlap, dtype=np.float32)
+    while output_position + frame <= output.size:
+        expected = input_position + analysis_hop
+        if expected + frame >= values.size:
+            break
+        reference = output[output_position : output_position + overlap]
+        low = max(0, expected - search)
+        high = min(values.size - frame, expected + search)
+        best = expected
+        best_score = -float("inf")
+        ref_energy = float(np.dot(reference, reference))
+        for candidate in range(low, high + 1, max(1, search // 24)):
+            probe = values[candidate : candidate + overlap]
+            energy = ref_energy * float(np.dot(probe, probe))
+            score = (
+                float(np.dot(reference, probe)) / math.sqrt(energy)
+                if energy > 1e-12
+                else -1.0
+            )
+            if score > best_score:
+                best_score = score
+                best = candidate
+        incoming = values[best : best + frame]
+        output[output_position : output_position + overlap] = (
+            reference * (1.0 - fade) + incoming[:overlap] * fade
+        )
+        output[
+            output_position + overlap : output_position + frame
+        ] = incoming[overlap:]
+        input_position = best
+        output_position += synthesis_hop
+    used = min(output.size, output_position + frame)
+    target_length = max(frame, round(values.size / bounded_rate))
+    return output[: min(used, target_length)]
 
 
 async def _wait_for_native_worker(worker: Future[TtsSynthesis]) -> None:

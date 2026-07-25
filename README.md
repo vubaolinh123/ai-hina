@@ -66,6 +66,13 @@ ollama serve
 pnpm start:dev-console
 ```
 
+`pnpm start:desktop` tự tìm Ollama ở PATH hoặc thư mục cài Windows, khởi động
+server loopback ẩn nếu cần và kiểm tra model trước khi mở Electron. Nếu thiếu
+model, launcher tự chạy `ollama pull qwen3.5:4b`; log provider nằm ở
+`var/logs/ollama.*.log`. Qwen 3.5 mặc định tắt thinking nội bộ trên chat UI để
+stream trả nội dung trong giới hạn token, tránh lỗi do reasoning chiếm hết
+`num_predict`.
+
 Nếu Ollama app đã chạy nền thì không cần chạy thêm `ollama serve`. Có thể đổi
 provider/model trước khi start:
 
@@ -107,12 +114,18 @@ pnpm start:dev-console
 M05 dùng `vieneu==3.2.3`, model
 `pnnbao-ump/VieNeu-TTS-v3-Turbo` và codec
 `OpenMOSS-Team/MOSS-Audio-Tokenizer-Nano-ONNX` tại các revision đã pin. Backend
-mặc định chạy CPU ONNX `int8`, xuất WAV mono 48 kHz với preset `Trúc Ly`.
+mặc định chạy CPU ONNX `int8`, xuất WAV mono 48 kHz với profile `Hina Anime AI
+v1` được enroll từ reference tổng hợp do owner tạo trong ElevenLabs. Đây là
+reference enrollment, không phải fine-tune model weights; provenance và SHA-256
+nằm trong `assets/manifests/hina-anime-elevenlabs-voice.v1.json`.
 
 Trong Dev Console, nhập nội dung ở panel **Hina nói tiếng Việt**, sau đó bấm
 **Tạo và phát giọng thật**. Toàn bộ câu phải qua `pre_tts` moderation trước khi
 model chạy. Nút **Dừng / barge-in** dừng audio ngay; bắt đầu thu mic cũng tự dừng
-audio. Voice cloning và lưu text/audio sinh ra đều bị tắt.
+audio. Arbitrary voice cloning và lưu text/audio sinh ra đều bị tắt. VieNeu giữ
+được `[chuckle]`, `[sigh]`, `[clear throat]` cùng các alias an toàn; cue chưa
+hỗ trợ được bỏ qua thay vì đọc thành chữ. Câu dài được tăng tốc thích ứng tối
+đa 1.18x, câu ngắn giữ tốc độ bình thường.
 
 Lần đầu có thể tải model/codec vào `var/cache/models/vieneu`. Có thể kiểm tra
 provider thật và tạo WAV nghe thử trong thư mục ignored:
@@ -199,10 +212,11 @@ Khi chạy desktop, ngoài cửa sổ **Hina Avatar Stage** dành cho operator, 
 thêm một **Hina Desktop Widget** trong suốt. Widget không có khung hoặc nền
 chữ nhật, luôn nổi trên desktop và có thể kéo trực tiếp trên vùng avatar để
 di chuyển sang vị trí khác. Khi không rê chuột (hoặc không focus bằng bàn
-phím), widget không hiện control nào; khi hover/focus chỉ hiện đúng một nút
-**Voice**. Nút này chỉ bật/tắt tiếng đầu ra của Hina qua safety authority hiện
-có, không bật microphone và không tạo audio giả. Nhấn `Esc` để bỏ focus và ẩn
-nút ngay sau khi rời avatar.
+phím), widget không hiện control nào; khi hover/focus hiện panel **Voice** và
+**Mic · Nói với Hina**. Voice bật/tắt tiếng đầu ra qua safety authority. Mic
+chỉ thu tối đa 30 giây vào RAM, gửi WAV loopback qua typed preload IPC để
+Moonshine chép lời, gửi transcript vào chat thật và phát câu trả lời VieNeu
+thật; không có wake-word hay ghi âm nền. Nhấn `Esc` để bỏ focus và ẩn panel.
 
 Trong panel Operator, nhóm **Quản lý widget avatar** giải thích ba thao tác
 **Ẩn widget / Hiện widget / Đặt lại vị trí**. Sau khi bạn kéo nhân vật sang

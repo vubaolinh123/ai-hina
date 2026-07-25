@@ -227,6 +227,68 @@ export async function requestSpeechSynthesis(raw: unknown): Promise<Uint8Array> 
   return response;
 }
 
+export async function requestSpeechTranscription(
+  rawAudio: unknown,
+  sessionId: unknown,
+  options: {
+    baseUrl?: string;
+    fetchImpl?: typeof fetch;
+  } = {},
+): Promise<JsonObject> {
+  const audio = validateWavAudio(rawAudio);
+  const validatedSessionId = validateUuid(sessionId, "E_DESKTOP_STT_REQUEST");
+  const baseUrl = parseControlBaseUrl(
+    options.baseUrl
+      ?? process.env.HINA_CONTROL_BASE_URL
+      ?? DEFAULT_CONTROL_BASE,
+  );
+  const fetchImpl = options.fetchImpl ?? fetch;
+  let response: Response;
+  try {
+    response = await fetchImpl(`${baseUrl}/v1/speech/transcriptions`, {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "audio/wav",
+        "X-Hina-Correlation-Id": crypto.randomUUID(),
+        "X-Hina-Session-Id": validatedSessionId,
+        "X-Hina-Source": "owner.desktop",
+      },
+      body: audio.buffer.slice(
+        audio.byteOffset,
+        audio.byteOffset + audio.byteLength,
+      ) as ArrayBuffer,
+      signal: AbortSignal.timeout(120_000),
+    });
+  } catch {
+    throw new Error("E_DESKTOP_CONTROL_OFFLINE: Hina control plane is unavailable");
+  }
+  const text = await response.text();
+  if (new TextEncoder().encode(text).byteLength > MAX_RESPONSE_BYTES) {
+    throw new Error("E_DESKTOP_RESPONSE: speech response exceeds the desktop limit");
+  }
+  let result: unknown;
+  try {
+    result = JSON.parse(text);
+  } catch {
+    throw new Error("E_DESKTOP_RESPONSE: speech response is not valid JSON");
+  }
+  if (!isObject(result)) {
+    throw new Error("E_DESKTOP_RESPONSE: speech response must be an object");
+  }
+  if (!response.ok) {
+    const code = typeof result.errorCode === "string"
+      ? result.errorCode.slice(0, 64)
+      : `HTTP_${response.status}`;
+    const message = typeof result.message === "string"
+      ? result.message.slice(0, 192)
+      : "speech transcription failed";
+    throw new Error(`${code}: ${message}`);
+  }
+  return result;
+}
+
 async function requestPath(
   method: "GET" | "POST",
   path: string,
@@ -291,6 +353,23 @@ async function requestBinaryPath(
     throw new Error(`${typeof record.errorCode === "string" ? record.errorCode : `HTTP_${response.status}`}: ${typeof record.message === "string" ? record.message : "speech synthesis failed"}`);
   }
   return bytes;
+}
+
+function validateWavAudio(raw: unknown): Uint8Array {
+  const audio = raw instanceof Uint8Array
+    ? raw
+    : raw instanceof ArrayBuffer
+      ? new Uint8Array(raw)
+      : null;
+  if (!audio || audio.byteLength < 44 || audio.byteLength > 1_048_576) {
+    throw new Error("E_DESKTOP_STT_REQUEST: WAV audio must be between 44 bytes and 1 MiB");
+  }
+  const riff = new TextDecoder().decode(audio.subarray(0, 4));
+  const wave = new TextDecoder().decode(audio.subarray(8, 12));
+  if (riff !== "RIFF" || wave !== "WAVE") {
+    throw new Error("E_DESKTOP_STT_REQUEST: audio must be a RIFF/WAVE payload");
+  }
+  return audio;
 }
 
 function isObject(value: unknown): value is JsonObject {

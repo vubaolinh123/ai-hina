@@ -121,6 +121,7 @@ class ProviderAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("".join(tokens), "Xin chao")
         self.assertEqual(_ProviderHandler.received_body["model"], "hina-local:4b")
         self.assertTrue(_ProviderHandler.received_body["stream"])
+        self.assertIs(_ProviderHandler.received_body["think"], False)
 
     async def test_openai_compatible_health_stream_and_secret_header(self) -> None:
         provider = LocalHttpChatProvider(

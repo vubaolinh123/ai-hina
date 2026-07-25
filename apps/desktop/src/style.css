@@ -86,6 +86,11 @@ html[data-window-mode="widget"] #app {
     opacity 120ms ease,
     transform 120ms ease,
     visibility 120ms linear;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  max-width: 260px;
 }
 
 .desktop-widget:hover .widget-voice-controls,
@@ -113,6 +118,49 @@ html[data-window-mode="widget"] #app {
   font-weight: 800;
   -webkit-app-region: no-drag;
   backdrop-filter: blur(10px);
+}
+
+.widget-mic-button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 11px;
+  border: 1px solid rgba(192, 225, 255, 0.76);
+  border-radius: 999px;
+  background: rgba(42, 62, 86, 0.9);
+  box-shadow: 0 8px 24px rgba(17, 28, 45, 0.34);
+  color: #f3f8ff;
+  font-size: 11px;
+  font-weight: 800;
+  -webkit-app-region: no-drag;
+  backdrop-filter: blur(10px);
+}
+
+.widget-mic-button:hover:not(:disabled),
+.widget-mic-button:focus-visible {
+  border-color: #9fd7ff;
+  background: rgba(59, 94, 128, 0.95);
+  outline: 2px solid rgba(159, 215, 255, 0.4);
+  outline-offset: 2px;
+}
+
+.widget-mic-button[aria-pressed="true"] {
+  border-color: rgba(255, 159, 197, 0.9);
+  background: rgba(110, 57, 90, 0.95);
+}
+
+.widget-voice-status {
+  display: block;
+  max-width: 250px;
+  padding: 7px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 10px;
+  background: rgba(13, 12, 17, 0.88);
+  color: #f8e9f0;
+  font-size: 10px;
+  line-height: 1.35;
+  -webkit-app-region: no-drag;
 }
 
 .widget-voice-button:hover:not(:disabled),

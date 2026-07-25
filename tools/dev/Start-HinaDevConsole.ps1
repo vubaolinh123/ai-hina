@@ -8,6 +8,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
+$modelScript = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "Start-HinaModelProvider.ps1"))
 $sourceRoot = Join-Path $repoRoot "apps\core-runtime\src"
 $contractsRoot = Join-Path $repoRoot "packages\contracts\src"
 $safetyRoot = Join-Path $repoRoot "packages\safety-policy\src"
@@ -67,6 +68,12 @@ if ($StartupCheck) {
 }
 
 try {
+    if (-not $StartupCheck) {
+        & $modelScript -PullMissingModel
+        if (-not $?) {
+            throw "Local model provider bootstrap failed."
+        }
+    }
     & uv @arguments
     if ($LASTEXITCODE -ne 0) {
         throw "Hina Dev Console failed with exit code $LASTEXITCODE"

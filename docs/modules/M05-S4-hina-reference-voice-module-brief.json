@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M05-S4-hina-authorized-reference-voice",
+  "module_id": "M05",
+  "objective": "Make the owner-created ElevenLabs AI voice the default local Hina voice through fixed VieNeu reference enrollment, preserve supported Vietnamese expressive cues, and apply a bounded pitch-preserving speed-up to long replies.",
+  "non_goals": [
+    "Do not claim that a new TTS model was trained or fine-tuned from one 51-second MP3.",
+    "Do not permit arbitrary uploaded voice cloning.",
+    "Do not retain generated speech or raw chat text.",
+    "Do not switch to a research-licensed 4B TTS model without a separate license and resource gate."
+  ],
+  "base_sha": "a2d79db",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    ".gitignore",
+    "assets/manifests/hina-anime-elevenlabs-voice.v1.json",
+    "assets/voices/hina-anime-elevenlabs-reference.wav",
+    "docs/modules/M05-*",
+    "workers/speech/"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "packages/contracts/",
+    "packages/text-brain/",
+    "apps/desktop/"
+  ],
+  "contracts": [
+    "The only cloneable voice is the fixed owner-authorized Hina reference asset with recorded provenance and hash.",
+    "Reference enrollment remains in memory and never writes a user voice into the installed VieNeu package.",
+    "Supported cues are normalized to VieNeu v3 Turbo emotion tokens before inference; unsupported cues are removed rather than spoken literally.",
+    "Short utterances remain at normal speed and long utterances are accelerated only within a bounded 1.00x to 1.18x range.",
+    "All synthesized output continues through pre-TTS moderation and watermarking."
+  ],
+  "allowed_dependencies": [
+    "Existing pinned VieNeu-TTS 3.2.3, NumPy and ONNX Runtime dependencies."
+  ],
+  "oss_candidates": [
+    "https://github.com/pnnbao97/VieNeu-TTS",
+    "https://github.com/fishaudio/fish-speech"
+  ],
+  "acceptance_criteria": [
+    "The fixed Hina reference WAV is hash-bound and becomes the default VieNeu voice.",
+    "VieNeu enrollment downloads and loads the pinned speaker encoder and denoiser artifacts.",
+    "chuckles, laughs, sighs, takes a deep breath and clears throat aliases reach the supported VieNeu cue vocabulary.",
+    "Unsupported cues such as yawns and smacks lips are omitted without being spoken as words.",
+    "Unit tests cover consent binding, cue normalization, adaptive rate bounds and pitch-preserving output duration.",
+    "A real VieNeu CPU smoke produces a WAV using the Hina profile."
+  ],
+  "required_test_commands": [
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-SpeechUnit.ps1",
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Run-M05RealTtsSmoke.ps1"
+  ],
+  "latency_or_quality_budget": {
+    "reference_seconds": 8,
+    "minimum_speaking_rate": 1.0,
+    "maximum_speaking_rate": 1.18,
+    "max_vram_mib": 0
+  },
+  "output_artifact_dir": "artifacts/verification/M05/"
+}

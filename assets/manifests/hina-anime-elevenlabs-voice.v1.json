@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "1.0",
+  "assetId": "hina-anime-elevenlabs-voice-v1",
+  "displayName": "Hina Anime AI v1",
+  "purpose": "Fixed local VieNeu reference enrollment for Hina speech output",
+  "provenance": {
+    "origin": "Owner-generated synthetic voice created with ElevenLabs",
+    "realPersonImitation": false,
+    "ownerRightsStatement": "On 2026-07-25 the repository owner stated that the source voice was generated entirely by AI in ElevenLabs and that no third-party voice permission is required.",
+    "sourceFile": "voice_demo/anime_voice.mp3",
+    "sourceSha256": "d76f9acc03574c0b885b4c902021ad7b7de5e8ed8f4150f90d96cb8e80fbb909",
+    "sourceDurationSeconds": 51.069375
+  },
+  "reference": {
+    "path": "assets/voices/hina-anime-elevenlabs-reference.wav",
+    "sha256": "f71960d949cdebba997cb4a96bc155ee0095dbb42fe6e609e8cf00b41346441f",
+    "sourceOffsetSeconds": 37.05,
+    "durationSeconds": 8.0,
+    "sampleRateHz": 44100,
+    "channels": 1,
+    "sampleFormat": "pcm_s16le"
+  },
+  "consent": {
+    "authorizedUse": "Local Hina AI speech synthesis",
+    "authorizedBy": "repository owner",
+    "revocable": true,
+    "deletionProcedure": "Delete the reference WAV and this manifest, then remove the configured Hina reference voice."
+  },
+  "processing": {
+    "method": "Zero-shot reference enrollment at runtime; no model-weight training or fine-tuning",
+    "sourceTool": "ffmpeg",
+    "sourceArguments": "-ss 37.050 -t 8.000 -ac 1 -ar 44100 -c:a pcm_s16le",
+    "generatedAudioWatermark": true,
+    "rawSourceCommitted": false
+  },
+  "restrictions": [
+    "No arbitrary reference upload",
+    "No public voice-cloning endpoint",
+    "Local owner use only"
+  ]
+}

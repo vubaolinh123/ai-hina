@@ -28,12 +28,16 @@ for commercial/public deployment until that model license is cleared.
 
 The same worker now provides real Vietnamese synthesis through pinned
 `vieneu==3.2.3`, the VieNeu-TTS v3 Turbo ONNX int8 snapshot and the MOSS audio
-codec snapshot. It runs on CPU, uses the allowlisted `Trúc Ly` preset voice,
-watermarks generated audio, and exposes 48 kHz mono PCM16 WAV through the
-loopback runtime.
+codec snapshot. It runs on CPU, enrolls the fixed owner-authorized
+`Hina Anime AI v1` reference voice from
+`assets/voices/hina-anime-elevenlabs-reference.wav`, watermarks generated
+audio, and exposes 48 kHz mono PCM16 WAV through the loopback runtime.
 
 Every complete utterance passes `pre_tts` moderation before inference. Voice
-cloning, generated-audio retention and input-text retention are disabled.
+uploads, generated-audio retention and input-text retention are disabled.
+VieNeu's supported `[chuckle]`, `[sigh]` and `[clear throat]` cues are kept
+after alias normalization; unsupported cues are removed. Long utterances use a
+bounded 1.00x–1.18x pitch-preserving speed adjustment.
 The first accepted request can download the pinned model and codec into
 `var/cache/models/vieneu`; set `HINA_TTS_ALLOW_DOWNLOAD=false` after preloading
 for strict offline use.

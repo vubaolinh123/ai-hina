@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M07-S11-widget-mic-stt-chat-tts",
+  "module_id": "M07",
+  "objective": "Add a real microphone conversation control to the transparent desktop widget: capture a short WAV in renderer memory, transcribe through the typed preload IPC and Moonshine, send the transcript to the real chat turn service, and play the moderated Hina TTS response.",
+  "non_goals": [
+    "Do not expose fetch, filesystem, Node or arbitrary IPC to the renderer.",
+    "Do not retain microphone audio after transcription.",
+    "Do not return fake transcripts, canned assistant text or fake audio.",
+    "Do not add continuous wake-word capture or background recording."
+  ],
+  "base_sha": "a2d79db",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "apps/desktop/",
+    "docs/modules/M07-*"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "packages/contracts/",
+    "packages/safety-policy/",
+    "packages/text-brain/",
+    "workers/speech/"
+  ],
+  "contracts": [
+    "Only named preload methods may send bounded audio bytes to a fixed loopback speech route.",
+    "Microphone permission is audio-only and scoped to the Hina desktop windows.",
+    "The widget exposes Mic and Voice controls only while hovered or focused; the avatar surface remains native drag.",
+    "A successful microphone turn follows STT → real chat FSM → moderated TTS and respects global mute.",
+    "Audio capture is memory-only and stops all tracks and AudioContext resources after each turn."
+  ],
+  "allowed_dependencies": [
+    "Existing Electron permission APIs, Web Audio API, Moonshine speech route, chat turn route and VieNeu TTS route."
+  ],
+  "oss_candidates": [
+    "https://github.com/moonshine-ai/moonshine"
+  ],
+  "acceptance_criteria": [
+    "Desktop build/typecheck and security tests pass.",
+    "The widget hover panel contains independent Voice and Mic controls.",
+    "Mic capture encodes mono 16 kHz PCM WAV and enforces a 30-second/1 MiB bound.",
+    "A real transcription response can feed a real chat turn and real WAV playback.",
+    "Mic errors show a correlation ID and leave no active media tracks."
+  ],
+  "required_test_commands": [
+    "pnpm --filter @hina/desktop test",
+    "pnpm --filter @hina/desktop build"
+  ],
+  "latency_or_quality_budget": {
+    "capture_max_seconds": 30,
+    "capture_max_bytes": 1048576,
+    "speech_request_timeout_milliseconds": 120000,
+    "chat_poll_milliseconds": 180
+  },
+  "output_artifact_dir": "artifacts/verification/M07/"
+}

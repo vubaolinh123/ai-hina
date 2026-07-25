@@ -13,7 +13,11 @@ DEFAULT_TTS_MODEL_ID = "pnnbao-ump/VieNeu-TTS-v3-Turbo"
 DEFAULT_TTS_MODEL_REVISION = "75ff82a72f54d55ed389e1eeb12041d3c4bac7d4"
 DEFAULT_TTS_CODEC_ID = "OpenMOSS-Team/MOSS-Audio-Tokenizer-Nano-ONNX"
 DEFAULT_TTS_CODEC_REVISION = "ceff0d0749bfb3fa2d61149794ec6feef0d1e1ae"
-DEFAULT_TTS_VOICE = "Trúc Ly"
+DEFAULT_TTS_VOICE = "Hina Anime AI v1"
+DEFAULT_TTS_REFERENCE_AUDIO = Path("assets/voices/hina-anime-elevenlabs-reference.wav")
+DEFAULT_TTS_REFERENCE_SHA256 = (
+    "f71960d949cdebba997cb4a96bc155ee0095dbb42fe6e609e8cf00b41346441f"
+)
 ALLOWED_TTS_VOICES = frozenset({DEFAULT_TTS_VOICE})
 ALLOWED_TTS_STYLES = frozenset({"tu_nhien", "tin_tuc", "doc_truyen"})
 
@@ -38,6 +42,9 @@ class TtsConfig:
     max_audio_seconds: float = 120.0
     raw_audio_retention: bool = False
     voice_cloning_enabled: bool = False
+    reference_voice_enabled: bool = True
+    reference_audio_path: Path = DEFAULT_TTS_REFERENCE_AUDIO
+    reference_audio_sha256: str = DEFAULT_TTS_REFERENCE_SHA256
 
     def __post_init__(self) -> None:
         for value, name in (
@@ -70,7 +77,15 @@ class TtsConfig:
         if self.raw_audio_retention:
             raise TtsError("E_TTS_CONFIG", "generated audio retention is unavailable in M05")
         if self.voice_cloning_enabled:
-            raise TtsError("E_TTS_VOICE_CONSENT", "voice cloning is unavailable in M05")
+            raise TtsError(
+                "E_TTS_VOICE_CONSENT",
+                "arbitrary voice cloning is unavailable; only the fixed authorized Hina reference is allowed",
+            )
+        if self.reference_voice_enabled:
+            if self.voice != DEFAULT_TTS_VOICE:
+                raise TtsError("E_TTS_VOICE_CONSENT", "the reference voice must use the Hina profile")
+            if re.fullmatch(r"[0-9a-f]{64}", self.reference_audio_sha256) is None:
+                raise TtsError("E_TTS_CONFIG", "TTS reference audio SHA-256 is invalid")
         for value, name, lower, upper in (
             (self.cpu_threads, "CPU threads", 1, 64),
             (self.max_pending_syntheses, "pending synthesis limit", 1, 16),
@@ -99,8 +114,13 @@ class TtsConfig:
     ) -> TtsConfig:
         values = env if env is not None else os.environ
         cache = Path(values.get("HINA_TTS_MODEL_CACHE", "var/cache/models/vieneu"))
+        reference = Path(
+            values.get("HINA_TTS_REFERENCE_AUDIO", str(DEFAULT_TTS_REFERENCE_AUDIO))
+        )
         if not cache.is_absolute() and root is not None:
             cache = root / cache
+        if not reference.is_absolute() and root is not None:
+            reference = root / reference
         return cls(
             model_id=values.get("HINA_TTS_MODEL", DEFAULT_TTS_MODEL_ID),
             model_revision=values.get("HINA_TTS_MODEL_REVISION", DEFAULT_TTS_MODEL_REVISION),
@@ -118,6 +138,13 @@ class TtsConfig:
             max_text_characters=_env_int(values, "HINA_TTS_MAX_TEXT_CHARACTERS", 2_000),
             max_chunk_characters=_env_int(values, "HINA_TTS_MAX_CHUNK_CHARACTERS", 256),
             max_audio_seconds=_env_float(values, "HINA_TTS_MAX_AUDIO_SECONDS", 120),
+            reference_voice_enabled=_env_bool(
+                values, "HINA_TTS_REFERENCE_VOICE_ENABLED", True
+            ),
+            reference_audio_path=reference,
+            reference_audio_sha256=values.get(
+                "HINA_TTS_REFERENCE_SHA256", DEFAULT_TTS_REFERENCE_SHA256
+            ).strip().lower(),
         )
 
     def public_status(self) -> dict[str, object]:
@@ -135,6 +162,19 @@ class TtsConfig:
             "allowDownload": self.allow_download,
             "rawAudioRetention": self.raw_audio_retention,
             "voiceCloning": self.voice_cloning_enabled,
+            "referenceVoiceEnrollment": self.reference_voice_enabled,
+            "referenceAudioSha256": (
+                self.reference_audio_sha256 if self.reference_voice_enabled else None
+            ),
+            "adaptiveSpeakingRate": {
+                "minimum": 1.0,
+                "maximum": 1.18,
+            },
+            "expressiveCues": [
+                "chuckle",
+                "sigh",
+                "clear throat",
+            ],
         }
 
 

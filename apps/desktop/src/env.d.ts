@@ -57,6 +57,14 @@ type ChatTurn = {
   correlationId?: string;
 };
 
+type SpeechTranscription = {
+  status: "transcribed" | "silence";
+  transcript: string;
+  speechDetected: boolean;
+  processingMilliseconds: number;
+  correlationId: string;
+};
+
 type DesktopWindowMode = "operator" | "widget";
 
 type WidgetStatus = {
@@ -99,6 +107,10 @@ type HinaDesktopApi = {
   }): Promise<ChatTurn>;
   getChatTurn(turnId: string): Promise<ChatTurn>;
   cancelChatTurn(turnId: string): Promise<ChatTurn>;
+  transcribeSpeech(
+    audio: Uint8Array,
+    sessionId: string,
+  ): Promise<SpeechTranscription>;
   synthesizeSpeech(payload: {
     text: string;
     utteranceId: string;

@@ -297,6 +297,7 @@ class LocalHttpChatProvider:
                 "model": self.config.model,
                 "messages": messages,
                 "stream": True,
+                "think": False,
                 "options": {
                     "temperature": self.config.temperature,
                     "num_predict": self.config.max_tokens,

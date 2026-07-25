@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M03-S3-local-model-provider-bootstrap",
+  "module_id": "M03",
+  "objective": "Make Hina text chat start against the real loopback Ollama provider by bootstrapping the configured server, checking the configured qwen3.5:4b model, and returning actionable diagnostics instead of a generic unavailable stream error.",
+  "non_goals": [
+    "Do not add fake or canned chat replies.",
+    "Do not expose the model server beyond numeric loopback.",
+    "Do not execute model-generated code or tools.",
+    "Do not run deep repeat or soak verification in this fast iteration."
+  ],
+  "base_sha": "a2d79db",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "docs/modules/M03-*",
+    "packages/text-brain/",
+    "tools/dev/Start-HinaDesktop.ps1",
+    "tools/dev/Start-HinaDevConsole.ps1",
+    "tools/dev/Start-HinaModelProvider.ps1",
+    "package.json"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "packages/contracts/",
+    "packages/safety-policy/",
+    "workers/speech/",
+    "apps/desktop/"
+  ],
+  "contracts": [
+    "The configured provider remains loopback-only and no renderer gains raw network access.",
+    "Desktop and Dev Console startup start Ollama only when the configured provider is unavailable.",
+    "Startup verifies the configured model exists before reporting model readiness.",
+    "No fake response is returned when installation, startup or model availability fails."
+  ],
+  "allowed_dependencies": [
+    "Ollama local runtime and the existing qwen3.5:4b model configuration."
+  ],
+  "oss_candidates": [
+    "https://github.com/ollama/ollama"
+  ],
+  "acceptance_criteria": [
+    "A startup helper discovers Ollama from PATH or its standard Windows install path and starts it hidden when required.",
+    "The helper verifies qwen3.5:4b through the loopback Ollama API and emits an actionable error when it is absent.",
+    "A real Ollama chat request completes against qwen3.5:4b.",
+    "Existing text-brain unit tests remain green."
+  ],
+  "required_test_commands": [
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Invoke-TextBrainUnit.ps1",
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Start-HinaModelProvider.ps1 -StartupCheck"
+  ],
+  "latency_or_quality_budget": {
+    "provider_health_timeout_seconds": 30,
+    "model_check_timeout_seconds": 10
+  },
+  "output_artifact_dir": "artifacts/verification/M03/"
+}

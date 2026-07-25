@@ -72,7 +72,7 @@ test("Vue renderer has no direct network, Electron, Node or storage access", () 
   assert.doesNotMatch(renderer, /sqlite|qdrant|modelPath|process\.env/i);
 });
 
-test("transparent widget keeps one hover Voice control and a native drag surface", () => {
+test("transparent widget keeps hover Voice/Mic controls and a native drag surface", () => {
   const main = read("electron/main.ts");
   const widget = read("src/DesktopWidget.vue");
   const style = read("src/style.css");
@@ -99,15 +99,20 @@ test("transparent widget keeps one hover Voice control and a native drag surface
   assert.match(widget, /class="desktop-widget"/);
   assert.match(widget, /class="widget-avatar-surface"/);
   assert.match(widget, /class="widget-control widget-voice-button"/);
-  assert.equal((widget.match(/\bclass="widget-control\b/g) ?? []).length, 1);
+  assert.match(widget, /id="widgetMicButton"/);
+  assert.equal((widget.match(/\bclass="widget-control\b/g) ?? []).length, 2);
   assert.match(widget, /Voice ·/);
+  assert.match(widget, /Mic · Nói với Hina/);
   assert.match(widget, /action:\s*"set_mute"/);
   assert.match(widget, /avatar\.value\?\.viseme/);
   assert.match(widget, /avatar\.value(?:\?\.|\.)intensity/);
-  assert.doesNotMatch(widget, /microphone|mic\b|speech recognition/i);
+  assert.match(widget, /getUserMedia/);
+  assert.match(widget, /transcribeSpeech/);
+  assert.match(widget, /encodePcmWav/);
 
   assert.match(style, /\.widget-avatar-surface[\s\S]*-webkit-app-region:\s*drag/);
   assert.match(style, /\.widget-voice-button[\s\S]*-webkit-app-region:\s*no-drag/);
+  assert.match(style, /\.widget-mic-button[\s\S]*-webkit-app-region:\s*no-drag/);
   assert.match(
     style,
     /\.widget-voice-controls[\s\S]*opacity:\s*0[\s\S]*visibility:\s*hidden[\s\S]*pointer-events:\s*none/,
@@ -297,6 +302,42 @@ test("control client maps only fixed operations and bounds control responses", a
       && error.message.startsWith("E_")
       && error.message.length <= 259
     ),
+  );
+});
+
+test("control client sends bounded microphone WAV only to the fixed speech route", async () => {
+  const calls = [];
+  const wav = new Uint8Array(44);
+  wav.set(new TextEncoder().encode("RIFF"), 0);
+  wav.set(new TextEncoder().encode("WAVE"), 8);
+  const response = {
+    status: "transcribed",
+    transcript: "Xin chào Hina",
+    speechDetected: true,
+    processingMilliseconds: 12,
+    correlationId: "11111111-1111-4111-8111-111111111111",
+  };
+  const result = await control.requestSpeechTranscription(
+    wav,
+    "22222222-2222-4222-8222-222222222222",
+    {
+      fetchImpl: async (url, init) => {
+        calls.push({ url, init });
+        return new Response(JSON.stringify(response), { status: 200 });
+      },
+    },
+  );
+  assert.deepEqual(result, response);
+  assert.equal(calls[0].url, "http://127.0.0.1:8765/v1/speech/transcriptions");
+  assert.equal(calls[0].init.headers["Content-Type"], "audio/wav");
+  assert.equal(new Uint8Array(calls[0].init.body)[0], 0x52);
+  await assert.rejects(
+    control.requestSpeechTranscription(
+      new Uint8Array(45),
+      "22222222-2222-4222-8222-222222222222",
+      { fetchImpl: async () => new Response("{}", { status: 200 }) },
+    ),
+    /E_DESKTOP_STT_REQUEST/,
   );
 });
 
