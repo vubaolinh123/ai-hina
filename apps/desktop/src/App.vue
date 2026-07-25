@@ -6,11 +6,12 @@ import {
   onMounted,
   ref,
 } from "vue";
+import { encodePcmWav, mergeAudioChunks, resampleAudio } from "./audio-utils";
 import type { FrameMetricsReport } from "./frame-metrics.mjs";
 
 const VrmStage = defineAsyncComponent(() => import("./VrmStage.vue"));
 const DesktopWidget = defineAsyncComponent(() => import("./DesktopWidget.vue"));
-type DashboardPage = "overview" | "chat" | "avatar" | "runtime";
+type DashboardPage = "overview" | "chat" | "speech" | "avatar" | "runtime";
 
 const stateLabels: Record<AvatarState, string> = {
   idle: "Nghỉ",
@@ -36,6 +37,25 @@ const chatBusy = ref(false);
 const chatError = ref("");
 const chatVoiceEnabled = ref(true);
 const chatSessionId = crypto.randomUUID();
+const speechSessionId = crypto.randomUUID();
+const speechRecording = ref(false);
+const speechBusy = ref(false);
+const speechStatus = ref("Sẵn sàng. Bấm Thu mic, nói một câu rồi bấm Dừng & nhận dạng.");
+const speechTranscript = ref("");
+const speechCorrelationId = ref("");
+const speechTtsText = ref("Xin chào, mình là Hina. Đây là phần kiểm tra giọng nói tiếng Việt.");
+const speechTtsAudioUrl = ref("");
+let speechTtsAudio: HTMLAudioElement | null = null;
+let speechRecorder: {
+  stream: MediaStream;
+  context: AudioContext;
+  source: MediaStreamAudioSourceNode;
+  processor: ScriptProcessorNode;
+  sink: GainNode;
+  chunks: Float32Array[];
+  sampleCount: number;
+  stopping: boolean;
+} | null = null;
 let chatPollTimer: number | null = null;
 let activeChatTurnId: string | null = null;
 const vrmReady = ref(false);
@@ -62,6 +82,7 @@ function controlRequestAllowed(): boolean {
 function noteControlFailure(error: unknown): void {
   const message = error instanceof Error ? error.message : "E_DESKTOP_CONTROL_OFFLINE";
   errorMessage.value = message;
+  console.error("[hina-operator] E_DESKTOP_CONTROL", message);
   if (message.includes("E_DESKTOP_CONTROL_OFFLINE")) {
     controlRetryAt = Date.now() + controlRetryDelay;
     controlRetryDelay = Math.min(controlRetryDelay * 2, 30_000);
@@ -114,11 +135,17 @@ async function pollDesktopChat(turnId: string): Promise<void> {
       const failure = `${turn.errorCode ?? "E_CHAT_FAILED"}: ${turn.errorMessage ?? "AI không thể trả lời."}`;
       chatError.value = failure;
       appendChatMessage("system", failure);
+      console.error(
+        `[hina-chat] ${turn.errorCode ?? "E_CHAT_FAILED"}`,
+        turn.errorMessage ?? "AI không thể trả lời.",
+        `correlationId=${turn.correlationId ?? "unknown"}`,
+      );
     }
   } catch (error) {
     activeChatTurnId = null;
     chatBusy.value = false;
     chatError.value = error instanceof Error ? error.message : "E_DESKTOP_CHAT";
+    console.error("[hina-chat] E_DESKTOP_CHAT_POLL", chatError.value);
   }
 }
 
@@ -141,6 +168,7 @@ async function sendDesktopChat(): Promise<void> {
     chatBusy.value = false;
     chatError.value = error instanceof Error ? error.message : "E_DESKTOP_CHAT";
     appendChatMessage("system", chatError.value);
+    console.error("[hina-chat] E_DESKTOP_CHAT_START", chatError.value);
   }
 }
 
@@ -153,6 +181,160 @@ async function cancelDesktopChat(): Promise<void> {
   }
   activeChatTurnId = null;
   chatBusy.value = false;
+}
+
+function cleanupSpeechRecorder(): void {
+  const current = speechRecorder;
+  speechRecorder = null;
+  speechRecording.value = false;
+  if (!current) return;
+  current.processor.onaudioprocess = null;
+  current.source.disconnect();
+  current.processor.disconnect();
+  current.sink.disconnect();
+  current.stream.getTracks().forEach((track) => track.stop());
+  void current.context.close();
+}
+
+async function stopSpeechTest(): Promise<void> {
+  const current = speechRecorder;
+  if (!current || current.stopping) return;
+  current.stopping = true;
+  speechRecorder = null;
+  speechRecording.value = false;
+  current.processor.onaudioprocess = null;
+  current.source.disconnect();
+  current.processor.disconnect();
+  current.sink.disconnect();
+  current.stream.getTracks().forEach((track) => track.stop());
+  const sampleRate = current.context.sampleRate;
+  await current.context.close();
+  if (current.sampleCount < sampleRate * 0.25) {
+    speechStatus.value = "Audio quá ngắn. Hãy nói ít nhất khoảng 0,25 giây.";
+    return;
+  }
+  const wav = encodePcmWav(
+    resampleAudio(
+      mergeAudioChunks(current.chunks, current.sampleCount),
+      sampleRate,
+      16_000,
+    ),
+    16_000,
+  );
+  if (wav.byteLength > 1_048_576) {
+    speechStatus.value = "Audio vượt giới hạn 1 MiB. Hãy thử một câu ngắn hơn.";
+    return;
+  }
+  speechBusy.value = true;
+  speechStatus.value = "Đang gửi WAV thật sang Moonshine để nhận dạng tiếng Việt…";
+  speechTranscript.value = "";
+  speechCorrelationId.value = "";
+  try {
+    const result = await window.hinaDesktop.transcribeSpeech(wav, speechSessionId);
+    speechTranscript.value = result.transcript.trim();
+    speechCorrelationId.value = result.correlationId;
+    speechStatus.value = result.speechDetected
+      ? `STT hoàn tất trong ${result.processingMilliseconds} ms.`
+      : "Moonshine không phát hiện tiếng nói trong đoạn thu.";
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "E_DESKTOP_STT";
+    speechStatus.value = message;
+    console.error("[hina-speech-test] E_DESKTOP_STT", message);
+  } finally {
+    speechBusy.value = false;
+  }
+}
+
+async function startSpeechTest(): Promise<void> {
+  if (speechBusy.value || speechRecording.value) return;
+  if (!navigator.mediaDevices?.getUserMedia) {
+    speechStatus.value = "Thiết bị hiện tại không cung cấp quyền microphone.";
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+      video: false,
+    });
+    const context = new window.AudioContext();
+    const source = context.createMediaStreamSource(stream);
+    const processor = context.createScriptProcessor(4096, 1, 1);
+    const sink = context.createGain();
+    sink.gain.value = 0;
+    speechRecorder = {
+      stream,
+      context,
+      source,
+      processor,
+      sink,
+      chunks: [],
+      sampleCount: 0,
+      stopping: false,
+    };
+    processor.onaudioprocess = (event) => {
+      if (!speechRecorder || speechRecorder.stopping) return;
+      const chunk = new Float32Array(event.inputBuffer.getChannelData(0));
+      speechRecorder.chunks.push(chunk);
+      speechRecorder.sampleCount += chunk.length;
+      if (speechRecorder.sampleCount / context.sampleRate >= 30) {
+        void stopSpeechTest();
+      }
+    };
+    source.connect(processor);
+    processor.connect(sink);
+    sink.connect(context.destination);
+    speechRecording.value = true;
+    speechStatus.value = "Đang thu mic… nói một câu, sau đó bấm Dừng & nhận dạng.";
+  } catch (error) {
+    cleanupSpeechRecorder();
+    const message = error instanceof Error ? error.message : "E_DESKTOP_MIC_PERMISSION";
+    speechStatus.value = message;
+    console.error("[hina-speech-test] E_DESKTOP_MIC_PERMISSION", message);
+  }
+}
+
+async function testTtsVoice(): Promise<void> {
+  const text = speechTtsText.value.trim();
+  if (!text || speechBusy.value || speechRecording.value) return;
+  speechBusy.value = true;
+  speechStatus.value = "Đang tạo WAV bằng giọng Hina/VieNeu thật…";
+  try {
+    const bytes = await window.hinaDesktop.synthesizeSpeech({
+      text,
+      utteranceId: crypto.randomUUID(),
+      sessionId: speechSessionId,
+      source: "owner.console",
+    });
+    if (speechTtsAudioUrl.value) URL.revokeObjectURL(speechTtsAudioUrl.value);
+    speechTtsAudio?.pause();
+    speechTtsAudioUrl.value = URL.createObjectURL(
+      new Blob([Uint8Array.from(bytes)], { type: "audio/wav" }),
+    );
+    speechTtsAudio = new Audio(speechTtsAudioUrl.value);
+    await speechTtsAudio.play();
+    speechStatus.value = "TTS hoàn tất và đang phát. Bạn cũng có thể dùng thanh audio để nghe lại.";
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "E_DESKTOP_TTS";
+    speechStatus.value = message;
+    console.error("[hina-speech-test] E_DESKTOP_TTS", message);
+  } finally {
+    speechBusy.value = false;
+  }
+}
+
+function cleanupSpeechTest(): void {
+  cleanupSpeechRecorder();
+  speechTtsAudio?.pause();
+  speechTtsAudio = null;
+  if (speechTtsAudioUrl.value) {
+    URL.revokeObjectURL(speechTtsAudioUrl.value);
+    speechTtsAudioUrl.value = "";
+  }
 }
 
 const stageState = computed(() => avatar.value?.state ?? "error");
@@ -434,6 +616,11 @@ function stopPolling(): void {
   }
 }
 
+function cleanupDesktop(): void {
+  stopPolling();
+  cleanupSpeechTest();
+}
+
 onMounted(async () => {
   windowMode.value = await window.hinaDesktop.getWindowMode();
   document.documentElement.dataset.windowMode = windowMode.value;
@@ -442,12 +629,12 @@ onMounted(async () => {
   avatarTimer = window.setInterval(refreshAvatar, 250);
   safetyTimer = window.setInterval(refreshSafety, 1_000);
   widgetTimer = window.setInterval(refreshWidget, 1_000);
-  window.addEventListener("beforeunload", stopPolling, { once: true });
+  window.addEventListener("beforeunload", cleanupDesktop, { once: true });
 });
 
 onBeforeUnmount(() => {
-  window.removeEventListener("beforeunload", stopPolling);
-  stopPolling();
+  window.removeEventListener("beforeunload", cleanupDesktop);
+  cleanupDesktop();
 });
 </script>
 
@@ -476,6 +663,10 @@ onBeforeUnmount(() => {
       <button type="button" :class="{ active: activePage === 'chat' }" @click="activePage = 'chat'">
         Chat với Hina
         <small>Gửi text và nghe câu trả lời</small>
+      </button>
+      <button type="button" :class="{ active: activePage === 'speech' }" @click="activePage = 'speech'">
+        Mic / STT / TTS
+        <small>Kiểm tra thu âm và giọng thật</small>
       </button>
       <button type="button" :class="{ active: activePage === 'avatar' }" @click="activePage = 'avatar'">
         Avatar Stage
@@ -524,6 +715,7 @@ onBeforeUnmount(() => {
       </div>
       <div class="quick-actions">
         <button class="primary" type="button" @click="activePage = 'chat'">Mở chat với Hina</button>
+        <button type="button" @click="activePage = 'speech'">Kiểm tra Mic / STT / TTS</button>
         <button type="button" @click="activePage = 'avatar'">Xem avatar</button>
         <button type="button" @click="activePage = 'runtime'">Quản lý widget và Safety</button>
       </div>
@@ -561,6 +753,97 @@ onBeforeUnmount(() => {
           <p v-if="chatError" class="inline-error">{{ chatError }}</p>
         </form>
       </div>
+    </section>
+
+    <section v-else-if="activePage === 'speech'" class="dashboard-page speech-page">
+      <div class="page-heading">
+        <p class="eyebrow">DASHBOARD / MIC · STT · TTS</p>
+        <h2>Kiểm tra từng phần của hội thoại bằng giọng nói</h2>
+        <p class="purpose">
+          Trang này dùng dịch vụ thật, không dùng dữ liệu giả. Phần Mic → STT thu âm trực tiếp
+          rồi gửi WAV cho Moonshine. Phần TTS gửi đoạn text cho VieNeu và phát lại WAV Hina tạo ra.
+        </p>
+      </div>
+      <div class="speech-test-grid">
+        <article class="speech-test-card">
+          <p class="eyebrow">MIC → MOONSHINE STT</p>
+          <h3>Hina nghe bạn nói</h3>
+          <p>
+            Dùng khi cần kiểm tra quyền microphone hoặc xem Moonshine nhận dạng tiếng Việt có đúng
+            không. Audio chỉ được giữ trong bộ nhớ để xử lý lượt hiện tại.
+          </p>
+          <div class="button-row">
+            <button
+              v-if="!speechRecording"
+              id="speechStartMic"
+              class="primary"
+              type="button"
+              :disabled="speechBusy"
+              @click="startSpeechTest"
+            >
+              Thu mic
+            </button>
+            <button
+              v-else
+              id="speechStopMic"
+              class="recording"
+              type="button"
+              @click="stopSpeechTest"
+            >
+              Dừng &amp; nhận dạng
+            </button>
+          </div>
+          <div class="speech-result" aria-live="polite">
+            <span>Kết quả transcript</span>
+            <strong>{{ speechTranscript || "Chưa có transcript." }}</strong>
+            <small v-if="speechCorrelationId">
+              Correlation ID: <code>{{ speechCorrelationId }}</code>
+            </small>
+          </div>
+        </article>
+
+        <article class="speech-test-card">
+          <p class="eyebrow">TEXT → VIENEU TTS</p>
+          <h3>Nghe thử giọng Hina</h3>
+          <p>
+            Dùng khi cần kiểm tra giọng, cảm xúc và tốc độ nói. Câu dài được pipeline tự tăng tốc
+            trong giới hạn đã cấu hình; câu ngắn giữ nhịp tự nhiên.
+          </p>
+          <label for="speechTtsText">Nội dung Hina sẽ nói</label>
+          <textarea
+            id="speechTtsText"
+            v-model="speechTtsText"
+            rows="5"
+            maxlength="4000"
+            :disabled="speechBusy || speechRecording"
+          ></textarea>
+          <button
+            id="speechTestTts"
+            class="primary"
+            type="button"
+            :disabled="speechBusy || speechRecording || !speechTtsText.trim()"
+            @click="testTtsVoice"
+          >
+            Tạo &amp; phát giọng Hina
+          </button>
+          <audio
+            v-if="speechTtsAudioUrl"
+            class="speech-audio"
+            :src="speechTtsAudioUrl"
+            controls
+          ></audio>
+        </article>
+      </div>
+      <div class="speech-status" :data-recording="speechRecording" role="status">
+        <strong>{{ speechRecording ? "● Đang nghe" : speechBusy ? "Đang xử lý" : "Trạng thái" }}</strong>
+        <span>{{ speechStatus }}</span>
+      </div>
+      <aside class="speech-help">
+        <strong>Nếu không nghe/không nhận được giọng:</strong>
+        kiểm tra Windows đã cấp quyền microphone cho ứng dụng desktop, chọn đúng mic mặc định,
+        nói gần mic rồi xem correlation ID hoặc dòng <code>[hina-error]</code> trong cửa sổ
+        <code>pnpm start:desktop</code>.
+      </aside>
     </section>
 
     <section v-else class="stage-grid" :data-page="activePage">

@@ -252,7 +252,7 @@ pre,
   z-index: 9;
   top: 76px;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   border-bottom: 1px solid var(--border);
   background: rgba(18, 16, 22, 0.96);
 }
@@ -333,6 +333,115 @@ pre,
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.speech-test-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.speech-test-card {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  background: #121016;
+}
+
+.speech-test-card h3 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.speech-test-card p:not(.eyebrow) {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.speech-test-card label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.speech-test-card textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 12px;
+  border: 1px solid var(--border);
+  background: #0d0c11;
+  color: var(--text);
+  font: inherit;
+  line-height: 1.45;
+}
+
+.speech-test-card button {
+  justify-self: start;
+}
+
+.speech-result {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 12px;
+  border-left: 3px solid var(--accent);
+  background: rgba(240, 142, 107, 0.08);
+}
+
+.speech-result span,
+.speech-result small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.speech-result strong {
+  min-height: 24px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.speech-audio {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.speech-status {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+}
+
+.speech-status strong {
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.speech-status[data-recording="true"] strong {
+  color: var(--danger);
+}
+
+.speech-status span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.speech-help {
+  padding: 14px 16px;
+  border: 1px dashed rgba(240, 142, 107, 0.5);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.speech-help strong {
+  color: var(--text);
 }
 
 .chat-layout {
@@ -919,6 +1028,10 @@ pre {
 }
 
 @media (max-width: 1050px) {
+  .speech-test-grid {
+    grid-template-columns: 1fr;
+  }
+
   .stage-grid {
     grid-template-columns: 1fr;
   }

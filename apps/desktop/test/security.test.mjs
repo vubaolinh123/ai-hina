@@ -20,6 +20,9 @@ test("BrowserWindow keeps renderer sandboxed and blocks navigation surfaces", ()
   assert.match(main, /opacity:\s*smoke \? 0 : 1/);
   assert.match(main, /skipTaskbar:\s*smoke/);
   assert.match(main, /setWindowOpenHandler/);
+  assert.match(main, /attachRendererConsoleLogging/);
+  assert.match(main, /console-message/);
+  assert.match(main, /render-process-gone/);
   assert.match(main, /setWindowOpenHandler\(\(\)\s*=>\s*\(\{\s*action:\s*"deny"\s*\}\)\)/);
   assert.match(main, /will-navigate/);
   assert.match(main, /will-attach-webview/);
@@ -61,6 +64,7 @@ test("Vue renderer has no direct network, Electron, Node or storage access", () 
   const renderer = [
     read("src/App.vue"),
     read("src/DesktopWidget.vue"),
+    read("src/audio-utils.ts"),
     read("src/main.ts"),
     read("src/VrmStage.vue"),
     read("src/hina-presentation.mjs"),
@@ -109,6 +113,13 @@ test("transparent widget keeps hover Voice/Mic controls and a native drag surfac
   assert.match(widget, /getUserMedia/);
   assert.match(widget, /transcribeSpeech/);
   assert.match(widget, /encodePcmWav/);
+  const app = read("src/App.vue");
+  assert.match(app, /Mic \/ STT \/ TTS/);
+  assert.match(app, /speechStartMic/);
+  assert.match(app, /speechTestTts/);
+  assert.match(app, /transcribeSpeech/);
+  assert.match(app, /synthesizeSpeech/);
+  assert.match(app, /getUserMedia/);
 
   assert.match(style, /\.widget-avatar-surface[\s\S]*-webkit-app-region:\s*drag/);
   assert.match(style, /\.widget-voice-button[\s\S]*-webkit-app-region:\s*no-drag/);
@@ -178,7 +189,7 @@ test("VRM is lazy-loaded and fixed-asset recovery exposes bounded real telemetry
   assert.match(main, /snapshot\.styledMaterialCount < 13/);
   assert.match(main, /snapshot\.presentation !== "hina-kawaii-v0\.1"/);
   assert.match(main, /app\.quit\(\)/);
-  assert.match(app, /addEventListener\("beforeunload", stopPolling/);
+  assert.match(app, /addEventListener\("beforeunload", cleanupDesktop/);
   assert.match(app, /function stopPolling\(\)/);
 });
 

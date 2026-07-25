@@ -293,8 +293,8 @@ class HinaRuntimeApplication:
     def _log_conversation_error(self, record: dict[str, str]) -> None:
         self.error_logger.log_error(
             PrimitiveError(
-                RuntimeErrorCode.OPERATION_FAILED,
-                record["errorCode"],
+                record["errorCode"],  # type: ignore[arg-type]
+                "conversation turn failed",
             ),
             component="text_brain.conversation",
             operation="turn",

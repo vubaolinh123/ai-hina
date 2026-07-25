@@ -195,6 +195,23 @@ function hardenWindow(target: BrowserWindow): void {
   });
 }
 
+function attachRendererConsoleLogging(target: BrowserWindow, name: "operator" | "widget"): void {
+  target.webContents.on("console-message", (details) => {
+    if (details.message.includes("frame-ancestors") && details.message.includes("ignored")) {
+      return;
+    }
+    if (details.level !== "warning" && details.level !== "error") return;
+    const prefix = details.level === "error" ? "ERROR" : "WARN";
+    console.error(
+      `[hina-renderer:${name}:${prefix}] ${details.message.slice(0, 512)} ` +
+      `(source=${details.sourceId.slice(0, 160)}:${details.lineNumber})`,
+    );
+  });
+  target.webContents.on("render-process-gone", (_event, details) => {
+    console.error(`[hina-renderer:${name}:GONE] reason=${details.reason} exitCode=${details.exitCode}`);
+  });
+}
+
 function registerIpcHandlers(): void {
   ipcMain.handle(CHANNELS.windowMode, (event) => assertTrustedSender(event));
   ipcMain.handle(CHANNELS.widgetStatus, (event) => {
@@ -375,6 +392,8 @@ async function createWindows(): Promise<void> {
 
   hardenWindow(mainWindow);
   hardenWindow(widgetWindow);
+  attachRendererConsoleLogging(mainWindow, "operator");
+  attachRendererConsoleLogging(widgetWindow, "widget");
   mainWindow.on("closed", () => {
     mainWindow = null;
     if (widgetWindow && !widgetWindow.isDestroyed()) {
