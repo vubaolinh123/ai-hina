@@ -202,18 +202,18 @@ class HinaRuntimeApplication:
             if tts_service is None and safety_policy is not None:
                 from hina_speech import (
                     F5TtsProvider,
+                    OmniVoiceTtsProvider,
                     ScheduledTtsProvider,
                     SpeechOutputService,
                     TtsConfig,
                     VieneuTtsProvider,
-                    VoxCpm2TtsProvider,
                 )
 
                 tts_config = TtsConfig.from_env(root=ROOT)
                 if tts_config.provider == "f5-tts":
                     native_tts_provider = F5TtsProvider(tts_config)
-                elif tts_config.provider == "voxcpm2":
-                    native_tts_provider = VoxCpm2TtsProvider(tts_config)
+                elif tts_config.provider == "omnivoice":
+                    native_tts_provider = OmniVoiceTtsProvider(tts_config)
                 else:
                     native_tts_provider = VieneuTtsProvider(tts_config)
                 scheduler = getattr(model_gateway, "scheduler", None)

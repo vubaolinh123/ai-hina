@@ -10,8 +10,8 @@ runtime spine, M02 safety, M03 text brain, M04 speech input, M05 speech
 output và M06 memory đã qua fast gate; M06 cũng đã qua independent review
 không có P0/P1. Hina Dev Console hiện là dashboard nhiều
 trang có chat text thật qua Ollama/OpenAI-compatible local, microphone/WAV tiếng
-Việt qua Faster-Whisper large-v3 trên GPU ở desktop, giọng Việt qua VoxCPM2 2B
-trên CUDA/BF16 và ký ức dài hạn
+Việt qua Faster-Whisper large-v3 trên GPU ở desktop, giọng Việt qua OmniVoice
+0.6B trên CUDA/FP16 và ký ức dài hạn
 SQLite + Qdrant local. Trang Avatar Stage đọc turn state thật và suy ra khẩu hình
 `A/I/U/E/O` từ chính phổ WAV TTS đang phát; không dùng câu trả lời, transcript,
 audio, memory hay backend state giả.
@@ -117,10 +117,11 @@ pnpm start:dev-console
 
 ## Bật speech output tiếng Việt
 
-M05 desktop mặc định dùng VoxCPM2 2B tại revision đã pin. Backend chạy
-CUDA/BF16, xuất WAV mono 48 kHz và condition profile `Hina Anime AI v1` từ
-reference tổng hợp do owner tạo bằng ElevenLabs. Đây là zero-shot voice
-conditioning, không phải fine-tune model weights; provenance và SHA-256 nằm trong
+M05 desktop mặc định dùng `omnivoice==0.2.1` với checkpoint
+`k2-fsa/OmniVoice` 0.6B tại revision đã pin. Backend chạy CUDA/FP16, xuất WAV
+mono 24 kHz và condition profile `Hina Anime AI v1` từ reference tổng hợp do
+owner tạo bằng ElevenLabs. Đây là zero-shot voice conditioning, không phải
+fine-tune model weights; provenance, transcript và SHA-256 nằm trong
 `assets/manifests/hina-anime-elevenlabs-voice.v1.json`.
 
 F5-TTS Vietnamese ZaloPay vẫn được giữ làm provider thử nghiệm. Cả checkpoint
@@ -129,24 +130,32 @@ hiện tại đều không qua quality smoke với reference Hina: WAV sinh ra l
 nonsense/noise và nhận dạng ngược không khớp câu nguồn. Vì vậy launcher không
 chọn F5 theo mặc định.
 
-VieNeu v3 Turbo vẫn là rollback provider. VoxCPM2 được chọn vì upstream công bố
-hỗ trợ tiếng Việt, model 2B/48 kHz, zero-shot voice cloning và Apache-2.0 cho
-code/weight. Hai real smoke ngắn/dài đều được Faster-Whisper large-v3 CUDA nhận
-lại đúng câu nguồn. Đây vẫn là candidate chờ owner nghe A/B, không phải tuyên bố
-chất lượng tương đương ElevenLabs.
+VieNeu v3 Turbo vẫn là rollback provider. OmniVoice được chọn vì upstream công
+bố hỗ trợ 646 ngôn ngữ gồm tiếng Việt, zero-shot voice cloning và code
+Apache-2.0. Checkpoint pretrained được model card ghi CC-BY-NC do ràng buộc dữ
+liệu huấn luyện, nên candidate này chỉ dành cho owner test local phi thương mại
+và chưa được production-promote. Real smoke ngắn/dài được Faster-Whisper
+large-v3 CUDA nhận lại với similarity lần lượt 0,9733 và 0,9285. Đây vẫn là
+candidate chờ owner nghe A/B, không phải tuyên bố chất lượng tương đương
+ElevenLabs.
 
 Trong Dev Console, nhập nội dung ở panel **Hina nói tiếng Việt**, sau đó bấm
 **Tạo và phát giọng thật**. Toàn bộ câu phải qua `pre_tts` moderation trước khi
 model chạy. Nút **Dừng / barge-in** dừng audio ngay; bắt đầu thu mic cũng tự dừng
 audio. Arbitrary voice cloning và lưu text/audio sinh ra đều bị tắt. Câu dài
-được chia tối đa 180 ký tự, kiểm tra silence/NaN và retry bad-case theo từng
-đoạn. VoxCPM2 không time-stretch hậu kỳ vì bước này từng làm hỏng một phần audio
-câu dài.
+được chia tối đa 110 ký tự, ưu tiên ngắt ở dấu câu/dấu phẩy, kiểm tra
+silence/NaN theo từng đoạn và tiếp tục được giới hạn theo độ dài audio bên
+trong OmniVoice. Profile chất lượng dùng 32 diffusion steps; 16 steps nhanh hơn
+nhưng từng làm rơi phần cuối câu dài. Tốc độ model được cap ở 1,02× và giữ cố
+định trong cả lượt để tránh rush/nuốt chữ. Không time-stretch hậu kỳ.
 
-Lần đầu có thể tải khoảng 5 GB artifact vào `var/cache/models/voxcpm2` và mất
-khoảng 20–30 giây để load trên máy owner. Khi đã resident, smoke thật đo khoảng
-3,5–5,3 giây/request. Có thể kiểm tra
-provider thật và tạo WAV nghe thử trong thư mục ignored:
+Lần đầu tải khoảng 3,04 GiB artifact vào `var/cache/models/omnivoice`. Trên RTX
+5070 Ti của owner, provider đo peak reserved khoảng 2270 MiB, scheduler giữ
+reservation 3072 MiB, cold first-audio khoảng 6,0 giây và warm first-audio câu
+ngắn khoảng 0,56 giây. Prompt giọng được tạo một lần và giữ trên CPU, optional
+ASR của OmniVoice bị tắt, batch size là 1 và cache CUDA không dùng được giải
+phóng sau mỗi request. Có thể kiểm tra provider thật và tạo WAV nghe thử trong
+thư mục ignored:
 
 ```powershell
 pnpm smoke:m05-tts
@@ -222,7 +231,8 @@ gọi status mỗi 250 ms và spam lỗi.
 
 Cửa sổ operator là dashboard gồm Tổng quan, Chat với Hina, Avatar Stage và
 Runtime & Safety. Trang Chat gửi turn thật tới local LLM, hiển thị text trả lời
-và có thể phát cùng câu trả lời bằng VoxCPM2 TTS; voice vẫn tuân theo global mute.
+và có thể phát cùng câu trả lời bằng OmniVoice TTS; voice vẫn tuân theo global
+mute.
 
 Desktop tải real VRM 1.0 bằng Three.js/`@pixiv/three-vrm`. Base hiện tại là
 `VRM1_Constraint_Twist_Sample` chính thức của pixiv/VRM Consortium, được bundle
@@ -254,8 +264,9 @@ di chuyển sang vị trí khác. Khi không rê chuột (hoặc không focus b�
 phím), widget không hiện control nào; khi hover/focus hiện panel **Voice** và
 **Mic · Nói với Hina**. Voice bật/tắt tiếng đầu ra qua safety authority. Mic
 chỉ thu tối đa 30 giây vào RAM, gửi WAV loopback qua typed preload IPC để
-Faster-Whisper chép lời, gửi transcript vào chat thật và phát câu trả lời VoxCPM2
-thật; không có wake-word hay ghi âm nền. Nhấn `Esc` để bỏ focus và ẩn panel.
+Faster-Whisper chép lời, gửi transcript vào chat thật và phát câu trả lời
+OmniVoice thật; không có wake-word hay ghi âm nền. Nhấn `Esc` để bỏ focus và ẩn
+panel.
 
 Trong panel Operator, nhóm **Quản lý widget avatar** giải thích ba thao tác
 **Ẩn widget / Hiện widget / Đặt lại vị trí**. Sau khi bạn kéo nhân vật sang

@@ -9,6 +9,7 @@ from .errors import TtsError
 
 _URL = re.compile(r"https?://[^\s<>{}\[\]]+", re.IGNORECASE)
 _BOUNDARY = re.compile(r"(?<=[.!?…;:])\s+|\n+")
+_SOFT_BOUNDARY = re.compile(r"(?<=[,，—–])\s+")
 _WHITESPACE = re.compile(r"\s+")
 _EXPRESSIVE_CUE = re.compile(r"\[([^\[\]]{1,48})\]", re.IGNORECASE)
 _CUE_ALIASES = {
@@ -95,6 +96,30 @@ def split_tts_chunks(text: str, *, max_characters: int = 256) -> tuple[str, ...]
 
 
 def _split_long_unit(unit: str, limit: int) -> list[str]:
+    clauses = [item.strip() for item in _SOFT_BOUNDARY.split(unit) if item.strip()]
+    if len(clauses) > 1:
+        chunks: list[str] = []
+        current = ""
+        for clause in clauses:
+            if len(clause) > limit:
+                if current:
+                    chunks.append(current)
+                    current = ""
+                chunks.extend(_split_words(clause, limit))
+                continue
+            candidate = f"{current} {clause}".strip()
+            if current and len(candidate) > limit:
+                chunks.append(current)
+                current = clause
+            else:
+                current = candidate
+        if current:
+            chunks.append(current)
+        return chunks
+    return _split_words(unit, limit)
+
+
+def _split_words(unit: str, limit: int) -> list[str]:
     words = unit.split()
     chunks: list[str] = []
     current = ""

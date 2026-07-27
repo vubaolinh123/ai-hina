@@ -12,13 +12,13 @@ dependencies = [
   "faster-whisper==1.2.1",
   "f5-tts==1.1.22",
   "moonshine-voice==0.0.73",
+  "omnivoice==0.2.1",
   "onnxruntime==1.27.0",
   "qdrant-client==1.18.0",
   "torch==2.11.0+cu128",
   "torchaudio==2.11.0+cu128; python_version == '3.12' and sys_platform == 'win32'",
-  "transformers>=4.57,<5",
+  "transformers==5.3.0",
   "vieneu==3.2.3",
-  "voxcpm==2.0.3",
 ]
 
 [dependency-groups]
@@ -28,10 +28,9 @@ dev = [
 
 [tool.uv]
 package = false
-# VoxCPM's inference path does not import datasets/fsspec, while its broad
-# training/demo dependency pins older releases that conflict with Hina's
-# existing F5/Moonshine environment. Keep Hina's already-tested runtime
-# versions and use only the official VoxCPM inference API.
+# Hina only uses the inference paths of the retained experimental F5 adapter.
+# Keep the already-tested dataset/filesystem pair instead of letting optional
+# training/demo dependencies downgrade the shared desktop environment.
 override-dependencies = [
   "datasets==5.0.0",
   "fsspec==2026.4.0",

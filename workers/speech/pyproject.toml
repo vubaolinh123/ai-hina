@@ -8,8 +8,8 @@ dependencies = [
   "faster-whisper==1.2.1",
   "f5-tts==1.1.22",
   "moonshine-voice==0.0.73",
+  "omnivoice==0.2.1",
   "vieneu==3.2.3",
-  "voxcpm==2.0.3",
 ]
 
 [build-system]

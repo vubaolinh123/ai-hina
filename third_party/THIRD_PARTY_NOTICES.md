@@ -33,24 +33,27 @@ with soundfile on Windows before CUDA inference. The ZaloPay Vietnamese model
 and Vocos weights are licensed and hashed separately in
 `ml/models/manifests/f5-tts-vietnamese-zalopay.v1.json`.
 
-## VoxCPM 2.0.3 / VoxCPM2
+## OmniVoice 0.2.1
 
-- Upstream: https://github.com/OpenBMB/VoxCPM
-- Distribution: `voxcpm==2.0.3`
+- Upstream: https://github.com/k2-fsa/OmniVoice
+- Distribution: `omnivoice==0.2.1`
+- Source commit: `5ba967c4d5b0f08244ae856b033eea583d1e4517`
 - PyPI wheel SHA-256:
-  `24da58a30d094a9e9a7ead450ae9cffda0d31eaeba620b61ad99179dd87e486b`
+  `23f113ef51116a16308b55c4c2ac9c08efca7dfb594802f5c8adfb7523313ccc`
 - License: Apache-2.0
-- Use: default local CUDA/BF16 Vietnamese TTS provider for owner testing
+- Use: default local CUDA/FP16 multilingual TTS provider for owner testing
 
-No VoxCPM source file or snippet is copied into this repository. Hina calls
-the pinned package through its official `VoxCPM.from_pretrained` and
-`generate` APIs. The exact VoxCPM2 model revision, file hashes and weight
-license are tracked separately in
-`ml/models/manifests/voxcpm2-2b.v1.json`.
+No OmniVoice source file or snippet is copied into this repository. Hina calls
+the pinned package through its official `from_pretrained`,
+`create_voice_clone_prompt` and `generate` APIs. The exact OmniVoice model
+revision, file hashes and weight license are tracked separately in
+`ml/models/manifests/omnivoice-0.6b.v1.json`.
 
 Hina permits only one fixed, hash-bound synthetic owner voice. Generated
-VoxCPM2 audio is not watermarked, so this candidate remains local-owner only
-and is not production-promoted.
+OmniVoice audio is not watermarked. The upstream model card identifies the
+pretrained weights as CC-BY-NC because of training-data constraints, so this
+candidate remains local, non-commercial owner testing only and is not
+production-promoted.
 
 ## VieNeu-TTS 3.2.3
 

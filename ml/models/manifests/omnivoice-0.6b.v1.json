@@ -1,0 +1,124 @@
+{
+  "schema_version": "1.0",
+  "manifest_id": "hina.tts.omnivoice-0.6b.v1",
+  "artifact_kind": "model_weights_configuration_tokenizer_and_audio_codec",
+  "model_id": "k2-fsa/OmniVoice",
+  "source_url": "https://huggingface.co/k2-fsa/OmniVoice",
+  "revision": "c5fdb5ccb189668d56333f77ba2629f4cd7535f4",
+  "observed_at": "2026-07-27",
+  "files": [
+    {
+      "path": "audio_tokenizer/config.json",
+      "size_bytes": 2531,
+      "sha256": "eefb20806f7104e77c9a5277c9df0f9bb8826b08eb1d4e8ab2b9829b6ef9fac1"
+    },
+    {
+      "path": "audio_tokenizer/model.safetensors",
+      "size_bytes": 805665628,
+      "sha256": "fe7c5e8785e0a05833e1bfc3e002ec7f55af21e306b2e7154a448c1f54ccfb0d"
+    },
+    {
+      "path": "audio_tokenizer/preprocessor_config.json",
+      "size_bytes": 206,
+      "sha256": "ae61eea88558608ee2fa86d2aec9fce8d99a5ff75d09cb7651ccce21ae1d9084"
+    },
+    {
+      "path": "chat_template.jinja",
+      "size_bytes": 4168,
+      "sha256": "a55ee1b1660128b7098723e0abcd92caa0788061051c62d51cbe87d9cf1974d8"
+    },
+    {
+      "path": "config.json",
+      "size_bytes": 2238,
+      "sha256": "5e359117e13b420c5e0c925d4aba650d624767131f1d1746928f8b850d5dc372"
+    },
+    {
+      "path": "model.safetensors",
+      "size_bytes": 2450344112,
+      "sha256": "730839316de585f4c8298ec0e1712efc10fb19c6fa4e36eb741cb8d51ebcf6aa"
+    },
+    {
+      "path": "tokenizer.json",
+      "size_bytes": 11423986,
+      "sha256": "408f669b7e2b045fdf54201d815bd364e6667dbd845115da81239c40bc6dcfd1"
+    },
+    {
+      "path": "tokenizer_config.json",
+      "size_bytes": 533,
+      "sha256": "49f78845596a82bf15c83673794bdf9f76f812b11f60ab6a2239d9be65b00676"
+    }
+  ],
+  "licenses": {
+    "runtime_code_spdx": "Apache-2.0",
+    "weights_license": "CC-BY-NC (version not stated by the model card)",
+    "weights_spdx": "LicenseRef-CC-BY-NC-unspecified",
+    "model_card_url": "https://huggingface.co/k2-fsa/OmniVoice",
+    "commercial_use_allowed_by_declared_license": false,
+    "redistribution_requires_separate_license_review": true
+  },
+  "lineage": {
+    "architecture": "OmniVoice 0.6B backbone with Higgs Audio V2 tokenizer for massively multilingual zero-shot text-to-speech",
+    "declared_language_count": 646,
+    "declared_languages_include_vietnamese": true,
+    "known_training_data_terms": "The upstream model card states that pretrained weights are CC-BY-NC because of training-data constraints including Emilia.",
+    "owner_data_included_in_weights": false,
+    "runtime_voice_conditioning": "One SHA-256-bound owner-authorized synthetic Hina WAV and its matching transcript are encoded once per model load; no model-weight training or fine-tuning occurs."
+  },
+  "runtime": {
+    "provider": "omnivoice",
+    "provider_version": "0.2.1",
+    "provider_source_commit": "5ba967c4d5b0f08244ae856b033eea583d1e4517",
+    "transformers_version": "5.3.0",
+    "tested_device": "cuda",
+    "tested_precision": "float16",
+    "attention_implementation": "sdpa",
+    "optional_asr_loaded": false,
+    "sample_rate_hz": 24000,
+    "diffusion_steps": 32,
+    "batch_size": 1,
+    "outer_chunk_characters": 110,
+    "maximum_speaking_rate": 1.02,
+    "audio_chunk_duration_seconds": 8,
+    "audio_chunk_threshold_seconds": 12,
+    "cache_path": "var/cache/models/omnivoice",
+    "scheduler_reservation_vram_mib": 3072,
+    "scheduler_minimum_headroom_mib": 2048,
+    "desktop_default": true,
+    "generated_audio_watermarked": false
+  },
+  "measured_on_owner_gpu": {
+    "gpu": "NVIDIA GeForce RTX 5070 Ti 16 GB",
+    "resident_allocated_mib": 1946.3,
+    "short_peak_allocated_mib": 2099.2,
+    "long_peak_allocated_mib": 2118.9,
+    "long_peak_reserved_mib": 2270.0,
+    "post_request_allocated_mib": 1946.3,
+    "twelve_request_growth_mib": 0.0,
+    "cached_process_cold_first_audio_milliseconds": 6016.0,
+    "warm_short_first_audio_milliseconds": 562.0,
+    "warm_short_processing_milliseconds": 672.0,
+    "warm_long_first_audio_milliseconds": 969.0,
+    "warm_long_processing_milliseconds": 3594.0
+  },
+  "quality_evaluation": {
+    "decision": "runnable_local_noncommercial_candidate_pending_owner_listening",
+    "short_vietnamese_roundtrip_similarity": 0.9733,
+    "long_vietnamese_roundtrip_similarity": 0.9285,
+    "owner_reported_long_sample_roundtrip_similarity_after_pacing_fix": 0.9463,
+    "long_sample_chunks": 3,
+    "stable_pacing_regression_chunks": 3,
+    "reference_duration_seconds": 8.0,
+    "reference_transcript_aligned": true,
+    "reference_sha256": "f71960d949cdebba997cb4a96bc155ee0095dbb42fe6e609e8cf00b41346441f"
+  },
+  "status": {
+    "download_authorized_by_owner": true,
+    "download_on_first_use": true,
+    "local_owner_testing_ready": true,
+    "quality_promoted": false,
+    "commercial_ready": false,
+    "production_ready": false,
+    "requires_owner_listening": true,
+    "commercial_promotion_blocked_by_weight_license": true
+  }
+}

@@ -1,0 +1,27 @@
+name: omnivoice
+upstream_url: https://github.com/k2-fsa/OmniVoice
+revision: 5ba967c4d5b0f08244ae856b033eea583d1e4517
+distribution:
+  kind: pypi-wheel
+  name: omnivoice
+  version: 0.2.1
+  filename: omnivoice-0.2.1-py3-none-any.whl
+  sha256: 23f113ef51116a16308b55c4c2ac9c08efca7dfb594802f5c8adfb7523313ccc
+license_spdx: Apache-2.0
+model_weight_license: "CC-BY-NC (version not stated by upstream model card)"
+copyright: "Copyright Han Zhu and OmniVoice contributors"
+imported_at: 2026-07-27
+original_paths: []
+destination_paths:
+  - pyproject.toml
+  - uv.lock
+  - workers/speech/src/hina_speech/omnivoice_tts_provider.py
+modifications:
+  - "Pinned runtime dependency; no upstream source file or snippet was copied."
+  - "Wrapped the official OmniVoice.from_pretrained, create_voice_clone_prompt and generate APIs behind Hina's TtsProvider boundary."
+  - "Restricted inference to CUDA/float16, SDPA, batch size one and one SHA-256-bound owner-authorized synthetic reference voice."
+  - "Disabled the optional Whisper ASR, keeps the reusable voice prompt on CPU, bounds long text by character and duration chunks, and clears unused CUDA allocator blocks after each request."
+  - "Added measured CUDA telemetry, growth-triggered recycling, deterministic scheduler unload and no runtime audio/text retention."
+model_manifest: ml/models/manifests/omnivoice-0.6b.v1.json
+reviewed_by: primary_orchestrator
+approved_by: primary_orchestrator_for_local_noncommercial_owner_testing

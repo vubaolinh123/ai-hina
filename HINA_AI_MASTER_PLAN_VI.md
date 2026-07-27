@@ -1143,19 +1143,30 @@ Phát giọng tiếng Việt tự nhiên đủ dùng, bắt đầu sớm, dừng
 - Voice asset consent/license manifest.
 - GPU-backed TTS chỉ load/infer khi có `ResourceLease`; cancellation phải release lease.
 
-### Trạng thái triển khai local hiện tại (M07-S14)
+### Trạng thái triển khai local hiện tại (M07-S15)
 
-- Desktop owner-test chọn VoxCPM2 2B CUDA/BF16, revision và file hash đã pin.
-- Provider chỉ dùng một owner-authorized synthetic reference có SHA-256; đây là
-  zero-shot conditioning, không phải fine-tune.
-- Câu dài chia tối đa 180 ký tự, validate/retry từng đoạn và không time-stretch
-  hậu kỳ để tránh audio nửa đúng nửa hỏng.
-- TTS giữ lease scheduler priority thấp khi warm và unload khi bị preempt; STT
-  unload trước release; Ollama dùng `keep_alive: 0`.
-- Real smoke ngắn/dài và sequence `TTS → chat → TTS` đã pass trên RTX 5070 Ti
-  16 GB với headroom cấu hình 2048 MiB.
-- Đây là runnable candidate chờ owner nghe A/B; chưa đạt Gate M05 đầy đủ hoặc
-  production promotion.
+- Desktop owner-test chọn OmniVoice 0.6B package 0.2.1, CUDA/FP16, SDPA và
+  checkpoint revision/file hash đã pin; optional Whisper ASR không được load.
+- Provider chỉ dùng một owner-authorized synthetic reference tám giây có
+  transcript khớp và SHA-256; đây là zero-shot conditioning, không phải
+  fine-tune. Arbitrary voice enrollment vẫn bị tắt.
+- Câu dài chia tối đa 110 ký tự, ưu tiên ngắt ở dấu câu/dấu phẩy rồi tiếp tục
+  được giới hạn theo thời lượng audio. Profile chất lượng dùng 32 diffusion
+  steps vì thử nghiệm 16 steps làm rơi phần cuối một câu dài; rate cố định trong
+  lượt và cap 1,02× để tránh rush/nuốt chữ; không time-stretch hậu kỳ.
+- Prompt giọng được tạo một lần và giữ trên CPU, batch size một, allocator cache
+  không dùng được giải phóng sau request, model được recycle khi CUDA allocated
+  tăng quá 512 MiB hoặc sau 32 request warm.
+- Peak reserved đo được 2270 MiB trên RTX 5070 Ti; scheduler reservation là
+  3072 MiB và vòng 12 request không tăng allocated VRAM. TTS vẫn giữ lease
+  priority thấp và unload khi bị preempt; STT unload trước release; Ollama dùng
+  `keep_alive: 0`.
+- Real smoke ngắn/dài có reverse-STT similarity 0.9733/0.9285. Candidate chờ
+  owner nghe A/B; chưa đạt Gate M05 đầy đủ hoặc production promotion.
+- Runtime code OmniVoice là Apache-2.0 nhưng pretrained weights được upstream
+  ghi CC-BY-NC. Candidate chỉ dùng local phi thương mại; public/commercial
+  promotion bị chặn. VoxCPM2 đã bị gỡ khỏi active runtime/dependency/cache và
+  chỉ còn trong hồ sơ lịch sử M07-S14.
 
 ### Test matrix
 

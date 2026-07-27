@@ -67,6 +67,17 @@ similarity 1.0. Lỗi `E_RESOURCE_CAPACITY` được đóng bằng scheduler lea
 priority thấp có unload khi preempt, STT unload trước release, Ollama
 `keep_alive: 0` và tắt startup TTS warmup; real sequence TTS→chat→TTS pass trong
 headroom 2048 MiB. Candidate vẫn chờ owner nghe A/B, chưa production-promote.
+Ngày 2026-07-27 owner yêu cầu thay và xóa sạch VoxCPM2. M07-S15 đã chuyển
+desktop default sang `k2-fsa/OmniVoice` 0.6B, package 0.2.1 và checkpoint
+revision đã pin, CUDA/float16, SDPA, batch 1, optional ASR tắt và reference Hina
+tám giây có transcript khớp + SHA-256. Profile chất lượng dùng 32 diffusion
+steps, chunk tối đa 110 ký tự ưu tiên dấu câu và rate cap 1,02× vì profile nhanh
+hơn làm rơi/nuốt chữ ở câu dài. Trên RTX 5070 Ti, peak reserved đo
+2270 MiB, scheduler reservation 3072 MiB, vòng 12 request không tăng allocated
+VRAM; short/long reverse-STT similarity lần lượt 0.9733/0.9285. Code/cache/deps
+VoxCPM2 đã nghỉ hưu; M07-S14 chỉ còn lịch sử audit. OmniVoice code Apache-2.0
+nhưng pretrained weight CC-BY-NC, nên chỉ local non-commercial owner testing,
+không commercial/public/production promotion.
 Ngày 2026-07-26 owner chỉ thị “Tiếp tục hoàn thành Plan” và chọn mở M08 —
 Perception trong fast-development mode; M07 giữ trạng thái runnable candidate
 với các deep gate (frozen OBS benchmark, lip-sync p95, final Hina asset, soak

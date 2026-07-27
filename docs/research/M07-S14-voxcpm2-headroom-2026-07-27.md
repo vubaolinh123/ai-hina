@@ -1,5 +1,9 @@
 # M07-S14 — VoxCPM2 và vòng đời VRAM cho chat/TTS
 
+> Trạng thái lịch sử: candidate này đã nghỉ hưu ở M07-S15 theo yêu cầu owner.
+> Provider, dependency và local weight cache không còn được dùng; tài liệu này
+> chỉ được giữ làm audit trail cho quyết định trước đó.
+
 Ngày đánh giá: 2026-07-27
 Máy kiểm thử: Windows 11, RTX 5070 Ti 16 GB, CUDA/BF16.
 

@@ -51,7 +51,7 @@
     {
       "path": "apps/desktop/src/App.vue",
       "role": "desktop Vue stage and original inline SVG geometry",
-      "sha256": "65890bd996310ded213a1efd46ecf2e79857057b8ad0dbe57ad3e748709caedc"
+      "sha256": "4107a050c4bdf3f32ca23e62b3e0e023376269e9b855f4189fc660fbb81e9cc4"
     },
     {
       "path": "apps/desktop/src/style.css",

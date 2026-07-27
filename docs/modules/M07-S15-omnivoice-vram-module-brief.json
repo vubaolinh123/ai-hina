@@ -1,0 +1,90 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M07-S15-omnivoice-vram-retire-voxcpm2",
+  "module_id": "M07",
+  "objective": "Replace the retired VoxCPM2 desktop TTS runtime with pinned k2-fsa OmniVoice on CUDA, preserve the fixed owner-authorized Hina synthetic voice, reduce resident and peak VRAM, and prove one real Vietnamese synthesis before deleting VoxCPM2 weights and runtime dependencies.",
+  "non_goals": [
+    "Do not open a public or arbitrary voice-cloning endpoint.",
+    "Do not fine-tune OmniVoice from the raw voice_demo folder in this maintenance slice.",
+    "Do not use an unverified community quantization or silently fall back to CPU.",
+    "Do not claim commercial readiness while OmniVoice pretrained weights remain CC-BY-NC.",
+    "Do not run the deferred M08 OCR or VLM implementation in this slice."
+  ],
+  "base_sha": "1251d8a7cfa292de3409986dddba9ab852919d3c",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    ".env.example",
+    "AGENTS.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "README.md",
+    "apps/core-runtime/",
+    "apps/desktop/",
+    "assets/manifests/",
+    "docs/modules/",
+    "docs/provenance/",
+    "docs/research/",
+    "ml/models/manifests/",
+    "pyproject.toml",
+    "third_party/",
+    "tools/dev/",
+    "uv.lock",
+    "workers/speech/",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "packages/contracts/",
+    "packages/safety-policy/",
+    "workers/perception/"
+  ],
+  "contracts": [
+    "OmniVoice is CUDA-only in Hina and loads the pinned official checkpoint in float16 without its optional Whisper ASR.",
+    "Voice cloning uses only the SHA-256-bound transcript-aligned owner-created synthetic Hina reference; arbitrary reference enrollment remains disabled.",
+    "Long Vietnamese output is bounded by outer sentence chunking and OmniVoice audio-duration chunking, with batch size one and complete pre-TTS moderation.",
+    "The provider records CUDA resident and peak memory, releases cached allocator blocks after inference, and unloads deterministically on scheduler preemption or shutdown.",
+    "The shared scheduler retains at least 2048 MiB global VRAM headroom.",
+    "VoxCPM2 is removed from active code, dependencies, provenance registry, local model cache and the Python environment only after OmniVoice real synthesis passes."
+  ],
+  "allowed_dependencies": [
+    "omnivoice==0.2.1 from the official k2-fsa PyPI release at Git commit 5ba967c4d5b0f08244ae856b033eea583d1e4517.",
+    "Official k2-fsa/OmniVoice checkpoint revision c5fdb5ccb189668d56333f77ba2629f4cd7535f4.",
+    "Existing PyTorch CUDA 12.8, torchaudio, soundfile, NumPy, Accelerate and Hugging Face Hub runtime.",
+    "Existing Hina scheduler, moderation, fixed voice manifest and TTS service contracts."
+  ],
+  "oss_candidates": [
+    "https://github.com/k2-fsa/OmniVoice",
+    "https://huggingface.co/k2-fsa/OmniVoice",
+    "https://pypi.org/project/omnivoice/0.2.1/"
+  ],
+  "acceptance_criteria": [
+    "The default desktop TTS status reports OmniVoice 0.2.1, CUDA, float16, 24 kHz, ASR disabled and the fixed Hina reference hash.",
+    "A real short Vietnamese WAV using the Hina voice is finite, non-silent and saved under var/tmp for owner listening.",
+    "A real multi-sentence Vietnamese WAV completes without corrupt partial segments.",
+    "The benchmark records cold load, warm synthesis, process CUDA allocated/reserved peaks and global free VRAM on the RTX 5070 Ti.",
+    "Configured scheduler reservation is based on the measured OmniVoice peak and still preserves the 2048 MiB headroom contract.",
+    "VoxCPM2 provider code, dependency, active manifests and all verified local weight caches are gone; only clearly marked historical reports may retain its name.",
+    "Focused speech unit tests, governance provenance tests and desktop typecheck/startup smoke pass once."
+  ],
+  "required_test_commands": [
+    "pnpm test:speech",
+    "uv run --frozen python -m unittest tests.governance.test_provenance",
+    "pnpm --filter @hina/desktop typecheck",
+    "pnpm smoke:desktop",
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Run-M05RealTtsSmoke.ps1 -Provider omnivoice"
+  ],
+  "latency_or_quality_budget": {
+    "device": "cuda",
+    "precision": "float16",
+    "minimum_vram_headroom_mib": 2048,
+    "maximum_tts_model_vram_mib": 6144,
+    "sample_rate_hz": 24000,
+    "batch_size": 1,
+    "diffusion_steps": 32,
+    "maximum_chunk_characters": 110,
+    "maximum_speaking_rate": 1.02,
+    "quality_promotion_requires_owner_listening": true,
+    "commercial_promotion_blocked_by_weight_license": true
+  },
+  "output_artifact_dir": "artifacts/verification/M07/"
+}

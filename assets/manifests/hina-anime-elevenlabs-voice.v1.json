@@ -2,7 +2,7 @@
   "schemaVersion": "1.0",
   "assetId": "hina-anime-elevenlabs-voice-v1",
   "displayName": "Hina Anime AI v1",
-  "purpose": "Fixed local VoxCPM2, VieNeu and experimental F5-TTS reference conditioning for Hina speech output",
+  "purpose": "Fixed local OmniVoice, VieNeu and experimental F5-TTS reference conditioning for Hina speech output",
   "provenance": {
     "origin": "Owner-generated synthetic voice created with ElevenLabs",
     "realPersonImitation": false,
@@ -18,7 +18,8 @@
     "durationSeconds": 8.0,
     "sampleRateHz": 44100,
     "channels": 1,
-    "sampleFormat": "pcm_s16le"
+    "sampleFormat": "pcm_s16le",
+    "referenceTranscript": "Thôi nào, đừng tự tạo áp lực cho bản thân quá. [sigh] Công việc code dự án hay gỡ lỗi có những ngày bế tắc là chuyện bình thường mà."
   },
   "f5Reference": {
     "path": "assets/voices/hina-anime-elevenlabs-f5-reference.wav",
@@ -48,11 +49,11 @@
     "deletionProcedure": "Delete the reference WAV and this manifest, then remove the configured Hina reference voice."
   },
   "processing": {
-    "method": "Zero-shot VoxCPM2/VieNeu/F5-TTS reference conditioning at runtime; no model-weight training or fine-tuning",
+    "method": "Zero-shot OmniVoice/VieNeu/F5-TTS reference conditioning at runtime; no model-weight training or fine-tuning",
     "sourceTool": "ffmpeg",
     "sourceArguments": "-ss 37.050 -t 8.000 -ac 1 -ar 44100 -c:a pcm_s16le",
     "generatedAudioWatermark": {
-      "voxcpm2": false,
+      "omnivoice": false,
       "vieneu": true,
       "f5-tts": false
     },
@@ -62,6 +63,7 @@
     "No arbitrary reference upload",
     "No public voice-cloning endpoint",
     "Local owner use only",
-    "VoxCPM2 output is not watermarked and must not be exposed as a public voice-cloning service"
+    "OmniVoice output is not watermarked and must not be exposed as a public voice-cloning service",
+    "OmniVoice pretrained weights are CC-BY-NC and may only be used for local non-commercial owner testing until separately cleared"
   ]
 }

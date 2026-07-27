@@ -1,14 +1,18 @@
-"""Audit owner-provided MP3 clips and build VoxCPM2/VieNeu/F5 reference profiles.
+"""Audit owner-provided MP3 clips and build Hina voice-reference profiles.
 
-VoxCPM2 and VieNeu do not fine-tune their base weights from a folder of MP3s.
+OmniVoice and VieNeu do not fine-tune their base weights from a folder of MP3s.
 They condition on one short reference. This tool therefore:
 
 * audits every MP3 in ``voice_demo`` with ffprobe and SHA-256;
 * chooses the longest clean clip that fits the eight-second reference window;
-* converts that clip to a deterministic 44.1 kHz mono WAV for VoxCPM2/VieNeu;
+* converts that clip to a deterministic 44.1 kHz mono WAV for VieNeu;
 * converts the owner master ``anime_voice.mp3`` to a transcript-aligned 24 kHz
   reference WAV for the rejected F5-TTS experiment; and
 * writes an auditable manifest containing *all* supplied clips.
+
+OmniVoice uses the separately checked-in, transcript-aligned eight-second Hina
+reference. A generic longest-clip anchor is not safe for OmniVoice unless its
+spoken transcript is known exactly.
 
 The manifest is intentionally generated under ``var/`` (ignored by git) so
 raw owner voice data never becomes a repository artifact.
@@ -171,7 +175,7 @@ def build_profile(
 
     profile = {
         "schemaVersion": 1,
-        "providers": ["voxcpm2", "vieneu", "f5-tts"],
+        "providers": ["omnivoice", "vieneu", "f5-tts"],
         "modelReferenceLimitSeconds": MAX_REFERENCE_SECONDS,
         "anchorSampleRateHz": REFERENCE_SAMPLE_RATE_HZ,
         "sourceDirectory": str(input_dir),
@@ -194,7 +198,8 @@ def build_profile(
         "clips": entries,
         "notes": [
             "All owner-provided clips are audited and retained in this manifest.",
-            "VoxCPM2 and VieNeu use one <=8 second anchor; neither fine-tunes base weights from MP3 folders.",
+            "VieNeu uses one <=8 second anchor and does not fine-tune base weights from MP3 folders.",
+            "OmniVoice uses the separately checked-in transcript-aligned eight-second Hina reference, not the generic longest-clip anchor.",
             "The anchor is selected deterministically by longest eligible clip to preserve natural prosody and is bound to SHA-256.",
             "F5-TTS uses the transcript-aligned 12-second Hina master reference only for its rejected experiment.",
             "The complete MP3 folder is audit input, not a fine-tuning dataset.",

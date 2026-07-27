@@ -26,19 +26,31 @@ for commercial/public deployment until that model license is cleared.
 
 ## M05 speech output
 
-The same worker now defaults to pinned VoxCPM2 2B on CUDA/BF16. It conditions
-the fixed owner-authorized `Hina Anime AI v1` reference voice from the prepared
-SHA-256-bound profile anchor (or the checked-in fallback) and exposes 48 kHz
-mono PCM16 WAV through the loopback runtime.
+The same worker now defaults to pinned OmniVoice 0.2.1 on CUDA/FP16. It
+conditions the fixed owner-authorized `Hina Anime AI v1` voice from the
+checked-in, transcript-aligned and SHA-256-bound eight-second reference, then
+exposes 24 kHz mono PCM16 WAV through the loopback runtime. The optional
+OmniVoice Whisper ASR is disabled because Hina already owns a separate STT
+module.
 
 Every complete utterance passes `pre_tts` moderation before inference. Voice
 uploads, generated-audio retention and input-text retention are disabled.
-Long utterances are split at 180 characters, validated per segment and retried
-through VoxCPM2's bad-case path. No post-generation time-stretch is applied.
+Long utterances are split at 110 characters with clause punctuation preferred,
+then OmniVoice also bounds its audio-duration chunks. One stable rate capped at
+1.02x is used for the whole utterance, and output is validated per segment. No
+post-generation time-stretch is applied.
 The first accepted request can download the pinned model into
-`var/cache/models/voxcpm2`; set `HINA_TTS_ALLOW_DOWNLOAD=false` after
+`var/cache/models/omnivoice`; set `HINA_TTS_ALLOW_DOWNLOAD=false` after
 preloading for strict offline use. The desktop launcher fails closed when
 CUDA/PyTorch is not available; it never silently switches to CPU.
+
+The quality-first profile uses 32 diffusion steps: the 16-step profile was
+faster but dropped part of a long Vietnamese sentence in reverse-STT
+regression. The reusable voice prompt lives on CPU between requests, batch size
+is one, unused CUDA allocator blocks are cleared after inference, and the
+provider records allocated/reserved peaks. On the owner's RTX 5070 Ti, measured
+peak reserved VRAM is about 2270 MiB; the scheduler reserves 3072 MiB to keep
+margin above the measured peak.
 
 The TTS model owns a lower-priority shared scheduler lease while warm. Chat and
 STT can preempt it when required; unload returns CUDA memory before lease
@@ -51,6 +63,10 @@ Both the model-card checkpoint `model_960000.pt` and current
 so the desktop launcher does not select it by default. VieNeu v3 Turbo remains
 an explicit rollback provider.
 
+OmniVoice runtime code is Apache-2.0, but the upstream pretrained weights are
+declared CC-BY-NC because of training-data constraints. This candidate is
+therefore local non-commercial owner testing only and is not production-ready.
+
 ### Owner voice profile
 
 Place owner-authorized MP3 clips in `voice_demo` and run:
@@ -60,10 +76,11 @@ pnpm prepare:voice
 ```
 
 The command audits every clip, records SHA-256 and duration metadata in
-`var/cache/voices/hina/hina-profile.json`, and creates both the normalized
-VoxCPM2/VieNeu anchor and the experimental F5 reference. The desktop launcher
-automatically uses the profile anchor on the next start. All clips are included
-in the local manifest for provenance and future fine-tuning work.
+`var/cache/voices/hina/hina-profile.json`, and creates the normalized VieNeu
+anchor plus the experimental F5 reference. OmniVoice intentionally uses the
+checked-in transcript-aligned reference instead of the generic longest clip.
+All clips are included in the local manifest for provenance and future
+owner-authorized training work.
 
 Run one real moderated inference and keep a WAV under the ignored `var/tmp`
 folder for manual listening:

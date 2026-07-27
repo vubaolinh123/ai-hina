@@ -23,7 +23,17 @@ if (-not $env:HINA_STT_DEVICE) { $env:HINA_STT_DEVICE = "cuda" }
 if (-not $env:HINA_STT_COMPUTE_TYPE) { $env:HINA_STT_COMPUTE_TYPE = "float16" }
 if (-not $env:HINA_STT_CPU_FALLBACK) { $env:HINA_STT_CPU_FALLBACK = "false" }
 if (-not $env:HINA_STT_LANGUAGE) { $env:HINA_STT_LANGUAGE = "auto" }
-if (-not $env:HINA_TTS_PROVIDER) { $env:HINA_TTS_PROVIDER = "voxcpm2" }
+if ($env:HINA_TTS_PROVIDER -eq "voxcpm2") {
+    Write-Warning "VoxCPM2 has been retired; switching this launch to OmniVoice."
+    $env:HINA_TTS_PROVIDER = "omnivoice"
+    Remove-Item Env:HINA_TTS_MODEL -ErrorAction SilentlyContinue
+    Remove-Item Env:HINA_TTS_MODEL_REVISION -ErrorAction SilentlyContinue
+    Remove-Item Env:HINA_TTS_MODEL_CACHE -ErrorAction SilentlyContinue
+    Remove-Item Env:HINA_TTS_PRECISION -ErrorAction SilentlyContinue
+    Remove-Item Env:HINA_TTS_MAX_CHUNK_CHARACTERS -ErrorAction SilentlyContinue
+    Remove-Item Env:HINA_TTS_MODEL_VRAM_MIB -ErrorAction SilentlyContinue
+}
+if (-not $env:HINA_TTS_PROVIDER) { $env:HINA_TTS_PROVIDER = "omnivoice" }
 if ($env:HINA_TTS_PROVIDER -eq "f5-tts") {
     if (-not $env:HINA_TTS_MODEL) { $env:HINA_TTS_MODEL = "zalopay/vietnamese-tts" }
     if (-not $env:HINA_TTS_MODEL_REVISION) { $env:HINA_TTS_MODEL_REVISION = "1dc4967edb4549e40d820429e487eeeacee8bc08" }
@@ -37,19 +47,25 @@ elseif ($env:HINA_TTS_PROVIDER -eq "vieneu") {
     if (-not $env:HINA_TTS_MODEL_REVISION) { $env:HINA_TTS_MODEL_REVISION = "75ff82a72f54d55ed389e1eeb12041d3c4bac7d4" }
     if (-not $env:HINA_TTS_MODEL_CACHE) { $env:HINA_TTS_MODEL_CACHE = (Join-Path $repoRoot "var\cache\models\vieneu") }
 }
-else {
-    if (-not $env:HINA_TTS_MODEL) { $env:HINA_TTS_MODEL = "openbmb/VoxCPM2" }
-    if (-not $env:HINA_TTS_MODEL_REVISION) { $env:HINA_TTS_MODEL_REVISION = "bffb3df5a29440629464e5e839f4d214c8714c3d" }
-    if (-not $env:HINA_TTS_MODEL_CACHE) { $env:HINA_TTS_MODEL_CACHE = (Join-Path $repoRoot "var\cache\models\voxcpm2") }
-    if (-not $env:HINA_TTS_INFERENCE_STEPS) { $env:HINA_TTS_INFERENCE_STEPS = "10" }
+elseif ($env:HINA_TTS_PROVIDER -eq "omnivoice") {
+    if (-not $env:HINA_TTS_MODEL) { $env:HINA_TTS_MODEL = "k2-fsa/OmniVoice" }
+    if (-not $env:HINA_TTS_MODEL_REVISION) { $env:HINA_TTS_MODEL_REVISION = "c5fdb5ccb189668d56333f77ba2629f4cd7535f4" }
+    if (-not $env:HINA_TTS_MODEL_CACHE) { $env:HINA_TTS_MODEL_CACHE = (Join-Path $repoRoot "var\cache\models\omnivoice") }
+    if (-not $env:HINA_TTS_INFERENCE_STEPS) { $env:HINA_TTS_INFERENCE_STEPS = "32" }
     if (-not $env:HINA_TTS_GUIDANCE_SCALE) { $env:HINA_TTS_GUIDANCE_SCALE = "2.0" }
-    if (-not $env:HINA_TTS_MAX_CHUNK_CHARACTERS) { $env:HINA_TTS_MAX_CHUNK_CHARACTERS = "180" }
+    if (-not $env:HINA_TTS_MAX_CHUNK_CHARACTERS) { $env:HINA_TTS_MAX_CHUNK_CHARACTERS = "110" }
+    if (-not $env:HINA_TTS_AUDIO_CHUNK_SECONDS) { $env:HINA_TTS_AUDIO_CHUNK_SECONDS = "8" }
+    if (-not $env:HINA_TTS_AUDIO_CHUNK_THRESHOLD_SECONDS) { $env:HINA_TTS_AUDIO_CHUNK_THRESHOLD_SECONDS = "12" }
+    if (-not $env:HINA_TTS_OMNIVOICE_MAX_SPEAKING_RATE) { $env:HINA_TTS_OMNIVOICE_MAX_SPEAKING_RATE = "1.02" }
+}
+else {
+    throw "Unsupported HINA_TTS_PROVIDER '$env:HINA_TTS_PROVIDER'"
 }
 if (-not $env:HINA_TTS_DEVICE) { $env:HINA_TTS_DEVICE = "cuda" }
-if (-not $env:HINA_TTS_PRECISION) {
-    $env:HINA_TTS_PRECISION = if ($env:HINA_TTS_PROVIDER -eq "voxcpm2") { "bfloat16" } else { "float16" }
+if (-not $env:HINA_TTS_PRECISION) { $env:HINA_TTS_PRECISION = "float16" }
+if (-not $env:HINA_TTS_MODEL_VRAM_MIB) {
+    $env:HINA_TTS_MODEL_VRAM_MIB = if ($env:HINA_TTS_PROVIDER -eq "omnivoice") { "3072" } elseif ($env:HINA_TTS_PROVIDER -eq "vieneu") { "6144" } else { "8192" }
 }
-if (-not $env:HINA_TTS_MODEL_VRAM_MIB) { $env:HINA_TTS_MODEL_VRAM_MIB = "8192" }
 if (-not $env:HINA_TTS_MODEL_RAM_MIB) { $env:HINA_TTS_MODEL_RAM_MIB = "6144" }
 if (-not $env:HINA_TTS_WARMUP_ON_START) { $env:HINA_TTS_WARMUP_ON_START = "false" }
 if (-not $env:HINA_TTS_CODEC) { $env:HINA_TTS_CODEC = "OpenMOSS-Team/MOSS-Audio-Tokenizer-Nano" }
@@ -57,11 +73,19 @@ if (-not $env:HINA_TTS_CODEC_REVISION) { $env:HINA_TTS_CODEC_REVISION = "6aa02b0
 # If the owner has prepared the local voice profile, use its deterministic
 # <=8-second anchor and bind it to its SHA-256. Otherwise keep the checked-in
 # consent-bound reference WAV as the safe default.
-$profileAnchorName = if ($env:HINA_TTS_PROVIDER -eq "f5-tts") { "f5-reference.wav" } else { "hina-profile-anchor.wav" }
-$profileAnchor = Join-Path $repoRoot "var\cache\voices\hina\$profileAnchorName"
+$profileAnchor = if ($env:HINA_TTS_PROVIDER -eq "omnivoice") {
+    Join-Path $repoRoot "assets\voices\hina-anime-elevenlabs-reference.wav"
+} elseif ($env:HINA_TTS_PROVIDER -eq "f5-tts") {
+    Join-Path $repoRoot "var\cache\voices\hina\f5-reference.wav"
+} else {
+    Join-Path $repoRoot "var\cache\voices\hina\hina-profile-anchor.wav"
+}
 if (-not $env:HINA_TTS_REFERENCE_AUDIO -and (Test-Path -LiteralPath $profileAnchor)) {
     $env:HINA_TTS_REFERENCE_AUDIO = $profileAnchor
     $env:HINA_TTS_REFERENCE_SHA256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $profileAnchor).Hash.ToLowerInvariant()
+}
+if ($env:HINA_TTS_PROVIDER -eq "omnivoice" -and -not $env:HINA_TTS_REFERENCE_TEXT) {
+    $env:HINA_TTS_REFERENCE_TEXT = "Thôi nào, đừng tự tạo áp lực cho bản thân quá. [sigh] Công việc code dự án hay gỡ lỗi có những ngày bế tắc là chuyện bình thường mà."
 }
 if ($env:HINA_TTS_PROVIDER -eq "f5-tts" -and -not $env:HINA_TTS_REFERENCE_TEXT) {
     $referenceTextFile = Join-Path $repoRoot "var\cache\voices\hina\f5-reference.txt"

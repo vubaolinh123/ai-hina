@@ -53,20 +53,22 @@
       ]
     },
     {
-      "name": "voxcpm",
-      "source_url": "https://github.com/OpenBMB/VoxCPM",
-      "revision": "pypi:voxcpm==2.0.3",
+      "name": "omnivoice",
+      "source_url": "https://github.com/k2-fsa/OmniVoice",
+      "revision": "pypi:omnivoice==0.2.1@5ba967c4d5b0f08244ae856b033eea583d1e4517",
       "license_spdx": "Apache-2.0",
-      "source_hash": "sha256:24da58a30d094a9e9a7ead450ae9cffda0d31eaeba620b61ad99179dd87e486b",
+      "model_license": "CC-BY-NC (version not stated by upstream model card)",
+      "source_hash": "sha256:23f113ef51116a16308b55c4c2ac9c08efca7dfb594802f5c8adfb7523313ccc",
       "destination_paths": [
         "pyproject.toml",
         "uv.lock",
-        "workers/speech/src/hina_speech/voxcpm2_tts_provider.py"
+        "workers/speech/src/hina_speech/omnivoice_tts_provider.py"
       ],
       "modifications": [
         "Used as a pinned PyPI dependency behind Hina's TtsProvider interface; no upstream source file or snippet was copied.",
-        "Hina uses the official VoxCPM.from_pretrained and generate APIs with an exact model revision, CUDA/BF16 inference and 48 kHz output.",
-        "Hina restricts conditioning to one SHA-256-bound owner-authorized synthetic reference and adds bounded chunking, audio validation, retry, scheduler admission, deterministic unload and no runtime audio retention."
+        "Hina uses the official from_pretrained, create_voice_clone_prompt and generate APIs with an exact checkpoint revision, CUDA/FP16 inference, SDPA and optional ASR disabled.",
+        "Hina restricts conditioning to one SHA-256-bound transcript-aligned owner-authorized synthetic reference and adds bounded chunking, audio validation, scheduler admission, CUDA memory telemetry, deterministic unload and no runtime audio retention.",
+        "The pretrained checkpoint is restricted to local non-commercial owner testing until its CC-BY-NC terms are separately cleared."
       ]
     },
     {

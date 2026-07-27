@@ -22,6 +22,7 @@ from hina_speech import (  # noqa: E402
     DEFAULT_TTS_MODEL_REVISION,
     DEFAULT_TTS_VOICE,
     F5TtsProvider,
+    OmniVoiceTtsProvider,
     ScheduledTtsProvider,
     SpeechOutputService,
     TtsConfig,
@@ -29,7 +30,6 @@ from hina_speech import (  # noqa: E402
     TtsPcmChunk,
     TtsSynthesis,
     VieneuTtsProvider,
-    VoxCpm2TtsProvider,
     adaptive_speaking_rate,
     normalize_tts_text,
     pcm16_to_wav,
@@ -121,13 +121,19 @@ class _FakeVieNeu:
 
 
 class TextAndAudioTests(unittest.TestCase):
-    def test_desktop_tts_defaults_to_voxcpm2_without_time_stretch(self) -> None:
+    def test_desktop_tts_defaults_to_omnivoice_float16(self) -> None:
         config = TtsConfig()
         status = config.public_status()
-        self.assertEqual(config.provider, "voxcpm2")
+        self.assertEqual(config.provider, "omnivoice")
         self.assertEqual(config.device, "cuda")
-        self.assertEqual(config.precision, "bfloat16")
-        self.assertEqual(status["adaptiveSpeakingRate"], {"minimum": 1.0, "maximum": 1.0})
+        self.assertEqual(config.precision, "float16")
+        self.assertEqual(config.inference_timesteps, 32)
+        self.assertEqual(config.max_chunk_characters, 110)
+        self.assertEqual(
+            status["adaptiveSpeakingRate"],
+            {"minimum": 1.0, "maximum": 1.02},
+        )
+        self.assertEqual(status["expressiveCues"], ["laughter", "sigh"])
 
     def test_normalization_is_nfc_and_speaks_only_url_hostname(self) -> None:
         value = normalize_tts_text(
@@ -142,6 +148,18 @@ class TextAndAudioTests(unittest.TestCase):
         chunks = split_tts_chunks(text.strip(), max_characters=64)
         self.assertTrue(all(0 < len(chunk) <= 64 for chunk in chunks))
         self.assertEqual(" ".join(chunks).split(), text.split())
+
+    def test_long_vietnamese_chunking_prefers_clause_boundaries(self) -> None:
+        text = (
+            "Mình tên Hina! Một AI companion và VTuber tiếng Việt chạy cục bộ "
+            "trên máy chủ của bạn. Mình có cá tính tinh nghịch vừa phải, luôn "
+            "sẵn sàng trò chuyện hoặc hỗ trợ làm việc – miễn sao tuân thủ các "
+            "quy tắc an toàn và không vượt quá khả năng hiện tại nhé."
+        )
+        chunks = split_tts_chunks(text, max_characters=110)
+        self.assertTrue(all(0 < len(chunk) <= 110 for chunk in chunks))
+        self.assertEqual(" ".join(chunks).split(), text.split())
+        self.assertTrue(any(chunk.endswith((",", "–")) for chunk in chunks))
 
     def test_expressive_cues_use_only_supported_vieneu_tokens(self) -> None:
         value = normalize_tts_text(
@@ -482,9 +500,10 @@ class F5ProviderTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreater(len(result.pcm16), 0)
 
 
-class VoxCpm2ProviderTests(unittest.IsolatedAsyncioTestCase):
-    async def test_voxcpm2_uses_fixed_reference_and_returns_valid_48khz_segments(self) -> None:
+class OmniVoiceProviderTests(unittest.IsolatedAsyncioTestCase):
+    async def test_omnivoice_reuses_fixed_prompt_and_returns_valid_24khz_segments(self) -> None:
         import numpy as np
+        import torch
 
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -493,10 +512,11 @@ class VoxCpm2ProviderTests(unittest.IsolatedAsyncioTestCase):
             snapshot = root / "snapshot"
             snapshot.mkdir()
             config = TtsConfig(
-                provider="voxcpm2",
+                provider="omnivoice",
                 model_cache=root,
                 reference_audio_path=reference,
                 reference_audio_sha256=hashlib.sha256(reference.read_bytes()).hexdigest(),
+                reference_text="Đây là mẫu giọng tổng hợp của Hina.",
             )
             downloads: list[dict[str, object]] = []
 
@@ -504,18 +524,30 @@ class VoxCpm2ProviderTests(unittest.IsolatedAsyncioTestCase):
                 downloads.append(kwargs)
                 return str(snapshot)
 
-            class FakeVox:
+            class FakeOmniVoice:
                 def __init__(self) -> None:
-                    self.tts_model = SimpleNamespace(sample_rate=48_000)
+                    self.sampling_rate = 24_000
+                    self._asr_pipe = None
                     self.calls: list[dict[str, object]] = []
+                    self.prompt_calls = 0
+
+                def create_voice_clone_prompt(self, **kwargs):
+                    self.prompt_calls += 1
+                    self.prompt_kwargs = kwargs
+                    return SimpleNamespace(
+                        ref_audio_tokens=torch.tensor([[1, 2, 3]], device="cpu"),
+                        ref_text=kwargs["ref_text"],
+                        ref_rms=0.1,
+                    )
 
                 def generate(self, **kwargs):
                     self.calls.append(kwargs)
-                    axis = np.arange(9_600, dtype=np.float32) / 48_000
-                    return np.sin(2 * np.pi * 220 * axis).astype(np.float32) * 0.2
+                    axis = np.arange(4_800, dtype=np.float32) / 24_000
+                    audio = np.sin(2 * np.pi * 220 * axis).astype(np.float32) * 0.2
+                    return [audio]
 
-            fake = FakeVox()
-            provider = VoxCpm2TtsProvider(
+            fake = FakeOmniVoice()
+            provider = OmniVoiceTtsProvider(
                 config,
                 snapshot_downloader=downloader,
                 model_factory=lambda *_args: fake,
@@ -524,14 +556,28 @@ class VoxCpm2ProviderTests(unittest.IsolatedAsyncioTestCase):
                 ("[chuckle] Xin chào.", "Hina đang kiểm tra câu dài."),
                 threading.Event(),
             )
-            self.assertEqual(result.sample_rate_hz, 48_000)
+            self.assertEqual(result.sample_rate_hz, 24_000)
             self.assertEqual(len(result.chunks), 2)
             self.assertGreater(len(result.pcm16), 0)
             self.assertEqual(downloads[0]["revision"], config.model_revision)
-            self.assertEqual(fake.calls[0]["reference_wav_path"], str(reference))
-            self.assertNotIn("[", fake.calls[0]["text"])
+            self.assertEqual(fake.prompt_calls, 1)
+            self.assertEqual(fake.prompt_kwargs["ref_audio"], str(reference))
+            self.assertEqual(fake.prompt_kwargs["ref_text"], config.reference_text)
+            self.assertIn("[laughter]", fake.calls[0]["text"])
             self.assertTrue(str(fake.calls[0]["text"]).endswith("."))
-            self.assertTrue(fake.calls[0]["retry_badcase"])
+            self.assertEqual(fake.calls[0]["language"], "vi")
+            self.assertEqual(fake.calls[0]["num_step"], 32)
+            self.assertLessEqual(fake.calls[0]["speed"], 1.02)
+            self.assertEqual(
+                {call["speed"] for call in fake.calls},
+                {fake.calls[0]["speed"]},
+            )
+            self.assertEqual(fake.calls[0]["audio_chunk_duration"], 8.0)
+            self.assertEqual(fake.calls[0]["audio_chunk_threshold"], 12.0)
+            self.assertNotIn("ref_audio", fake.calls[0])
+            status = await provider.status()
+            self.assertFalse(status["asrLoaded"])
+            self.assertTrue(status["voicePromptReady"])
             await provider.unload()
             self.assertFalse((await provider.status())["modelLoaded"])
             await provider.close()

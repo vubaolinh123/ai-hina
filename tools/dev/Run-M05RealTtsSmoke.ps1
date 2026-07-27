@@ -1,8 +1,10 @@
 param(
     [string]$Text = "",
     [string]$Output = "",
-    [ValidateSet("voxcpm2", "vieneu", "f5-tts")]
-    [string]$Provider = "voxcpm2"
+    [ValidateRange(1, 20)]
+    [int]$Iterations = 1,
+    [ValidateSet("omnivoice", "vieneu", "f5-tts")]
+    [string]$Provider = "omnivoice"
 )
 
 $ErrorActionPreference = "Stop"
@@ -17,16 +19,21 @@ $env:UV_CACHE_DIR = Join-Path $repoRoot ".cache\uv"
 $env:PYTHONIOENCODING = "utf-8"
 $env:HINA_TTS_PROVIDER = $Provider
 $env:HINA_TTS_DEVICE = "cuda"
-$env:HINA_TTS_PRECISION = if ($Provider -eq "voxcpm2") { "bfloat16" } else { "float16" }
+$env:HINA_TTS_PRECISION = "float16"
 $env:HINA_TTS_ALLOW_DOWNLOAD = "true"
-if ($Provider -eq "voxcpm2") {
-    $env:HINA_TTS_MODEL = "openbmb/VoxCPM2"
-    $env:HINA_TTS_MODEL_REVISION = "bffb3df5a29440629464e5e839f4d214c8714c3d"
-    $env:HINA_TTS_MODEL_CACHE = Join-Path $repoRoot "var\cache\models\voxcpm2"
-    $env:HINA_TTS_INFERENCE_STEPS = "10"
+if ($Provider -eq "omnivoice") {
+    $env:HINA_TTS_MODEL = "k2-fsa/OmniVoice"
+    $env:HINA_TTS_MODEL_REVISION = "c5fdb5ccb189668d56333f77ba2629f4cd7535f4"
+    $env:HINA_TTS_MODEL_CACHE = Join-Path $repoRoot "var\cache\models\omnivoice"
+    $env:HINA_TTS_INFERENCE_STEPS = "32"
     $env:HINA_TTS_GUIDANCE_SCALE = "2.0"
-    $env:HINA_TTS_MAX_CHUNK_CHARACTERS = "180"
-    $profileAnchor = Join-Path $repoRoot "var\cache\voices\hina\hina-profile-anchor.wav"
+    $env:HINA_TTS_MAX_CHUNK_CHARACTERS = "110"
+    $env:HINA_TTS_AUDIO_CHUNK_SECONDS = "8"
+    $env:HINA_TTS_AUDIO_CHUNK_THRESHOLD_SECONDS = "12"
+    $env:HINA_TTS_OMNIVOICE_MAX_SPEAKING_RATE = "1.02"
+    $env:HINA_TTS_MODEL_VRAM_MIB = "3072"
+    $profileAnchor = Join-Path $repoRoot "assets\voices\hina-anime-elevenlabs-reference.wav"
+    $env:HINA_TTS_REFERENCE_TEXT = "Thôi nào, đừng tự tạo áp lực cho bản thân quá. [sigh] Công việc code dự án hay gỡ lỗi có những ngày bế tắc là chuyện bình thường mà."
 }
 elseif ($Provider -eq "vieneu") {
     $env:HINA_TTS_MODEL = "pnnbao-ump/VieNeu-TTS-v3-Turbo"
@@ -68,6 +75,7 @@ if ($Text) {
 if ($Output) {
     $arguments += @("--output", $Output)
 }
+$arguments += @("--iterations", $Iterations)
 
 & uv @arguments
 if ($LASTEXITCODE -ne 0) {

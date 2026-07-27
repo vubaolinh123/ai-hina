@@ -119,6 +119,37 @@ class ProvenanceTests(unittest.TestCase):
         )
         self.assertEqual(f5_model["licenses"]["weights_spdx"], "CC-BY-4.0")
         self.assertFalse(f5_model["status"]["production_ready"])
+        omnivoice_model = json.loads(
+            (
+                ROOT
+                / "ml"
+                / "models"
+                / "manifests"
+                / "omnivoice-0.6b.v1.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            omnivoice_model["revision"],
+            "c5fdb5ccb189668d56333f77ba2629f4cd7535f4",
+        )
+        self.assertEqual(
+            omnivoice_model["licenses"]["runtime_code_spdx"],
+            "Apache-2.0",
+        )
+        self.assertFalse(
+            omnivoice_model["licenses"][
+                "commercial_use_allowed_by_declared_license"
+            ]
+        )
+        self.assertFalse(omnivoice_model["runtime"]["optional_asr_loaded"])
+        self.assertEqual(omnivoice_model["runtime"]["diffusion_steps"], 32)
+        self.assertFalse(omnivoice_model["status"]["production_ready"])
+        code_lock = json.loads(
+            (ROOT / "third_party" / "code.lock.json").read_text(encoding="utf-8")
+        )
+        component_names = {item["name"] for item in code_lock["components"]}
+        self.assertIn("omnivoice", component_names)
+        self.assertNotIn("voxcpm", component_names)
         avatar = json.loads(
             (
                 ROOT
