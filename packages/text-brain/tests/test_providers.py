@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import base64
 import sys
 import threading
 import unittest
@@ -43,6 +44,17 @@ class _ProviderHandler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", "0"))
         type(self).received_body = json.loads(self.rfile.read(length).decode("utf-8"))
         if self.path == "/api/chat":
+            if type(self).received_body.get("stream") is False:
+                self._json(
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": "Ảnh có một nhân vật anime trên sân khấu.",
+                        },
+                        "done": True,
+                    }
+                )
+                return
             lines = (
                 [b"{not-json}\n"]
                 if type(self).malformed
@@ -163,6 +175,37 @@ class ProviderAdapterTests(unittest.IsolatedAsyncioTestCase):
                 tokens.append(token)
         self.assertEqual(raised.exception.code, "E_MODEL_STREAM_INVALID")
         self.assertEqual(tokens, [])
+
+    async def test_ollama_vision_request_is_bounded_and_unloads(self) -> None:
+        provider = LocalHttpChatProvider(
+            ModelGatewayConfig(base_url=self.base_url, model="hina-local:4b")
+        )
+        image = b"\x89PNG\r\n\x1a\n" + b"owner-pixels"
+        result = await provider.analyze_image(
+            image,
+            "Mô tả ngắn gọn ảnh này bằng tiếng Việt.",
+        )
+        self.assertEqual(result, "Ảnh có một nhân vật anime trên sân khấu.")
+        body = _ProviderHandler.received_body
+        assert body is not None
+        self.assertFalse(body["stream"])
+        self.assertEqual(body["keep_alive"], 0)
+        self.assertIs(body["think"], False)
+        self.assertEqual(body["options"]["num_ctx"], 4_096)
+        self.assertLessEqual(body["options"]["temperature"], 0.2)
+        self.assertEqual(
+            base64.b64decode(body["messages"][0]["images"][0]),
+            image,
+        )
+
+    async def test_vision_rejects_non_png_without_http_request(self) -> None:
+        provider = LocalHttpChatProvider(
+            ModelGatewayConfig(base_url=self.base_url, model="hina-local:4b")
+        )
+        with self.assertRaises(TextBrainError) as raised:
+            await provider.analyze_image(b"not-a-png", "Mô tả ảnh")
+        self.assertEqual(raised.exception.code, "E_MODEL_REQUEST")
+        self.assertIsNone(_ProviderHandler.received_body)
 
 
 if __name__ == "__main__":

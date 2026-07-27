@@ -15,6 +15,8 @@ class ChatProvider(Protocol):
 
     def stream_chat(self, messages: list[dict[str, str]]) -> AsyncIterator[str]: ...
 
+    async def analyze_image(self, image_png: bytes, prompt: str) -> str: ...
+
     async def unload(self) -> None: ...
 
 
@@ -103,6 +105,52 @@ class ModelGateway:
                 except TextBrainError as exc:
                     last_error = exc
                     if emitted or not exc.retryable or attempt >= self.config.retry_attempts:
+                        await self._record_failure()
+                        raise
+                finally:
+                    await lease.release()
+            assert last_error is not None
+            await self._record_failure()
+            raise last_error
+        finally:
+            if not completed:
+                await self._leave_half_open()
+
+    async def analyze_image(self, image_png: bytes, prompt: str) -> str:
+        """Run one explicit snapshot through the shared local model lease."""
+
+        await self._before_request()
+        completed = False
+        last_error: TextBrainError | None = None
+        try:
+            for attempt in range(self.config.retry_attempts + 1):
+                lease = await self.scheduler.acquire(
+                    LocalResourceRequest(
+                        owner="model.vision",
+                        vram_mib=self.config.model_vram_mib,
+                        ram_mib=self.config.model_ram_mib,
+                        priority=70,
+                        ttl_seconds=self.config.request_timeout_seconds + 10,
+                        preemptible=True,
+                    ),
+                    wait_timeout_seconds=min(5.0, self.config.health_timeout_seconds),
+                    on_preempt=self.provider.unload,
+                )
+                try:
+                    result = await self.provider.analyze_image(image_png, prompt)
+                    lease.assert_active()
+                    if not isinstance(result, str) or not result.strip():
+                        raise TextBrainError(
+                            "E_MODEL_EMPTY_RESPONSE",
+                            "local vision provider returned no text",
+                            retryable=True,
+                        )
+                    completed = True
+                    await self._record_success()
+                    return result.strip()
+                except TextBrainError as exc:
+                    last_error = exc
+                    if not exc.retryable or attempt >= self.config.retry_attempts:
                         await self._record_failure()
                         raise
                 finally:

@@ -1,0 +1,62 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M05-S5-omnivoice-vietnamese-prosody",
+  "module_id": "M05",
+  "objective": "Stop OmniVoice from rushing, swallowing or mispronouncing Vietnamese clause tails by normalizing decorative emoji, isolating parenthetical asides into their own chunks and capping synthesis at the reference voice's natural 1.0 speaking rate.",
+  "non_goals": [
+    "Do not replace OmniVoice, retrain the voice or change the owner-authorized reference corpus.",
+    "Do not hide unsupported text or silently fall back to CPU/cloud TTS.",
+    "Do not run a long soak or subjective promotion beyond one focused owner-listening sample."
+  ],
+  "base_sha": "a3b6713bca17d1dbdb8d681e80eca50d7bd1f538",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "workers/speech/",
+    "apps/core-runtime/",
+    "apps/desktop/",
+    "tools/dev/",
+    ".env.example",
+    "docs/modules/M05-S5-omnivoice-vietnamese-prosody-module-brief.json",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "packages/contracts/",
+    "packages/safety-policy/",
+    "packages/text-brain/",
+    "packages/memory/",
+    "workers/perception/"
+  ],
+  "contracts": [
+    "Parenthetical Vietnamese tails become separate clean chunks rather than a rushed suffix of the preceding sentence.",
+    "Decorative emoji never reach OmniVoice as unknown glyphs; expressive emoji map to an existing bounded non-verbal cue where appropriate.",
+    "OmniVoice speaking rate never exceeds 1.0 in the quality profile and the configured cap is reported honestly.",
+    "Every normalized chunk remains non-empty, bounded and reconstructs all meaningful spoken words in order."
+  ],
+  "allowed_dependencies": [
+    "Existing Hina speech worker and OmniVoice 0.2.1; no new dependency."
+  ],
+  "oss_candidates": [
+    "https://github.com/k2-fsa/OmniVoice"
+  ],
+  "acceptance_criteria": [
+    "The exact owner-reported joke is a regression fixture: the final question is a separate chunk, the pen emoji/parentheses are absent from model input, and no meaningful Vietnamese word is lost.",
+    "Provider tests prove every chunk uses speaking_rate=1.0 or lower and preserves output ordering.",
+    "A real CUDA WAV of the regression sentence is generated for owner listening with stable non-silent duration.",
+    "Focused speech tests and desktop chat/TTS smoke pass once."
+  ],
+  "required_test_commands": [
+    "pnpm test:speech",
+    "pnpm --filter @hina/desktop typecheck",
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Run-M05RealTtsSmoke.ps1 -Provider omnivoice"
+  ],
+  "latency_or_quality_budget": {
+    "maximum_speaking_rate": 1.0,
+    "maximum_chunk_characters": 110,
+    "inter_segment_silence_seconds": 0.16,
+    "quality_promotion_requires_owner_listening": true
+  },
+  "output_artifact_dir": "artifacts/verification/M05/"
+}

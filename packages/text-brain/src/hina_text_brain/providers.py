@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import http.client
 import json
 import ssl
@@ -15,6 +16,8 @@ from .errors import TextBrainError
 
 MAX_MESSAGE_BYTES = 32_768
 MAX_CONTEXT_BYTES = 131_072
+MAX_VISION_IMAGE_BYTES = 1_000_000
+MAX_VISION_PROMPT_BYTES = 8_192
 _DONE = object()
 
 
@@ -125,6 +128,30 @@ class LocalHttpChatProvider:
                 except OSError:
                     pass
             await asyncio.to_thread(thread.join, 1.0)
+
+    async def analyze_image(self, image_png: bytes, prompt: str) -> str:
+        """Analyze one bounded PNG with the configured local Ollama model.
+
+        OpenAI-compatible multimodal payload conventions differ between local
+        servers, so M08-S2 deliberately supports only the pinned Ollama route.
+        The image exists only in the request-local body and Ollama is asked to
+        unload the model immediately after completing the response.
+        """
+
+        normalized_image, normalized_prompt = _validate_vision_request(
+            image_png,
+            prompt,
+        )
+        if self.config.provider is not ProviderKind.OLLAMA:
+            raise TextBrainError(
+                "E_MODEL_REQUEST",
+                "image analysis requires the configured Ollama provider",
+            )
+        return await asyncio.to_thread(
+            self._analyze_image_sync,
+            normalized_image,
+            normalized_prompt,
+        )
 
     async def unload(self) -> None:
         if self.config.provider is not ProviderKind.OLLAMA:
@@ -291,6 +318,66 @@ class LocalHttpChatProvider:
         finally:
             connection.close()
 
+    def _analyze_image_sync(self, image_png: bytes, prompt: str) -> str:
+        connection = self._connection(self.config.request_timeout_seconds)
+        body = self._vision_body(image_png, prompt)
+        try:
+            connection.request(
+                "POST",
+                self.config.endpoint_path("chat"),
+                body=body,
+                headers=self._headers(content_length=len(body)),
+            )
+            response = connection.getresponse()
+            if response.status != 200:
+                response.read(4_096)
+                raise TextBrainError(
+                    "E_MODEL_UNAVAILABLE",
+                    f"local vision provider returned HTTP {response.status}",
+                    retryable=response.status >= 500 or response.status in {408, 429},
+                )
+            raw = response.read(self.config.max_output_bytes + 1)
+            if len(raw) > self.config.max_output_bytes:
+                raise TextBrainError(
+                    "E_MODEL_STREAM_INVALID",
+                    "local vision response exceeds byte limit",
+                )
+            payload = json.loads(raw.decode("utf-8"))
+            if not isinstance(payload, dict) or payload.get("error") is not None:
+                raise ValueError
+            message = payload.get("message")
+            content = message.get("content") if isinstance(message, dict) else None
+            if not isinstance(content, str):
+                raise ValueError
+            result = content.strip()
+            if not result:
+                raise TextBrainError(
+                    "E_MODEL_EMPTY_RESPONSE",
+                    "local vision provider returned no text",
+                    retryable=True,
+                )
+            if len(result.encode("utf-8")) > self.config.max_output_bytes:
+                raise TextBrainError(
+                    "E_MODEL_STREAM_INVALID",
+                    "local vision output exceeds byte limit",
+                )
+            return result
+        except TextBrainError:
+            raise
+        except (OSError, TimeoutError, http.client.HTTPException) as exc:
+            raise TextBrainError(
+                "E_MODEL_UNAVAILABLE",
+                "local vision provider is unavailable",
+                retryable=True,
+            ) from exc
+        except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
+            raise TextBrainError(
+                "E_MODEL_STREAM_INVALID",
+                "local vision provider returned malformed data",
+            ) from exc
+        finally:
+            connection.close()
+
     def _chat_body(self, messages: list[dict[str, str]]) -> bytes:
         if self.config.provider is ProviderKind.OLLAMA:
             payload: dict[str, Any] = {
@@ -316,6 +403,32 @@ class LocalHttpChatProvider:
                 "temperature": self.config.temperature,
                 "max_tokens": self.config.max_tokens,
             }
+        return json.dumps(
+            payload,
+            ensure_ascii=False,
+            allow_nan=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+
+    def _vision_body(self, image_png: bytes, prompt: str) -> bytes:
+        payload = {
+            "model": self.config.model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": prompt,
+                    "images": [base64.b64encode(image_png).decode("ascii")],
+                }
+            ],
+            "stream": False,
+            "keep_alive": 0,
+            "think": False,
+            "options": {
+                "temperature": min(self.config.temperature, 0.2),
+                "num_ctx": 4_096,
+                "num_predict": self.config.max_tokens,
+            },
+        }
         return json.dumps(
             payload,
             ensure_ascii=False,
@@ -373,3 +486,25 @@ def _validate_messages(raw: Any) -> list[dict[str, str]]:
             raise TextBrainError("E_MODEL_REQUEST", "conversation context exceeds byte limit")
         messages.append({"role": role, "content": content})
     return messages
+
+
+def _validate_vision_request(image_png: Any, prompt: Any) -> tuple[bytes, str]:
+    if (
+        not isinstance(image_png, bytes)
+        or not 8 <= len(image_png) <= MAX_VISION_IMAGE_BYTES
+        or not image_png.startswith(b"\x89PNG\r\n\x1a\n")
+    ):
+        raise TextBrainError(
+            "E_MODEL_REQUEST",
+            "vision input must be a bounded PNG image",
+        )
+    if not isinstance(prompt, str):
+        raise TextBrainError("E_MODEL_REQUEST", "vision prompt is invalid")
+    normalized_prompt = prompt.strip()
+    try:
+        prompt_bytes = normalized_prompt.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise TextBrainError("E_MODEL_REQUEST", "vision prompt is invalid Unicode") from exc
+    if not normalized_prompt or len(prompt_bytes) > MAX_VISION_PROMPT_BYTES:
+        raise TextBrainError("E_MODEL_REQUEST", "vision prompt exceeds byte limit")
+    return image_png, normalized_prompt

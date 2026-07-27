@@ -255,9 +255,11 @@ class HinaRuntimeApplication:
             if perception_service is None and safety_policy is not None:
                 from hina_perception import PerceptionConfig, PerceptionService
 
+                vision_analyze = getattr(model_gateway, "analyze_image", None)
                 perception_service = PerceptionService(
                     PerceptionConfig.from_env(),
                     safety_evaluate=safety_policy.evaluate,
+                    vision_analyze=vision_analyze if callable(vision_analyze) else None,
                     on_error=self._log_perception_error,
                 )
             server = ControlPlaneServer(

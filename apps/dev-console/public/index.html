@@ -152,8 +152,9 @@
           <p>
             Không có gì được chụp tự động. Mỗi lần bấm chụp, trình duyệt mở hộp
             thoại chọn màn hình/cửa sổ và ảnh chỉ được xử lý trong bộ nhớ: runtime
-            giữ lại kích thước, hash và độ sáng — không lưu ảnh, không OCR ở slice
-            này. Mọi quan sát tự hết hạn sau tối đa 15 giây.
+            giữ lại kích thước, hash và độ sáng — không lưu ảnh. Khi bạn chủ động
+            đánh dấu phân tích, Qwen3.5 local tạo thêm một mô tả ngắn không đáng
+            tin tuyệt đối. Mọi quan sát tự hết hạn sau tối đa 15 giây.
           </p>
           <ol class="guide-steps">
             <li>1. Bật “Quan sát màn hình” ở trang An toàn</li>
@@ -836,8 +837,9 @@
           <p class="panel-copy feature-purpose">
             <strong>Mục đích:</strong> cho Hina một bằng chứng “đang thấy gì” có
             hạn dùng. Ảnh chụp chỉ nằm trong RAM để tạo evidence (kích thước,
-            hash, độ sáng) rồi bị bỏ; runtime không lưu ảnh và chưa đọc chữ
-            (OCR sẽ tới ở slice sau khi dependency qua review license).
+            hash, độ sáng) và, nếu bạn yêu cầu, một mô tả bằng Qwen3.5 local rồi
+            bị bỏ. Runtime không lưu ảnh; mô tả chỉ là dữ liệu không tin cậy,
+            không tự kích hoạt công cụ hay hành động trong game.
           </p>
 
           <div class="safety-banner">
@@ -865,6 +867,24 @@
                 placeholder="Ví dụ: cửa sổ Minecraft"
                 autocomplete="off"
               >
+              <div class="perception-vision-controls">
+                <label class="checkbox-field" for="perceptionVisionCheck">
+                  <input id="perceptionVisionCheck" type="checkbox">
+                  Nhờ Qwen3.5 local phân tích nội dung ảnh
+                </label>
+                <label for="perceptionVisionQuestion">Bạn muốn Hina chú ý điều gì? (không bắt buộc)</label>
+                <textarea
+                  id="perceptionVisionQuestion"
+                  maxlength="500"
+                  rows="3"
+                  placeholder="Ví dụ: Trong cửa sổ game có nguy hiểm nào ở gần nhân vật?"
+                ></textarea>
+                <p class="panel-copy speech-hint">
+                  Chỉ chạy khi bạn đánh dấu lựa chọn này. Ảnh không được lưu; kết quả là
+                  nhận xét không đáng tin tuyệt đối, hết hạn cùng observation sau tối đa
+                  15 giây và không thể tự bấm nút hay điều khiển game.
+                </p>
+              </div>
               <p class="panel-copy speech-hint">
                 Ảnh được thu nhỏ tối đa 1280 px và nén PNG ngay trong trình duyệt
                 trước khi gửi tới <code>127.0.0.1</code>. Ảnh trùng với quan sát

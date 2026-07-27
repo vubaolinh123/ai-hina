@@ -11,6 +11,8 @@ from .gateway import ChatProvider, ModelGateway
 from .providers import (
     MAX_CONTEXT_BYTES,
     MAX_MESSAGE_BYTES,
+    MAX_VISION_IMAGE_BYTES,
+    MAX_VISION_PROMPT_BYTES,
     LocalHttpChatProvider,
     ProviderHealth,
 )
@@ -46,6 +48,8 @@ __all__ = [
     "MAX_MEMORY_BYTES",
     "MAX_MEMORY_TURNS",
     "MAX_MESSAGE_BYTES",
+    "MAX_VISION_IMAGE_BYTES",
+    "MAX_VISION_PROMPT_BYTES",
     "MAX_MODEL_CONTEXT_BYTES",
     "MIN_VRAM_HEADROOM_MIB",
     "ModelGateway",

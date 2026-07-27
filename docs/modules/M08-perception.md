@@ -1,9 +1,10 @@
 # M08 — Perception: screen snapshot, OCR và optional VLM
 
-- Status: M08-S1 runnable candidate; M08 remains active
+- Status: M08-S1/S2 runnable candidate; M08 remains active
 - Branch: `main` (fast-development mode)
 - Active slices: M08-S1 perception spine (owner-consented snapshot ingestion,
-  freshness/TTL ledger, safety gating, Dev Console page)
+  freshness/TTL ledger, safety gating, Dev Console page); M08-S2 explicit
+  Qwen3.5 local image analysis through the shared model scheduler
 
 ## Runnable target
 
@@ -13,6 +14,12 @@ loopback và xem quan sát còn hạn với đồng hồ đếm ngược TTL th�
 được chụp tự động và không có pixel nào được lưu: runtime chỉ giữ evidence
 (kích thước, SHA-256, dHash, độ sáng trung bình) trong RAM cho tới khi quan
 sát hết hạn.
+
+Khi owner chủ động đánh dấu **Nhờ Qwen3.5 local phân tích nội dung ảnh**, cùng
+PNG đó được đưa qua model local trước khi byte ảnh bị bỏ. Observation chỉ nhận
+một mô tả text tối đa 2.000 ký tự, luôn mang `trustLevel=untrusted`,
+`decisionSupportEligible=false` và hết hạn cùng TTL. Mô tả không tự đi vào
+memory, chat prompt, tool hay bộ điều khiển game.
 
 ## Implemented in M08-S1
 
@@ -48,13 +55,33 @@ sát hết hạn.
 - Capability `perception.observe` và feature flag `perception` đã tồn tại từ
   M02 với mặc định tắt; slice này không sửa manifest an toàn.
 
+## Implemented in M08-S2
+
+- `LocalHttpChatProvider.analyze_image` dùng Ollama `/api/chat` với PNG base64
+  bounded, `stream=false`, `think=false`, context runtime 4.096,
+  `keep_alive=0`; OpenAI-compatible provider không được suy đoán payload.
+- `ModelGateway.analyze_image` dùng cùng resource scheduler với chat, lease
+  `model.vision` priority 70 và reservation 4.096 MiB. Vì text và ảnh dùng
+  chung Qwen3.5-4B nên không có VLM thứ hai chiếm VRAM.
+- Runtime chỉ truyền callback model đã dựng sẵn vào perception service. Lỗi
+  model tạo `vision.state=error` có mã ổn định nhưng vẫn trả observation với
+  hash/kích thước/TTL cơ bản; ảnh nguồn không được lưu.
+- Route snapshot nhận thêm hai header bounded:
+  `X-Hina-Vision-Analyze: true` và `X-Hina-Vision-Question` percent-encoded.
+- Trang **Quan sát** giải thích bằng ngôn ngữ phổ thông, có checkbox opt-in,
+  câu hỏi tùy chọn, kết quả mô tả/error và nhắc rõ model không thể tự bấm nút
+  hoặc điều khiển game.
+- Benchmark thật trên RTX 5070 Ti: `qwen3.5:4b` xử lý ảnh PNG 785.947 byte
+  bằng GPU, trả mô tả tiếng Việt và không còn resident trong `ollama ps` sau
+  request. Blob Ollama 3,4 GB; runtime đo khoảng 3,1 GiB GPU tại context 4K.
+
 ## Deferred M08 deliverables
 
-OCR provider thật (PaddleOCR hoặc RapidOCR sau license/VRAM review), optional
-VLM snapshot với resource lease, capture allowlist theo window/region ở tầng
-OS, privacy mask, event/intent-driven capture, replay ≥200 historical/stopped
-capture cases và các gate OCR CER/VLM QA của master plan thuộc các slice M08
-tiếp theo. Không được đánh dấu M08 complete khi các phần này chưa có evidence.
+OCR provider thật (PaddleOCR hoặc RapidOCR sau license/VRAM review), capture
+allowlist theo window/region ở tầng OS, privacy mask, event/intent-driven
+capture, replay ≥200 historical/stopped capture cases và các gate OCR CER/VLM
+QA của master plan thuộc các slice M08 tiếp theo. Không được đánh dấu M08
+complete khi các phần này chưa có evidence.
 
 ## Fast evidence (sandbox, Python 3.11/3.13)
 
@@ -70,3 +97,12 @@ tiếp theo. Không được đánh dấu M08 complete khi các phần này chư
   máy owner).
 - Owner cần chạy trên Windows: `pnpm test:perception`, `pnpm test:fast`,
   `pnpm smoke:dev-console` và browser workflow thật của trang Quan sát.
+
+## Fast evidence M08-S2 (owner machine)
+
+- `pnpm test:text-brain`: 28/28 pass.
+- `pnpm test:perception`: 33/33 pass.
+- `pnpm test:fast`: safety 22, text-brain 28, memory 11, avatar 5, speech 37,
+  perception 33 và core-runtime 45 tests đều pass; `node --check app.js` pass.
+- Real local image smoke trả mô tả tiếng Việt từ Qwen3.5-4B; model dùng GPU và
+  `keep_alive=0` làm `ollama ps` trống sau request.

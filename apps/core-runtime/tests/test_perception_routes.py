@@ -75,6 +75,8 @@ async def _post_snapshot(
     content_type: str = "image/png",
     owner_confirmed: bool = True,
     label: str | None = None,
+    analyze_with_vlm: bool = False,
+    vision_question: str | None = None,
 ) -> tuple[int, dict[str, object]]:
     import json as json_module
 
@@ -91,6 +93,10 @@ async def _post_snapshot(
         headers.append("X-Hina-Owner-Confirmed: true")
     if label is not None:
         headers.append(f"X-Hina-Label: {quote(label)}")
+    if analyze_with_vlm:
+        headers.append("X-Hina-Vision-Analyze: true")
+    if vision_question is not None:
+        headers.append(f"X-Hina-Vision-Question: {quote(vision_question)}")
     headers.append("Connection: close")
     writer.write(("\r\n".join(headers) + "\r\n\r\n").encode("ascii") + body)
     await writer.drain()
@@ -111,9 +117,14 @@ class PerceptionRouteTests(unittest.IsolatedAsyncioTestCase):
             AuditTrail(directory / "audit.jsonl", build_commit="perception-test"),
         )
         self.clock = _FakeClock()
+
+        async def analyze(_image: bytes, prompt: str) -> str:
+            return f"Phân tích local: {prompt[-40:]}"
+
         self.perception = PerceptionService(
             PerceptionConfig(),
             safety_evaluate=self.safety.evaluate,
+            vision_analyze=analyze,
             clock=self.clock,
         )
         self.server = ControlPlaneServer(
@@ -151,6 +162,7 @@ class PerceptionRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(response.body["capture"]["autoCapture"])
         self.assertEqual(response.body["policy"]["capability"], "perception.observe")
         self.assertEqual(response.body["ocr"]["state"], "contract-ready")
+        self.assertTrue(response.body["vision"]["available"])
 
     async def test_snapshot_is_denied_while_feature_flag_is_off(self) -> None:
         status, body = await _post_snapshot(self.host, self.port, _png())
@@ -194,6 +206,21 @@ class PerceptionRouteTests(unittest.IsolatedAsyncioTestCase):
         second_status, second_body = await _post_snapshot(self.host, self.port, _png())
         self.assertEqual(second_status, HTTPStatus.OK)
         self.assertEqual(second_body["status"], "duplicate")
+
+    async def test_explicit_vision_headers_return_untrusted_summary(self) -> None:
+        await self._enable_perception_flag()
+        status, body = await _post_snapshot(
+            self.host,
+            self.port,
+            _png(),
+            analyze_with_vlm=True,
+            vision_question="Có chữ gì quan trọng?",
+        )
+        self.assertEqual(status, HTTPStatus.OK)
+        observation = body["observation"]
+        self.assertEqual(observation["vision"]["state"], "ready")
+        self.assertIn("Có chữ gì quan trọng?", observation["vision"]["summary"])
+        self.assertFalse(observation["vision"]["decisionSupportEligible"])
 
     async def test_wrong_content_type_and_empty_body_are_rejected(self) -> None:
         await self._enable_perception_flag()

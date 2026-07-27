@@ -26,9 +26,16 @@ class StaticTelemetry:
 
 
 class ScriptedProvider:
-    def __init__(self, scripts: list[list[object]]) -> None:
+    def __init__(
+        self,
+        scripts: list[list[object]],
+        *,
+        vision_scripts: list[object] | None = None,
+    ) -> None:
         self.scripts = scripts
+        self.vision_scripts = vision_scripts or []
         self.calls = 0
+        self.vision_calls = 0
         self.unloads = 0
 
     async def health(self) -> ProviderHealth:
@@ -44,6 +51,13 @@ class ScriptedProvider:
 
     async def unload(self) -> None:
         self.unloads += 1
+
+    async def analyze_image(self, image_png: bytes, prompt: str) -> str:
+        item = self.vision_scripts[self.vision_calls]
+        self.vision_calls += 1
+        if isinstance(item, Exception):
+            raise item
+        return str(item)
 
 
 class BlockingProvider(ScriptedProvider):
@@ -164,6 +178,53 @@ class GatewayTests(unittest.IsolatedAsyncioTestCase):
         task.cancel()
         with self.assertRaises(asyncio.CancelledError):
             await task
+        self.assertEqual((await scheduler.snapshot()).active_leases, 0)
+
+    async def test_vision_uses_shared_scheduler_and_retries_before_result(self) -> None:
+        provider = ScriptedProvider(
+            [],
+            vision_scripts=[
+                TextBrainError("E_MODEL_UNAVAILABLE", "offline", retryable=True),
+                "Một cửa sổ Minecraft.",
+            ],
+        )
+        scheduler = LocalResourceScheduler(StaticTelemetry())
+        gateway = ModelGateway(
+            ModelGatewayConfig(
+                model="test-model",
+                retry_attempts=1,
+                model_vram_mib=1_024,
+            ),
+            scheduler,
+            provider=provider,
+        )
+        result = await gateway.analyze_image(
+            b"\x89PNG\r\n\x1a\npixels",
+            "Mô tả ảnh",
+        )
+        self.assertEqual(result, "Một cửa sổ Minecraft.")
+        self.assertEqual(provider.vision_calls, 2)
+        self.assertEqual((await scheduler.snapshot()).active_leases, 0)
+        self.assertEqual((await gateway.status())["circuit"]["state"], "closed")
+
+    async def test_empty_vision_result_fails_and_releases_lease(self) -> None:
+        provider = ScriptedProvider([], vision_scripts=[""])
+        scheduler = LocalResourceScheduler(StaticTelemetry())
+        gateway = ModelGateway(
+            ModelGatewayConfig(
+                model="test-model",
+                retry_attempts=0,
+                model_vram_mib=1_024,
+            ),
+            scheduler,
+            provider=provider,
+        )
+        with self.assertRaises(TextBrainError) as raised:
+            await gateway.analyze_image(
+                b"\x89PNG\r\n\x1a\npixels",
+                "Mô tả ảnh",
+            )
+        self.assertEqual(raised.exception.code, "E_MODEL_EMPTY_RESPONSE")
         self.assertEqual((await scheduler.snapshot()).active_leases, 0)
 
 

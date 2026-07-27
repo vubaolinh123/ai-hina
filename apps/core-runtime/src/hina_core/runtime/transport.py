@@ -961,6 +961,12 @@ class ControlPlaneServer:
         )
         label_raw = request.headers.get("x-hina-label")
         label = unquote(label_raw) if label_raw else None
+        analyze_with_vlm = (
+            request.headers.get("x-hina-vision-analyze", "").strip().lower()
+            in {"1", "true", "yes"}
+        )
+        vision_question_raw = request.headers.get("x-hina-vision-question")
+        vision_question = unquote(vision_question_raw) if vision_question_raw else None
         content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
         if content_type != "image/png":
             self._log_perception_request_error(
@@ -1024,6 +1030,8 @@ class ControlPlaneServer:
                 source=source,
                 label=label,
                 owner_confirmed=owner_confirmed,
+                analyze_with_vlm=analyze_with_vlm,
+                vision_question=vision_question,
             )
         except Exception as exc:
             code = getattr(exc, "code", "")

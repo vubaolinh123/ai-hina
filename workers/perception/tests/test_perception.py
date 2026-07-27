@@ -302,10 +302,12 @@ def _service(
     clock: FakeClock | None = None,
     config: PerceptionConfig | None = None,
     on_error=None,
+    vision_analyze=None,
 ) -> PerceptionService:
     return PerceptionService(
         config or PerceptionConfig(),
         safety_evaluate=evaluate,
+        vision_analyze=vision_analyze,
         on_error=on_error,
         clock=clock or FakeClock(),
     )
@@ -335,9 +337,10 @@ class ServiceTests(unittest.TestCase):
             observation["evidence"]["sha256"], hashlib.sha256(encoded).hexdigest()
         )
         self.assertEqual(observation["ocr"], {"state": "unavailable", "provider": "none"})
+        self.assertEqual(observation["vision"]["state"], "not-requested")
         flattened = str(observation)
         self.assertNotIn("IDAT", flattened)
-        self.assertLess(len(flattened), 2_000)
+        self.assertLess(len(flattened), 4_096)
         self.assertEqual(evaluate.calls[0]["capability"], "perception.observe")
         self.assertTrue(evaluate.calls[0]["consume"])
 
@@ -437,6 +440,88 @@ class ServiceTests(unittest.TestCase):
         )
         listing = asyncio.run(service.observations())
         self.assertEqual(listing["count"], 1)
+
+    def test_explicit_vision_summary_is_bounded_untrusted_and_keeps_no_pixels(self) -> None:
+        calls: list[tuple[bytes, str]] = []
+
+        async def analyze(image: bytes, prompt: str) -> str:
+            calls.append((image, prompt))
+            return "  Có một cửa sổ Minecraft.\nKhông đọc rõ dòng chữ nhỏ.  "
+
+        encoded = encode_png(gradient())
+        service = _service(
+            _RecordingEvaluate("allow"),
+            vision_analyze=analyze,
+        )
+        result = asyncio.run(
+            service.ingest_snapshot(
+                encoded,
+                correlation_id=CORRELATION,
+                session_id=None,
+                source="owner.console",
+                analyze_with_vlm=True,
+                vision_question="Nhân vật đang đứng ở đâu?",
+            )
+        )
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][0], encoded)
+        self.assertIn("Nhân vật đang đứng ở đâu?", calls[0][1])
+        vision = result["observation"]["vision"]
+        self.assertEqual(vision["state"], "ready")
+        self.assertEqual(
+            vision["summary"],
+            "Có một cửa sổ Minecraft.\nKhông đọc rõ dòng chữ nhỏ.",
+        )
+        self.assertEqual(vision["trustLevel"], "untrusted")
+        self.assertFalse(vision["decisionSupportEligible"])
+        self.assertNotIn("Nhân vật đang đứng", str(result["observation"]))
+        self.assertNotIn(encoded.hex()[:32], str(result))
+
+    def test_vision_failure_preserves_base_observation_and_is_reported(self) -> None:
+        reports: list[dict[str, str]] = []
+
+        class VisionFailure(Exception):
+            code = "E_MODEL_UNAVAILABLE"
+
+        async def analyze(_image: bytes, _prompt: str) -> str:
+            raise VisionFailure("offline")
+
+        service = _service(
+            _RecordingEvaluate("allow"),
+            on_error=reports.append,
+            vision_analyze=analyze,
+        )
+        result = asyncio.run(
+            service.ingest_snapshot(
+                encode_png(gradient()),
+                correlation_id=CORRELATION,
+                session_id=None,
+                source="owner.console",
+                analyze_with_vlm=True,
+            )
+        )
+        self.assertEqual(result["status"], "observed")
+        self.assertIn("sha256", result["observation"]["evidence"])
+        self.assertEqual(result["observation"]["vision"]["state"], "error")
+        self.assertEqual(
+            result["observation"]["vision"]["modelErrorCode"],
+            "E_MODEL_UNAVAILABLE",
+        )
+        self.assertEqual(reports[0]["errorCode"], "E_PERCEPTION_VISION")
+
+    def test_vision_question_requires_explicit_analysis(self) -> None:
+        service = _service(_RecordingEvaluate("allow"))
+        with self.assertRaises(PerceptionError) as caught:
+            asyncio.run(
+                service.ingest_snapshot(
+                    encode_png(gradient()),
+                    correlation_id=CORRELATION,
+                    session_id=None,
+                    source="owner.console",
+                    vision_question="Ảnh có gì?",
+                )
+            )
+        self.assertEqual(caught.exception.code, "E_PERCEPTION_REQUEST")
 
     def test_rate_limit_rejects_after_budget(self) -> None:
         clock = FakeClock()
@@ -568,6 +653,8 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(status["policy"]["featureFlag"], "perception")
         self.assertFalse(status["ocr"]["available"])
         self.assertEqual(status["ocr"]["state"], "contract-ready")
+        self.assertFalse(status["vision"]["available"])
+        self.assertFalse(status["vision"]["decisionSupportEligible"])
         self.assertFalse(status["retention"]["snapshotPersistence"])
         self.assertFalse(status["retention"]["pixelDataRetained"])
 

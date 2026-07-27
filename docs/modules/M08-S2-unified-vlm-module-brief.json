@@ -1,0 +1,71 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M08-S2-unified-qwen35-vlm",
+  "module_id": "M08",
+  "objective": "Add explicit owner-triggered image understanding to the M08 perception spine by reusing the pinned Qwen3.5-4B Ollama brain, retaining no pixels and storing only a bounded untrusted summary inside the existing maximum-15-second observation.",
+  "non_goals": [
+    "Do not capture continuously or without the browser display picker/explicit upload action.",
+    "Do not add a second VLM, OCR dependency, autonomous tool action or automatic memory write.",
+    "Do not persist snapshot pixels, base64 images or model prompts.",
+    "Do not promote Qwen3.5-9B without a measured all-on VRAM benchmark below 14336 MiB."
+  ],
+  "base_sha": "a3b6713bca17d1dbdb8d681e80eca50d7bd1f538",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "packages/text-brain/",
+    "workers/perception/",
+    "apps/core-runtime/src/hina_core/runtime/application.py",
+    "apps/core-runtime/src/hina_core/runtime/transport.py",
+    "apps/core-runtime/tests/",
+    "apps/dev-console/public/",
+    "docs/adr/0008-unified-multimodal-brain-and-external-live2d.md",
+    "docs/modules/M08-S2-unified-vlm-module-brief.json",
+    "docs/research/M08-S2-neuro-architecture-models-2026-07-27.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "packages/contracts/",
+    "packages/safety-policy/",
+    "packages/memory/",
+    "workers/speech/",
+    "apps/desktop/"
+  ],
+  "contracts": [
+    "Vision is available only on an explicit perception.observe request after the existing feature and capability checks pass.",
+    "The Ollama request is bounded, uses the pinned local Qwen3.5 model, shares the model scheduler, and sets keep_alive=0.",
+    "No PNG bytes or base64 survive request completion; only bounded untrusted text is attached to the TTL observation.",
+    "Vision output is decisionSupportEligible=false and cannot invoke tools or enter memory automatically.",
+    "A VLM error preserves the non-visual snapshot evidence and returns a stable visible error state."
+  ],
+  "allowed_dependencies": [
+    "Existing Python standard library, Hina text-brain gateway, scheduler and Ollama HTTP API; no new package or model dependency."
+  ],
+  "oss_candidates": [
+    "https://huggingface.co/Qwen/Qwen3.5-4B",
+    "https://ollama.com/library/qwen3.5",
+    "https://github.com/kimjammer/Neuro"
+  ],
+  "acceptance_criteria": [
+    "Provider and gateway tests cover image encoding, response extraction, empty/error response, scheduler lease and deterministic unload.",
+    "Perception tests prove summary bounds, no pixel retention, TTL preservation, explicit opt-in and visible error state.",
+    "The Quan sat dashboard lets a non-developer request local image analysis, ask a bounded question and understand the privacy/TTL behavior.",
+    "A real local Qwen3.5-4B screenshot smoke returns Vietnamese text while Ollama reports 100% GPU execution."
+  ],
+  "required_test_commands": [
+    "pnpm test:text-brain",
+    "pnpm test:perception",
+    "pnpm test:fast",
+    "pnpm smoke:dev-console"
+  ],
+  "latency_or_quality_budget": {
+    "all_on_vram_ceiling_mib": 14336,
+    "model_runtime_context_tokens": 4096,
+    "model_resource_reservation_mib": 4096,
+    "maximum_summary_characters": 2000,
+    "maximum_observation_ttl_seconds": 15,
+    "retain_source_pixels": false
+  },
+  "output_artifact_dir": "artifacts/verification/M08/"
+}
+

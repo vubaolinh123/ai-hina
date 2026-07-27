@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import re
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -19,16 +19,26 @@ _SOURCE = re.compile(r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$")
 _ALLOWED_SOURCES = frozenset({"owner.console", "owner.dev-console", "owner.desktop"})
 _CAPABILITY = "perception.observe"
 PerceptionErrorCallback = Callable[[dict[str, str]], None]
+VisionAnalyzeCallback = Callable[[bytes, str], Awaitable[str]]
+_MAX_VISION_QUESTION_CHARS = 500
+_MAX_VISION_SUMMARY_CHARS = 2_000
+_VISION_PROMPT = (
+    "Bạn là bộ phận thị giác cục bộ của Hina. Hãy mô tả ngắn gọn bằng tiếng Việt "
+    "những gì thực sự nhìn thấy trong ảnh. Phân biệt rõ điều chắc chắn và điều "
+    "không đọc được; không suy đoán danh tính, dữ liệu ngoài ảnh hay hành động cần "
+    "thực thi. Ưu tiên chữ quan trọng, trạng thái giao diện và chi tiết hữu ích."
+)
 
 
 class PerceptionService:
     """Owner-consented snapshot ingestion with TTL freshness and fail-closed policy.
 
-    Every snapshot is decoded in memory, reduced to renderer-safe evidence
-    (dimensions, mean luminance, perceptual hash, SHA-256) and immediately
-    discarded. No pixel data, file or OCR text is retained or persisted in
-    M08-S1, and nothing here can start a capture on its own: each call needs an
-    explicit owner action plus a live safety-policy decision.
+    Every snapshot is decoded in memory, reduced to renderer-safe evidence and
+    immediately discarded. M08-S2 can optionally ask the shared local model for
+    one bounded untrusted text summary before discarding the bytes. No pixel
+    data or file is retained or persisted, and nothing here can start a capture
+    on its own: each call needs an explicit owner action plus a live
+    safety-policy decision.
     """
 
     def __init__(
@@ -36,11 +46,13 @@ class PerceptionService:
         config: PerceptionConfig,
         *,
         safety_evaluate: Callable[[dict[str, Any]], dict[str, Any]],
+        vision_analyze: VisionAnalyzeCallback | None = None,
         on_error: PerceptionErrorCallback | None = None,
         clock: Callable[[], float] | None = None,
     ) -> None:
         self.config = config
         self._evaluate = safety_evaluate
+        self._vision_analyze = vision_analyze
         self.on_error = on_error
         self._clock = clock or time.monotonic
         self._ledger = FreshnessLedger(
@@ -89,6 +101,15 @@ class PerceptionService:
                 "remainingThisMinute": self._rate.remaining,
             },
             "ocr": unconfigured_ocr_status(),
+            "vision": {
+                "available": self._vision_analyze is not None,
+                "state": "ready" if self._vision_analyze is not None else "unavailable",
+                "provider": "shared-local-model" if self._vision_analyze is not None else "none",
+                "mode": "explicit-owner-request",
+                "automatic": False,
+                "decisionSupportEligible": False,
+                "maxSummaryCharacters": _MAX_VISION_SUMMARY_CHARS,
+            },
             "retention": {
                 "snapshotPersistence": False,
                 "pixelDataRetained": False,
@@ -105,6 +126,8 @@ class PerceptionService:
         source: str,
         label: str | None = None,
         owner_confirmed: bool = False,
+        analyze_with_vlm: bool = False,
+        vision_question: str | None = None,
     ) -> dict[str, Any]:
         started = time.monotonic()
         _validate_uuid(correlation_id, "correlation ID")
@@ -116,6 +139,17 @@ class PerceptionService:
                 "snapshot source must be an owner-controlled surface",
             )
         normalized_label = _sanitize_label(label)
+        if not isinstance(analyze_with_vlm, bool):
+            raise PerceptionError(
+                "E_PERCEPTION_REQUEST",
+                "vision analysis option must be a boolean",
+            )
+        normalized_question = _sanitize_vision_question(vision_question)
+        if normalized_question is not None and not analyze_with_vlm:
+            raise PerceptionError(
+                "E_PERCEPTION_REQUEST",
+                "a vision question requires explicit image analysis",
+            )
         if self._closed:
             raise PerceptionError(
                 "E_PERCEPTION_UNAVAILABLE",
@@ -140,7 +174,10 @@ class PerceptionService:
             snapshot_hash = dhash64(summary)
             for observation_id, existing_hash in self._ledger.latest_hashes():
                 distance = hamming_distance(snapshot_hash, existing_hash)
-                if distance <= self.config.dedup_hamming_threshold:
+                if (
+                    not analyze_with_vlm
+                    and distance <= self.config.dedup_hamming_threshold
+                ):
                     self._duplicate_total += 1
                     return {
                         "status": "duplicate",
@@ -161,6 +198,13 @@ class PerceptionService:
                     "snapshot rate limit reached; wait before capturing again",
                     retryable=True,
                 )
+            vision = await self._analyze_vision(
+                encoded,
+                requested=analyze_with_vlm,
+                question=normalized_question,
+                correlation_id=correlation_id,
+                session_id=session_id,
+            )
             observation = self._ledger.add(
                 str(uuid4()),
                 {
@@ -178,6 +222,7 @@ class PerceptionService:
                         "meanLuma": summary.mean_luma,
                     },
                     "ocr": {"state": "unavailable", "provider": "none"},
+                    "vision": vision,
                 },
                 snapshot_hash,
             )
@@ -306,6 +351,57 @@ class PerceptionService:
             return
         error.reported = True
 
+    async def _analyze_vision(
+        self,
+        encoded: bytes,
+        *,
+        requested: bool,
+        question: str | None,
+        correlation_id: str,
+        session_id: str | None,
+    ) -> dict[str, Any]:
+        base = {
+            "provider": "shared-local-model",
+            "requested": requested,
+            "automatic": False,
+            "decisionSupportEligible": False,
+            "trustLevel": "untrusted",
+            "questionProvided": question is not None,
+        }
+        if not requested:
+            return {**base, "state": "not-requested", "summary": None}
+        if self._vision_analyze is None:
+            return {
+                **base,
+                "state": "unavailable",
+                "summary": None,
+                "errorCode": "E_PERCEPTION_VISION_UNAVAILABLE",
+            }
+        prompt = _VISION_PROMPT
+        if question is not None:
+            prompt = f"{prompt}\nCâu hỏi của chủ máy: {question}"
+        try:
+            result = await self._vision_analyze(encoded, prompt)
+            summary = _sanitize_vision_summary(result)
+            return {**base, "state": "ready", "summary": summary}
+        except Exception as exc:
+            model_code = getattr(exc, "code", "E_MODEL_UNAVAILABLE")
+            if not isinstance(model_code, str) or not model_code.startswith("E_MODEL_"):
+                model_code = "E_MODEL_UNAVAILABLE"
+            error = PerceptionError(
+                "E_PERCEPTION_VISION",
+                "local image analysis failed; base snapshot evidence was preserved",
+                retryable=True,
+            )
+            self._report_error(error, correlation_id, session_id, len(encoded))
+            return {
+                **base,
+                "state": "error",
+                "summary": None,
+                "errorCode": "E_PERCEPTION_VISION",
+                "modelErrorCode": model_code,
+            }
+
 
 def _sanitize_label(label: str | None) -> str | None:
     if label is None:
@@ -318,6 +414,50 @@ def _sanitize_label(label: str | None) -> str | None:
     if not cleaned:
         return None
     return cleaned[:120]
+
+
+def _sanitize_vision_question(question: str | None) -> str | None:
+    if question is None:
+        return None
+    if not isinstance(question, str):
+        raise PerceptionError("E_PERCEPTION_REQUEST", "vision question is invalid")
+    cleaned = " ".join(
+        "".join(
+            char for char in question if ord(char) >= 0x20 and ord(char) != 0x7F
+        ).split()
+    )
+    if not cleaned:
+        return None
+    if len(cleaned) > _MAX_VISION_QUESTION_CHARS:
+        raise PerceptionError(
+            "E_PERCEPTION_REQUEST",
+            "vision question exceeds 500 characters",
+        )
+    return cleaned
+
+
+def _sanitize_vision_summary(summary: str) -> str:
+    if not isinstance(summary, str):
+        raise PerceptionError(
+            "E_PERCEPTION_VISION",
+            "local image analysis returned invalid text",
+        )
+    cleaned = "\n".join(
+        line.strip()
+        for line in "".join(
+            char
+            for char in summary
+            if ord(char) >= 0x20 or char in {"\n", "\t"}
+        ).splitlines()
+        if line.strip()
+    ).strip()
+    if not cleaned:
+        raise PerceptionError(
+            "E_PERCEPTION_VISION",
+            "local image analysis returned no text",
+            retryable=True,
+        )
+    return cleaned[:_MAX_VISION_SUMMARY_CHARS]
 
 
 def _validate_uuid(value: str, name: str) -> None:

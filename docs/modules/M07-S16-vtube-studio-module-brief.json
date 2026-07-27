@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M07-S16-vtube-studio-live2d",
+  "module_id": "M07",
+  "objective": "Replace the architectural role of Neuro's avatar module with a real optional VTube Studio adapter for Hina, exposing safe operator controls for the selected Live2D model while preserving the transparent VRM widget as the offline fallback.",
+  "non_goals": [
+    "Do not copy or redistribute the Hiyori sample model or claim that Neuro's MIT license covers it.",
+    "Do not require VTube Studio for normal desktop startup or remove the current VRM fallback.",
+    "Do not expose arbitrary VTube Studio API payloads, filesystem paths or plugin tokens to the renderer.",
+    "Do not add Twitch, song or game controls whose backends do not yet exist."
+  ],
+  "base_sha": "a3b6713bca17d1dbdb8d681e80eca50d7bd1f538",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "apps/desktop/",
+    "docs/adr/0008-unified-multimodal-brain-and-external-live2d.md",
+    "docs/modules/M07-S16-vtube-studio-module-brief.json",
+    "docs/research/M08-S2-neuro-architecture-models-2026-07-27.md",
+    "docs/provenance/",
+    "third_party/"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "packages/contracts/",
+    "packages/safety-policy/",
+    "packages/text-brain/",
+    "workers/perception/",
+    "workers/speech/"
+  ],
+  "contracts": [
+    "Only the Electron main process connects to the loopback VTube Studio public API; renderer access is a fixed typed operator-only IPC allowlist.",
+    "The one-time authentication token is stored locally, bounded and never logged or returned to the renderer.",
+    "Connection, current model, hotkeys and movement presets have timeouts and stable disconnected/error states.",
+    "VTube Studio absence or failure never prevents desktop startup, chat, voice or the existing transparent VRM widget.",
+    "The dashboard identifies Hiyori as an external separately licensed sample and does not imply that Hina bundles it."
+  ],
+  "allowed_dependencies": [
+    "Node 24 built-in WebSocket implementation and the official VTube Studio public API; no new npm dependency."
+  ],
+  "oss_candidates": [
+    "https://github.com/DenchiSoft/VTubeStudio",
+    "https://github.com/kimjammer/Neuro",
+    "https://github.com/kimjammer/neurofrontend"
+  ],
+  "acceptance_criteria": [
+    "A fake WebSocket unit test covers connect, authentication, token redaction, model status, hotkey trigger, movement preset, timeout and disconnect.",
+    "Desktop typecheck/build and IPC smoke prove the fixed preload surface without arbitrary channel access.",
+    "The Avatar dashboard gives non-developers installation, authorization, Hiyori license and fallback guidance plus real status/hotkey/movement controls.",
+    "When VTube Studio is unavailable the page reports an actionable offline state and the VRM widget remains usable."
+  ],
+  "required_test_commands": [
+    "pnpm --filter @hina/desktop test",
+    "pnpm --filter @hina/desktop typecheck",
+    "pnpm --filter @hina/desktop build",
+    "pnpm smoke:desktop"
+  ],
+  "latency_or_quality_budget": {
+    "api_timeout_milliseconds": 5000,
+    "loopback_only": true,
+    "renderer_receives_auth_token": false,
+    "offline_fallback_required": true
+  },
+  "output_artifact_dir": "artifacts/verification/M07/"
+}
+

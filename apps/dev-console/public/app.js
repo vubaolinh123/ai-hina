@@ -173,6 +173,8 @@ const elements = Object.fromEntries(
     "capturePerceptionButton",
     "perceptionFileInput",
     "perceptionLabelInput",
+    "perceptionVisionCheck",
+    "perceptionVisionQuestion",
     "perceptionCaptureResult",
     "perceptionObservationList",
     "refreshAvatarButton",
@@ -222,7 +224,7 @@ const dashboardPages = {
   perception: {
     eyebrow: "M08 / OWNER-CONSENTED PERCEPTION",
     title: "Quan sát màn hình",
-    description: "Chụp một khung hình có sự đồng ý, xem evidence và TTL 15 giây; không lưu ảnh, không OCR ở slice này.",
+    description: "Chụp một khung hình có sự đồng ý và tùy chọn nhờ Qwen3.5 local mô tả; không lưu ảnh, kết quả tự hết hạn sau tối đa 15 giây.",
   },
   safety: {
     eyebrow: "M02 / POLICY AUTHORITY",
@@ -409,6 +411,7 @@ function renderPerceptionStatus(status) {
     `Quan sát còn hạn: ${status.observation.freshCount} · đã hết hạn: ${status.observation.expiredTotal} · duplicate: ${status.observation.duplicateTotal}`,
     `Giới hạn: ${status.rate.limitPerMinute} ảnh/phút (còn ${status.rate.remainingThisMinute}) · ${Math.round(status.configured.maxSnapshotBytes / 1024)} KB/ảnh`,
     `OCR: ${status.ocr.state} (${status.ocr.provider}) · lưu ảnh: ${status.retention.snapshotPersistence ? "có" : "không"}`,
+    `Phân tích ảnh local: ${status.vision?.available ? "SẴN SÀNG" : "chưa sẵn sàng"} · tự động: không · được phép tự hành động: không`,
   ];
   elements.perceptionStatusBox.textContent = lines.join("\n");
   elements.perceptionStatusBox.classList.remove("empty");
@@ -456,6 +459,19 @@ function renderPerceptionObservations() {
       `sha256 ${entry.observation.evidence.sha256.slice(0, 12)}… · ` +
       `dhash ${entry.observation.evidence.dhash}`;
     item.append(meta, detail);
+    if (entry.observation.vision?.state === "ready") {
+      const vision = document.createElement("p");
+      vision.className = "entry-message perception-vision-summary";
+      vision.textContent = `Hina nhìn thấy: ${entry.observation.vision.summary}`;
+      item.append(vision);
+    } else if (entry.observation.vision?.state === "error") {
+      const vision = document.createElement("p");
+      vision.className = "entry-message perception-vision-error";
+      vision.textContent =
+        `Phân tích ảnh lỗi: ${entry.observation.vision.modelErrorCode || entry.observation.vision.errorCode}. ` +
+        "Evidence cơ bản vẫn được giữ đến khi TTL hết hạn.";
+      item.append(vision);
+    }
     list.append(item);
   }
 }
@@ -511,6 +527,13 @@ async function submitPerceptionSnapshot(blob) {
   };
   if (label) {
     headers["X-Hina-Label"] = encodeURIComponent(label);
+  }
+  if (elements.perceptionVisionCheck.checked) {
+    headers["X-Hina-Vision-Analyze"] = "true";
+    const question = elements.perceptionVisionQuestion.value.trim();
+    if (question) {
+      headers["X-Hina-Vision-Question"] = encodeURIComponent(question);
+    }
   }
   const response = await fetch("/v1/perception/snapshots", {
     method: "POST",
@@ -613,13 +636,22 @@ function renderPerceptionCaptureResult(result) {
     return;
   }
   const observation = result.observation;
-  box.textContent = [
+  const lines = [
     `Đã tạo quan sát ${observation.observationId}`,
     `Kích thước: ${observation.evidence.width}×${observation.evidence.height} · ${observation.evidence.bytes} byte`,
     `TTL: ${observation.ttlSeconds}s · hết hạn lúc ${observation.expiresAt}`,
     `Policy: ${result.policy.decision} (${result.policy.reasonCode})`,
     `Correlation: ${result.correlationId}`,
-  ].join("\n");
+  ];
+  if (observation.vision?.state === "ready") {
+    lines.push(`Hina nhìn thấy (Qwen3.5 local): ${observation.vision.summary}`);
+  } else if (observation.vision?.requested) {
+    lines.push(
+      `Phân tích ảnh: ${observation.vision.state} · ` +
+      `${observation.vision.modelErrorCode || observation.vision.errorCode || "không có kết quả"}`,
+    );
+  }
+  box.textContent = lines.join("\n");
   addActivity(
     `Perception: đã quan sát ${observation.evidence.width}×${observation.evidence.height}, TTL ${observation.ttlSeconds}s.`,
     "success",
