@@ -492,7 +492,9 @@ async function connectVTubeStudio(): Promise<void> {
   try {
     vtubeStatus.value = await window.hinaDesktop.connectVTubeStudio();
     vtubeMessage.value = vtubeStatus.value.authenticated
-      ? "Đã kết nối. Hina đang điều khiển model Live2D đã chọn trong VTube Studio."
+      ? vtubeStatus.value.model.loaded
+        ? "Đã kết nối. Hina đang điều khiển model Live2D đã chọn trong VTube Studio."
+        : "Đã kết nối Plugin API, nhưng VTube Studio chưa tải model Live2D. Hãy chọn model trong cửa sổ chính rồi bấm “Đọc lại model”."
       : "VTube Studio chưa cấp quyền plugin; hãy bấm kết nối lại và chọn Allow.";
   } catch (error) {
     vtubeMessage.value = error instanceof Error

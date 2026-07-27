@@ -14,6 +14,7 @@
   "worktree": "D:/ProjectHinaAI",
   "owned_paths": [
     "apps/desktop/electron/vtube-studio-client.ts",
+    "apps/desktop/src/App.vue",
     "apps/desktop/test/vtube-studio-client.test.mjs",
     "docs/modules/M07-S17-vtube-empty-frame-hotfix-module-brief.json"
   ],
@@ -29,6 +30,7 @@
     "Only an empty text frame received while exactly one CurrentModelRequest is pending is interpreted as modelLoaded=false.",
     "Non-empty invalid JSON, binary data and oversized frames remain protocol errors.",
     "A successful authentication with no model loaded reports connected=true, authenticated=true, model.loaded=false and an empty hotkey allowlist.",
+    "The dashboard distinguishes a connected Plugin API from a loaded Live2D model and tells the owner to load a model before refreshing.",
     "All requests remain loopback-only, bounded and timed out; the authentication token is never returned or logged."
   ],
   "allowed_dependencies": [
