@@ -40,6 +40,7 @@ class SpeechOutputService:
 
     async def status(self) -> dict[str, object]:
         provider = await self.provider.status()
+        sample_rate_hz = int(provider.get("sampleRateHz", 48_000))
         return {
             "configured": self.config.public_status(),
             "provider": provider,
@@ -51,7 +52,7 @@ class SpeechOutputService:
             },
             "output": {
                 "transport": "audio/wav",
-                "sampleRateHz": 48_000,
+                "sampleRateHz": sample_rate_hz,
                 "channels": 1,
                 "sampleWidthBits": 16,
                 "progressiveHttpStreaming": False,

@@ -93,6 +93,32 @@ class ProvenanceTests(unittest.TestCase):
         )
         self.assertFalse(voice["consent_and_use"]["voice_cloning_allowed_by_hina"])
         self.assertFalse(voice["status"]["production_ready"])
+        hina_voice = json.loads(
+            (
+                ROOT
+                / "assets"
+                / "manifests"
+                / "hina-anime-elevenlabs-voice.v1.json"
+            ).read_text(encoding="utf-8")
+        )
+        f5_reference = hina_voice["f5Reference"]
+        f5_reference_path = ROOT / f5_reference["path"]
+        self.assertEqual(
+            f5_reference["sha256"],
+            hashlib.sha256(f5_reference_path.read_bytes()).hexdigest(),
+        )
+        self.assertEqual(f5_reference["sampleRateHz"], 24000)
+        f5_model = json.loads(
+            (
+                ROOT
+                / "ml"
+                / "models"
+                / "manifests"
+                / "f5-tts-vietnamese-zalopay.v1.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(f5_model["licenses"]["weights_spdx"], "CC-BY-4.0")
+        self.assertFalse(f5_model["status"]["production_ready"])
         avatar = json.loads(
             (
                 ROOT

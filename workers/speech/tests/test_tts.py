@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import struct
 import sys
 import tempfile
@@ -20,6 +21,7 @@ from hina_speech import (  # noqa: E402
     DEFAULT_TTS_CODEC_REVISION,
     DEFAULT_TTS_MODEL_REVISION,
     DEFAULT_TTS_VOICE,
+    F5TtsProvider,
     SpeechOutputService,
     TtsConfig,
     TtsError,
@@ -163,9 +165,9 @@ class TextAndAudioTests(unittest.TestCase):
             self.assertEqual(handle.getframerate(), 48_000)
             self.assertEqual(handle.getnframes(), 3)
 
-    def test_config_rejects_gpu_without_resource_lease(self) -> None:
+    def test_config_rejects_gpu_with_cpu_precision(self) -> None:
         with self.assertRaisesRegex(TtsError, "ResourceLease"):
-            TtsConfig(device="cuda")
+            TtsConfig(provider="vieneu", device="cuda", precision="int8")
 
 
 class SpeechOutputServiceTests(unittest.IsolatedAsyncioTestCase):
@@ -310,11 +312,13 @@ class VieneuProviderTests(unittest.IsolatedAsyncioTestCase):
             result = await provider.synthesize(("Xin chào.",), threading.Event())
             await provider.close()
 
+
         self.assertEqual(downloads[0]["revision"], DEFAULT_TTS_MODEL_REVISION)
         self.assertEqual(downloads[1]["revision"], DEFAULT_TTS_CODEC_REVISION)
         self.assertEqual(downloads[0]["local_files_only"], False)
+        self.assertIn("update/model.safetensors", downloads[0]["allow_patterns"])
         self.assertIn("speaker_encoder.onnx", downloads[0]["allow_patterns"])
-        self.assertIn("denoiser.onnx", downloads[0]["allow_patterns"])
+        self.assertIsNone(downloads[1]["allow_patterns"])
         self.assertEqual(len(factory_calls), 1)
         self.assertEqual(fake_model.calls[0]["voice"], DEFAULT_TTS_VOICE)
         self.assertEqual(fake_model.calls[0]["apply_watermark"], True)
@@ -379,6 +383,52 @@ class VieneuProviderTests(unittest.IsolatedAsyncioTestCase):
                 await asyncio.sleep(0.005)
             self.assertFalse((await provider.status())["drainingTimedOutInference"])
             await provider.close()
+
+
+class F5ProviderTests(unittest.IsolatedAsyncioTestCase):
+    async def test_f5_provider_uses_pinned_reference_and_returns_24khz_wav(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            reference = root / "reference.wav"
+            reference.write_bytes(b"authorized synthetic reference")
+            config = TtsConfig(
+                model_cache=root,
+                reference_audio_path=reference,
+                reference_audio_sha256=hashlib.sha256(reference.read_bytes()).hexdigest(),
+            )
+            downloads: list[dict[str, object]] = []
+
+            def downloader(**kwargs):
+                downloads.append(kwargs)
+                snapshot = root / ("model" if len(downloads) == 1 else "vocoder")
+                snapshot.mkdir(exist_ok=True)
+                (snapshot / config.model_file).write_bytes(b"model")
+                (snapshot / "vocab.txt").write_text("a\n", encoding="utf-8")
+                (snapshot / "config.yaml").write_text("vocoder\n", encoding="utf-8")
+                (snapshot / "pytorch_model.bin").write_bytes(b"vocoder")
+                return str(snapshot)
+
+            class FakeF5:
+                def infer(self, text: str, *, speed: float, nfe_step: int):
+                    self.call = (text, speed, nfe_step)
+                    return [0.0, 0.25, -0.25], 24_000
+
+            fake = FakeF5()
+            provider = F5TtsProvider(
+                config,
+                snapshot_downloader=downloader,
+                model_factory=lambda *_args: fake,
+            )
+            result = await provider.synthesize(("Xin chào [chuckle].",), threading.Event())
+            await provider.close()
+
+        self.assertEqual(len(downloads), 2)
+        self.assertEqual(downloads[0]["revision"], config.model_revision)
+        self.assertEqual(downloads[1]["revision"], config.vocoder_revision)
+        self.assertEqual(fake.call[0], "Xin chào .")
+        self.assertEqual(fake.call[2], config.nfe_step)
+        self.assertEqual(result.sample_rate_hz, 24_000)
+        self.assertGreater(len(result.pcm16), 0)
 
 
 if __name__ == "__main__":

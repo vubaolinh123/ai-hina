@@ -4,7 +4,8 @@
 
 Đọc `HINA_AI_MASTER_PLAN_VI.md` trước khi thay đổi kiến trúc hoặc mở module mới. Chỉ một module sản phẩm được ở write phase tại một thời điểm.
 
-Module active hiện tại: **M07 — Avatar stage và operator desktop**. M01,
+Module active hiện tại: **M08 — Perception: screen snapshot, OCR và optional
+VLM**. M01,
 M02 và M03 đã qua fast unit/contract/startup gate; repeat/soak/deep release
 verification được hoãn tới khi owner yêu cầu. M04-S1/S2 đã qua fast gate,
 real-provider smoke và independent review; P1 native inference timeout đã đóng
@@ -52,6 +53,27 @@ rollback. Fast unit/contract/desktop smoke và real Moonshine CPU smoke đều x
 Moonshine Vietnamese weight có license phi thương mại nên vẫn chặn commercial
 promotion cho tới khi được clearance riêng.
 Chưa gọi independent reviewer trước khi module thực sự hoàn tất.
+Ngày 2026-07-27 quality hotfix đã loại F5-TTS Vietnamese ZaloPay khỏi desktop
+default: cả `model_960000.pt` và `model_1290000.pt` đều sinh nonsense/noise với
+reference Hina và không qua round-trip STT. Desktop trở lại VieNeu-TTS v3 Turbo
+CUDA/float16, dùng owner reference hash-bound; real smoke sinh WAV 48 kHz và
+round-trip nhận lại đúng câu thử gần như nguyên văn. F5 chỉ còn experimental,
+không được tự động chọn hoặc promotion.
+Ngày 2026-07-26 owner chỉ thị “Tiếp tục hoàn thành Plan” và chọn mở M08 —
+Perception trong fast-development mode; M07 giữ trạng thái runnable candidate
+với các deep gate (frozen OBS benchmark, lip-sync p95, final Hina asset, soak
+8 giờ, independent review toàn module) tiếp tục deferred theo owner.
+M08-S1 perception spine là runnable candidate: worker `hina_perception`
+(PNG evidence không lưu pixel, dedup dHash, rate limit, FreshnessLedger TTL
+≤15 s theo monotonic clock), route `/v1/perception/*` gate qua
+`perception.observe` + feature flag `perception` (mặc định tắt, fail closed),
+và trang Dev Console **Quan sát** với capture một lần qua hộp thoại
+getDisplayMedia. Slice được viết trong cloud sandbox (Claude) theo Solo-first:
+30 unit + 8 route tests xanh trên Python 3.11/3.13 sandbox. Ngày 2026-07-27,
+Windows `pnpm test:fast` (bao gồm 30 perception tests và runtime route tests)
+cùng `pnpm smoke:dev-console` đã pass; M08-S1 fast gate được coi là xanh.
+OCR/VLM chưa có dependency nào được thêm; OCR provider chỉ là contract-ready
+cho tới khi qua OSS/license review.
 
 Legacy AIRI skill paths dưới `D:\ProjectAiri` mặc định ánh xạ sang repository
 hiện tại `D:\ProjectHinaAI`, trừ khi owner chỉ định workspace khác.

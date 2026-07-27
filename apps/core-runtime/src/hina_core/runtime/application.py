@@ -40,6 +40,7 @@ class HinaRuntimeApplication:
         tts_service: Any | None = None,
         memory_service: Any | None = None,
         avatar_service: Any | None = None,
+        perception_service: Any | None = None,
     ) -> None:
         self.config = config
         self.paths = paths
@@ -58,6 +59,7 @@ class HinaRuntimeApplication:
         self.tts_service: Any | None = tts_service
         self.memory_service: Any | None = memory_service
         self.avatar_service: Any | None = avatar_service
+        self.perception_service: Any | None = perception_service
 
     @property
     def address(self) -> tuple[str, int]:
@@ -93,6 +95,7 @@ class HinaRuntimeApplication:
         tts_service = self.tts_service
         memory_service = self.memory_service
         avatar_service = self.avatar_service
+        perception_service = self.perception_service
         try:
             if avatar_service is None:
                 from hina_avatar import AvatarStageService
@@ -198,22 +201,36 @@ class HinaRuntimeApplication:
                 )
             if tts_service is None and safety_policy is not None:
                 from hina_speech import (
+                    F5TtsProvider,
                     SpeechOutputService,
                     TtsConfig,
                     VieneuTtsProvider,
                 )
 
                 tts_config = TtsConfig.from_env(root=ROOT)
+                tts_provider = (
+                    F5TtsProvider(tts_config)
+                    if tts_config.provider == "f5-tts"
+                    else VieneuTtsProvider(tts_config)
+                )
                 tts_service = SpeechOutputService(
                     tts_config,
-                    VieneuTtsProvider(tts_config),
+                    tts_provider,
                     moderator=safety_policy.moderate,
                     on_error=self._log_tts_error,
                 )
                 # The desktop profile warms the fixed GPU voice once so an
                 # owner's first chat does not pay model/enrollment latency.
-                if tts_config.device == "cuda":
+                if tts_config.device == "cuda" and tts_config.warmup_on_start:
                     await tts_service.warmup()
+            if perception_service is None and safety_policy is not None:
+                from hina_perception import PerceptionConfig, PerceptionService
+
+                perception_service = PerceptionService(
+                    PerceptionConfig.from_env(),
+                    safety_evaluate=safety_policy.evaluate,
+                    on_error=self._log_perception_error,
+                )
             server = ControlPlaneServer(
                 self.config,
                 durable_store=store,
@@ -227,6 +244,7 @@ class HinaRuntimeApplication:
                 tts_service=tts_service,
                 memory_service=memory_service,
                 avatar_service=avatar_service,
+                perception_service=perception_service,
                 build_commit=self.build_commit,
             )
             await server.start()
@@ -239,6 +257,8 @@ class HinaRuntimeApplication:
                 await tts_service.close()
             if memory_service is not None:
                 await memory_service.close()
+            if perception_service is not None:
+                await perception_service.close()
             store.close()
             raise
         self.store = store
@@ -250,6 +270,7 @@ class HinaRuntimeApplication:
         self.tts_service = tts_service
         self.memory_service = memory_service
         self.avatar_service = avatar_service
+        self.perception_service = perception_service
         self.metrics.set_gauge(
             "hina_runtime_ready",
             1,
@@ -271,6 +292,7 @@ class HinaRuntimeApplication:
         tts_service = self.tts_service
         memory_service = self.memory_service
         avatar_service = self.avatar_service
+        perception_service = self.perception_service
         self.server = None
         self.store = None
         self.safety_policy = None
@@ -279,6 +301,7 @@ class HinaRuntimeApplication:
         self.tts_service = None
         self.memory_service = None
         self.avatar_service = None
+        self.perception_service = None
         if server is not None:
             await server.stop()
         if conversation is not None:
@@ -289,6 +312,8 @@ class HinaRuntimeApplication:
             await tts_service.close()
         if memory_service is not None:
             await memory_service.close()
+        if perception_service is not None:
+            await perception_service.close()
         if avatar_service is not None:
             avatar_service.reset(source="runtime.lifecycle")
         if store is not None:
@@ -321,6 +346,20 @@ class HinaRuntimeApplication:
                 "audioBytes": record["audioBytes"],
                 "durationMilliseconds": record["durationMilliseconds"],
                 "rawAudioRetained": False,
+            },
+        )
+
+    def _log_perception_error(self, record: dict[str, str]) -> None:
+        self.error_logger.log_error(
+            PrimitiveError(record["errorCode"], "perception snapshot operation failed"),  # type: ignore[arg-type]
+            component="perception.snapshot",
+            operation="ingest",
+            correlation_id=record["correlationId"],
+            session_id=record["sessionId"] or None,
+            context={
+                "snapshotBytes": record["snapshotBytes"],
+                "pixelDataRetained": False,
+                "snapshotPersisted": False,
             },
         )
 

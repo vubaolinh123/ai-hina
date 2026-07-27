@@ -4,12 +4,13 @@ Hina AI là dự án local-first xây dựng AI VTuber tiếng Việt theo kiế
 mô-đun. Hội thoại, speech, memory, avatar, perception, Minecraft và livestream
 được tách bằng contract rõ ràng để có thể phát triển và rollback độc lập.
 
-Trạng thái hiện tại: **M07 — avatar stage và desktop đang có vertical slice chạy thật để
-owner test**. M01 runtime spine, M02 safety, M03 text brain, M04 speech input,
-M05 speech output và M06 memory đã qua fast gate; M06 cũng đã qua independent
-review không có P0/P1. Hina Dev Console hiện là dashboard nhiều
+Trạng thái hiện tại: **M08 — perception đang mở với slice S1 chạy thật để
+owner test; M07 avatar/desktop giữ trạng thái runnable candidate**. M01
+runtime spine, M02 safety, M03 text brain, M04 speech input, M05 speech
+output và M06 memory đã qua fast gate; M06 cũng đã qua independent review
+không có P0/P1. Hina Dev Console hiện là dashboard nhiều
 trang có chat text thật qua Ollama/OpenAI-compatible local, microphone/WAV tiếng
-Việt qua Moonshine Voice, giọng Việt qua VieNeu-TTS ONNX int8 và ký ức dài hạn
+Việt qua Moonshine Voice, giọng Việt qua VieNeu v3 Turbo trên CUDA và ký ức dài hạn
 SQLite + Qdrant local. Trang Avatar Stage đọc turn state thật và suy ra khẩu hình
 `A/I/U/E/O` từ chính phổ WAV TTS đang phát; không dùng câu trả lời, transcript,
 audio, memory hay backend state giả.
@@ -25,8 +26,8 @@ pnpm start:dev-console
 
 Trình duyệt sẽ mở `http://127.0.0.1:8765/`. Đây là ứng dụng local chạy liên tục
 cho tới khi bạn bấm `Ctrl+C`, không phải output dựng sẵn. Navbar chia chức năng
-thành Tổng quan, Trò chuyện & giọng nói, Avatar Stage, Ký ức, An toàn và Runtime
-& chẩn đoán.
+thành Tổng quan, Trò chuyện & giọng nói, Avatar Stage, Ký ức, Quan sát, An toàn
+và Runtime & chẩn đoán.
 Giao diện cho phép:
 
 - kiểm tra health, version, config và metrics của runtime;
@@ -111,20 +112,23 @@ pnpm start:dev-console
 
 ## Bật speech output tiếng Việt
 
-M05 dùng `vieneu==3.2.3`, model
-`pnnbao-ump/VieNeu-TTS-v3-Turbo` và codec
-`OpenMOSS-Team/MOSS-Audio-Tokenizer-Nano-ONNX` tại các revision đã pin. Backend
-mặc định chạy CPU ONNX `int8`, xuất WAV mono 48 kHz với profile `Hina Anime AI
-v1` được enroll từ reference tổng hợp do owner tạo trong ElevenLabs. Đây là
-reference enrollment, không phải fine-tune model weights; provenance và SHA-256
-nằm trong `assets/manifests/hina-anime-elevenlabs-voice.v1.json`.
+M05 mặc định dùng VieNeu-TTS v3 Turbo tại revision đã pin. Backend chạy CUDA,
+xuất WAV mono 48 kHz và enroll profile `Hina Anime AI v1` từ reference tổng hợp
+do owner tạo bằng ElevenLabs. Đây là zero-shot reference enrollment, không phải
+fine-tune model weights; provenance và SHA-256 nằm trong
+`assets/manifests/hina-anime-elevenlabs-voice.v1.json`.
+
+F5-TTS Vietnamese ZaloPay vẫn được giữ làm provider thử nghiệm. Cả checkpoint
+`model_960000.pt` được model card hướng dẫn và checkpoint `model_1290000.pt`
+hiện tại đều không qua quality smoke với reference Hina: WAV sinh ra là
+nonsense/noise và nhận dạng ngược không khớp câu nguồn. Vì vậy launcher không
+chọn F5 theo mặc định.
 
 Trong Dev Console, nhập nội dung ở panel **Hina nói tiếng Việt**, sau đó bấm
 **Tạo và phát giọng thật**. Toàn bộ câu phải qua `pre_tts` moderation trước khi
 model chạy. Nút **Dừng / barge-in** dừng audio ngay; bắt đầu thu mic cũng tự dừng
-audio. Arbitrary voice cloning và lưu text/audio sinh ra đều bị tắt. VieNeu giữ
-được `[chuckle]`, `[sigh]`, `[clear throat]` cùng các alias an toàn; cue chưa
-hỗ trợ được bỏ qua thay vì đọc thành chữ. Câu dài được tăng tốc thích ứng tối
+audio. Arbitrary voice cloning và lưu text/audio sinh ra đều bị tắt. Câu dài
+được tăng tốc thích ứng tối
 đa 1.18x, câu ngắn giữ tốc độ bình thường.
 
 Lần đầu có thể tải model/codec vào `var/cache/models/vieneu`. Có thể kiểm tra
@@ -134,7 +138,7 @@ provider thật và tạo WAV nghe thử trong thư mục ignored:
 pnpm smoke:m05-tts
 ```
 
-Smoke CPU hiện chỉ xác nhận luồng thật hoạt động, chưa phải quality/performance
+Smoke CUDA hiện chỉ xác nhận luồng thật hoạt động, chưa phải quality/performance
 promotion. Chạy offline nghiêm ngặt sau khi cache xong:
 
 ```powershell
@@ -154,6 +158,27 @@ block có nhãn untrusted data và không thể sửa persona/system prompt. Pub
 viewer chat không được đọc owner memory. Nút **Xóa có biên nhận** chỉ báo thành
 công sau khi SQLite và Qdrant đã đối soát; biên nhận không tuyên bố xóa dữ liệu
 khỏi model weights đã train.
+
+## Cho Hina quan sát màn hình theo yêu cầu
+
+M08-S1 thêm trang **Quan sát**: owner bấm chụp, trình duyệt mở hộp thoại chọn
+màn hình/cửa sổ (đây là consent cho từng lần chụp), một khung hình được thu
+nhỏ và gửi PNG tới control plane loopback. Runtime chỉ giữ evidence trong RAM
+— kích thước, SHA-256, perceptual hash và độ sáng — không lưu ảnh và chưa có
+OCR/VLM; OCR provider mới ở trạng thái contract-ready cho tới khi dependency
+qua review license. Mỗi quan sát có `trustLevel=untrusted` và TTL tối đa
+15 giây theo monotonic clock; hết hạn là biến mất khỏi danh sách và không thể
+được coi là ngữ cảnh hiện tại.
+
+Capture mặc định tắt: cần bật cờ **Quan sát màn hình** ở trang An toàn trước,
+và safety policy (`perception.observe`, decision `ask`) yêu cầu đúng hành động
+xác nhận của owner cho từng snapshot; policy lỗi thì capture fail closed.
+Quan sát ở slice này chỉ hiển thị cho owner — chưa được đưa vào chat context,
+memory hay tool nào.
+
+```powershell
+pnpm test:perception
+```
 
 ## Dùng Avatar Stage
 
@@ -234,6 +259,7 @@ pnpm test:text-brain
 pnpm test:speech
 pnpm test:memory
 pnpm test:avatar
+pnpm test:perception
 pnpm report:errors
 ```
 
@@ -252,6 +278,7 @@ Các lệnh `smoke:m01-s2` đến `smoke:m01-s6` là harness kiểm tra kỹ thu
 - [Trạng thái M05](docs/modules/M05-speech-output.md)
 - [Trạng thái M06](docs/modules/M06-long-term-memory.md)
 - [Trạng thái M07](docs/modules/M07-avatar-stage.md)
+- [Trạng thái M08](docs/modules/M08-perception.md)
 - [Hướng dẫn Dev Console](apps/dev-console/README.md)
 
 ## Nguyên tắc an toàn

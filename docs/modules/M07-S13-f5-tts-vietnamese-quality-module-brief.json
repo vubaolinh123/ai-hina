@@ -1,0 +1,76 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M07-S13-f5-tts-vietnamese-quality",
+  "module_id": "M07",
+  "objective": "Evaluate pinned local ZaloPay Vietnamese F5-TTS on CUDA with the owner-authorized Hina MP3 reference, promote it only if real speech quality passes, and otherwise keep VieNeu CUDA as the safe default.",
+  "non_goals": [
+    "Do not claim that zero-shot reference conditioning is model-weight fine-tuning.",
+    "Do not expose arbitrary voice upload or clone endpoints.",
+    "Do not retain generated speech or chat text.",
+    "Do not claim ElevenLabs-equivalent quality before owner listening and a later blind benchmark."
+  ],
+  "base_sha": "8f60e6bf0ac54b8cb5781148342014b8d1bda0fa",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "workers/speech/",
+    "apps/core-runtime/",
+    "apps/desktop/",
+    "apps/dev-console/",
+    "tools/dev/",
+    "assets/voices/",
+    "assets/manifests/",
+    "ml/models/manifests/",
+    "docs/modules/",
+    "docs/provenance/",
+    "third_party/",
+    "README.md",
+    "pyproject.toml",
+    "uv.lock",
+    ".gitignore"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "packages/contracts/",
+    "packages/safety-policy/",
+    "packages/text-brain/"
+  ],
+  "contracts": [
+    "F5-TTS uses only the fixed hash-bound Hina synthetic reference and explicit transcript.",
+    "The production desktop path is CUDA-only and fails loudly instead of falling back to CPU.",
+    "Complete text still passes pre_tts moderation before provider inference.",
+    "A failed F5 real-audio quality gate must keep VieNeu CUDA as the desktop default.",
+    "Runtime audio remains in memory; the explicit smoke tool alone may write a WAV under var/tmp."
+  ],
+  "allowed_dependencies": [
+    "Pinned f5-tts Python package",
+    "Pinned ZaloPay Vietnamese F5-TTS checkpoint",
+    "Pinned charactr Vocos 24 kHz vocoder",
+    "Existing PyTorch CUDA, ffmpeg and soundfile runtime"
+  ],
+  "oss_candidates": [
+    "https://github.com/SWivid/F5-TTS",
+    "https://huggingface.co/zalopay/vietnamese-tts",
+    "https://huggingface.co/charactr/vocos-mel-24khz"
+  ],
+  "acceptance_criteria": [
+    "Speech unit tests cover pinned F5 snapshots, reference hash validation and 24 kHz PCM output.",
+    "Real CUDA smoke and round-trip STT determine whether the ZaloPay checkpoint produces intelligible Vietnamese instead of merely a structurally valid WAV.",
+    "Desktop labels identify the provider actually selected by the launcher.",
+    "Model, dependency and voice provenance identify exact revisions, licenses and local-only candidate status."
+  ],
+  "required_test_commands": [
+    "pnpm prepare:voice",
+    "pnpm test:speech",
+    "pnpm --filter @hina/desktop typecheck",
+    "pnpm smoke:m05-tts"
+  ],
+  "latency_or_quality_budget": {
+    "device": "cuda",
+    "minimum_vram_headroom_mib": 2048,
+    "reference_seconds": 12,
+    "sample_rate_hz": 24000,
+    "quality_promotion_requires_owner_listening": true
+  },
+  "output_artifact_dir": "artifacts/verification/M07/"
+}

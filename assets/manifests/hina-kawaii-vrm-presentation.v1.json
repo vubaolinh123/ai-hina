@@ -45,7 +45,7 @@
     {
       "path": "apps/desktop/index.html",
       "role": "CSP permits only local/data/blob image decoding and local/blob ImageBitmap fetch for embedded VRM textures",
-      "sha256": "38b232a7221d9394fb2d2448f7dff655d1f12a426c4fe8789819d549428d7cfc"
+      "sha256": "1b2bc57e3d834d03e9db531ea05228665d0d9fc66adff69b2c60dfc9571ef29b"
     },
     {
       "path": "apps/desktop/src/VrmStage.vue",

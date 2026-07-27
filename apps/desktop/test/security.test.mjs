@@ -49,6 +49,7 @@ test("preload exposes named methods and never exposes raw ipcRenderer", () => {
     "getWindowMode",
     "getWidgetStatus",
     "applyWidgetControl",
+    "onWidgetHover",
     "getAvatarStatus",
     "applyAvatarCue",
     "resetAvatar",
@@ -99,6 +100,13 @@ test("transparent widget keeps hover Voice/Mic controls and a native drag surfac
   assert.match(main, /E_DESKTOP_WIDGET_AUTHORITY: operator window required/);
   assert.match(main, /reset_position/);
   assert.match(main, /scheduleWidgetPositionWrite/);
+  assert.match(main, /CHANNELS\.widgetHover/);
+  assert.match(main, /getCursorScreenPoint/);
+  assert.match(main, /startWidgetHoverWatcher/);
+  assert.match(main, /stopWidgetHoverWatcher/);
+  const preloadSource = read("electron/preload.ts");
+  assert.match(preloadSource, /onWidgetHover:/);
+  assert.match(preloadSource, /removeListener\(CHANNELS\.widgetHover/);
 
   assert.match(widget, /class="desktop-widget"/);
   assert.match(widget, /class="widget-avatar-surface"/);
@@ -115,6 +123,7 @@ test("transparent widget keeps hover Voice/Mic controls and a native drag surfac
   assert.match(widget, /getUserMedia/);
   assert.match(widget, /transcribeSpeech/);
   assert.match(widget, /monitorAutoListen/);
+  assert.match(widget, /onWidgetHover/);
   assert.match(widget, /await new Promise<void>/);
   assert.doesNotMatch(widget, /ScriptProcessorNode|createScriptProcessor/);
   assert.match(widget, /encodePcmWav/);

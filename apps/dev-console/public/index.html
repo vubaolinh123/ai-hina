@@ -47,6 +47,10 @@
             <span class="nav-icon" aria-hidden="true">04</span>
             <span><strong>Ký ức</strong><small>Duyệt và quản lý ghi nhớ</small></span>
           </a>
+          <a href="#/perception" data-dashboard-nav="perception">
+            <span class="nav-icon" aria-hidden="true">07</span>
+            <span><strong>Quan sát</strong><small>Chụp màn hình có kiểm soát</small></span>
+          </a>
           <a href="#/safety" data-dashboard-nav="safety">
             <span class="nav-icon" aria-hidden="true">05</span>
             <span><strong>An toàn</strong><small>Quyền hạn và kiểm duyệt</small></span>
@@ -137,6 +141,24 @@
             <li>Chat hoặc phát TTS để xem phản ứng thật</li>
             <li>Xem thử state để kiểm tra hình</li>
             <li>Mute / dừng khẩn cấp khi cần</li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="page-guide" data-dashboard-page="perception" aria-label="Hướng dẫn nhanh trang Quan sát">
+        <span class="page-guide-badge" aria-hidden="true">07</span>
+        <div>
+          <strong>Khi nào dùng: muốn Hina thấy đúng những gì đang có trên màn hình ngay lúc này.</strong>
+          <p>
+            Không có gì được chụp tự động. Mỗi lần bấm chụp, trình duyệt mở hộp
+            thoại chọn màn hình/cửa sổ và ảnh chỉ được xử lý trong bộ nhớ: runtime
+            giữ lại kích thước, hash và độ sáng — không lưu ảnh, không OCR ở slice
+            này. Mọi quan sát tự hết hạn sau tối đa 15 giây.
+          </p>
+          <ol class="guide-steps">
+            <li>1. Bật “Quan sát màn hình” ở trang An toàn</li>
+            <li>2. Bấm chụp và chọn cửa sổ</li>
+            <li>3. Xem quan sát và đếm ngược TTL</li>
           </ol>
         </div>
       </section>
@@ -599,7 +621,7 @@
         <section class="panel tts-panel" data-dashboard-page="companion" aria-labelledby="ttsTitle">
           <div class="panel-heading">
             <div>
-              <p class="eyebrow">M05 / VIENEU ONNX INT8 + PRE-TTS MODERATION</p>
+              <p class="eyebrow">M05 / VIENEU VIETNAMESE GPU + PRE-TTS MODERATION</p>
               <h2 id="ttsTitle">Hina nói tiếng Việt</h2>
             </div>
             <button id="refreshTtsButton" class="text-button" type="button">Làm mới</button>
@@ -796,6 +818,64 @@
             <div id="memorySearchResult" class="data-box empty">Chưa tìm kiếm.</div>
             <div id="memoryRecordList" class="stack-list memory-list">
               <p class="empty">Chưa có ký ức đã duyệt.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel perception-panel" data-dashboard-page="perception" aria-labelledby="perceptionTitle">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">M08 / OWNER-CONSENTED PERCEPTION</p>
+              <h2 id="perceptionTitle">Quan sát màn hình theo yêu cầu</h2>
+            </div>
+            <div class="button-row">
+              <button id="refreshPerceptionButton" class="text-button" type="button">Làm mới</button>
+              <button id="clearPerceptionButton" class="text-button" type="button">Xóa quan sát</button>
+            </div>
+          </div>
+          <p class="panel-copy feature-purpose">
+            <strong>Mục đích:</strong> cho Hina một bằng chứng “đang thấy gì” có
+            hạn dùng. Ảnh chụp chỉ nằm trong RAM để tạo evidence (kích thước,
+            hash, độ sáng) rồi bị bỏ; runtime không lưu ảnh và chưa đọc chữ
+            (OCR sẽ tới ở slice sau khi dependency qua review license).
+          </p>
+
+          <div class="safety-banner">
+            Capture mặc định tắt. Cần bật cờ <strong>Quan sát màn hình</strong>
+            ở trang An toàn, và mỗi lần chụp là một hành động chủ động của owner —
+            trình duyệt luôn hiện hộp thoại chọn màn hình/cửa sổ trước khi chia sẻ.
+          </div>
+
+          <div class="perception-grid">
+            <div>
+              <label>Trạng thái perception backend</label>
+              <div id="perceptionStatusBox" class="data-box empty">Chưa tải trạng thái.</div>
+              <div class="button-row">
+                <button id="capturePerceptionButton" class="button button-primary" type="button">
+                  Chụp màn hình một lần…
+                </button>
+              </div>
+              <label for="perceptionFileInput">Hoặc chọn ảnh PNG có sẵn</label>
+              <input id="perceptionFileInput" type="file" accept="image/png">
+              <label for="perceptionLabelInput">Nhãn tùy chọn cho quan sát</label>
+              <input
+                id="perceptionLabelInput"
+                type="text"
+                maxlength="120"
+                placeholder="Ví dụ: cửa sổ Minecraft"
+                autocomplete="off"
+              >
+              <p class="panel-copy speech-hint">
+                Ảnh được thu nhỏ tối đa 1280 px và nén PNG ngay trong trình duyệt
+                trước khi gửi tới <code>127.0.0.1</code>. Ảnh trùng với quan sát
+                còn hạn sẽ được báo “duplicate” thay vì tạo bản ghi mới.
+              </p>
+            </div>
+            <div>
+              <label>Kết quả lần chụp gần nhất</label>
+              <div id="perceptionCaptureResult" class="data-box empty">Chưa có lần chụp nào.</div>
+              <label>Quan sát còn hạn (TTL tối đa 15 giây)</label>
+              <ul id="perceptionObservationList" class="stack-list empty" aria-live="polite"></ul>
             </div>
           </div>
         </section>

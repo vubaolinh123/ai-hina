@@ -2,7 +2,7 @@
   "schemaVersion": "1.0",
   "assetId": "hina-anime-elevenlabs-voice-v1",
   "displayName": "Hina Anime AI v1",
-  "purpose": "Fixed local VieNeu reference enrollment for Hina speech output",
+  "purpose": "Fixed local VieNeu and F5-TTS reference enrollment for Hina speech output",
   "provenance": {
     "origin": "Owner-generated synthetic voice created with ElevenLabs",
     "realPersonImitation": false,
@@ -20,6 +20,16 @@
     "channels": 1,
     "sampleFormat": "pcm_s16le"
   },
+  "f5Reference": {
+    "path": "assets/voices/hina-anime-elevenlabs-f5-reference.wav",
+    "sha256": "785a36e9b1d33154cb6a8a658f2982e6b3c36008e26bb2142d9c0fb2442cf1de",
+    "sourceOffsetSeconds": 0.0,
+    "durationSeconds": 12.0,
+    "sampleRateHz": 24000,
+    "channels": 1,
+    "sampleFormat": "pcm_s16le",
+    "referenceTranscript": "Xin chào mọi người, Hina có mặt rồi đây, hôm nay mọi người đi làm, đi học về có mệt lắm không? Cứ từ từ pha một ly nước ấm, rồi ngồi xuống đây tâm sự với mình nhé."
+  },
   "consent": {
     "authorizedUse": "Local Hina AI speech synthesis",
     "authorizedBy": "repository owner",
@@ -27,7 +37,7 @@
     "deletionProcedure": "Delete the reference WAV and this manifest, then remove the configured Hina reference voice."
   },
   "processing": {
-    "method": "Zero-shot reference enrollment at runtime; no model-weight training or fine-tuning",
+    "method": "Zero-shot VieNeu/F5-TTS reference enrollment at runtime; no model-weight training or fine-tuning",
     "sourceTool": "ffmpeg",
     "sourceArguments": "-ss 37.050 -t 8.000 -ac 1 -ar 44100 -c:a pcm_s16le",
     "generatedAudioWatermark": true,

@@ -1,4 +1,4 @@
-"""Audit owner-provided MP3 clips and build a VieNeu reference profile.
+"""Audit owner-provided MP3 clips and build VieNeu/F5-TTS reference profiles.
 
 VieNeu-TTS v3 Turbo does not fine-tune its base weights from a folder of MP3s.
 It enrolls one short reference (up to eight seconds) and reuses the resulting
@@ -6,7 +6,9 @@ speaker embedding/reference codes. This tool therefore:
 
 * audits every MP3 in ``voice_demo`` with ffprobe and SHA-256;
 * chooses the longest clean clip that fits VieNeu's eight-second limit;
-* converts that clip to a deterministic 16 kHz mono WAV; and
+* converts that clip to a deterministic 44.1 kHz mono WAV for VieNeu; and
+* converts the owner master ``anime_voice.mp3`` to a transcript-aligned 24 kHz
+  reference WAV for F5-TTS; and
 * writes an auditable manifest containing *all* supplied clips.
 
 The manifest is intentionally generated under ``var/`` (ignored by git) so
@@ -26,6 +28,7 @@ from typing import Any
 
 
 MAX_REFERENCE_SECONDS = 8.0
+F5_REFERENCE_SECONDS = 12.0
 REFERENCE_SAMPLE_RATE_HZ = 44_100
 MIN_CLIP_SECONDS = 0.5
 MAX_SOURCE_SECONDS = 300.0
@@ -84,7 +87,40 @@ def _normalize(source: Path, destination: Path, ffmpeg: str) -> None:
     subprocess.run(command, check=True)
 
 
-def build_profile(input_dir: Path, output_dir: Path, *, force: bool = False) -> Path:
+def _normalize_f5(source: Path, destination: Path, ffmpeg: str) -> None:
+    """Prepare one transcript-aligned F5-TTS reference from the owner master."""
+    command = [
+        ffmpeg,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-i",
+        str(source),
+        "-t",
+        str(F5_REFERENCE_SECONDS),
+        "-ac",
+        "1",
+        "-ar",
+        "24000",
+        "-af",
+        "loudnorm=I=-20:TP=-2:LRA=7",
+        str(destination),
+    ]
+    subprocess.run(command, check=True)
+
+
+def build_profile(
+    input_dir: Path,
+    output_dir: Path,
+    *,
+    force: bool = False,
+    f5_reference_text: str = (
+        "Xin chào mọi người, Hina có mặt rồi đây, hôm nay mọi người đi làm, "
+        "đi học về có mệt lắm không? Cứ từ từ pha một ly nước ấm, rồi ngồi xuống "
+        "đây tâm sự với mình nhé."
+    ),
+) -> Path:
     ffmpeg = shutil.which("ffmpeg")
     ffprobe = shutil.which("ffprobe")
     if not ffmpeg or not ffprobe:
@@ -115,19 +151,28 @@ def build_profile(input_dir: Path, output_dir: Path, *, force: bool = False) -> 
 
     output_dir.mkdir(parents=True, exist_ok=True)
     anchor = output_dir / "hina-profile-anchor.wav"
+    f5_anchor = output_dir / "f5-reference.wav"
+    f5_text = output_dir / "f5-reference.txt"
     manifest = output_dir / "hina-profile.json"
-    if (anchor.exists() or manifest.exists()) and not force:
+    if (anchor.exists() or f5_anchor.exists() or manifest.exists()) and not force:
         raise FileExistsError(
             f"profile already exists under {output_dir}; pass --force to rebuild"
         )
+    master = input_dir / "anime_voice.mp3"
+    if not master.is_file():
+        master = selected
     with tempfile.TemporaryDirectory(prefix="hina-voice-profile-") as temporary:
         temporary_anchor = Path(temporary) / anchor.name
+        temporary_f5_anchor = Path(temporary) / f5_anchor.name
         _normalize(selected, temporary_anchor, ffmpeg)
+        _normalize_f5(master, temporary_f5_anchor, ffmpeg)
         shutil.copy2(temporary_anchor, anchor)
+        shutil.copy2(temporary_f5_anchor, f5_anchor)
+    f5_text.write_text(f5_reference_text.strip() + "\n", encoding="utf-8")
 
     profile = {
         "schemaVersion": 1,
-        "provider": "vieneu",
+    "provider": "vieneu",
         "modelReferenceLimitSeconds": MAX_REFERENCE_SECONDS,
         "anchorSampleRateHz": REFERENCE_SAMPLE_RATE_HZ,
         "sourceDirectory": str(input_dir),
@@ -139,11 +184,19 @@ def build_profile(input_dir: Path, output_dir: Path, *, force: bool = False) -> 
             "sha256": _sha256(selected),
             "anchor": anchor.name,
         },
+        "f5Reference": {
+            "file": master.name,
+            "durationSeconds": F5_REFERENCE_SECONDS,
+            "anchor": f5_anchor.name,
+            "transcript": f5_text.name,
+            "sha256": _sha256(master),
+        },
         "clips": entries,
         "notes": [
             "All owner-provided clips are audited and retained in this manifest.",
             "VieNeu v3 Turbo uses one <=8 second anchor; it does not fine-tune base weights from MP3 folders.",
             "The anchor is selected deterministically by longest eligible clip to preserve natural prosody.",
+            "F5-TTS uses the transcript-aligned 12-second Hina master reference; the complete MP3 folder is audit input, not a fine-tuning dataset.",
         ],
     }
     manifest.write_text(json.dumps(profile, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -155,8 +208,21 @@ def main() -> int:
     parser.add_argument("--input", type=Path, default=Path("voice_demo"))
     parser.add_argument("--output", type=Path, default=Path("var/cache/voices/hina"))
     parser.add_argument("--force", action="store_true")
+    parser.add_argument(
+        "--f5-reference-text",
+        default=(
+            "Xin chào mọi người, Hina có mặt rồi đây, hôm nay mọi người đi làm, "
+            "đi học về có mệt lắm không? Cứ từ từ pha một ly nước ấm, rồi ngồi xuống "
+            "đây tâm sự với mình nhé."
+        ),
+    )
     args = parser.parse_args()
-    manifest = build_profile(args.input, args.output, force=args.force)
+    manifest = build_profile(
+        args.input,
+        args.output,
+        force=args.force,
+        f5_reference_text=args.f5_reference_text,
+    )
     print(manifest)
     return 0
 

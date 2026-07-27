@@ -36,6 +36,23 @@
       ]
     },
     {
+      "name": "f5-tts",
+      "source_url": "https://github.com/SWivid/F5-TTS",
+      "revision": "pypi:f5-tts==1.1.22",
+      "license_spdx": "MIT",
+      "source_hash": "sha256:f0505dfb5463645caa526bace346ed1c89bcc9acb9ef42fdffd56c2c4c0a09d1",
+      "destination_paths": [
+        "pyproject.toml",
+        "uv.lock",
+        "workers/speech/src/hina_speech/f5_tts_provider.py"
+      ],
+      "modifications": [
+        "Used as a pinned PyPI dependency behind Hina's TtsProvider interface; no upstream source file or snippet was copied.",
+        "Hina bypasses TorchCodec audio loading on Windows by decoding the fixed WAV with soundfile before invoking the official inference primitives.",
+        "Hina restricts conditioning to one hash-bound owner-authorized synthetic reference, CUDA execution, pre-TTS moderation, bounded admission and no runtime text/audio retention."
+      ]
+    },
+    {
       "name": "vieneu",
       "source_url": "https://github.com/pnnbao97/VieNeu-TTS",
       "revision": "v3.2.3@452bf58485a37772d8963a7dfb9e13b0d8288a50",

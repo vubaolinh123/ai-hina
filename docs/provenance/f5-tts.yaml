@@ -1,0 +1,23 @@
+name: f5-tts
+upstream_url: https://github.com/SWivid/F5-TTS
+revision: pypi:f5-tts==1.1.22
+distribution:
+  kind: pypi-wheel
+  filename: f5_tts-1.1.22-py3-none-any.whl
+  sha256: f0505dfb5463645caa526bace346ed1c89bcc9acb9ef42fdffd56c2c4c0a09d1
+original_paths: []
+license_spdx: MIT
+copyright: "Copyright F5-TTS contributors"
+imported_at: 2026-07-25
+destination_paths:
+  - pyproject.toml
+  - uv.lock
+  - workers/speech/src/hina_speech/f5_tts_provider.py
+modifications:
+  - "Pinned runtime dependency; no upstream source or snippet copied."
+  - "Wrapped behind TtsProvider with exact ZaloPay checkpoint and Vocos revisions."
+  - "Uses soundfile for fixed WAV decoding on Windows to avoid TorchCodec shared-library requirements."
+  - "Restricts operation to CUDA and the hash-bound owner-authorized Hina synthetic reference."
+  - "Adds pre-TTS moderation, bounded admission, cancellation signaling and no-retention controls."
+reviewed_by: primary_orchestrator
+approved_by: repository_owner_for_local_quality_testing

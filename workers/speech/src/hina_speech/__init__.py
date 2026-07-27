@@ -29,11 +29,13 @@ from .tts_config import (
     ALLOWED_TTS_VOICES,
     DEFAULT_TTS_CODEC_ID,
     DEFAULT_TTS_CODEC_REVISION,
+    DEFAULT_TTS_PROVIDER,
     DEFAULT_TTS_MODEL_ID,
     DEFAULT_TTS_MODEL_REVISION,
     DEFAULT_TTS_VOICE,
     TtsConfig,
 )
+from .f5_tts_provider import F5TtsProvider
 from .tts_provider import TtsProvider, VieneuTtsProvider
 from .tts_service import SpeechOutputService
 from .tts_text import adaptive_speaking_rate, normalize_tts_text, split_tts_chunks
@@ -51,6 +53,7 @@ __all__ = [
     "DEFAULT_PROVIDER",
     "DEFAULT_TTS_CODEC_ID",
     "DEFAULT_TTS_CODEC_REVISION",
+    "DEFAULT_TTS_PROVIDER",
     "DEFAULT_TTS_MODEL_ID",
     "DEFAULT_TTS_MODEL_REVISION",
     "DEFAULT_TTS_VOICE",
@@ -85,4 +88,5 @@ __all__ = [
     "pcm16_to_wav",
     "split_tts_chunks",
     "VieneuTtsProvider",
+    "F5TtsProvider",
 ]

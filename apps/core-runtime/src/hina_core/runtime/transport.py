@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 from uuid import UUID
 from uuid import uuid4
 
@@ -166,6 +166,7 @@ class ControlPlaneServer:
         tts_service: Any | None = None,
         memory_service: Any | None = None,
         avatar_service: Any | None = None,
+        perception_service: Any | None = None,
         build_commit: str | None = None,
     ) -> None:
         self.config = config
@@ -180,6 +181,7 @@ class ControlPlaneServer:
         self.tts_service = tts_service
         self.memory_service = memory_service
         self.avatar_service = avatar_service
+        self.perception_service = perception_service
         self.build_commit = build_commit or os.environ.get("HINA_BUILD_COMMIT", "development")
         self._server: asyncio.AbstractServer | None = None
         self._started_at = 0.0
@@ -371,6 +373,9 @@ class ControlPlaneServer:
         if request.method == "POST" and path == "/v1/tts/synthesis":
             await self._serve_tts_synthesis(writer, request)
             return
+        if request.method == "POST" and path == "/v1/perception/snapshots":
+            await self._serve_perception_snapshot(writer, request)
+            return
         tts_cancel_id = _tts_cancel_route(path)
         if request.method == "POST" and tts_cancel_id is not None:
             await self._serve_tts_cancel(writer, request, tts_cancel_id)
@@ -443,6 +448,11 @@ class ControlPlaneServer:
             body = await self._memory_call("status")
         elif path == "/v1/avatar/status":
             body = self._avatar_call("status")
+        elif path == "/v1/perception/status":
+            body = await self._perception_call("status")
+        elif path == "/v1/perception/observations":
+            _require_empty_query(parsed_target.query)
+            body = await self._perception_call("observations")
         elif path == "/v1/memory/candidates":
             status = _parse_memory_candidate_query(parsed_target.query)
             body = await self._memory_call("candidates", status=status)
@@ -504,6 +514,13 @@ class ControlPlaneServer:
                     "avatar reset request is invalid",
                 )
             return self._avatar_call("reset")
+        if path == "/v1/perception/clear":
+            if payload != {"action": "clear"}:
+                raise PrimitiveError(
+                    RuntimeErrorCode.HTTP_BAD_REQUEST,
+                    "perception clear request is invalid",
+                )
+            return await self._perception_call("clear", source="owner.console")
         if path == "/v1/memory/candidates":
             return await self._memory_call("propose", payload)
         candidate_id = _memory_item_route(path, "candidates", "decision")
@@ -927,6 +944,181 @@ class ControlPlaneServer:
                 "utteranceId": utterance_id,
                 "generatedAudioRetained": False,
                 "inputTextRetained": False,
+            },
+        )
+
+    async def _serve_perception_snapshot(
+        self,
+        writer: asyncio.StreamWriter,
+        request: _HttpRequest,
+    ) -> None:
+        correlation_id = request.headers.get("x-hina-correlation-id") or str(uuid4())
+        session_id = request.headers.get("x-hina-session-id") or None
+        source = request.headers.get("x-hina-source", "owner.console")
+        owner_confirmed = (
+            request.headers.get("x-hina-owner-confirmed", "").strip().lower()
+            in {"1", "true", "yes"}
+        )
+        label_raw = request.headers.get("x-hina-label")
+        label = unquote(label_raw) if label_raw else None
+        content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+        if content_type != "image/png":
+            self._log_perception_request_error(
+                "E_PERCEPTION_CONTENT_TYPE",
+                correlation_id,
+                session_id,
+                len(request.body),
+            )
+            await self._send_json_response(
+                writer,
+                HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
+                {
+                    "status": "error",
+                    "errorCode": "E_PERCEPTION_CONTENT_TYPE",
+                    "message": "perception snapshots require an image/png body",
+                    "correlationId": correlation_id,
+                },
+            )
+            return
+        if not request.body:
+            self._log_perception_request_error(
+                "E_PERCEPTION_SNAPSHOT_EMPTY",
+                correlation_id,
+                session_id,
+                0,
+            )
+            await self._send_json_response(
+                writer,
+                HTTPStatus.BAD_REQUEST,
+                {
+                    "status": "error",
+                    "errorCode": "E_PERCEPTION_SNAPSHOT_EMPTY",
+                    "message": "PNG snapshot body is empty",
+                    "correlationId": correlation_id,
+                },
+            )
+            return
+        if self.perception_service is None:
+            self._log_perception_request_error(
+                "E_PERCEPTION_UNAVAILABLE",
+                correlation_id,
+                session_id,
+                len(request.body),
+            )
+            await self._send_json_response(
+                writer,
+                HTTPStatus.SERVICE_UNAVAILABLE,
+                {
+                    "status": "error",
+                    "errorCode": "E_PERCEPTION_UNAVAILABLE",
+                    "message": "perception service is unavailable",
+                    "correlationId": correlation_id,
+                },
+            )
+            return
+        try:
+            body = await self.perception_service.ingest_snapshot(
+                request.body,
+                correlation_id=correlation_id,
+                session_id=session_id,
+                source=source,
+                label=label,
+                owner_confirmed=owner_confirmed,
+            )
+        except Exception as exc:
+            code = getattr(exc, "code", "")
+            if not isinstance(code, str) or not code.startswith("E_PERCEPTION_"):
+                raise
+            if code == "E_PERCEPTION_RATE_LIMIT":
+                status = HTTPStatus.TOO_MANY_REQUESTS
+            elif code in {"E_PERCEPTION_DENIED", "E_PERCEPTION_CONFIRMATION"}:
+                status = HTTPStatus.FORBIDDEN
+            elif code in {
+                "E_PERCEPTION_UNAVAILABLE",
+                "E_PERCEPTION_POLICY",
+                "E_PERCEPTION_OPERATION",
+            }:
+                status = HTTPStatus.SERVICE_UNAVAILABLE
+            elif code == "E_PERCEPTION_SNAPSHOT_TOO_LARGE":
+                status = HTTPStatus.REQUEST_ENTITY_TOO_LARGE
+            else:
+                status = HTTPStatus.BAD_REQUEST
+            if not getattr(exc, "reported", False):
+                self._log_perception_request_error(
+                    code,
+                    correlation_id,
+                    session_id,
+                    len(request.body),
+                )
+            self._record_metric(
+                "hina_http_requests_total",
+                operation="perception/snapshots",
+                status="error",
+            )
+            await self._send_json_response(
+                writer,
+                status,
+                {
+                    "status": "error",
+                    "errorCode": code,
+                    "message": getattr(exc, "detail", "perception request failed")[:256],
+                    "correlationId": correlation_id,
+                },
+            )
+            return
+        self._record_metric(
+            "hina_http_requests_total",
+            operation="perception/snapshots",
+            status="ok",
+        )
+        await self._send_json_response(writer, HTTPStatus.OK, body)
+
+    async def _perception_call(
+        self,
+        operation: str,
+        *args: Any,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        if self.perception_service is None:
+            raise PrimitiveError(
+                "E_PERCEPTION_UNAVAILABLE",  # type: ignore[arg-type]
+                "perception service is unavailable",
+            )
+        try:
+            result = await getattr(self.perception_service, operation)(*args, **kwargs)
+        except Exception as exc:
+            code = getattr(exc, "code", "")
+            if not isinstance(code, str) or not code.startswith("E_PERCEPTION_"):
+                raise
+            raise PrimitiveError(  # type: ignore[arg-type]
+                code,
+                getattr(exc, "detail", "perception request was rejected"),
+            ) from exc
+        if not isinstance(result, dict):
+            raise PrimitiveError(
+                "E_PERCEPTION_UNAVAILABLE",  # type: ignore[arg-type]
+                "perception service returned invalid data",
+            )
+        return result
+
+    def _log_perception_request_error(
+        self,
+        code: str,
+        correlation_id: str,
+        session_id: str | None,
+        snapshot_bytes: int,
+    ) -> None:
+        if self.error_logger is None:
+            return
+        self.error_logger.log_error(
+            PrimitiveError(code, "perception snapshot request failed"),  # type: ignore[arg-type]
+            component="perception.snapshot",
+            operation="ingest",
+            correlation_id=correlation_id,
+            session_id=session_id,
+            context={
+                "snapshotBytes": snapshot_bytes,
+                "pixelDataRetained": False,
             },
         )
 
@@ -1453,6 +1645,20 @@ class ControlPlaneServer:
         if code_value == "E_AVATAR_SOURCE":
             return HTTPStatus.FORBIDDEN
         if code_value == "E_AVATAR_UNAVAILABLE":
+            return HTTPStatus.SERVICE_UNAVAILABLE
+        if code_value in {"E_PERCEPTION_DENIED", "E_PERCEPTION_CONFIRMATION"}:
+            return HTTPStatus.FORBIDDEN
+        if code_value == "E_PERCEPTION_RATE_LIMIT":
+            return HTTPStatus.TOO_MANY_REQUESTS
+        if code_value == "E_PERCEPTION_EXPIRED":
+            return HTTPStatus.GONE
+        if code_value == "E_PERCEPTION_SNAPSHOT_TOO_LARGE":
+            return HTTPStatus.REQUEST_ENTITY_TOO_LARGE
+        if code_value in {
+            "E_PERCEPTION_UNAVAILABLE",
+            "E_PERCEPTION_POLICY",
+            "E_PERCEPTION_OPERATION",
+        }:
             return HTTPStatus.SERVICE_UNAVAILABLE
         if code is RuntimeErrorCode.FRAME_TOO_LARGE:
             return HTTPStatus.REQUEST_HEADER_FIELDS_TOO_LARGE

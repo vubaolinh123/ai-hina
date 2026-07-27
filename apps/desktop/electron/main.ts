@@ -34,6 +34,7 @@ const CHANNELS = Object.freeze({
   windowMode: "hina:window:mode",
   widgetStatus: "hina:widget:status",
   widgetControl: "hina:widget:control",
+  widgetHover: "hina:widget:hover",
   avatarStatus: "hina:avatar:status",
   avatarCue: "hina:avatar:cue",
   avatarReset: "hina:avatar:reset",
@@ -57,6 +58,8 @@ let mainWindow: BrowserWindow | null = null;
 let widgetWindow: BrowserWindow | null = null;
 let smokeTimer: NodeJS.Timeout | null = null;
 let widgetPositionTimer: NodeJS.Timeout | null = null;
+let widgetHoverTimer: NodeJS.Timeout | null = null;
+let widgetHoverInside = false;
 
 type DesktopWindowMode = "operator" | "widget";
 type WidgetControlAction = "show" | "hide" | "reset_position";
@@ -138,6 +141,47 @@ function scheduleWidgetPositionWrite(): void {
     widgetPositionTimer = null;
     void persistWidgetPosition();
   }, 250);
+}
+
+function sendWidgetHover(inside: boolean): void {
+  widgetHoverInside = inside;
+  if (widgetWindow && !widgetWindow.isDestroyed()) {
+    widgetWindow.webContents.send(CHANNELS.widgetHover, inside);
+  }
+}
+
+function pollWidgetHover(): void {
+  if (!widgetWindow || widgetWindow.isDestroyed() || !widgetWindow.isVisible()) {
+    if (widgetHoverInside) sendWidgetHover(false);
+    return;
+  }
+  const cursor = screen.getCursorScreenPoint();
+  const bounds = widgetWindow.getBounds();
+  const inside =
+    cursor.x >= bounds.x
+    && cursor.x < bounds.x + bounds.width
+    && cursor.y >= bounds.y
+    && cursor.y < bounds.y + bounds.height;
+  if (inside !== widgetHoverInside) {
+    sendWidgetHover(inside);
+  }
+}
+
+// The widget avatar surface uses -webkit-app-region: drag, which Windows treats
+// as non-client area: the renderer never receives real mouse events there, so
+// CSS :hover/pointerenter cannot reveal the Voice/Mic controls. The main
+// process watches the OS cursor against the window bounds instead and pushes
+// hover state to the widget renderer over IPC.
+function startWidgetHoverWatcher(): void {
+  if (process.env.HINA_DESKTOP_SMOKE === "1" || widgetHoverTimer) return;
+  widgetHoverTimer = setInterval(pollWidgetHover, 130);
+}
+
+function stopWidgetHoverWatcher(): void {
+  if (widgetHoverTimer) {
+    clearInterval(widgetHoverTimer);
+    widgetHoverTimer = null;
+  }
 }
 
 function validateWidgetControl(value: unknown): WidgetControlAction {
@@ -412,6 +456,8 @@ async function createWindows(): Promise<void> {
   });
   widgetWindow.on("closed", () => {
     widgetWindow = null;
+    stopWidgetHoverWatcher();
+    widgetHoverInside = false;
     if (widgetPositionTimer) {
       clearTimeout(widgetPositionTimer);
       widgetPositionTimer = null;
@@ -425,6 +471,10 @@ async function createWindows(): Promise<void> {
     void persistWidgetPosition();
   });
   widgetWindow.on("move", scheduleWidgetPositionWrite);
+  widgetWindow.webContents.on("did-finish-load", () => {
+    // Renderer state resets on load; force the next poll to re-send hover.
+    widgetHoverInside = false;
+  });
 
   if (smoke) {
     const widgetLoaded = new Promise<void>((resolve, reject) => {
@@ -785,6 +835,45 @@ async function createWindows(): Promise<void> {
           movementY: 0,
         });
         await new Promise((resolve) => setTimeout(resolve, 180));
+        widgetWindow.webContents.send(CHANNELS.widgetHover, false);
+        await new Promise((resolve) => setTimeout(resolve, 160));
+        const widgetIpcHiddenSnapshot: unknown =
+          await widgetWindow.webContents.executeJavaScript(
+            `(() => {
+              const root = document.querySelector(".desktop-widget");
+              const controls = document.querySelector(".widget-voice-controls");
+              if (!(root instanceof HTMLElement) || !(controls instanceof HTMLElement)) {
+                throw new Error("E_DESKTOP_WIDGET_HOVER_DOM");
+              }
+              const style = getComputedStyle(controls);
+              return {
+                dataHovered: root.dataset.hovered ?? "missing",
+                visibility: style.visibility
+              };
+            })()`,
+            true,
+          );
+        widgetWindow.webContents.send(CHANNELS.widgetHover, true);
+        await new Promise((resolve) => setTimeout(resolve, 160));
+        const widgetIpcHoverSnapshot: unknown =
+          await widgetWindow.webContents.executeJavaScript(
+            `(() => {
+              const root = document.querySelector(".desktop-widget");
+              const controls = document.querySelector(".widget-voice-controls");
+              if (!(root instanceof HTMLElement) || !(controls instanceof HTMLElement)) {
+                throw new Error("E_DESKTOP_WIDGET_HOVER_DOM");
+              }
+              const style = getComputedStyle(controls);
+              return {
+                dataHovered: root.dataset.hovered ?? "missing",
+                opacity: style.opacity,
+                visibility: style.visibility,
+                pointerEvents: style.pointerEvents
+              };
+            })()`,
+            true,
+          );
+        widgetWindow.webContents.send(CHANNELS.widgetHover, false);
         const widgetSize = widgetWindow.getContentSize();
         const widgetWidthActual = widgetSize[0] ?? 0;
         const widgetHeightActual = widgetSize[1] ?? 0;
@@ -846,6 +935,22 @@ async function createWindows(): Promise<void> {
           || widgetHoverSnapshot.visibility !== "visible"
           || !("pointerEvents" in widgetHoverSnapshot)
           || widgetHoverSnapshot.pointerEvents !== "auto"
+          || !widgetIpcHiddenSnapshot
+          || typeof widgetIpcHiddenSnapshot !== "object"
+          || !("dataHovered" in widgetIpcHiddenSnapshot)
+          || widgetIpcHiddenSnapshot.dataHovered !== "false"
+          || !("visibility" in widgetIpcHiddenSnapshot)
+          || widgetIpcHiddenSnapshot.visibility !== "hidden"
+          || !widgetIpcHoverSnapshot
+          || typeof widgetIpcHoverSnapshot !== "object"
+          || !("dataHovered" in widgetIpcHoverSnapshot)
+          || widgetIpcHoverSnapshot.dataHovered !== "true"
+          || !("opacity" in widgetIpcHoverSnapshot)
+          || widgetIpcHoverSnapshot.opacity !== "1"
+          || !("visibility" in widgetIpcHoverSnapshot)
+          || widgetIpcHoverSnapshot.visibility !== "visible"
+          || !("pointerEvents" in widgetIpcHoverSnapshot)
+          || widgetIpcHoverSnapshot.pointerEvents !== "auto"
           || !widgetWindow.isAlwaysOnTop()
           || !widgetWindow.isMovable()
           || widgetWindow.isResizable()
@@ -870,6 +975,10 @@ async function createWindows(): Promise<void> {
                 ],
                 controls: widgetDiagnostic.controlCount ?? null,
                 hover: widgetHoverSnapshot,
+                ipcHover: {
+                  hidden: widgetIpcHiddenSnapshot,
+                  hovered: widgetIpcHoverSnapshot,
+                },
                 snapshot: widgetSnapshot,
               }).slice(0, 700)
             }`,
@@ -977,9 +1086,11 @@ async function createWindows(): Promise<void> {
     mainWindow.loadFile(rendererPath),
     widgetWindow.loadFile(rendererPath),
   ]);
+  startWidgetHoverWatcher();
 }
 
 app.on("before-quit", () => {
+  stopWidgetHoverWatcher();
   if (smokeTimer) {
     clearTimeout(smokeTimer);
     smokeTimer = null;

@@ -1083,6 +1083,29 @@ main.dashboard-main {
   gap: 24px;
 }
 
+.perception-grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.9fr) minmax(340px, 1.1fr);
+  gap: 24px;
+}
+
+.perception-observation {
+  display: grid;
+  gap: 4px;
+}
+
+.perception-observation .entry-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.perception-ttl {
+  font-variant-numeric: tabular-nums;
+  color: var(--accent, #7c6df2);
+  white-space: nowrap;
+}
+
 .tts-auto-field {
   width: fit-content;
   margin: 12px 0;
@@ -1602,6 +1625,7 @@ kbd {
 
   .chat-grid,
   .speech-grid,
+  .perception-grid,
   .tts-grid {
     grid-template-columns: 1fr;
   }

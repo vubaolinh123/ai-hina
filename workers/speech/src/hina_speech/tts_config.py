@@ -9,14 +9,30 @@ from typing import Mapping
 from .errors import TtsError
 
 
-DEFAULT_TTS_MODEL_ID = "pnnbao-ump/VieNeu-TTS-v3-Turbo"
-DEFAULT_TTS_MODEL_REVISION = "75ff82a72f54d55ed389e1eeb12041d3c4bac7d4"
-DEFAULT_TTS_CODEC_ID = "OpenMOSS-Team/MOSS-Audio-Tokenizer-Nano-ONNX"
-DEFAULT_TTS_CODEC_REVISION = "ceff0d0749bfb3fa2d61149794ec6feef0d1e1ae"
+DEFAULT_TTS_PROVIDER = "vieneu"
+F5_TTS_MODEL_ID = "zalopay/vietnamese-tts"
+F5_TTS_MODEL_REVISION = "1dc4967edb4549e40d820429e487eeeacee8bc08"
+F5_TTS_MODEL_FILE = "model_1290000.pt"
+DEFAULT_TTS_VOCODER_ID = "charactr/vocos-mel-24khz"
+DEFAULT_TTS_VOCODER_REVISION = "0feb3fdd929bcd6649e0e7c5a688cf7dd012ef21"
+VIENEU_TTS_MODEL_ID = "pnnbao-ump/VieNeu-TTS-v3-Turbo"
+VIENEU_TTS_MODEL_REVISION = "75ff82a72f54d55ed389e1eeb12041d3c4bac7d4"
+DEFAULT_TTS_MODEL_ID = VIENEU_TTS_MODEL_ID
+DEFAULT_TTS_MODEL_REVISION = VIENEU_TTS_MODEL_REVISION
+DEFAULT_TTS_MODEL_FILE = F5_TTS_MODEL_FILE
+DEFAULT_TTS_CODEC_ID = "OpenMOSS-Team/MOSS-Audio-Tokenizer-Nano"
+DEFAULT_TTS_CODEC_REVISION = "6aa02b01e445cc585582cf0ba480bc3ea6c8dd68"
 DEFAULT_TTS_VOICE = "Hina Anime AI v1"
-DEFAULT_TTS_REFERENCE_AUDIO = Path("assets/voices/hina-anime-elevenlabs-reference.wav")
+DEFAULT_TTS_REFERENCE_AUDIO = Path(
+    "assets/voices/hina-anime-elevenlabs-reference.wav"
+)
 DEFAULT_TTS_REFERENCE_SHA256 = (
     "f71960d949cdebba997cb4a96bc155ee0095dbb42fe6e609e8cf00b41346441f"
+)
+DEFAULT_TTS_REFERENCE_TEXT = (
+    "Xin chào mọi người, Hina có mặt rồi đây, hôm nay mọi người đi làm, "
+    "đi học về có mệt lắm không? Cứ từ từ pha một ly nước ấm, rồi ngồi xuống "
+    "đây tâm sự với mình nhé."
 )
 ALLOWED_TTS_VOICES = frozenset({DEFAULT_TTS_VOICE})
 ALLOWED_TTS_STYLES = frozenset({"tu_nhien", "tin_tuc", "doc_truyen"})
@@ -24,13 +40,17 @@ ALLOWED_TTS_STYLES = frozenset({"tu_nhien", "tin_tuc", "doc_truyen"})
 
 @dataclass(frozen=True, slots=True)
 class TtsConfig:
+    provider: str = DEFAULT_TTS_PROVIDER
     model_id: str = DEFAULT_TTS_MODEL_ID
     model_revision: str = DEFAULT_TTS_MODEL_REVISION
+    model_file: str = DEFAULT_TTS_MODEL_FILE
+    vocoder_id: str = DEFAULT_TTS_VOCODER_ID
+    vocoder_revision: str = DEFAULT_TTS_VOCODER_REVISION
     codec_id: str = DEFAULT_TTS_CODEC_ID
     codec_revision: str = DEFAULT_TTS_CODEC_REVISION
     model_cache: Path = Path("var/cache/models/vieneu")
-    device: str = "cpu"
-    precision: str = "int8"
+    device: str = "cuda"
+    precision: str = "float16"
     voice: str = DEFAULT_TTS_VOICE
     style: str = "tu_nhien"
     allow_download: bool = True
@@ -45,11 +65,16 @@ class TtsConfig:
     reference_voice_enabled: bool = True
     reference_audio_path: Path = DEFAULT_TTS_REFERENCE_AUDIO
     reference_audio_sha256: str = DEFAULT_TTS_REFERENCE_SHA256
+    reference_text: str = DEFAULT_TTS_REFERENCE_TEXT
+    nfe_step: int = 32
+    warmup_on_start: bool = False
 
     def __post_init__(self) -> None:
+        if self.provider not in {"f5-tts", "vieneu"}:
+            raise TtsError("E_TTS_CONFIG", "TTS provider must be f5-tts or vieneu")
         for value, name in (
             (self.model_id, "model identifier"),
-            (self.codec_id, "codec identifier"),
+            (self.vocoder_id, "vocoder identifier"),
         ):
             if (
                 not value
@@ -59,15 +84,21 @@ class TtsConfig:
                 raise TtsError("E_TTS_CONFIG", f"TTS {name} is invalid")
         for value, name in (
             (self.model_revision, "model revision"),
-            (self.codec_revision, "codec revision"),
+            (self.vocoder_revision, "vocoder revision"),
         ):
             if re.fullmatch(r"[0-9a-f]{40}", value) is None:
                 raise TtsError("E_TTS_CONFIG", f"TTS {name} must be a commit SHA")
         if self.device not in {"cpu", "cuda"}:
             raise TtsError("E_TTS_CONFIG", "TTS device must be cpu or cuda")
+        if self.provider == "f5-tts" and self.device != "cuda":
+            raise TtsError("E_TTS_RESOURCE_LEASE", "F5-TTS is GPU-only in Hina")
         if self.device == "cpu" and self.precision != "int8":
             raise TtsError("E_TTS_CONFIG", "CPU TTS precision must be int8")
-        if self.device == "cuda" and self.precision not in {"float16", "bfloat16"}:
+        if (
+            self.device == "cuda"
+            and self.provider == "vieneu"
+            and self.precision not in {"float16", "bfloat16"}
+        ):
             raise TtsError(
                 "E_TTS_RESOURCE_LEASE",
                 "CUDA TTS requires an explicit GPU precision and ResourceLease profile",
@@ -86,13 +117,16 @@ class TtsConfig:
         if self.reference_voice_enabled:
             if self.voice != DEFAULT_TTS_VOICE:
                 raise TtsError("E_TTS_VOICE_CONSENT", "the reference voice must use the Hina profile")
-            if re.fullmatch(r"[0-9a-f]{64}", self.reference_audio_sha256) is None:
+            if self.reference_audio_sha256 and re.fullmatch(r"[0-9a-f]{64}", self.reference_audio_sha256) is None:
                 raise TtsError("E_TTS_CONFIG", "TTS reference audio SHA-256 is invalid")
+            if self.provider == "f5-tts" and not self.reference_text.strip():
+                raise TtsError("E_TTS_CONFIG", "F5-TTS requires a reference transcript")
         for value, name, lower, upper in (
             (self.cpu_threads, "CPU threads", 1, 64),
             (self.max_pending_syntheses, "pending synthesis limit", 1, 16),
             (self.max_text_characters, "text character limit", 32, 10_000),
             (self.max_chunk_characters, "chunk character limit", 32, 512),
+            (self.nfe_step, "F5-TTS NFE step count", 8, 64),
         ):
             if isinstance(value, bool) or not isinstance(value, int) or not lower <= value <= upper:
                 raise TtsError("E_TTS_CONFIG", f"TTS {name} is invalid")
@@ -115,7 +149,21 @@ class TtsConfig:
         root: Path | None = None,
     ) -> TtsConfig:
         values = env if env is not None else os.environ
-        cache = Path(values.get("HINA_TTS_MODEL_CACHE", "var/cache/models/vieneu"))
+        provider = values.get("HINA_TTS_PROVIDER", DEFAULT_TTS_PROVIDER).strip().lower()
+        default_model = F5_TTS_MODEL_ID if provider == "f5-tts" else VIENEU_TTS_MODEL_ID
+        default_revision = (
+            F5_TTS_MODEL_REVISION
+            if provider == "f5-tts"
+            else VIENEU_TTS_MODEL_REVISION
+        )
+        default_cache = (
+            "var/cache/models/f5-tts"
+            if provider == "f5-tts"
+            else "var/cache/models/vieneu"
+        )
+        default_device = "cuda"
+        default_precision = "float16"
+        cache = Path(values.get("HINA_TTS_MODEL_CACHE", default_cache))
         reference = Path(
             values.get("HINA_TTS_REFERENCE_AUDIO", str(DEFAULT_TTS_REFERENCE_AUDIO))
         )
@@ -124,13 +172,19 @@ class TtsConfig:
         if not reference.is_absolute() and root is not None:
             reference = root / reference
         return cls(
-            model_id=values.get("HINA_TTS_MODEL", DEFAULT_TTS_MODEL_ID),
-            model_revision=values.get("HINA_TTS_MODEL_REVISION", DEFAULT_TTS_MODEL_REVISION),
+            provider=provider,
+            model_id=values.get("HINA_TTS_MODEL", default_model),
+            model_revision=values.get("HINA_TTS_MODEL_REVISION", default_revision),
+            model_file=values.get("HINA_TTS_MODEL_FILE", F5_TTS_MODEL_FILE),
+            vocoder_id=values.get("HINA_TTS_VOCODER", DEFAULT_TTS_VOCODER_ID),
+            vocoder_revision=values.get(
+                "HINA_TTS_VOCODER_REVISION", DEFAULT_TTS_VOCODER_REVISION
+            ),
             codec_id=values.get("HINA_TTS_CODEC", DEFAULT_TTS_CODEC_ID),
             codec_revision=values.get("HINA_TTS_CODEC_REVISION", DEFAULT_TTS_CODEC_REVISION),
             model_cache=cache,
-            device=values.get("HINA_TTS_DEVICE", "cpu").strip().lower(),
-            precision=values.get("HINA_TTS_PRECISION", "int8").strip().lower(),
+            device=values.get("HINA_TTS_DEVICE", default_device).strip().lower(),
+            precision=values.get("HINA_TTS_PRECISION", default_precision).strip().lower(),
             voice=values.get("HINA_TTS_VOICE", DEFAULT_TTS_VOICE).strip(),
             style=values.get("HINA_TTS_STYLE", "tu_nhien").strip().lower(),
             allow_download=_env_bool(values, "HINA_TTS_ALLOW_DOWNLOAD", True),
@@ -147,16 +201,28 @@ class TtsConfig:
             reference_audio_sha256=values.get(
                 "HINA_TTS_REFERENCE_SHA256", DEFAULT_TTS_REFERENCE_SHA256
             ).strip().lower(),
+            reference_text=values.get(
+                "HINA_TTS_REFERENCE_TEXT", DEFAULT_TTS_REFERENCE_TEXT
+            ).strip(),
+            nfe_step=_env_int(values, "HINA_TTS_NFE_STEP", 32),
+            warmup_on_start=_env_bool(values, "HINA_TTS_WARMUP_ON_START", False),
         )
 
     def public_status(self) -> dict[str, object]:
         return {
-            "provider": "vieneu",
-            "providerVersion": "3.2.3",
+            "provider": self.provider,
+            "providerVersion": "1.1.22" if self.provider == "f5-tts" else "3.2.3",
             "model": self.model_id,
             "modelRevision": self.model_revision,
-            "codec": self.codec_id,
-            "codecRevision": self.codec_revision,
+            "modelFile": self.model_file if self.provider == "f5-tts" else None,
+            "vocoder": self.vocoder_id if self.provider == "f5-tts" else None,
+            "vocoderRevision": (
+                self.vocoder_revision if self.provider == "f5-tts" else None
+            ),
+            "codec": self.codec_id if self.provider == "vieneu" else None,
+            "codecRevision": (
+                self.codec_revision if self.provider == "vieneu" else None
+            ),
             "device": self.device,
             "precision": self.precision,
             "voice": self.voice,
@@ -165,18 +231,19 @@ class TtsConfig:
             "rawAudioRetention": self.raw_audio_retention,
             "voiceCloning": self.voice_cloning_enabled,
             "referenceVoiceEnrollment": self.reference_voice_enabled,
-            "referenceAudioSha256": (
-                self.reference_audio_sha256 if self.reference_voice_enabled else None
-            ),
+            "referenceAudioSha256": self.reference_audio_sha256 or None,
             "adaptiveSpeakingRate": {
                 "minimum": 1.0,
                 "maximum": 1.18,
             },
-            "expressiveCues": [
-                "chuckle",
-                "sigh",
-                "clear throat",
-            ],
+            "expressiveCues": (
+                ["chuckle", "sigh", "clear throat"]
+                if self.provider == "vieneu"
+                else ["reference-prosody"]
+            ),
+            "referenceTranscriptConfigured": bool(self.reference_text),
+            "nfeStep": self.nfe_step,
+            "warmupOnStart": self.warmup_on_start,
         }
 
 

@@ -7,7 +7,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from hina_safety import AuditTrail, CapabilityManifest, SafetyPolicyService
-from hina_speech import SpeechOutputService, TtsConfig, VieneuTtsProvider
+from hina_speech import F5TtsProvider, SpeechOutputService, TtsConfig, VieneuTtsProvider
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -25,7 +25,11 @@ async def run(text: str, output: Path) -> dict[str, object]:
             build_commit="m05-real-tts-smoke",
         ),
     )
-    provider = VieneuTtsProvider(config)
+    provider = (
+        F5TtsProvider(config)
+        if config.provider == "f5-tts"
+        else VieneuTtsProvider(config)
+    )
     service = SpeechOutputService(
         config,
         provider,
@@ -45,12 +49,18 @@ async def run(text: str, output: Path) -> dict[str, object]:
     finally:
         await service.close()
     return {
-        "provider": "vieneu",
-        "providerVersion": "3.2.3",
+        "provider": config.provider,
+        "providerVersion": config.public_status()["providerVersion"],
         "model": config.model_id,
         "revision": config.model_revision,
-        "codec": config.codec_id,
-        "codecRevision": config.codec_revision,
+        "audioDecoder": (
+            config.vocoder_id if config.provider == "f5-tts" else config.codec_id
+        ),
+        "audioDecoderRevision": (
+            config.vocoder_revision
+            if config.provider == "f5-tts"
+            else config.codec_revision
+        ),
         "device": status["provider"]["effectiveDevice"],
         "precision": status["provider"]["effectivePrecision"],
         "voice": result["voice"],

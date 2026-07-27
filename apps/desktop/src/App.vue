@@ -325,7 +325,7 @@ async function testTtsVoice(): Promise<void> {
   const text = speechTtsText.value.trim();
   if (!text || speechBusy.value || speechRecording.value) return;
   speechBusy.value = true;
-  speechStatus.value = "Đang tạo WAV bằng giọng Hina/VieNeu thật…";
+  speechStatus.value = "Đang tạo WAV bằng giọng Hina/VieNeu thật trên GPU…";
   try {
     const bytes = await window.hinaDesktop.synthesizeSpeech({
       text,
@@ -753,7 +753,7 @@ onBeforeUnmount(() => {
       <div class="page-heading">
         <p class="eyebrow">DASHBOARD / CHAT</p>
         <h2>Nói chuyện với Hina bằng text và voice</h2>
-        <p class="purpose">Nhập câu hỏi bằng tiếng Việt. Hina trả về nội dung text trước, sau đó phát cùng nội dung bằng giọng VieNeu nếu Voice đang bật.</p>
+          <p class="purpose">Nhập câu hỏi bằng tiếng Việt. Hina trả về nội dung text trước, sau đó phát cùng nội dung bằng giọng VieNeu local chạy GPU và dùng reference Hina nếu Voice đang bật.</p>
       </div>
       <div class="chat-layout">
         <div class="chat-messages" aria-live="polite">
@@ -789,7 +789,7 @@ onBeforeUnmount(() => {
         <h2>Kiểm tra từng phần của hội thoại bằng giọng nói</h2>
         <p class="purpose">
           Trang này dùng dịch vụ thật, không dùng dữ liệu giả. Phần Mic → STT thu âm trực tiếp
-          và cập nhật transcript khi bạn còn đang nói. Phần TTS gửi đoạn text cho VieNeu và phát lại WAV Hina tạo ra.
+              và cập nhật transcript khi bạn còn đang nói. Phần TTS gửi đoạn text cho VieNeu chạy GPU và phát lại WAV Hina tạo ra.
         </p>
       </div>
       <div class="speech-runtime-strip" role="status">
@@ -849,7 +849,7 @@ onBeforeUnmount(() => {
         </article>
 
         <article class="speech-test-card">
-          <p class="eyebrow">TEXT → VIENEU TTS</p>
+          <p class="eyebrow">TEXT → VIENEU VIETNAMESE GPU</p>
           <h3>Nghe thử giọng Hina</h3>
           <p>
             Dùng khi cần kiểm tra giọng, cảm xúc và tốc độ nói. Câu dài được pipeline tự tăng tốc

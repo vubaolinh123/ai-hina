@@ -117,6 +117,7 @@ type HinaDesktopApi = {
     | { action: "hide" }
     | { action: "reset_position" }
   ): Promise<WidgetStatus>;
+  onWidgetHover(listener: (hovered: boolean) => void): () => void;
   getAvatarStatus(): Promise<AvatarStatus>;
   applyAvatarCue(cue: {
     source: "owner.console";

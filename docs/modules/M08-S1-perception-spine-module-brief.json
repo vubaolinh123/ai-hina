@@ -1,0 +1,73 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M08-S1-perception-spine",
+  "module_id": "M08",
+  "objective": "Create the perception spine: owner-consented one-shot screen snapshots ingested through the control plane, reduced in memory to privacy-preserving evidence, stored in a bounded monotonic-TTL freshness ledger, and surfaced on a new Dev Console page, with the OCR provider left as an honest contract-ready interface.",
+  "non_goals": [
+    "Do not add automatic, scheduled or event-driven capture; every snapshot requires an explicit owner action.",
+    "Do not persist snapshot pixels, files or OCR text anywhere; only dimensions, hashes and luminance evidence may be retained in RAM.",
+    "Do not add an OCR or VLM dependency before it passes OSS/license review in a later M08 slice.",
+    "Do not let observations outlive their TTL or be presented as current context after expiry.",
+    "Do not bypass the safety policy: the perception feature flag and perception.observe capability gate every ingestion and fail closed."
+  ],
+  "base_sha": "owner-records-at-commit (fast-development mode; slice authored in cloud sandbox without git access)",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "workers/perception/",
+    "apps/core-runtime/src/hina_core/runtime/application.py",
+    "apps/core-runtime/src/hina_core/runtime/transport.py",
+    "apps/core-runtime/tests/",
+    "apps/dev-console/public/",
+    "tools/dev/Invoke-FastUnit.ps1",
+    "tools/dev/Invoke-PerceptionUnit.ps1",
+    "tools/dev/Start-HinaDevConsole.ps1",
+    "tools/dev/Start-HinaControlPlane.ps1",
+    "package.json",
+    "docs/modules/",
+    "README.md",
+    "AGENTS.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "packages/contracts/",
+    "packages/safety-policy/",
+    "packages/text-brain/",
+    "packages/memory/",
+    "workers/speech/",
+    "apps/desktop/"
+  ],
+  "contracts": [
+    "Every observation carries kind=screen.snapshot, trustLevel=untrusted, capturedAt, ttlSeconds<=15, expiresAt and monotonic-elapsed expiry; expired observations are excluded 100% of the time.",
+    "Snapshot ingestion calls safety evaluate on perception.observe with consume=true; deny fails closed, ask requires the explicit owner-confirmed header, and a crashing policy engine also fails closed.",
+    "The default capability manifest keeps the perception feature flag off, so capture is disabled until the owner enables it on the Safety page.",
+    "Snapshots are decoded from PNG in memory only; the service retains no pixel data, and the evidence payload is bounded and renderer-safe.",
+    "Local dedup (64-bit dHash) reports duplicates instead of creating new observations, and a monotonic sliding-window rate limit bounds ingestion.",
+    "Observations are evidence for the owner only in this slice; nothing feeds ContextBundle, chat prompts, memory or tools yet."
+  ],
+  "allowed_dependencies": [
+    "Python standard library only (zlib PNG decode, hashlib, asyncio); no new Python or Node packages."
+  ],
+  "oss_candidates": [
+    "https://github.com/PaddlePaddle/PaddleOCR (later slice, pending license/VRAM review)",
+    "https://github.com/RapidAI/RapidOCR (later slice, onnxruntime-based alternative)"
+  ],
+  "acceptance_criteria": [
+    "Perception worker unit tests cover config bounds, PNG subset decoding and rejection, dHash dedup, rate limiting, TTL at T-epsilon/T/T+epsilon and fail-closed policy paths.",
+    "Control-plane route tests prove: feature flag off denies, ask requires owner confirmation, confirmed snapshots create TTL-bounded observations, duplicates are flagged, wrong content types are rejected, and a missing service fails closed.",
+    "Dev Console has a Quan sát page with explicit-consent capture via the browser display picker, an observation list with live TTL countdown, and honest OCR contract-ready labeling.",
+    "Fast unit suite, node --check on app.js and the Dev Console startup smoke stay green on the owner machine."
+  ],
+  "required_test_commands": [
+    "pnpm test:perception",
+    "pnpm test:fast",
+    "pnpm smoke:dev-console"
+  ],
+  "latency_or_quality_budget": {
+    "screen_observation_ttl_seconds_max": 15,
+    "snapshot_max_bytes": 1000000,
+    "snapshot_rate_per_minute": 12,
+    "expired_observation_leak_tolerance": 0
+  },
+  "output_artifact_dir": "artifacts/verification/M08/"
+}

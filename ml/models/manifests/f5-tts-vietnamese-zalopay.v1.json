@@ -1,0 +1,90 @@
+{
+  "schema_version": "1.0",
+  "manifest_id": "hina.tts.f5-zalopay-vietnamese.v1",
+  "artifact_kind": "model_weights_configuration_and_vocoder",
+  "model_id": "zalopay/vietnamese-tts",
+  "source_url": "https://huggingface.co/zalopay/vietnamese-tts",
+  "revision": "1dc4967edb4549e40d820429e487eeeacee8bc08",
+  "observed_at": "2026-07-27",
+  "files": [
+    {
+      "path": "model_1290000.pt",
+      "size_bytes": 5394345740,
+      "sha256": "8f4aa91017f30815063bb5d3fa012f0c40598971da77498219a4172fce54e9f5"
+    },
+    {
+      "path": "vocab.txt",
+      "size_bytes": 11330,
+      "sha256": "eeb76d2622fa1809b7ee51cb7a99a950f19b77867a7499e45cc0894a3119bae9"
+    }
+  ],
+  "vocoder": {
+    "model_id": "charactr/vocos-mel-24khz",
+    "source_url": "https://huggingface.co/charactr/vocos-mel-24khz",
+    "revision": "0feb3fdd929bcd6649e0e7c5a688cf7dd012ef21",
+    "license_spdx": "MIT",
+    "files": [
+      {
+        "path": "config.yaml",
+        "size_bytes": 461,
+        "sha256": "da9033922f969a47f0c160010226919e59f27761fd5066f3828d46de6650b0fc"
+      },
+      {
+        "path": "pytorch_model.bin",
+        "size_bytes": 54365991,
+        "sha256": "97ec976ad1fd67a33ab2682d29c0ac7df85234fae875aefcc5fb215681a91b2a"
+      }
+    ]
+  },
+  "licenses": {
+    "runtime_code_spdx": "MIT",
+    "weights_spdx": "CC-BY-4.0",
+    "vocoder_weights_spdx": "MIT",
+    "model_card_url": "https://huggingface.co/zalopay/vietnamese-tts",
+    "commercial_use_allowed_by_declared_weight_license": true,
+    "redistribution_requires_attribution": true
+  },
+  "lineage": {
+    "architecture": "F5-TTS Diffusion Transformer with ConvNeXt V2 and Vocos",
+    "known_training_data_terms": "The model card states 200+ hours of public Vietnamese Voice and YouTube data but does not publish a complete item-level training-data inventory.",
+    "owner_data_included": false,
+    "runtime_voice_conditioning": "Owner-authorized synthetic Hina reference; no weight fine-tuning"
+  },
+  "runtime": {
+    "provider": "f5-tts",
+    "provider_version": "1.1.22",
+    "tested_device": "cuda",
+    "tested_precision": "float16",
+    "sample_rate_hz": 24000,
+    "cache_path": "var/cache/models/f5-tts",
+    "selected_by_desktop_launcher": false
+  },
+  "quality_evaluation": {
+    "decision": "rejected",
+    "reason": "Both tested checkpoints generated nonsense or noise with transcript-aligned Hina references; round-trip Vietnamese STT did not match the requested text.",
+    "tested_checkpoints": [
+      {
+        "revision": "1dc4967edb4549e40d820429e487eeeacee8bc08",
+        "path": "model_1290000.pt",
+        "result": "rejected"
+      },
+      {
+        "revision": "c3acb992b579ddc0ebdeb47fee5551871144d438",
+        "path": "model_960000.pt",
+        "size_bytes": 5394349386,
+        "sha256": "c69a0ea099d1b19d16ced4be8b2482769bdec06604853bc9368db612ed7bd985",
+        "result": "rejected"
+      }
+    ],
+    "selected_fallback": "pnnbao-ump/VieNeu-TTS-v3-Turbo on CUDA"
+  },
+  "status": {
+    "download_authorized_by_owner": true,
+    "download_on_first_use": true,
+    "local_owner_testing_ready": false,
+    "quality_rejected": true,
+    "quality_promoted": false,
+    "production_ready": false,
+    "requires_owner_listening_and_training_data_provenance_review": true
+  }
+}

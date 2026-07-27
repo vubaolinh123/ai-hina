@@ -22,11 +22,13 @@ PERSONA_PATH = ROOT / "packages" / "text-brain" / "personas" / "hina.v1.json"
 SPEECH_ROOT = ROOT / "workers" / "speech"
 MEMORY_ROOT = ROOT / "packages" / "memory"
 AVATAR_ROOT = ROOT / "packages" / "avatar"
+PERCEPTION_ROOT = ROOT / "workers" / "perception"
 sys.path.insert(0, str(ROOT / "packages" / "contracts" / "src"))
 sys.path.insert(0, str(SAFETY_ROOT / "src"))
 sys.path.insert(0, str(SPEECH_ROOT / "src"))
 sys.path.insert(0, str(MEMORY_ROOT / "src"))
 sys.path.insert(0, str(AVATAR_ROOT / "src"))
+sys.path.insert(0, str(PERCEPTION_ROOT / "src"))
 sys.path.insert(0, str(APP_ROOT / "src"))
 
 from hina_core.runtime import (  # noqa: E402

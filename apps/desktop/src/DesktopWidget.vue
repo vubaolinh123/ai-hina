@@ -27,6 +27,7 @@ let safetyRefreshPending = false;
 let controlRetryAt = 0;
 let controlRetryDelay = 1_000;
 let recording: MicrophoneRecorder | null = null;
+let unsubscribeWidgetHover: (() => void) | null = null;
 let activeTurnId: string | null = null;
 let finishingCapture = false;
 let captureMode: "manual" | "auto" | null = null;
@@ -404,6 +405,11 @@ function stopPolling(): void {
 }
 
 onMounted(async () => {
+  // Real mouse moves over the drag-region avatar never reach this renderer;
+  // the main process watches the cursor and pushes hover state instead.
+  unsubscribeWidgetHover = window.hinaDesktop.onWidgetHover((value) => {
+    hovered.value = value;
+  });
   await Promise.all([refreshAvatar(), refreshSafety()]);
   avatarTimer = window.setInterval(refreshAvatar, 250);
   safetyTimer = window.setInterval(refreshSafety, 1_000);
@@ -412,6 +418,8 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   window.removeEventListener("beforeunload", stopPolling);
+  unsubscribeWidgetHover?.();
+  unsubscribeWidgetHover = null;
   stopPolling();
   streamCleanup();
 });
@@ -428,7 +436,6 @@ onBeforeUnmount(() => {
     @keydown="blurWidget"
     @pointerenter="hovered = true"
     @pointermove.passive="hovered = true"
-    @pointerleave="hovered = false"
   >
     <section
       class="widget-avatar-surface"

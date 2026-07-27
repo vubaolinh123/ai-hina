@@ -2,9 +2,10 @@
 
 This is the owner-facing local application for manually exercising the real
 M01 runtime, M02 safety policy, M03 local text brain, M04 local speech input,
-M05 local Vietnamese speech output, M06 consent-gated long-term memory and the
-M07 renderer-safe avatar stage. It contains no simulated AI response,
-transcript, audio, memory or backend activity.
+M05 local Vietnamese speech output, M06 consent-gated long-term memory, the
+M07 renderer-safe avatar stage and the M08 owner-consented perception spine.
+It contains no simulated AI response, transcript, audio, memory or backend
+activity.
 
 From the repository root:
 
@@ -29,6 +30,8 @@ The UI is an admin-style hash-routed dashboard:
 - `#/companion` groups text chat, STT and TTS;
 - `#/avatar` renders typed turn/TTS cues and operator safety controls;
 - `#/memory` handles candidate consent and active memory lifecycle;
+- `#/perception` captures one owner-consented screen snapshot at a time and
+  lists fresh observations with a live TTL countdown;
 - `#/safety` contains policy, sanitation, moderation and audit controls;
 - `#/runtime` groups events, replay, binary frames, metrics, errors and activity.
 
@@ -44,7 +47,7 @@ the real loopback endpoint, run VAD and pinned faster-whisper, then copy a real
 Vietnamese transcript into the chat composer without auto-sending it. Raw audio
 is never persisted.
 M05 can synthesize owner-entered text or completed moderated chat responses
-through pinned VieNeu ONNX int8, play the returned 48 kHz mono WAV, and cancel
+through pinned VieNeu-TTS v3 Turbo on CUDA, play the returned 48 kHz mono WAV, and cancel
 or stop playback when the owner starts speaking. Complete text passes pre-TTS
 moderation before inference; voice cloning and runtime audio/text retention are
 disabled.
@@ -60,6 +63,12 @@ intensity. This is an explicitly labeled audio-spectral heuristic, not
 phoneme-accurate alignment. Manual visual checks are labeled `manual-preview`.
 The web stage keeps the repository-original SVG/CSS fallback; the separate
 Electron/Vue app loads a licensed VRM 1.0 development sample.
+M08 ingests a single browser-picker-consented PNG snapshot per owner action,
+keeps only in-memory evidence (dimensions, SHA-256, dHash, mean luminance),
+enforces the `perception` feature flag plus `perception.observe` policy with
+fail-closed behavior, and expires every observation after at most 15 seconds
+of monotonic time. No pixels are persisted and OCR remains contract-ready
+until a reviewed dependency lands in a later M08 slice.
 
 After updating the source, restart the running console so its Python process
 loads the new safety, text-brain, speech, memory and avatar modules.

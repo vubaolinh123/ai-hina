@@ -18,6 +18,21 @@ Model weights are licensed and tracked separately. The M04 default is
 `536b0662742c02347bc0e980a01041f333bce120`; see its model manifest for the
 weight hash and terms.
 
+## F5-TTS 1.1.22
+
+- Upstream: https://github.com/SWivid/F5-TTS
+- Distribution: `f5-tts==1.1.22`
+- PyPI wheel SHA-256:
+  `f0505dfb5463645caa526bace346ed1c89bcc9acb9ef42fdffd56c2c4c0a09d1`
+- License: MIT
+- Use: runtime dependency behind Hina's local Vietnamese TTS provider
+
+No F5-TTS source file or snippet is copied into this repository. Hina invokes
+the pinned package through its inference primitives and decodes the fixed WAV
+with soundfile on Windows before CUDA inference. The ZaloPay Vietnamese model
+and Vocos weights are licensed and hashed separately in
+`ml/models/manifests/f5-tts-vietnamese-zalopay.v1.json`.
+
 ## VieNeu-TTS 3.2.3
 
 - Upstream: https://github.com/pnnbao97/VieNeu-TTS

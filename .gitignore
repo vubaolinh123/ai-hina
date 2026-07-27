@@ -41,6 +41,7 @@ ml/datasets/curated/
 assets/voices/*
 !assets/voices/.gitkeep
 !assets/voices/hina-anime-elevenlabs-reference.wav
+!assets/voices/hina-anime-elevenlabs-f5-reference.wav
 # Owner-provided raw voice input stays local; the canonical reference is hash-bound above.
 voice_demo/
 *.gguf

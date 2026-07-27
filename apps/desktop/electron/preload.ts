@@ -4,6 +4,7 @@ const CHANNELS = Object.freeze({
   windowMode: "hina:window:mode",
   widgetStatus: "hina:widget:status",
   widgetControl: "hina:widget:control",
+  widgetHover: "hina:widget:hover",
   avatarStatus: "hina:avatar:status",
   avatarCue: "hina:avatar:cue",
   avatarReset: "hina:avatar:reset",
@@ -25,6 +26,18 @@ const hinaDesktop = Object.freeze({
   getWidgetStatus: () => ipcRenderer.invoke(CHANNELS.widgetStatus),
   applyWidgetControl: (control: unknown) =>
     ipcRenderer.invoke(CHANNELS.widgetControl, control),
+  onWidgetHover: (listener: (hovered: boolean) => void) => {
+    const wrapped = (
+      _event: Electron.IpcRendererEvent,
+      hovered: unknown,
+    ): void => {
+      listener(hovered === true);
+    };
+    ipcRenderer.on(CHANNELS.widgetHover, wrapped);
+    return () => {
+      ipcRenderer.removeListener(CHANNELS.widgetHover, wrapped);
+    };
+  },
   getAvatarStatus: () => ipcRenderer.invoke(CHANNELS.avatarStatus),
   applyAvatarCue: (cue: unknown) => ipcRenderer.invoke(CHANNELS.avatarCue, cue),
   resetAvatar: () => ipcRenderer.invoke(CHANNELS.avatarReset),

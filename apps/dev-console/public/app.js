@@ -30,6 +30,9 @@ const state = {
   avatarPublishedViseme: "sil",
   avatarPublishedIntensity: 0,
   avatarLastVisemeCueAt: 0,
+  perceptionObservations: [],
+  perceptionCountdownTimer: null,
+  perceptionBusy: false,
   sessionId: localStorage.getItem("hina.console.session") || crypto.randomUUID(),
 };
 
@@ -164,6 +167,14 @@ const elements = Object.fromEntries(
     "searchMemoryButton",
     "memorySearchResult",
     "memoryRecordList",
+    "refreshPerceptionButton",
+    "clearPerceptionButton",
+    "perceptionStatusBox",
+    "capturePerceptionButton",
+    "perceptionFileInput",
+    "perceptionLabelInput",
+    "perceptionCaptureResult",
+    "perceptionObservationList",
     "refreshAvatarButton",
     "avatarViewport",
     "avatarAssetBadge",
@@ -207,6 +218,11 @@ const dashboardPages = {
     eyebrow: "M07 / AVATAR STAGE",
     title: "Avatar Stage & điều khiển",
     description: "Xem state hội thoại thật, chuyển động miệng theo WAV TTS đang phát và dùng các điều khiển an toàn của operator.",
+  },
+  perception: {
+    eyebrow: "M08 / OWNER-CONSENTED PERCEPTION",
+    title: "Quan sát màn hình",
+    description: "Chụp một khung hình có sự đồng ý, xem evidence và TTL 15 giây; không lưu ảnh, không OCR ở slice này.",
   },
   safety: {
     eyebrow: "M02 / POLICY AUTHORITY",
@@ -261,6 +277,9 @@ function renderDashboardRoute() {
   elements.dashboardMain.focus({ preventScroll: true });
   if (page === "avatar") {
     refreshAvatar();
+  }
+  if (page === "perception") {
+    refreshPerception();
   }
 }
 
@@ -378,6 +397,263 @@ function renderAvatarStatus(status) {
   );
   if (!state.avatarPlaybackActive) {
     setAvatarMouth(status.state === "speaking" ? status.intensity : 0);
+  }
+}
+
+function renderPerceptionStatus(status) {
+  const flagEnabled = state.safetyStatus?.state.featureFlags?.perception === true;
+  const lines = [
+    `Cờ an toàn “Quan sát màn hình”: ${flagEnabled ? "ĐANG BẬT" : "đang tắt (bật ở trang An toàn)"}`,
+    `Chế độ: ${status.capture.mode} · tự động chụp: ${status.capture.autoCapture ? "có" : "không"}`,
+    `TTL: ${status.configured.ttlSeconds}s (tối đa ${status.configured.maxTtlSeconds}s) · đồng hồ: ${status.observation.expiryClock}`,
+    `Quan sát còn hạn: ${status.observation.freshCount} · đã hết hạn: ${status.observation.expiredTotal} · duplicate: ${status.observation.duplicateTotal}`,
+    `Giới hạn: ${status.rate.limitPerMinute} ảnh/phút (còn ${status.rate.remainingThisMinute}) · ${Math.round(status.configured.maxSnapshotBytes / 1024)} KB/ảnh`,
+    `OCR: ${status.ocr.state} (${status.ocr.provider}) · lưu ảnh: ${status.retention.snapshotPersistence ? "có" : "không"}`,
+  ];
+  elements.perceptionStatusBox.textContent = lines.join("\n");
+  elements.perceptionStatusBox.classList.remove("empty");
+}
+
+function renderPerceptionObservations() {
+  const list = elements.perceptionObservationList;
+  list.replaceChildren();
+  const nowMs = performance.now();
+  const visible = state.perceptionObservations.filter((entry) => {
+    const remaining = entry.remainingSeconds - (nowMs - entry.receivedAtMs) / 1000;
+    return remaining > 0;
+  });
+  if (!visible.length) {
+    list.classList.add("empty");
+    const item = document.createElement("li");
+    item.className = "activity-entry";
+    item.textContent = "Không có quan sát còn hạn. Quan sát cũ đã tự hết hạn và không được dùng làm ngữ cảnh hiện tại.";
+    list.append(item);
+    return;
+  }
+  list.classList.remove("empty");
+  for (const entry of visible) {
+    const remaining = Math.max(
+      0,
+      entry.remainingSeconds - (nowMs - entry.receivedAtMs) / 1000,
+    );
+    const item = document.createElement("li");
+    item.className = "activity-entry perception-observation";
+    const meta = document.createElement("div");
+    meta.className = "entry-meta";
+    const title = document.createElement("span");
+    title.textContent = entry.observation.label
+      ? `${entry.observation.label}`
+      : `Ảnh ${entry.observation.evidence.width}×${entry.observation.evidence.height}`;
+    const ttl = document.createElement("span");
+    ttl.className = "perception-ttl";
+    ttl.textContent = `còn ${remaining.toFixed(1)}s`;
+    meta.append(title, ttl);
+    const detail = document.createElement("p");
+    detail.className = "entry-message";
+    detail.textContent =
+      `${entry.observation.kind} · ${entry.observation.trustLevel} · ` +
+      `${entry.observation.evidence.width}×${entry.observation.evidence.height} · ` +
+      `sha256 ${entry.observation.evidence.sha256.slice(0, 12)}… · ` +
+      `dhash ${entry.observation.evidence.dhash}`;
+    item.append(meta, detail);
+    list.append(item);
+  }
+}
+
+function startPerceptionCountdown() {
+  if (state.perceptionCountdownTimer !== null) return;
+  state.perceptionCountdownTimer = setInterval(() => {
+    if (document.hidden) return;
+    renderPerceptionObservations();
+    const nowMs = performance.now();
+    state.perceptionObservations = state.perceptionObservations.filter((entry) => {
+      const remaining = entry.remainingSeconds - (nowMs - entry.receivedAtMs) / 1000;
+      return remaining > -2;
+    });
+  }, 500);
+}
+
+async function refreshPerception({ logFailure = false } = {}) {
+  if (state.perceptionBusy) return;
+  state.perceptionBusy = true;
+  try {
+    const status = await fetchJson("/v1/perception/status");
+    renderPerceptionStatus(status);
+    const listing = await fetchJson("/v1/perception/observations");
+    const receivedAtMs = performance.now();
+    state.perceptionObservations = listing.observations.map((observation) => ({
+      observation,
+      remainingSeconds: observation.remainingSeconds,
+      receivedAtMs,
+    }));
+    renderPerceptionObservations();
+    startPerceptionCountdown();
+  } catch (error) {
+    elements.perceptionStatusBox.textContent = `Không đọc được perception backend: ${error.message}`;
+    if (logFailure) {
+      addActivity(`Perception status lỗi: ${error.message}`, "error");
+    }
+  } finally {
+    state.perceptionBusy = false;
+  }
+}
+
+async function submitPerceptionSnapshot(blob) {
+  const correlationId = crypto.randomUUID();
+  const label = elements.perceptionLabelInput.value.trim();
+  const headers = {
+    Accept: "application/json",
+    "Content-Type": "image/png",
+    "X-Hina-Correlation-Id": correlationId,
+    "X-Hina-Session-Id": state.sessionId,
+    "X-Hina-Source": "owner.console",
+    "X-Hina-Owner-Confirmed": "true",
+  };
+  if (label) {
+    headers["X-Hina-Label"] = encodeURIComponent(label);
+  }
+  const response = await fetch("/v1/perception/snapshots", {
+    method: "POST",
+    cache: "no-store",
+    headers,
+    body: blob,
+  });
+  const result = await response.json();
+  if (!response.ok) {
+    throw new Error(`${result.errorCode || response.status}: ${result.message || "snapshot failed"}`);
+  }
+  return result;
+}
+
+async function encodeSnapshotPng(bitmap) {
+  const maxSide = 1280;
+  let scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const width = Math.max(16, Math.round(bitmap.width * scale));
+    const height = Math.max(16, Math.round(bitmap.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    canvas.getContext("2d").drawImage(bitmap, 0, 0, width, height);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+    if (blob && blob.size <= 1_000_000) {
+      return blob;
+    }
+    scale *= 0.7;
+  }
+  throw new Error("không nén được ảnh xuống dưới 1 MB");
+}
+
+async function capturePerceptionSnapshot() {
+  elements.capturePerceptionButton.disabled = true;
+  let stream = null;
+  try {
+    stream = await navigator.mediaDevices.getDisplayMedia({
+      video: { frameRate: 1 },
+      audio: false,
+    });
+    const track = stream.getVideoTracks()[0];
+    const bitmap = await grabDisplayFrame(track, stream);
+    const blob = await encodeSnapshotPng(bitmap);
+    const result = await submitPerceptionSnapshot(blob);
+    renderPerceptionCaptureResult(result);
+    await refreshPerception();
+  } catch (error) {
+    if (error.name === "NotAllowedError") {
+      addActivity("Bạn đã hủy hộp thoại chia sẻ màn hình; không có gì được chụp.", "info");
+    } else {
+      elements.perceptionCaptureResult.textContent = `Chụp thất bại: ${error.message}`;
+      elements.perceptionCaptureResult.classList.remove("empty");
+      addActivity(`Perception snapshot lỗi: ${error.message}`, "error");
+    }
+  } finally {
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+    }
+    elements.capturePerceptionButton.disabled = false;
+  }
+}
+
+async function grabDisplayFrame(track, stream) {
+  if (window.ImageCapture) {
+    try {
+      return await new ImageCapture(track).grabFrame();
+    } catch {
+      // fall through to the <video> path below
+    }
+  }
+  const video = document.createElement("video");
+  video.srcObject = stream;
+  video.muted = true;
+  await video.play();
+  await new Promise((resolve) => {
+    if (video.readyState >= 2) {
+      resolve();
+    } else {
+      video.addEventListener("loadeddata", resolve, { once: true });
+    }
+  });
+  const bitmap = await createImageBitmap(video);
+  video.pause();
+  video.srcObject = null;
+  return bitmap;
+}
+
+function renderPerceptionCaptureResult(result) {
+  const box = elements.perceptionCaptureResult;
+  box.classList.remove("empty");
+  if (result.status === "duplicate") {
+    box.textContent = [
+      "Ảnh trùng với một quan sát còn hạn — không tạo bản ghi mới.",
+      `Khoảng cách hash: ${result.dedup.hammingDistance} (ngưỡng ${result.dedup.threshold})`,
+      `Quan sát gốc: ${result.dedup.matchedObservationId}`,
+      `Correlation: ${result.correlationId}`,
+    ].join("\n");
+    addActivity("Perception: ảnh trùng, dùng lại quan sát còn hạn.", "info");
+    return;
+  }
+  const observation = result.observation;
+  box.textContent = [
+    `Đã tạo quan sát ${observation.observationId}`,
+    `Kích thước: ${observation.evidence.width}×${observation.evidence.height} · ${observation.evidence.bytes} byte`,
+    `TTL: ${observation.ttlSeconds}s · hết hạn lúc ${observation.expiresAt}`,
+    `Policy: ${result.policy.decision} (${result.policy.reasonCode})`,
+    `Correlation: ${result.correlationId}`,
+  ].join("\n");
+  addActivity(
+    `Perception: đã quan sát ${observation.evidence.width}×${observation.evidence.height}, TTL ${observation.ttlSeconds}s.`,
+    "success",
+  );
+}
+
+async function submitPerceptionFile() {
+  const file = elements.perceptionFileInput.files?.[0];
+  if (!file) return;
+  try {
+    if (file.type !== "image/png") {
+      throw new Error("chỉ nhận ảnh PNG");
+    }
+    const bitmap = await createImageBitmap(file);
+    const blob = await encodeSnapshotPng(bitmap);
+    const result = await submitPerceptionSnapshot(blob);
+    renderPerceptionCaptureResult(result);
+    await refreshPerception();
+  } catch (error) {
+    elements.perceptionCaptureResult.textContent = `Không gửi được ảnh: ${error.message}`;
+    elements.perceptionCaptureResult.classList.remove("empty");
+    addActivity(`Perception snapshot lỗi: ${error.message}`, "error");
+  } finally {
+    elements.perceptionFileInput.value = "";
+  }
+}
+
+async function clearPerceptionObservations() {
+  try {
+    const result = await postJson("/v1/perception/clear", { action: "clear" });
+    addActivity(`Perception: đã xóa ${result.removed} quan sát.`, "success");
+    await refreshPerception();
+  } catch (error) {
+    addActivity(`Perception clear lỗi: ${error.message}`, "error");
   }
 }
 
@@ -2188,6 +2464,11 @@ elements.exportMemoryButton.addEventListener("click", exportMemory);
 elements.rebuildMemoryButton.addEventListener("click", rebuildMemory);
 elements.refreshAvatarButton.addEventListener("click", () =>
   refreshAvatar({ logFailure: true }));
+elements.refreshPerceptionButton.addEventListener("click", () =>
+  refreshPerception({ logFailure: true }));
+elements.capturePerceptionButton.addEventListener("click", capturePerceptionSnapshot);
+elements.perceptionFileInput.addEventListener("change", submitPerceptionFile);
+elements.clearPerceptionButton.addEventListener("click", clearPerceptionObservations);
 elements.previewAvatarButton.addEventListener("click", previewAvatarState);
 elements.resetAvatarButton.addEventListener("click", resetAvatarState);
 elements.avatarMuteButton.addEventListener("click", () => {
@@ -2219,6 +2500,9 @@ window.addEventListener("beforeunload", () => {
   }
   if (state.avatarAudioFrame !== null) {
     cancelAnimationFrame(state.avatarAudioFrame);
+  }
+  if (state.perceptionCountdownTimer !== null) {
+    clearInterval(state.perceptionCountdownTimer);
   }
   state.avatarAudioContext?.close();
 });

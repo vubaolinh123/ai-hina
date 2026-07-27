@@ -6,8 +6,19 @@
 
 ## Runnable result
 
+### Current quality decision — VieNeu CUDA default, F5 rejected
+
+The desktop/control-plane default selects the pinned VieNeu-TTS v3 Turbo
+checkpoint on CUDA. It conditions on the owner-authorized Hina synthetic
+reference and returns 48 kHz mono WAV.
+
+The ZaloPay F5 provider remains experimental and is not selected by the
+launcher. Both `model_960000.pt` from the model-card revision and the current
+`model_1290000.pt` produced nonsense/noise in real Hina reference tests; their
+round-trip transcripts did not match the requested Vietnamese text.
+
 The Dev Console synthesizes actual local Vietnamese audio through a pinned
-VieNeu-TTS v3 Turbo CPU/ONNX provider. The complete utterance must pass the
+VieNeu-TTS v3 Turbo CUDA provider. The complete utterance must pass the
 existing `pre_tts` moderation surface before provider invocation. Generated
 audio stays in memory and is returned as binary WAV; it is not stored or used
 for training.
