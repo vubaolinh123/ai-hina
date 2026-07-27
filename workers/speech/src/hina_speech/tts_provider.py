@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import gc
 import hashlib
 import importlib.util
 import math
@@ -62,6 +63,8 @@ class TtsProvider(Protocol):
         chunks: tuple[str, ...],
         cancel_event: threading.Event,
     ) -> TtsSynthesis: ...
+
+    async def unload(self) -> None: ...
 
     async def close(self) -> None: ...
 
@@ -225,8 +228,20 @@ class VieneuTtsProvider:
             await _wait_for_native_worker(active)
         if drain is not None:
             await asyncio.shield(drain)
+        await self.unload()
         self._executor.shutdown(wait=True, cancel_futures=True)
-        self._model = None
+
+    async def unload(self) -> None:
+        drain = self._drain_task
+        if drain is not None and drain is not asyncio.current_task():
+            await asyncio.shield(drain)
+        async with self._inference_lock:
+            with self._model_lock:
+                model = self._model
+                self._model = None
+        if model is not None:
+            del model
+        _release_cuda_memory()
 
     async def _finish_drain(self, worker: Future[TtsSynthesis]) -> None:
         try:
@@ -461,6 +476,21 @@ def _create_pinned_vieneu(
     model.max_batch_size = 1
     model._batch_engine = None
     return model
+
+
+def _release_cuda_memory() -> None:
+    """Return unreferenced model allocations before another GPU phase starts."""
+    gc.collect()
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
+    except Exception:
+        # Unload is best-effort during shutdown/preemption. Admission telemetry
+        # remains the source of truth and will still reject an unsafe request.
+        return
 
 
 class _NumpyOnnxSpeakerEncoder:

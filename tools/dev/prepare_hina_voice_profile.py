@@ -1,14 +1,13 @@
-"""Audit owner-provided MP3 clips and build VieNeu/F5-TTS reference profiles.
+"""Audit owner-provided MP3 clips and build VoxCPM2/VieNeu/F5 reference profiles.
 
-VieNeu-TTS v3 Turbo does not fine-tune its base weights from a folder of MP3s.
-It enrolls one short reference (up to eight seconds) and reuses the resulting
-speaker embedding/reference codes. This tool therefore:
+VoxCPM2 and VieNeu do not fine-tune their base weights from a folder of MP3s.
+They condition on one short reference. This tool therefore:
 
 * audits every MP3 in ``voice_demo`` with ffprobe and SHA-256;
-* chooses the longest clean clip that fits VieNeu's eight-second limit;
-* converts that clip to a deterministic 44.1 kHz mono WAV for VieNeu; and
+* chooses the longest clean clip that fits the eight-second reference window;
+* converts that clip to a deterministic 44.1 kHz mono WAV for VoxCPM2/VieNeu;
 * converts the owner master ``anime_voice.mp3`` to a transcript-aligned 24 kHz
-  reference WAV for F5-TTS; and
+  reference WAV for the rejected F5-TTS experiment; and
 * writes an auditable manifest containing *all* supplied clips.
 
 The manifest is intentionally generated under ``var/`` (ignored by git) so
@@ -145,7 +144,7 @@ def build_profile(
             eligible.append((duration, clip))
 
     if not eligible:
-        raise RuntimeError("no clip fits the VieNeu reference window (0.5-8 seconds)")
+        raise RuntimeError("no clip fits the TTS reference window (0.5-8 seconds)")
     eligible.sort(key=lambda item: (-item[0], item[1].name.casefold()))
     selected_duration, selected = eligible[0]
 
@@ -172,7 +171,7 @@ def build_profile(
 
     profile = {
         "schemaVersion": 1,
-    "provider": "vieneu",
+        "providers": ["voxcpm2", "vieneu", "f5-tts"],
         "modelReferenceLimitSeconds": MAX_REFERENCE_SECONDS,
         "anchorSampleRateHz": REFERENCE_SAMPLE_RATE_HZ,
         "sourceDirectory": str(input_dir),
@@ -183,6 +182,7 @@ def build_profile(
             "durationSeconds": selected_duration,
             "sha256": _sha256(selected),
             "anchor": anchor.name,
+            "anchorSha256": _sha256(anchor),
         },
         "f5Reference": {
             "file": master.name,
@@ -194,9 +194,10 @@ def build_profile(
         "clips": entries,
         "notes": [
             "All owner-provided clips are audited and retained in this manifest.",
-            "VieNeu v3 Turbo uses one <=8 second anchor; it does not fine-tune base weights from MP3 folders.",
-            "The anchor is selected deterministically by longest eligible clip to preserve natural prosody.",
-            "F5-TTS uses the transcript-aligned 12-second Hina master reference; the complete MP3 folder is audit input, not a fine-tuning dataset.",
+            "VoxCPM2 and VieNeu use one <=8 second anchor; neither fine-tunes base weights from MP3 folders.",
+            "The anchor is selected deterministically by longest eligible clip to preserve natural prosody and is bound to SHA-256.",
+            "F5-TTS uses the transcript-aligned 12-second Hina master reference only for its rejected experiment.",
+            "The complete MP3 folder is audit input, not a fine-tuning dataset.",
         ],
     }
     manifest.write_text(json.dumps(profile, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

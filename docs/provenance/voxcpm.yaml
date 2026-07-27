@@ -1,0 +1,25 @@
+name: voxcpm
+upstream_url: https://github.com/OpenBMB/VoxCPM
+distribution:
+  kind: pypi-wheel
+  name: voxcpm
+  version: 2.0.3
+  filename: voxcpm-2.0.3-py3-none-any.whl
+  sha256: 24da58a30d094a9e9a7ead450ae9cffda0d31eaeba620b61ad99179dd87e486b
+license_spdx: Apache-2.0
+copyright: "Copyright OpenBMB and VoxCPM contributors"
+imported_at: 2026-07-27
+original_paths: []
+destination_paths:
+  - pyproject.toml
+  - uv.lock
+  - workers/speech/src/hina_speech/voxcpm2_tts_provider.py
+modifications:
+  - "Pinned runtime dependency; no upstream source file or snippet was copied."
+  - "Wrapped the official VoxCPM.from_pretrained and generate APIs behind Hina's TtsProvider boundary."
+  - "Restricted inference to CUDA/BF16 and one SHA-256-bound owner-authorized synthetic reference voice."
+  - "Added bounded Vietnamese chunking, per-segment audio validation, bad-case retry, cancellation, scheduler admission and deterministic unload."
+  - "The inference-only Hina environment overrides optional datasets/fsspec demo-training dependency versions; the official speech inference path was verified by real CUDA smoke tests."
+model_manifest: ml/models/manifests/voxcpm2-2b.v1.json
+reviewed_by: primary_orchestrator
+approved_by: primary_orchestrator_for_local_owner_testing

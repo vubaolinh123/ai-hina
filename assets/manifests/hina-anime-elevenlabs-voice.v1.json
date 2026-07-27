@@ -2,7 +2,7 @@
   "schemaVersion": "1.0",
   "assetId": "hina-anime-elevenlabs-voice-v1",
   "displayName": "Hina Anime AI v1",
-  "purpose": "Fixed local VieNeu and F5-TTS reference enrollment for Hina speech output",
+  "purpose": "Fixed local VoxCPM2, VieNeu and experimental F5-TTS reference conditioning for Hina speech output",
   "provenance": {
     "origin": "Owner-generated synthetic voice created with ElevenLabs",
     "realPersonImitation": false,
@@ -30,6 +30,17 @@
     "sampleFormat": "pcm_s16le",
     "referenceTranscript": "Xin chào mọi người, Hina có mặt rồi đây, hôm nay mọi người đi làm, đi học về có mệt lắm không? Cứ từ từ pha một ly nước ấm, rồi ngồi xuống đây tâm sự với mình nhé."
   },
+  "profileAnchor": {
+    "path": "var/cache/voices/hina/hina-profile-anchor.wav",
+    "sha256": "5aceeaae5342742f5c11c2f5af76ebbaea01d81a1fd76fc0daec17e16c092161",
+    "sourceFile": "voice_demo/ElevenLabs_2026-07-25T12_40_23_Anime Voice 18 age_gen_sp100_s50_sb75_v3.mp3",
+    "sourceSha256": "c8cc4049e75da100756f37f5c8101640cb0597bae707c267721884cf8581dad7",
+    "durationSeconds": 7.549388,
+    "sampleRateHz": 44100,
+    "channels": 1,
+    "sampleFormat": "pcm_s16le",
+    "committed": false
+  },
   "consent": {
     "authorizedUse": "Local Hina AI speech synthesis",
     "authorizedBy": "repository owner",
@@ -37,15 +48,20 @@
     "deletionProcedure": "Delete the reference WAV and this manifest, then remove the configured Hina reference voice."
   },
   "processing": {
-    "method": "Zero-shot VieNeu/F5-TTS reference enrollment at runtime; no model-weight training or fine-tuning",
+    "method": "Zero-shot VoxCPM2/VieNeu/F5-TTS reference conditioning at runtime; no model-weight training or fine-tuning",
     "sourceTool": "ffmpeg",
     "sourceArguments": "-ss 37.050 -t 8.000 -ac 1 -ar 44100 -c:a pcm_s16le",
-    "generatedAudioWatermark": true,
+    "generatedAudioWatermark": {
+      "voxcpm2": false,
+      "vieneu": true,
+      "f5-tts": false
+    },
     "rawSourceCommitted": false
   },
   "restrictions": [
     "No arbitrary reference upload",
     "No public voice-cloning endpoint",
-    "Local owner use only"
+    "Local owner use only",
+    "VoxCPM2 output is not watermarked and must not be exposed as a public voice-cloning service"
   ]
 }

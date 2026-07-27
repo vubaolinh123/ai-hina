@@ -202,17 +202,46 @@ class HinaRuntimeApplication:
             if tts_service is None and safety_policy is not None:
                 from hina_speech import (
                     F5TtsProvider,
+                    ScheduledTtsProvider,
                     SpeechOutputService,
                     TtsConfig,
                     VieneuTtsProvider,
+                    VoxCpm2TtsProvider,
                 )
 
                 tts_config = TtsConfig.from_env(root=ROOT)
-                tts_provider = (
-                    F5TtsProvider(tts_config)
-                    if tts_config.provider == "f5-tts"
-                    else VieneuTtsProvider(tts_config)
-                )
+                if tts_config.provider == "f5-tts":
+                    native_tts_provider = F5TtsProvider(tts_config)
+                elif tts_config.provider == "voxcpm2":
+                    native_tts_provider = VoxCpm2TtsProvider(tts_config)
+                else:
+                    native_tts_provider = VieneuTtsProvider(tts_config)
+                scheduler = getattr(model_gateway, "scheduler", None)
+                if tts_config.device == "cuda":
+                    if scheduler is None:
+                        raise RuntimeError("CUDA TTS requires the shared local resource scheduler")
+                    from hina_text_brain import LocalResourceRequest
+
+                    async def acquire_tts_lease(unload: Any) -> Any:
+                        return await scheduler.acquire(
+                            LocalResourceRequest(
+                                owner=f"tts.{tts_config.provider}",
+                                vram_mib=tts_config.model_vram_mib,
+                                ram_mib=tts_config.model_ram_mib,
+                                priority=60,
+                                ttl_seconds=tts_config.lease_ttl_seconds,
+                                preemptible=True,
+                            ),
+                            wait_timeout_seconds=5,
+                            on_preempt=unload,
+                        )
+
+                    tts_provider = ScheduledTtsProvider(
+                        native_tts_provider,
+                        acquire_tts_lease,
+                    )
+                else:
+                    tts_provider = native_tts_provider
                 tts_service = SpeechOutputService(
                     tts_config,
                     tts_provider,

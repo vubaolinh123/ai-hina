@@ -1143,6 +1143,20 @@ Phát giọng tiếng Việt tự nhiên đủ dùng, bắt đầu sớm, dừng
 - Voice asset consent/license manifest.
 - GPU-backed TTS chỉ load/infer khi có `ResourceLease`; cancellation phải release lease.
 
+### Trạng thái triển khai local hiện tại (M07-S14)
+
+- Desktop owner-test chọn VoxCPM2 2B CUDA/BF16, revision và file hash đã pin.
+- Provider chỉ dùng một owner-authorized synthetic reference có SHA-256; đây là
+  zero-shot conditioning, không phải fine-tune.
+- Câu dài chia tối đa 180 ký tự, validate/retry từng đoạn và không time-stretch
+  hậu kỳ để tránh audio nửa đúng nửa hỏng.
+- TTS giữ lease scheduler priority thấp khi warm và unload khi bị preempt; STT
+  unload trước release; Ollama dùng `keep_alive: 0`.
+- Real smoke ngắn/dài và sequence `TTS → chat → TTS` đã pass trên RTX 5070 Ti
+  16 GB với headroom cấu hình 2048 MiB.
+- Đây là runnable candidate chờ owner nghe A/B; chưa đạt Gate M05 đầy đủ hoặc
+  production promotion.
+
 ### Test matrix
 
 - Long text, reconnect, buffer underrun, cancellation.

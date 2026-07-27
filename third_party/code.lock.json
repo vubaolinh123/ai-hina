@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-07-25T00:00:00Z",
+  "generated_at": "2026-07-27T00:00:00Z",
   "components": [
     {
       "name": "moonshine-voice",
@@ -50,6 +50,23 @@
         "Used as a pinned PyPI dependency behind Hina's TtsProvider interface; no upstream source file or snippet was copied.",
         "Hina bypasses TorchCodec audio loading on Windows by decoding the fixed WAV with soundfile before invoking the official inference primitives.",
         "Hina restricts conditioning to one hash-bound owner-authorized synthetic reference, CUDA execution, pre-TTS moderation, bounded admission and no runtime text/audio retention."
+      ]
+    },
+    {
+      "name": "voxcpm",
+      "source_url": "https://github.com/OpenBMB/VoxCPM",
+      "revision": "pypi:voxcpm==2.0.3",
+      "license_spdx": "Apache-2.0",
+      "source_hash": "sha256:24da58a30d094a9e9a7ead450ae9cffda0d31eaeba620b61ad99179dd87e486b",
+      "destination_paths": [
+        "pyproject.toml",
+        "uv.lock",
+        "workers/speech/src/hina_speech/voxcpm2_tts_provider.py"
+      ],
+      "modifications": [
+        "Used as a pinned PyPI dependency behind Hina's TtsProvider interface; no upstream source file or snippet was copied.",
+        "Hina uses the official VoxCPM.from_pretrained and generate APIs with an exact model revision, CUDA/BF16 inference and 48 kHz output.",
+        "Hina restricts conditioning to one SHA-256-bound owner-authorized synthetic reference and adds bounded chunking, audio validation, retry, scheduler admission, deterministic unload and no runtime audio retention."
       ]
     },
     {

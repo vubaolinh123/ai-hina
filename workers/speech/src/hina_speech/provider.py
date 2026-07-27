@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import gc
 import importlib.util
 import math
 from collections.abc import Awaitable, Callable
@@ -123,6 +124,7 @@ class FasterWhisperProvider:
                 return await self._run_device(audio, "cpu")
         finally:
             if lease is not None:
+                await self._clear_model()
                 await lease.release()
 
     async def _run_device(self, audio: NormalizedAudio, device: str) -> SttResult:
@@ -151,9 +153,16 @@ class FasterWhisperProvider:
         drain = self._drain_task
         if drain is not None:
             await asyncio.shield(drain)
+        await self._clear_model()
+
+    async def _clear_model(self) -> None:
         async with self._model_lock:
+            model = self._model
             self._model = None
             self._model_device = None
+        if model is not None:
+            del model
+        gc.collect()
 
     async def close(self) -> None:
         self._closed = True
@@ -190,6 +199,7 @@ class FasterWhisperProvider:
         try:
             await _wait_for_native_worker(worker)
         finally:
+            await self._clear_model()
             if lease is not None:
                 await lease.release()
             async with self._drain_lock:

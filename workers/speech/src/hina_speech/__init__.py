@@ -33,12 +33,19 @@ from .tts_config import (
     DEFAULT_TTS_MODEL_ID,
     DEFAULT_TTS_MODEL_REVISION,
     DEFAULT_TTS_VOICE,
+    VIENEU_TTS_MODEL_ID,
+    VIENEU_TTS_MODEL_REVISION,
+    VOXCPM2_MODEL_ID,
+    VOXCPM2_MODEL_REVISION,
+    VOXCPM2_PACKAGE_VERSION,
     TtsConfig,
 )
 from .f5_tts_provider import F5TtsProvider
 from .tts_provider import TtsProvider, VieneuTtsProvider
+from .tts_resource import ScheduledTtsProvider, TtsGpuLease, TtsGpuLeaseFactory
 from .tts_service import SpeechOutputService
 from .tts_text import adaptive_speaking_rate, normalize_tts_text, split_tts_chunks
+from .voxcpm2_tts_provider import VoxCpm2TtsProvider
 from .vad import EnergyVad, EnergyVadConfig
 
 __all__ = [
@@ -57,6 +64,11 @@ __all__ = [
     "DEFAULT_TTS_MODEL_ID",
     "DEFAULT_TTS_MODEL_REVISION",
     "DEFAULT_TTS_VOICE",
+    "VIENEU_TTS_MODEL_ID",
+    "VIENEU_TTS_MODEL_REVISION",
+    "VOXCPM2_MODEL_ID",
+    "VOXCPM2_MODEL_REVISION",
+    "VOXCPM2_PACKAGE_VERSION",
     "EnergyVad",
     "EnergyVadConfig",
     "FasterWhisperProvider",
@@ -79,6 +91,9 @@ __all__ = [
     "TtsError",
     "TtsPcmChunk",
     "TtsProvider",
+    "ScheduledTtsProvider",
+    "TtsGpuLease",
+    "TtsGpuLeaseFactory",
     "TtsSynthesis",
     "TARGET_SAMPLE_RATE_HZ",
     "VadResult",
@@ -89,4 +104,5 @@ __all__ = [
     "split_tts_chunks",
     "VieneuTtsProvider",
     "F5TtsProvider",
+    "VoxCpm2TtsProvider",
 ]

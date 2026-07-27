@@ -23,7 +23,7 @@ if (-not $env:HINA_STT_DEVICE) { $env:HINA_STT_DEVICE = "cuda" }
 if (-not $env:HINA_STT_COMPUTE_TYPE) { $env:HINA_STT_COMPUTE_TYPE = "float16" }
 if (-not $env:HINA_STT_CPU_FALLBACK) { $env:HINA_STT_CPU_FALLBACK = "false" }
 if (-not $env:HINA_STT_LANGUAGE) { $env:HINA_STT_LANGUAGE = "auto" }
-if (-not $env:HINA_TTS_PROVIDER) { $env:HINA_TTS_PROVIDER = "vieneu" }
+if (-not $env:HINA_TTS_PROVIDER) { $env:HINA_TTS_PROVIDER = "voxcpm2" }
 if ($env:HINA_TTS_PROVIDER -eq "f5-tts") {
     if (-not $env:HINA_TTS_MODEL) { $env:HINA_TTS_MODEL = "zalopay/vietnamese-tts" }
     if (-not $env:HINA_TTS_MODEL_REVISION) { $env:HINA_TTS_MODEL_REVISION = "1dc4967edb4549e40d820429e487eeeacee8bc08" }
@@ -32,14 +32,26 @@ if ($env:HINA_TTS_PROVIDER -eq "f5-tts") {
     if (-not $env:HINA_TTS_VOCODER_REVISION) { $env:HINA_TTS_VOCODER_REVISION = "0feb3fdd929bcd6649e0e7c5a688cf7dd012ef21" }
     if (-not $env:HINA_TTS_MODEL_CACHE) { $env:HINA_TTS_MODEL_CACHE = (Join-Path $repoRoot "var\cache\models\f5-tts") }
 }
-else {
+elseif ($env:HINA_TTS_PROVIDER -eq "vieneu") {
     if (-not $env:HINA_TTS_MODEL) { $env:HINA_TTS_MODEL = "pnnbao-ump/VieNeu-TTS-v3-Turbo" }
     if (-not $env:HINA_TTS_MODEL_REVISION) { $env:HINA_TTS_MODEL_REVISION = "75ff82a72f54d55ed389e1eeb12041d3c4bac7d4" }
     if (-not $env:HINA_TTS_MODEL_CACHE) { $env:HINA_TTS_MODEL_CACHE = (Join-Path $repoRoot "var\cache\models\vieneu") }
 }
+else {
+    if (-not $env:HINA_TTS_MODEL) { $env:HINA_TTS_MODEL = "openbmb/VoxCPM2" }
+    if (-not $env:HINA_TTS_MODEL_REVISION) { $env:HINA_TTS_MODEL_REVISION = "bffb3df5a29440629464e5e839f4d214c8714c3d" }
+    if (-not $env:HINA_TTS_MODEL_CACHE) { $env:HINA_TTS_MODEL_CACHE = (Join-Path $repoRoot "var\cache\models\voxcpm2") }
+    if (-not $env:HINA_TTS_INFERENCE_STEPS) { $env:HINA_TTS_INFERENCE_STEPS = "10" }
+    if (-not $env:HINA_TTS_GUIDANCE_SCALE) { $env:HINA_TTS_GUIDANCE_SCALE = "2.0" }
+    if (-not $env:HINA_TTS_MAX_CHUNK_CHARACTERS) { $env:HINA_TTS_MAX_CHUNK_CHARACTERS = "180" }
+}
 if (-not $env:HINA_TTS_DEVICE) { $env:HINA_TTS_DEVICE = "cuda" }
-if (-not $env:HINA_TTS_PRECISION) { $env:HINA_TTS_PRECISION = "float16" }
-if (-not $env:HINA_TTS_WARMUP_ON_START) { $env:HINA_TTS_WARMUP_ON_START = "true" }
+if (-not $env:HINA_TTS_PRECISION) {
+    $env:HINA_TTS_PRECISION = if ($env:HINA_TTS_PROVIDER -eq "voxcpm2") { "bfloat16" } else { "float16" }
+}
+if (-not $env:HINA_TTS_MODEL_VRAM_MIB) { $env:HINA_TTS_MODEL_VRAM_MIB = "8192" }
+if (-not $env:HINA_TTS_MODEL_RAM_MIB) { $env:HINA_TTS_MODEL_RAM_MIB = "6144" }
+if (-not $env:HINA_TTS_WARMUP_ON_START) { $env:HINA_TTS_WARMUP_ON_START = "false" }
 if (-not $env:HINA_TTS_CODEC) { $env:HINA_TTS_CODEC = "OpenMOSS-Team/MOSS-Audio-Tokenizer-Nano" }
 if (-not $env:HINA_TTS_CODEC_REVISION) { $env:HINA_TTS_CODEC_REVISION = "6aa02b01e445cc585582cf0ba480bc3ea6c8dd68" }
 # If the owner has prepared the local voice profile, use its deterministic

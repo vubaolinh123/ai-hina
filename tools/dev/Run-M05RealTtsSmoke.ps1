@@ -1,7 +1,8 @@
 param(
     [string]$Text = "",
-    [ValidateSet("vieneu", "f5-tts")]
-    [string]$Provider = "vieneu"
+    [string]$Output = "",
+    [ValidateSet("voxcpm2", "vieneu", "f5-tts")]
+    [string]$Provider = "voxcpm2"
 )
 
 $ErrorActionPreference = "Stop"
@@ -16,9 +17,18 @@ $env:UV_CACHE_DIR = Join-Path $repoRoot ".cache\uv"
 $env:PYTHONIOENCODING = "utf-8"
 $env:HINA_TTS_PROVIDER = $Provider
 $env:HINA_TTS_DEVICE = "cuda"
-$env:HINA_TTS_PRECISION = "float16"
+$env:HINA_TTS_PRECISION = if ($Provider -eq "voxcpm2") { "bfloat16" } else { "float16" }
 $env:HINA_TTS_ALLOW_DOWNLOAD = "true"
-if ($Provider -eq "vieneu") {
+if ($Provider -eq "voxcpm2") {
+    $env:HINA_TTS_MODEL = "openbmb/VoxCPM2"
+    $env:HINA_TTS_MODEL_REVISION = "bffb3df5a29440629464e5e839f4d214c8714c3d"
+    $env:HINA_TTS_MODEL_CACHE = Join-Path $repoRoot "var\cache\models\voxcpm2"
+    $env:HINA_TTS_INFERENCE_STEPS = "10"
+    $env:HINA_TTS_GUIDANCE_SCALE = "2.0"
+    $env:HINA_TTS_MAX_CHUNK_CHARACTERS = "180"
+    $profileAnchor = Join-Path $repoRoot "var\cache\voices\hina\hina-profile-anchor.wav"
+}
+elseif ($Provider -eq "vieneu") {
     $env:HINA_TTS_MODEL = "pnnbao-ump/VieNeu-TTS-v3-Turbo"
     $env:HINA_TTS_MODEL_REVISION = "75ff82a72f54d55ed389e1eeb12041d3c4bac7d4"
     $env:HINA_TTS_MODEL_CACHE = Join-Path $repoRoot "var\cache\models\vieneu"
@@ -54,6 +64,9 @@ $arguments = @(
 )
 if ($Text) {
     $arguments += @("--text", $Text)
+}
+if ($Output) {
+    $arguments += @("--output", $Output)
 }
 
 & uv @arguments

@@ -22,12 +22,14 @@ from hina_speech import (  # noqa: E402
     DEFAULT_TTS_MODEL_REVISION,
     DEFAULT_TTS_VOICE,
     F5TtsProvider,
+    ScheduledTtsProvider,
     SpeechOutputService,
     TtsConfig,
     TtsError,
     TtsPcmChunk,
     TtsSynthesis,
     VieneuTtsProvider,
+    VoxCpm2TtsProvider,
     adaptive_speaking_rate,
     normalize_tts_text,
     pcm16_to_wav,
@@ -76,6 +78,7 @@ class _FakeProvider:
         self.started = asyncio.Event()
         self.release = asyncio.Event()
         self.closed = False
+        self.unloads = 0
 
     async def status(self) -> dict[str, object]:
         return {"available": not self.closed, "modelLoaded": False, "modelCached": True}
@@ -98,6 +101,9 @@ class _FakeProvider:
     async def close(self) -> None:
         self.closed = True
 
+    async def unload(self) -> None:
+        self.unloads += 1
+
 
 class _FakeVieNeu:
     def __init__(self, *, block: bool = False) -> None:
@@ -115,6 +121,14 @@ class _FakeVieNeu:
 
 
 class TextAndAudioTests(unittest.TestCase):
+    def test_desktop_tts_defaults_to_voxcpm2_without_time_stretch(self) -> None:
+        config = TtsConfig()
+        status = config.public_status()
+        self.assertEqual(config.provider, "voxcpm2")
+        self.assertEqual(config.device, "cuda")
+        self.assertEqual(config.precision, "bfloat16")
+        self.assertEqual(status["adaptiveSpeakingRate"], {"minimum": 1.0, "maximum": 1.0})
+
     def test_normalization_is_nfc_and_speaks_only_url_hostname(self) -> None:
         value = normalize_tts_text(
             "Xin cha\u0300o 😊 https://example.com/private?q=secret"
@@ -285,6 +299,43 @@ class SpeechOutputServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("secret text", repr(reports))
 
 
+class ScheduledTtsProviderTests(unittest.IsolatedAsyncioTestCase):
+    async def test_preemption_unloads_native_model_before_releasing_lease(self) -> None:
+        native = _FakeProvider()
+        callback = None
+
+        class Lease:
+            state = "active"
+            releases = 0
+
+            def assert_active(self) -> None:
+                if self.state != "active":
+                    raise RuntimeError("inactive")
+
+            async def release(self) -> bool:
+                self.releases += 1
+                self.state = "released"
+                return True
+
+        lease = Lease()
+
+        async def acquire(unload):
+            nonlocal callback
+            callback = unload
+            return lease
+
+        provider = ScheduledTtsProvider(native, acquire)
+        result = await provider.synthesize(("Xin chào.",), threading.Event())
+        self.assertGreater(len(result.pcm16), 0)
+        self.assertEqual((await provider.status())["resourceLease"]["state"], "active")
+        self.assertIsNotNone(callback)
+        await callback()
+        self.assertEqual(native.unloads, 1)
+        self.assertEqual(lease.releases, 1)
+        self.assertEqual((await provider.status())["resourceLease"]["state"], "released")
+        await provider.close()
+
+
 class VieneuProviderTests(unittest.IsolatedAsyncioTestCase):
     async def test_provider_downloads_exact_revisions_and_keeps_fixed_voice(self) -> None:
         downloads: list[dict[str, object]] = []
@@ -429,6 +480,61 @@ class F5ProviderTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fake.call[2], config.nfe_step)
         self.assertEqual(result.sample_rate_hz, 24_000)
         self.assertGreater(len(result.pcm16), 0)
+
+
+class VoxCpm2ProviderTests(unittest.IsolatedAsyncioTestCase):
+    async def test_voxcpm2_uses_fixed_reference_and_returns_valid_48khz_segments(self) -> None:
+        import numpy as np
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            reference = root / "hina.wav"
+            reference.write_bytes(b"owner-created synthetic voice")
+            snapshot = root / "snapshot"
+            snapshot.mkdir()
+            config = TtsConfig(
+                provider="voxcpm2",
+                model_cache=root,
+                reference_audio_path=reference,
+                reference_audio_sha256=hashlib.sha256(reference.read_bytes()).hexdigest(),
+            )
+            downloads: list[dict[str, object]] = []
+
+            def downloader(**kwargs):
+                downloads.append(kwargs)
+                return str(snapshot)
+
+            class FakeVox:
+                def __init__(self) -> None:
+                    self.tts_model = SimpleNamespace(sample_rate=48_000)
+                    self.calls: list[dict[str, object]] = []
+
+                def generate(self, **kwargs):
+                    self.calls.append(kwargs)
+                    axis = np.arange(9_600, dtype=np.float32) / 48_000
+                    return np.sin(2 * np.pi * 220 * axis).astype(np.float32) * 0.2
+
+            fake = FakeVox()
+            provider = VoxCpm2TtsProvider(
+                config,
+                snapshot_downloader=downloader,
+                model_factory=lambda *_args: fake,
+            )
+            result = await provider.synthesize(
+                ("[chuckle] Xin chào.", "Hina đang kiểm tra câu dài."),
+                threading.Event(),
+            )
+            self.assertEqual(result.sample_rate_hz, 48_000)
+            self.assertEqual(len(result.chunks), 2)
+            self.assertGreater(len(result.pcm16), 0)
+            self.assertEqual(downloads[0]["revision"], config.model_revision)
+            self.assertEqual(fake.calls[0]["reference_wav_path"], str(reference))
+            self.assertNotIn("[", fake.calls[0]["text"])
+            self.assertTrue(str(fake.calls[0]["text"]).endswith("."))
+            self.assertTrue(fake.calls[0]["retry_badcase"])
+            await provider.unload()
+            self.assertFalse((await provider.status())["modelLoaded"])
+            await provider.close()
 
 
 if __name__ == "__main__":

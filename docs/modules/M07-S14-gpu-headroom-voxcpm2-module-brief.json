@@ -1,0 +1,86 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M07-S14-gpu-headroom-voxcpm2-vietnamese",
+  "module_id": "M07",
+  "objective": "Eliminate chat admission failures caused by untracked resident GPU models, then replace the rejected F5 candidate with a pinned VoxCPM2 CUDA candidate that clones the fixed Hina voice and remains intelligible on short and long Vietnamese replies.",
+  "non_goals": [
+    "Do not run LLM, STT or TTS inference on CPU.",
+    "Do not expose arbitrary voice-upload or voice-cloning endpoints.",
+    "Do not claim that reference conditioning is model fine-tuning.",
+    "Do not claim ElevenLabs-equivalent quality before owner listening.",
+    "Do not leave multiple large GPU models resident after their conversational phase; brief overlap is allowed only when live admission still preserves the mandatory headroom."
+  ],
+  "base_sha": "7b4645342b492287b1c61e2e075773214db8a18f",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "packages/text-brain/",
+    "workers/speech/",
+    "apps/core-runtime/",
+    "apps/desktop/",
+    "tools/dev/",
+    "assets/voices/",
+    "assets/manifests/",
+    "ml/models/manifests/",
+    "docs/modules/",
+    "docs/provenance/",
+    "docs/research/",
+    "third_party/",
+    "README.md",
+    "AGENTS.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "pyproject.toml",
+    "uv.lock",
+    "package.json",
+    "pnpm-lock.yaml",
+    ".gitignore"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "packages/contracts/",
+    "packages/safety-policy/"
+  ],
+  "contracts": [
+    "The desktop launcher runs LLM, Faster-Whisper STT and TTS on GPU and fails loudly instead of falling back to CPU.",
+    "Only one large model workload may retain GPU memory between conversational phases; released scheduler leases must not leave untracked CUDA weights resident.",
+    "Every admission decision preserves at least 2048 MiB of reported local VRAM headroom.",
+    "VoxCPM2 uses only the fixed hash-bound owner-created synthetic Hina reference.",
+    "Long replies are split on Vietnamese sentence boundaries, each segment is validated, and a failed segment is retried or fails the whole synthesis instead of returning corrupt partial audio.",
+    "Complete text still passes pre-TTS moderation before provider inference."
+  ],
+  "allowed_dependencies": [
+    "Pinned OpenBMB VoxCPM2 model and voxcpm inference package.",
+    "Existing PyTorch CUDA 12.8, torchaudio, soundfile, NumPy and Hugging Face Hub runtime.",
+    "Existing Ollama local model provider and Moonshine/Faster-Whisper speech dependencies."
+  ],
+  "oss_candidates": [
+    "https://github.com/OpenBMB/VoxCPM",
+    "https://huggingface.co/openbmb/VoxCPM2",
+    "https://github.com/OpenMOSS/MOSS-TTS",
+    "https://huggingface.co/dolly-vn/Vira-TTS"
+  ],
+  "acceptance_criteria": [
+    "Ollama receives keep_alive zero for chat streams so its GPU weights are released after the text phase.",
+    "GPU STT unloads after each request; TTS may retain one lower-priority scheduler lease between adjacent utterances and unloads deterministically on preemption or shutdown.",
+    "A chat followed by TTS no longer raises E_RESOURCE_CAPACITY on the owner's 16 GiB GPU while the 2048 MiB headroom rule remains enabled.",
+    "The selected model has explicit Vietnamese support, Apache-2.0 code and weight licensing, CUDA execution, 48 kHz output and zero-shot voice cloning.",
+    "Real short and long Vietnamese smoke WAVs are finite, non-silent, bounded, and pass automated round-trip intelligibility checks before the provider becomes the desktop default.",
+    "Fast speech, text-brain and desktop startup tests pass once without a deep repeat or soak gate."
+  ],
+  "required_test_commands": [
+    "pnpm test:text-brain",
+    "pnpm test:speech",
+    "pnpm smoke:m05-tts",
+    "pnpm --filter @hina/desktop typecheck",
+    "pnpm smoke:desktop"
+  ],
+  "latency_or_quality_budget": {
+    "device": "cuda",
+    "minimum_vram_headroom_mib": 2048,
+    "maximum_tts_model_vram_mib": 9216,
+    "sample_rate_hz": 48000,
+    "maximum_chunk_characters": 180,
+    "quality_promotion_requires_owner_listening": true
+  },
+  "output_artifact_dir": "artifacts/verification/M07/"
+}

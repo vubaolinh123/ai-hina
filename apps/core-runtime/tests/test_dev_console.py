@@ -160,6 +160,20 @@ class _StubTtsProvider:
     async def close(self) -> None:
         self.closed = True
 
+    async def unload(self) -> None:
+        return None
+
+
+def _stub_tts_service() -> SpeechOutputService:
+    return SpeechOutputService(
+        TtsConfig(),
+        _StubTtsProvider(),
+        moderator=lambda payload: {
+            "decision": "allow",
+            "sanitizedText": payload["text"],
+        },
+    )
+
 
 async def _get(host: str, port: int, target: str) -> tuple[int, dict[str, str], bytes]:
     reader, writer = await asyncio.open_connection(host, port)
@@ -664,6 +678,7 @@ class DevConsoleTests(unittest.IsolatedAsyncioTestCase):
                     persona_spec=PERSONA_PATH,
                 ),
                 model_gateway=_FailingModelGateway(),
+                tts_service=_stub_tts_service(),
             )
             await application.start()
             host, port = application.address
@@ -720,6 +735,7 @@ class DevConsoleTests(unittest.IsolatedAsyncioTestCase):
                 ),
                 build_commit="safety-test",
                 model_gateway=_StubModelGateway(),
+                tts_service=_stub_tts_service(),
             )
             await application.start()
             host, port = application.address

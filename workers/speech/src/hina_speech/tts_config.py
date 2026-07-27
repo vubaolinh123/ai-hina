@@ -9,7 +9,10 @@ from typing import Mapping
 from .errors import TtsError
 
 
-DEFAULT_TTS_PROVIDER = "vieneu"
+DEFAULT_TTS_PROVIDER = "voxcpm2"
+VOXCPM2_MODEL_ID = "openbmb/VoxCPM2"
+VOXCPM2_MODEL_REVISION = "bffb3df5a29440629464e5e839f4d214c8714c3d"
+VOXCPM2_PACKAGE_VERSION = "2.0.3"
 F5_TTS_MODEL_ID = "zalopay/vietnamese-tts"
 F5_TTS_MODEL_REVISION = "1dc4967edb4549e40d820429e487eeeacee8bc08"
 F5_TTS_MODEL_FILE = "model_1290000.pt"
@@ -17,8 +20,8 @@ DEFAULT_TTS_VOCODER_ID = "charactr/vocos-mel-24khz"
 DEFAULT_TTS_VOCODER_REVISION = "0feb3fdd929bcd6649e0e7c5a688cf7dd012ef21"
 VIENEU_TTS_MODEL_ID = "pnnbao-ump/VieNeu-TTS-v3-Turbo"
 VIENEU_TTS_MODEL_REVISION = "75ff82a72f54d55ed389e1eeb12041d3c4bac7d4"
-DEFAULT_TTS_MODEL_ID = VIENEU_TTS_MODEL_ID
-DEFAULT_TTS_MODEL_REVISION = VIENEU_TTS_MODEL_REVISION
+DEFAULT_TTS_MODEL_ID = VOXCPM2_MODEL_ID
+DEFAULT_TTS_MODEL_REVISION = VOXCPM2_MODEL_REVISION
 DEFAULT_TTS_MODEL_FILE = F5_TTS_MODEL_FILE
 DEFAULT_TTS_CODEC_ID = "OpenMOSS-Team/MOSS-Audio-Tokenizer-Nano"
 DEFAULT_TTS_CODEC_REVISION = "6aa02b01e445cc585582cf0ba480bc3ea6c8dd68"
@@ -48,9 +51,9 @@ class TtsConfig:
     vocoder_revision: str = DEFAULT_TTS_VOCODER_REVISION
     codec_id: str = DEFAULT_TTS_CODEC_ID
     codec_revision: str = DEFAULT_TTS_CODEC_REVISION
-    model_cache: Path = Path("var/cache/models/vieneu")
+    model_cache: Path = Path("var/cache/models/voxcpm2")
     device: str = "cuda"
-    precision: str = "float16"
+    precision: str = "bfloat16"
     voice: str = DEFAULT_TTS_VOICE
     style: str = "tu_nhien"
     allow_download: bool = True
@@ -58,7 +61,7 @@ class TtsConfig:
     request_timeout_seconds: float = 180.0
     max_pending_syntheses: int = 2
     max_text_characters: int = 2_000
-    max_chunk_characters: int = 256
+    max_chunk_characters: int = 180
     max_audio_seconds: float = 120.0
     raw_audio_retention: bool = False
     voice_cloning_enabled: bool = False
@@ -67,11 +70,17 @@ class TtsConfig:
     reference_audio_sha256: str = DEFAULT_TTS_REFERENCE_SHA256
     reference_text: str = DEFAULT_TTS_REFERENCE_TEXT
     nfe_step: int = 32
+    inference_timesteps: int = 10
+    guidance_scale: float = 2.0
+    generation_seed: int = 42
+    model_vram_mib: int = 8_192
+    model_ram_mib: int = 6_144
+    lease_ttl_seconds: float = 86_400.0
     warmup_on_start: bool = False
 
     def __post_init__(self) -> None:
-        if self.provider not in {"f5-tts", "vieneu"}:
-            raise TtsError("E_TTS_CONFIG", "TTS provider must be f5-tts or vieneu")
+        if self.provider not in {"f5-tts", "vieneu", "voxcpm2"}:
+            raise TtsError("E_TTS_CONFIG", "TTS provider must be f5-tts, vieneu or voxcpm2")
         for value, name in (
             (self.model_id, "model identifier"),
             (self.vocoder_id, "vocoder identifier"),
@@ -90,13 +99,16 @@ class TtsConfig:
                 raise TtsError("E_TTS_CONFIG", f"TTS {name} must be a commit SHA")
         if self.device not in {"cpu", "cuda"}:
             raise TtsError("E_TTS_CONFIG", "TTS device must be cpu or cuda")
-        if self.provider == "f5-tts" and self.device != "cuda":
-            raise TtsError("E_TTS_RESOURCE_LEASE", "F5-TTS is GPU-only in Hina")
+        if self.provider in {"f5-tts", "voxcpm2"} and self.device != "cuda":
+            raise TtsError(
+                "E_TTS_RESOURCE_LEASE",
+                f"{self.provider} is GPU-only in Hina",
+            )
         if self.device == "cpu" and self.precision != "int8":
             raise TtsError("E_TTS_CONFIG", "CPU TTS precision must be int8")
         if (
             self.device == "cuda"
-            and self.provider == "vieneu"
+            and self.provider in {"vieneu", "voxcpm2"}
             and self.precision not in {"float16", "bfloat16"}
         ):
             raise TtsError(
@@ -127,12 +139,18 @@ class TtsConfig:
             (self.max_text_characters, "text character limit", 32, 10_000),
             (self.max_chunk_characters, "chunk character limit", 32, 512),
             (self.nfe_step, "F5-TTS NFE step count", 8, 64),
+            (self.inference_timesteps, "VoxCPM2 inference step count", 4, 50),
+            (self.generation_seed, "generation seed", 0, 2_147_483_647),
+            (self.model_vram_mib, "model VRAM", 256, 16_384),
+            (self.model_ram_mib, "model RAM", 256, 65_536),
         ):
             if isinstance(value, bool) or not isinstance(value, int) or not lower <= value <= upper:
                 raise TtsError("E_TTS_CONFIG", f"TTS {name} is invalid")
         for value, name, lower, upper in (
             (self.request_timeout_seconds, "request timeout", 5.0, 600.0),
             (self.max_audio_seconds, "audio duration limit", 1.0, 600.0),
+            (self.guidance_scale, "VoxCPM2 guidance scale", 0.1, 10.0),
+            (self.lease_ttl_seconds, "GPU lease TTL", 60.0, 86_400.0),
         ):
             if (
                 isinstance(value, bool)
@@ -150,19 +168,22 @@ class TtsConfig:
     ) -> TtsConfig:
         values = env if env is not None else os.environ
         provider = values.get("HINA_TTS_PROVIDER", DEFAULT_TTS_PROVIDER).strip().lower()
-        default_model = F5_TTS_MODEL_ID if provider == "f5-tts" else VIENEU_TTS_MODEL_ID
-        default_revision = (
-            F5_TTS_MODEL_REVISION
-            if provider == "f5-tts"
-            else VIENEU_TTS_MODEL_REVISION
-        )
-        default_cache = (
-            "var/cache/models/f5-tts"
-            if provider == "f5-tts"
-            else "var/cache/models/vieneu"
-        )
+        if provider == "f5-tts":
+            default_model = F5_TTS_MODEL_ID
+            default_revision = F5_TTS_MODEL_REVISION
+            default_cache = "var/cache/models/f5-tts"
+            default_precision = "float16"
+        elif provider == "vieneu":
+            default_model = VIENEU_TTS_MODEL_ID
+            default_revision = VIENEU_TTS_MODEL_REVISION
+            default_cache = "var/cache/models/vieneu"
+            default_precision = "float16"
+        else:
+            default_model = VOXCPM2_MODEL_ID
+            default_revision = VOXCPM2_MODEL_REVISION
+            default_cache = "var/cache/models/voxcpm2"
+            default_precision = "bfloat16"
         default_device = "cuda"
-        default_precision = "float16"
         cache = Path(values.get("HINA_TTS_MODEL_CACHE", default_cache))
         reference = Path(
             values.get("HINA_TTS_REFERENCE_AUDIO", str(DEFAULT_TTS_REFERENCE_AUDIO))
@@ -205,13 +226,25 @@ class TtsConfig:
                 "HINA_TTS_REFERENCE_TEXT", DEFAULT_TTS_REFERENCE_TEXT
             ).strip(),
             nfe_step=_env_int(values, "HINA_TTS_NFE_STEP", 32),
+            inference_timesteps=_env_int(values, "HINA_TTS_INFERENCE_STEPS", 10),
+            guidance_scale=_env_float(values, "HINA_TTS_GUIDANCE_SCALE", 2.0),
+            generation_seed=_env_int(values, "HINA_TTS_GENERATION_SEED", 42),
+            model_vram_mib=_env_int(values, "HINA_TTS_MODEL_VRAM_MIB", 8_192),
+            model_ram_mib=_env_int(values, "HINA_TTS_MODEL_RAM_MIB", 6_144),
+            lease_ttl_seconds=_env_float(values, "HINA_TTS_LEASE_TTL_SECONDS", 86_400),
             warmup_on_start=_env_bool(values, "HINA_TTS_WARMUP_ON_START", False),
         )
 
     def public_status(self) -> dict[str, object]:
         return {
             "provider": self.provider,
-            "providerVersion": "1.1.22" if self.provider == "f5-tts" else "3.2.3",
+            "providerVersion": (
+                "1.1.22"
+                if self.provider == "f5-tts"
+                else VOXCPM2_PACKAGE_VERSION
+                if self.provider == "voxcpm2"
+                else "3.2.3"
+            ),
             "model": self.model_id,
             "modelRevision": self.model_revision,
             "modelFile": self.model_file if self.provider == "f5-tts" else None,
@@ -234,15 +267,24 @@ class TtsConfig:
             "referenceAudioSha256": self.reference_audio_sha256 or None,
             "adaptiveSpeakingRate": {
                 "minimum": 1.0,
-                "maximum": 1.18,
+                # VoxCPM2 audio is deliberately not time-stretched: the old
+                # post-process could corrupt individual parts of long replies.
+                "maximum": 1.0 if self.provider == "voxcpm2" else 1.18,
             },
             "expressiveCues": (
                 ["chuckle", "sigh", "clear throat"]
                 if self.provider == "vieneu"
                 else ["reference-prosody"]
             ),
-            "referenceTranscriptConfigured": bool(self.reference_text),
+            "referenceTranscriptConfigured": (
+                bool(self.reference_text) if self.provider == "f5-tts" else False
+            ),
             "nfeStep": self.nfe_step,
+            "inferenceTimesteps": self.inference_timesteps if self.provider == "voxcpm2" else None,
+            "guidanceScale": self.guidance_scale if self.provider == "voxcpm2" else None,
+            "modelVramMiB": self.model_vram_mib,
+            "modelRamMiB": self.model_ram_mib,
+            "leaseTtlSeconds": self.lease_ttl_seconds,
             "warmupOnStart": self.warmup_on_start,
         }
 

@@ -18,6 +18,7 @@ dependencies = [
   "torchaudio==2.11.0+cu128; python_version == '3.12' and sys_platform == 'win32'",
   "transformers>=4.57,<5",
   "vieneu==3.2.3",
+  "voxcpm==2.0.3",
 ]
 
 [dependency-groups]
@@ -27,6 +28,14 @@ dev = [
 
 [tool.uv]
 package = false
+# VoxCPM's inference path does not import datasets/fsspec, while its broad
+# training/demo dependency pins older releases that conflict with Hina's
+# existing F5/Moonshine environment. Keep Hina's already-tested runtime
+# versions and use only the official VoxCPM inference API.
+override-dependencies = [
+  "datasets==5.0.0",
+  "fsspec==2026.4.0",
+]
 
 [tool.uv.sources]
 torch = { index = "pytorch-cu128" }

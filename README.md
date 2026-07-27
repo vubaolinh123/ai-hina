@@ -10,7 +10,8 @@ runtime spine, M02 safety, M03 text brain, M04 speech input, M05 speech
 output và M06 memory đã qua fast gate; M06 cũng đã qua independent review
 không có P0/P1. Hina Dev Console hiện là dashboard nhiều
 trang có chat text thật qua Ollama/OpenAI-compatible local, microphone/WAV tiếng
-Việt qua Moonshine Voice, giọng Việt qua VieNeu v3 Turbo trên CUDA và ký ức dài hạn
+Việt qua Faster-Whisper large-v3 trên GPU ở desktop, giọng Việt qua VoxCPM2 2B
+trên CUDA/BF16 và ký ức dài hạn
 SQLite + Qdrant local. Trang Avatar Stage đọc turn state thật và suy ra khẩu hình
 `A/I/U/E/O` từ chính phổ WAV TTS đang phát; không dùng câu trả lời, transcript,
 audio, memory hay backend state giả.
@@ -97,6 +98,10 @@ Thư viện Moonshine là MIT nhưng weight tiếng Việt dùng Moonshine Commu
 License phi thương mại; candidate này chưa được phép promote cho mục đích
 thương mại/public nếu chưa xử lý license riêng.
 
+Riêng `pnpm start:desktop` dùng profile GPU-only:
+`Systran/faster-whisper-large-v3` CUDA/float16, không fallback CPU. Vì vậy
+widget và trang test Mic của desktop không dùng Moonshine CPU.
+
 ```powershell
 pnpm start:dev-console
 ```
@@ -112,10 +117,10 @@ pnpm start:dev-console
 
 ## Bật speech output tiếng Việt
 
-M05 mặc định dùng VieNeu-TTS v3 Turbo tại revision đã pin. Backend chạy CUDA,
-xuất WAV mono 48 kHz và enroll profile `Hina Anime AI v1` từ reference tổng hợp
-do owner tạo bằng ElevenLabs. Đây là zero-shot reference enrollment, không phải
-fine-tune model weights; provenance và SHA-256 nằm trong
+M05 desktop mặc định dùng VoxCPM2 2B tại revision đã pin. Backend chạy
+CUDA/BF16, xuất WAV mono 48 kHz và condition profile `Hina Anime AI v1` từ
+reference tổng hợp do owner tạo bằng ElevenLabs. Đây là zero-shot voice
+conditioning, không phải fine-tune model weights; provenance và SHA-256 nằm trong
 `assets/manifests/hina-anime-elevenlabs-voice.v1.json`.
 
 F5-TTS Vietnamese ZaloPay vẫn được giữ làm provider thử nghiệm. Cả checkpoint
@@ -124,14 +129,23 @@ hiện tại đều không qua quality smoke với reference Hina: WAV sinh ra l
 nonsense/noise và nhận dạng ngược không khớp câu nguồn. Vì vậy launcher không
 chọn F5 theo mặc định.
 
+VieNeu v3 Turbo vẫn là rollback provider. VoxCPM2 được chọn vì upstream công bố
+hỗ trợ tiếng Việt, model 2B/48 kHz, zero-shot voice cloning và Apache-2.0 cho
+code/weight. Hai real smoke ngắn/dài đều được Faster-Whisper large-v3 CUDA nhận
+lại đúng câu nguồn. Đây vẫn là candidate chờ owner nghe A/B, không phải tuyên bố
+chất lượng tương đương ElevenLabs.
+
 Trong Dev Console, nhập nội dung ở panel **Hina nói tiếng Việt**, sau đó bấm
 **Tạo và phát giọng thật**. Toàn bộ câu phải qua `pre_tts` moderation trước khi
 model chạy. Nút **Dừng / barge-in** dừng audio ngay; bắt đầu thu mic cũng tự dừng
 audio. Arbitrary voice cloning và lưu text/audio sinh ra đều bị tắt. Câu dài
-được tăng tốc thích ứng tối
-đa 1.18x, câu ngắn giữ tốc độ bình thường.
+được chia tối đa 180 ký tự, kiểm tra silence/NaN và retry bad-case theo từng
+đoạn. VoxCPM2 không time-stretch hậu kỳ vì bước này từng làm hỏng một phần audio
+câu dài.
 
-Lần đầu có thể tải model/codec vào `var/cache/models/vieneu`. Có thể kiểm tra
+Lần đầu có thể tải khoảng 5 GB artifact vào `var/cache/models/voxcpm2` và mất
+khoảng 20–30 giây để load trên máy owner. Khi đã resident, smoke thật đo khoảng
+3,5–5,3 giây/request. Có thể kiểm tra
 provider thật và tạo WAV nghe thử trong thư mục ignored:
 
 ```powershell
@@ -208,7 +222,7 @@ gọi status mỗi 250 ms và spam lỗi.
 
 Cửa sổ operator là dashboard gồm Tổng quan, Chat với Hina, Avatar Stage và
 Runtime & Safety. Trang Chat gửi turn thật tới local LLM, hiển thị text trả lời
-và có thể phát cùng câu trả lời bằng VieNeu TTS; voice vẫn tuân theo global mute.
+và có thể phát cùng câu trả lời bằng VoxCPM2 TTS; voice vẫn tuân theo global mute.
 
 Desktop tải real VRM 1.0 bằng Three.js/`@pixiv/three-vrm`. Base hiện tại là
 `VRM1_Constraint_Twist_Sample` chính thức của pixiv/VRM Consortium, được bundle
@@ -240,7 +254,7 @@ di chuyển sang vị trí khác. Khi không rê chuột (hoặc không focus b�
 phím), widget không hiện control nào; khi hover/focus hiện panel **Voice** và
 **Mic · Nói với Hina**. Voice bật/tắt tiếng đầu ra qua safety authority. Mic
 chỉ thu tối đa 30 giây vào RAM, gửi WAV loopback qua typed preload IPC để
-Moonshine chép lời, gửi transcript vào chat thật và phát câu trả lời VieNeu
+Faster-Whisper chép lời, gửi transcript vào chat thật và phát câu trả lời VoxCPM2
 thật; không có wake-word hay ghi âm nền. Nhấn `Esc` để bỏ focus và ẩn panel.
 
 Trong panel Operator, nhóm **Quản lý widget avatar** giải thích ba thao tác

@@ -297,6 +297,11 @@ class LocalHttpChatProvider:
                 "model": self.config.model,
                 "messages": messages,
                 "stream": True,
+                # Hina alternates a 4B chat model with GPU-only STT/TTS on a
+                # 16 GiB card. Keeping Ollama resident after the stream leaves
+                # no truthful way for the shared scheduler to preserve its
+                # mandatory 2 GiB headroom.
+                "keep_alive": 0,
                 "think": False,
                 "options": {
                     "temperature": self.config.temperature,

@@ -15,6 +15,7 @@ from .tts_config import TtsConfig
 from .tts_provider import (
     _float_samples,
     _float_samples_to_pcm16,
+    _release_cuda_memory,
     _wait_for_native_worker,
     _wsola_speed_up,
 )
@@ -180,8 +181,20 @@ class F5TtsProvider:
             await _wait_for_native_worker(active)
         if drain is not None:
             await asyncio.shield(drain)
+        await self.unload()
         self._executor.shutdown(wait=True, cancel_futures=True)
-        self._model = None
+
+    async def unload(self) -> None:
+        drain = self._drain_task
+        if drain is not None and drain is not asyncio.current_task():
+            await asyncio.shield(drain)
+        async with self._inference_lock:
+            with self._model_lock:
+                model = self._model
+                self._model = None
+        if model is not None:
+            del model
+        _release_cuda_memory()
 
     async def _finish_drain(self, worker: Future[TtsSynthesis]) -> None:
         try:

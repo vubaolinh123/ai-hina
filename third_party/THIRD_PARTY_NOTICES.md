@@ -33,6 +33,25 @@ with soundfile on Windows before CUDA inference. The ZaloPay Vietnamese model
 and Vocos weights are licensed and hashed separately in
 `ml/models/manifests/f5-tts-vietnamese-zalopay.v1.json`.
 
+## VoxCPM 2.0.3 / VoxCPM2
+
+- Upstream: https://github.com/OpenBMB/VoxCPM
+- Distribution: `voxcpm==2.0.3`
+- PyPI wheel SHA-256:
+  `24da58a30d094a9e9a7ead450ae9cffda0d31eaeba620b61ad99179dd87e486b`
+- License: Apache-2.0
+- Use: default local CUDA/BF16 Vietnamese TTS provider for owner testing
+
+No VoxCPM source file or snippet is copied into this repository. Hina calls
+the pinned package through its official `VoxCPM.from_pretrained` and
+`generate` APIs. The exact VoxCPM2 model revision, file hashes and weight
+license are tracked separately in
+`ml/models/manifests/voxcpm2-2b.v1.json`.
+
+Hina permits only one fixed, hash-bound synthetic owner voice. Generated
+VoxCPM2 audio is not watermarked, so this candidate remains local-owner only
+and is not production-promoted.
+
 ## VieNeu-TTS 3.2.3
 
 - Upstream: https://github.com/pnnbao97/VieNeu-TTS

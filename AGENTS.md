@@ -59,6 +59,14 @@ reference Hina và không qua round-trip STT. Desktop trở lại VieNeu-TTS v3 
 CUDA/float16, dùng owner reference hash-bound; real smoke sinh WAV 48 kHz và
 round-trip nhận lại đúng câu thử gần như nguyên văn. F5 chỉ còn experimental,
 không được tự động chọn hoặc promotion.
+Ngày 2026-07-27 M07-S14 thay desktop default bằng VoxCPM2 2B
+CUDA/BF16 tại revision đã pin. Provider dùng đúng một reference Hina hash-bound,
+chia câu dài 180 ký tự, retry/validate từng segment và không time-stretch hậu kỳ.
+Short/long WAV 48 kHz đều qua Faster-Whisper large-v3 CUDA round-trip với
+similarity 1.0. Lỗi `E_RESOURCE_CAPACITY` được đóng bằng scheduler lease TTS
+priority thấp có unload khi preempt, STT unload trước release, Ollama
+`keep_alive: 0` và tắt startup TTS warmup; real sequence TTS→chat→TTS pass trong
+headroom 2048 MiB. Candidate vẫn chờ owner nghe A/B, chưa production-promote.
 Ngày 2026-07-26 owner chỉ thị “Tiếp tục hoàn thành Plan” và chọn mở M08 —
 Perception trong fast-development mode; M07 giữ trạng thái runnable candidate
 với các deep gate (frozen OBS benchmark, lip-sync p95, final Hina asset, soak

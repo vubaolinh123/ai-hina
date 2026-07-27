@@ -76,7 +76,7 @@
         "result": "rejected"
       }
     ],
-    "selected_fallback": "pnnbao-ump/VieNeu-TTS-v3-Turbo on CUDA"
+    "selected_fallback": "openbmb/VoxCPM2 on CUDA/BF16; VieNeu v3 Turbo remains rollback"
   },
   "status": {
     "download_authorized_by_owner": true,
