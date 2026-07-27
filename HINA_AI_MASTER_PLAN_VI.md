@@ -1160,7 +1160,7 @@ Phát giọng tiếng Việt tự nhiên đủ dùng, bắt đầu sớm, dừng
 - Voice asset consent/license manifest.
 - GPU-backed TTS chỉ load/infer khi có `ResourceLease`; cancellation phải release lease.
 
-### Trạng thái triển khai local hiện tại (M07-S15)
+### Trạng thái triển khai local hiện tại (M07-S15, quality maintenance)
 
 - Desktop owner-test chọn OmniVoice 0.6B package 0.2.1, CUDA/FP16, SDPA và
   checkpoint revision/file hash đã pin; optional Whisper ASR không được load.
@@ -1169,8 +1169,12 @@ Phát giọng tiếng Việt tự nhiên đủ dùng, bắt đầu sớm, dừng
   fine-tune. Arbitrary voice enrollment vẫn bị tắt.
 - Câu dài chia tối đa 110 ký tự, ưu tiên ngắt ở dấu câu/dấu phẩy rồi tiếp tục
   được giới hạn theo thời lượng audio. Profile chất lượng dùng 32 diffusion
-  steps vì thử nghiệm 16 steps làm rơi phần cuối một câu dài; rate cố định trong
-  lượt và cap 1,02× để tránh rush/nuốt chữ; không time-stretch hậu kỳ.
+  steps vì thử nghiệm 16 steps làm rơi phần cuối một câu dài; rate cố định 1.0×
+  trong lượt để tránh rush/nuốt chữ; không time-stretch hậu kỳ.
+- Emoji trang trí được chuẩn hóa trước TTS (`🖊️` bỏ, `😂` thành `[chuckle]`);
+  phần trong ngoặc được tách thành aside chunk riêng và chèn 160 ms pause.
+  Regression sentence của owner qua reverse-STT CUDA ở similarity 0.9694,
+  không clipping, 24 kHz mono PCM16.
 - Prompt giọng được tạo một lần và giữ trên CPU, batch size một, allocator cache
   không dùng được giải phóng sau request, model được recycle khi CUDA allocated
   tăng quá 512 MiB hoặc sau 32 request warm.
@@ -1272,12 +1276,17 @@ Kết nối VRM/Live2D, lip-sync, expression và operator controls mà không nh
 ### Deliverables
 
 - Electron/Vue stage shell.
-- VRM trước; Live2D adapter khi asset/license sẵn sàng.
+- VRM trước; Live2D adapter qua VTube Studio Public API khi asset/license sẵn
+  sàng. Hina không bundle model Hiyori hay asset từ Neuro; owner chọn model
+  Live2D có quyền sử dụng trong VTube Studio.
 - State machine biểu cảm: idle/listening/thinking/speaking/interrupted/error.
 - Viseme/lip-sync và emotion cue.
 - Operator dashboard: status, current turn, latency, resource, mute/e-stop.
 - Settings gửi qua typed IPC/control plane.
 - Asset provenance manifest.
+- Dashboard page **Live2D / VTube Studio**: trạng thái kết nối, authorization,
+  model/hotkey thật và các preset biểu cảm được allowlist; VRM transparent vẫn
+  là fallback offline.
 
 ### Gate
 
@@ -1308,6 +1317,8 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
 - `Observation` có timestamp, TTL, confidence, evidence reference.
 - Privacy mask và no-persist mode.
 - GPU resource lease/fallback.
+- M08-S2 unified multimodal baseline: Qwen3.5-4B Q4_K_M dùng chung cho chat và
+  explicit image snapshot qua Ollama, `keep_alive=0`, không load VLM thứ hai.
 
 ### Test matrix
 
@@ -1330,6 +1341,9 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
 - Observation chỉ là evidence/untrusted context; không tự kích hoạt action nguy hiểm.
 - Snapshot không persist nếu chưa consent.
 - All-on workload vẫn giữ 2 GB VRAM headroom.
+- Budget owner machine: desktop ambient 4,875 MiB + Qwen3.5-4B 3,200 MiB +
+  OmniVoice 2,400 MiB + Moonshine 2,000 MiB + 1,861 MiB margin = 14,336 MiB
+  ceiling; Qwen3.5-9B chỉ benchmark tuần tự, không all-on mặc định.
 
 ### Companion Gate B
 

@@ -82,7 +82,7 @@
     "batch_size": 1,
     "diffusion_steps": 32,
     "maximum_chunk_characters": 110,
-    "maximum_speaking_rate": 1.02,
+    "maximum_speaking_rate": 1.0,
     "quality_promotion_requires_owner_listening": true,
     "commercial_promotion_blocked_by_weight_license": true
   },

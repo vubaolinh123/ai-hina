@@ -12,6 +12,7 @@ _BOUNDARY = re.compile(r"(?<=[.!?…;:])\s+|\n+")
 _SOFT_BOUNDARY = re.compile(r"(?<=[,，—–])\s+")
 _WHITESPACE = re.compile(r"\s+")
 _EXPRESSIVE_CUE = re.compile(r"\[([^\[\]]{1,48})\]", re.IGNORECASE)
+_PARENTHETICAL_ASIDE = re.compile(r"\s*\(([^()\r\n]{1,300})\)")
 _CUE_ALIASES = {
     "chuckle": "chuckle",
     "chuckles": "chuckle",
@@ -33,9 +34,11 @@ _EMOJI = {
     "❤️": " trái tim ",
     "❤": " trái tim ",
     "😊": " vui vẻ ",
-    "😂": " cười ",
+    "😂": " [chuckle] ",
     "😢": " buồn ",
     "👍": " đồng ý ",
+    "🖊️": " ",
+    "🖊": " ",
 }
 
 
@@ -51,6 +54,7 @@ def normalize_tts_text(raw: str, *, max_characters: int = 2_000) -> str:
     for symbol, spoken in _EMOJI.items():
         text = text.replace(symbol, spoken)
     text = _EXPRESSIVE_CUE.sub(_normalize_expressive_cue, text)
+    text = _PARENTHETICAL_ASIDE.sub(_normalize_parenthetical_aside, text)
     text = _URL.sub(_speak_url, text)
     text = _WHITESPACE.sub(" ", text).strip()
     if not text:
@@ -152,3 +156,26 @@ def _normalize_expressive_cue(match: re.Match[str]) -> str:
     cue = _WHITESPACE.sub(" ", match.group(1)).strip().casefold()
     supported = _CUE_ALIASES.get(cue)
     return f" [{supported}] " if supported is not None else " "
+
+
+def _normalize_parenthetical_aside(match: re.Match[str]) -> str:
+    """Keep an aside speakable while making it a clean prosody boundary.
+
+    A parenthetical tail is often where OmniVoice starts rushing when it is
+    attached to a long preceding clause. If the preceding text already ends in
+    punctuation (or an expressive cue), whitespace is enough because the
+    existing boundary splitter will separate it. Otherwise add a full-stop
+    boundary; parentheses themselves are decorative and are not sent to TTS.
+    """
+
+    aside = _WHITESPACE.sub(" ", match.group(1)).strip()
+    if not aside:
+        return " "
+    prefix = match.string[: match.start()].rstrip()
+    if not prefix:
+        return f" {aside} "
+    cue_at_end = bool(
+        re.search(r"\[(?:chuckle|sigh|clear throat)\]\s*$", prefix, re.IGNORECASE)
+    )
+    separator = " " if cue_at_end or prefix[-1] in ".!?…;:" else ". "
+    return f"{separator}{aside} "

@@ -30,7 +30,7 @@ if ($Provider -eq "omnivoice") {
     $env:HINA_TTS_MAX_CHUNK_CHARACTERS = "110"
     $env:HINA_TTS_AUDIO_CHUNK_SECONDS = "8"
     $env:HINA_TTS_AUDIO_CHUNK_THRESHOLD_SECONDS = "12"
-    $env:HINA_TTS_OMNIVOICE_MAX_SPEAKING_RATE = "1.02"
+    $env:HINA_TTS_OMNIVOICE_MAX_SPEAKING_RATE = "1.0"
     $env:HINA_TTS_MODEL_VRAM_MIB = "3072"
     $profileAnchor = Join-Path $repoRoot "assets\voices\hina-anime-elevenlabs-reference.wav"
     $env:HINA_TTS_REFERENCE_TEXT = "Thôi nào, đừng tự tạo áp lực cho bản thân quá. [sigh] Công việc code dự án hay gỡ lỗi có những ngày bế tắc là chuyện bình thường mà."

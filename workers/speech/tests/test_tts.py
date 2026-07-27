@@ -131,7 +131,7 @@ class TextAndAudioTests(unittest.TestCase):
         self.assertEqual(config.max_chunk_characters, 110)
         self.assertEqual(
             status["adaptiveSpeakingRate"],
-            {"minimum": 1.0, "maximum": 1.02},
+            {"minimum": 1.0, "maximum": 1.0},
         )
         self.assertEqual(status["expressiveCues"], ["laughter", "sigh"])
 
@@ -160,6 +160,30 @@ class TextAndAudioTests(unittest.TestCase):
         self.assertTrue(all(0 < len(chunk) <= 110 for chunk in chunks))
         self.assertEqual(" ".join(chunks).split(), text.split())
         self.assertTrue(any(chunk.endswith((",", "–")) for chunk in chunks))
+
+    def test_regression_sentence_removes_decorative_emoji_and_splits_parenthetical_tail(self) -> None:
+        text = (
+            "Tại sao cục tẩy lại khóc nức nở vì nó không thể xóa bỏ nỗi đau "
+            "của thế giới! 🖊️😂 (Còn muốn nghe cái gì nữa không, chủ nhân?)"
+        )
+        normalized = normalize_tts_text(text)
+        chunks = split_tts_chunks(normalized, max_characters=110)
+        self.assertNotIn("🖊", normalized)
+        self.assertNotIn("😂", normalized)
+        self.assertNotIn("(", normalized)
+        self.assertNotIn(")", normalized)
+        self.assertIn("[chuckle]", normalized)
+        self.assertEqual(
+            chunks,
+            (
+                "Tại sao cục tẩy lại khóc nức nở vì nó không thể xóa bỏ nỗi đau của thế giới!",
+                "[chuckle] Còn muốn nghe cái gì nữa không, chủ nhân?",
+            ),
+        )
+        self.assertEqual(
+            " ".join(chunks).replace("[chuckle]", "").split(),
+            normalized.replace("[chuckle]", "").split(),
+        )
 
     def test_expressive_cues_use_only_supported_vieneu_tokens(self) -> None:
         value = normalize_tts_text(
@@ -567,7 +591,7 @@ class OmniVoiceProviderTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(str(fake.calls[0]["text"]).endswith("."))
             self.assertEqual(fake.calls[0]["language"], "vi")
             self.assertEqual(fake.calls[0]["num_step"], 32)
-            self.assertLessEqual(fake.calls[0]["speed"], 1.02)
+            self.assertEqual(fake.calls[0]["speed"], 1.0)
             self.assertEqual(
                 {call["speed"] for call in fake.calls},
                 {fake.calls[0]["speed"]},

@@ -76,13 +76,18 @@ Ngày 2026-07-27 owner yêu cầu thay và xóa sạch VoxCPM2. M07-S15 đã chu
 desktop default sang `k2-fsa/OmniVoice` 0.6B, package 0.2.1 và checkpoint
 revision đã pin, CUDA/float16, SDPA, batch 1, optional ASR tắt và reference Hina
 tám giây có transcript khớp + SHA-256. Profile chất lượng dùng 32 diffusion
-steps, chunk tối đa 110 ký tự ưu tiên dấu câu và rate cap 1,02× vì profile nhanh
-hơn làm rơi/nuốt chữ ở câu dài. Trên RTX 5070 Ti, peak reserved đo
+steps, chunk tối đa 110 ký tự ưu tiên dấu câu và rate cố định 1.0× để không
+rush câu dài. Trên RTX 5070 Ti, peak reserved đo
 2270 MiB, scheduler reservation 3072 MiB, vòng 12 request không tăng allocated
 VRAM; short/long reverse-STT similarity lần lượt 0.9733/0.9285. Code/cache/deps
 VoxCPM2 đã nghỉ hưu; M07-S14 chỉ còn lịch sử audit. OmniVoice code Apache-2.0
 nhưng pretrained weight CC-BY-NC, nên chỉ local non-commercial owner testing,
 không commercial/public/production promotion.
+Ngày 2026-07-27 M07-S15 quality maintenance đã chuẩn hóa emoji trang trí
+(`🖊️` bị bỏ, `😂` thành cue `[chuckle]`), loại dấu ngoặc trang trí khỏi văn bản
+đọc và tách phần aside thành chunk riêng với 160 ms pause. Câu hồi quy của owner
+được sinh WAV OmniVoice CUDA/FP16 24 kHz không clipping; Faster-Whisper
+large-v3 CUDA đọc lại similarity 0.9694. Speaking rate thực tế là 1.0×.
 Ngày 2026-07-26 owner chỉ thị “Tiếp tục hoàn thành Plan” và chọn mở M08 —
 Perception trong fast-development mode; M07 giữ trạng thái runnable candidate
 với các deep gate (frozen OBS benchmark, lip-sync p95, final Hina asset, soak

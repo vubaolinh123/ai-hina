@@ -74,7 +74,9 @@ class TtsConfig:
     generation_seed: int = 42
     audio_chunk_duration_seconds: float = 8.0
     audio_chunk_threshold_seconds: float = 12.0
-    omnivoice_max_speaking_rate: float = 1.02
+    # OmniVoice quality profile: keep the reference prosody at natural speed.
+    # Long replies are shortened by chunk boundaries, never by rushing audio.
+    omnivoice_max_speaking_rate: float = 1.0
     cuda_growth_recycle_mib: int = 512
     max_warm_requests: int = 32
     model_vram_mib: int = 3_072
@@ -293,7 +295,7 @@ class TtsConfig:
             omnivoice_max_speaking_rate=_env_float(
                 values,
                 "HINA_TTS_OMNIVOICE_MAX_SPEAKING_RATE",
-                1.02,
+                1.0,
             ),
             cuda_growth_recycle_mib=_env_int(
                 values,

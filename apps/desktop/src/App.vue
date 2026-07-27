@@ -966,8 +966,8 @@ onBeforeUnmount(() => {
           <p class="eyebrow">TEXT → VIENEU VIETNAMESE GPU</p>
           <h3>Nghe thử giọng Hina</h3>
           <p>
-            Dùng khi cần kiểm tra giọng, cảm xúc và tốc độ nói. Câu dài được pipeline tự tăng tốc
-            trong giới hạn đã cấu hình; câu ngắn giữ nhịp tự nhiên.
+            Dùng khi cần kiểm tra giọng và cảm xúc. Câu dài được tách theo dấu câu
+            để giữ nhịp tự nhiên; hệ thống không ép tăng tốc làm mất chữ.
           </p>
           <label for="speechTtsText">Nội dung Hina sẽ nói</label>
           <textarea

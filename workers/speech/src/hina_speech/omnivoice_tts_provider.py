@@ -27,7 +27,7 @@ SnapshotDownloader = Callable[..., str]
 OmniVoiceFactory = Callable[[Path, TtsConfig], Any]
 
 _SAMPLE_RATE_HZ = 24_000
-_INTER_SEGMENT_SILENCE_SECONDS = 0.12
+_INTER_SEGMENT_SILENCE_SECONDS = 0.16
 _MODEL_PATTERNS = (
     "audio_tokenizer/config.json",
     "audio_tokenizer/model.safetensors",

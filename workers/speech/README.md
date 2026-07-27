@@ -36,9 +36,10 @@ module.
 Every complete utterance passes `pre_tts` moderation before inference. Voice
 uploads, generated-audio retention and input-text retention are disabled.
 Long utterances are split at 110 characters with clause punctuation preferred,
-then OmniVoice also bounds its audio-duration chunks. One stable rate capped at
-1.02x is used for the whole utterance, and output is validated per segment. No
-post-generation time-stretch is applied.
+then OmniVoice also bounds its audio-duration chunks. The quality profile keeps
+one stable, natural 1.0x rate for the whole utterance and uses a 160 ms pause
+between segments; it never rushes a long sentence to save wall-clock time.
+Output is validated per segment and no post-generation time-stretch is applied.
 The first accepted request can download the pinned model into
 `var/cache/models/omnivoice`; set `HINA_TTS_ALLOW_DOWNLOAD=false` after
 preloading for strict offline use. The desktop launcher fails closed when

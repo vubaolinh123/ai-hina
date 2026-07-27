@@ -77,7 +77,7 @@
     "diffusion_steps": 32,
     "batch_size": 1,
     "outer_chunk_characters": 110,
-    "maximum_speaking_rate": 1.02,
+    "maximum_speaking_rate": 1.0,
     "audio_chunk_duration_seconds": 8,
     "audio_chunk_threshold_seconds": 12,
     "cache_path": "var/cache/models/omnivoice",

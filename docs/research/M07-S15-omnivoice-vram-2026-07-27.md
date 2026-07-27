@@ -68,8 +68,9 @@ làm vi phạm headroom toàn GPU.
    request warm; scheduler preemption/shutdown vẫn unload toàn bộ.
 8. Không bật `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`: PyTorch Windows
    hiện cảnh báo cấu hình này không được hỗ trợ trên runtime đã kiểm tra.
-9. Giữ một speaking rate cho toàn lượt và cap 1,02×. Profile cũ tăng rate theo
-   tổng độ dài khiến một số đoạn rush và nuốt chữ trong owner listening test.
+9. Giữ một speaking rate cho toàn lượt ở 1.0× tự nhiên. Profile cũ tăng rate
+   theo tổng độ dài khiến một số đoạn rush và nuốt chữ trong owner listening
+   test; bản sửa tách aside trong ngoặc thành chunk riêng và chèn 160 ms pause.
 
 ## License và giới hạn
 

@@ -171,3 +171,9 @@ profile ghi rõ resolution/FPS/avatar/OBS state/duration.
   hotkey/movement/offline và security assertion operator-only. Electron smoke
   vẫn load VRM thật, WebGL fallback/recovery, transparent widget hover controls
   và Operator hide/show/reset; VTube Studio không cài vẫn startup bình thường.
+- M07-S15 quality maintenance: OmniVoice giữ rate tự nhiên 1.0×, tách
+  parenthetical aside thành chunk riêng và chèn 160 ms pause; emoji trang trí
+  được chuẩn hóa trước inference. Regression sentence của owner sinh WAV
+  24 kHz mono PCM16 không clipping tại
+  `var/tmp/m05-real-tts/hina-omnivoice-parenthetical-fixed.wav`; Faster-Whisper
+  large-v3 CUDA round-trip đạt similarity 0.9694.
