@@ -255,11 +255,14 @@ def capture_loop(store: FrameStore, stop_event: threading.Event) -> None:
         texture: Any | None = None
         texture_size: tuple[int, int] | None = None
         last_emit_state: tuple[str, str | None] | None = None
+        receiver_needs_reconnect = False
+        last_receiver_reset = time.monotonic()
         next_tick = time.monotonic()
 
         while not stop_event.is_set():
             senders = receiver.get_sender_list()
             if SENDER_NAME not in senders:
+                receiver_needs_reconnect = True
                 store.set_state("degraded", "E_SPOUT_SENDER_OFFLINE")
                 state = ("degraded", "E_SPOUT_SENDER_OFFLINE")
                 if state != last_emit_state:
@@ -275,7 +278,34 @@ def capture_loop(store: FrameStore, stop_event: threading.Event) -> None:
                 stop_event.wait(0.35)
                 continue
 
+            now = time.monotonic()
             width, height = int(receiver.width), int(receiver.height)
+            dimensions_invalid = (
+                width <= 0
+                or height <= 0
+                or width > 8192
+                or height > 8192
+            )
+            if (
+                receiver_needs_reconnect
+                or (
+                    dimensions_invalid
+                    and now - last_receiver_reset >= 1.0
+                )
+            ):
+                # liru resolves the shared texture dimensions when Receiver is
+                # constructed. If VTube Studio starts after Hina, the original
+                # receiver can keep 0x0 dimensions even after the sender name
+                # appears. Recreate only on the offline→online edge or after a
+                # bounded cooldown so normal frame capture never churns native
+                # Spout handles.
+                receiver = liru.Receiver(SENDER_NAME)
+                texture = None
+                texture_size = None
+                receiver_needs_reconnect = False
+                last_receiver_reset = now
+                width, height = int(receiver.width), int(receiver.height)
+
             if width <= 0 or height <= 0 or width > 8192 or height > 8192:
                 store.set_state("degraded", "E_SPOUT_DIMENSIONS")
                 stop_event.wait(0.2)

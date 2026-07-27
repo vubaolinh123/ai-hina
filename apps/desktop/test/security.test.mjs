@@ -127,10 +127,13 @@ test("Spout2 frame bridge is fixed to loopback and the allowlisted sender", () =
   assert.match(worker, /\("127\.0\.0\.1", port\)/);
   assert.match(worker, /SENDER_NAME = "VTubeStudioSpout"/);
   assert.match(worker, /MAX_FRAME_BYTES = 4 \* 1024 \* 1024/);
+  assert.match(worker, /receiver_needs_reconnect/);
+  assert.match(worker, /receiver = liru\.Receiver\(SENDER_NAME\)/);
   assert.doesNotMatch(worker, /\b(?:open|write_text|write_bytes)\s*\(/);
   assert.match(widget, /class="spout-frame"/);
   assert.match(widget, /showVrmFallback/);
   assert.match(widget, /getSpoutStatus/);
+  assert.match(widget, /next\.state === "ready"/);
 });
 
 test("transparent widget keeps hover Voice/Mic controls and a native drag surface", () => {

@@ -110,7 +110,9 @@ drag và đúng ba control hover. Bridge đã qua build, 39 desktop unit tests,
 real sender smoke và Electron smoke với Spout bật; frame hiện tại báo
 `transparent=false` cho tới khi owner bật “Transparent in capture” trong tab
 camera của VTube Studio. `liru` là alpha/BSD-2-Clause, chỉ dùng local testing
-qua Python 3.13 isolated worker; chưa production-promote.
+qua Python 3.13 isolated worker; chưa production-promote. Late-online smoke
+khởi Hina trước rồi mới mở VTube Studio cũng tự reconnect từ 0×0 lên
+720×405/ready, không cần restart Hina.
 Ngày 2026-07-26 owner chỉ thị “Tiếp tục hoàn thành Plan” và chọn mở M08 —
 Perception trong fast-development mode; M07 giữ trạng thái runnable candidate
 với các deep gate (frozen OBS benchmark, lip-sync p95, final Hina asset, soak

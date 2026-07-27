@@ -439,8 +439,11 @@ export class SpoutBridge {
             : workerState === "error"
               ? "error"
               : this.statusSnapshot.state;
-      const frameReady = record.frameReady === true;
-      const sequence = boundedInteger(record.frameSequence, this.statusSnapshot.frameSequence);
+      const frameReady = record.frameReady === true && nextState === "ready";
+      const sequence = boundedInteger(
+        record.frameSequence,
+        this.statusSnapshot.frameSequence,
+      );
       const frameAgeMilliseconds = boundedNonNegativeNumber(
         record.frameAgeMilliseconds,
         this.statusSnapshot.frameAgeMilliseconds,

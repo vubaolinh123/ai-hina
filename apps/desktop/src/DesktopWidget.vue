@@ -86,7 +86,12 @@ async function refreshSpout(): Promise<void> {
   try {
     const next = await window.hinaDesktop.getSpoutStatus();
     spout.value = next;
-    if (next.frameReady && next.frameUrl && next.frameSequence > 0) {
+    if (
+      next.state === "ready"
+      && next.frameReady
+      && next.frameUrl
+      && next.frameSequence > 0
+    ) {
       const url = `${next.frameUrl}?sequence=${next.frameSequence}`;
       if (url !== spoutFrameUrl.value) {
         spoutFrameUrl.value = url;

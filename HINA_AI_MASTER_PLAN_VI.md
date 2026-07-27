@@ -1330,7 +1330,8 @@ Kết nối VRM/Live2D, lip-sync, expression và operator controls mà không nh
   phát frame thật với `transparent=false`; để bỏ nền hồng cần bật thêm
   **Transparent in capture** sau khi đã Activate Spout2. `liru` là alpha/
   BSD-2-Clause nên slice này chỉ là local testing candidate, chưa
-  production-promote.
+  production-promote. Late-online smoke mở Hina trước rồi VTube Studio sau
+  cũng tự reconnect từ 0×0 lên 720×405/ready, không cần restart Hina.
 
 ### Gate
 
