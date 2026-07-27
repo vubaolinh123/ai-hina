@@ -15,7 +15,8 @@ class FakeWebSocket {
   listeners = new Map();
   requests = [];
 
-  constructor() {
+  constructor({ currentModelFrame = "json" } = {}) {
+    this.currentModelFrame = currentModelFrame;
     queueMicrotask(() => {
       this.readyState = 1;
       this.emit("open", {});
@@ -55,6 +56,15 @@ class FakeWebSocket {
       MoveModelRequest: {},
     }[request.messageType];
     queueMicrotask(() => {
+      if (
+        request.messageType === "CurrentModelRequest"
+        && this.currentModelFrame !== "json"
+      ) {
+        this.emit("message", {
+          data: this.currentModelFrame === "empty" ? "" : "{not-json",
+        });
+        return;
+      }
       this.emit("message", {
         data: JSON.stringify({
           apiName: "VTubeStudioPublicAPI",
@@ -188,3 +198,38 @@ test("status stays honest when permission has not been requested", async () => {
   await assert.rejects(client.refresh(), /E_VTS_AUTH_REQUIRED/);
 });
 
+test("empty CurrentModel frame means authenticated with no model loaded", async () => {
+  const store = tokenStore("owner-secret-token");
+  const sockets = [];
+  const client = new VTubeStudioClient(store, () => {
+    const socket = new FakeWebSocket({ currentModelFrame: "empty" });
+    sockets.push(socket);
+    return socket;
+  });
+
+  const status = await client.connect(false);
+  assert.equal(status.state, "connected");
+  assert.equal(status.connected, true);
+  assert.equal(status.authenticated, true);
+  assert.equal(status.model.loaded, false);
+  assert.deepEqual(status.hotkeys, []);
+  assert.equal(
+    sockets[0].requests.some(
+      (request) => request.messageType === "HotkeysInCurrentModelRequest",
+    ),
+    false,
+  );
+});
+
+test("non-empty malformed VTube Studio frames still fail closed", async () => {
+  const client = new VTubeStudioClient(
+    tokenStore("owner-secret-token"),
+    () => new FakeWebSocket({ currentModelFrame: "malformed" }),
+  );
+
+  await assert.rejects(client.connect(false), /E_VTS_PROTOCOL: response is invalid JSON/);
+  const status = client.status();
+  assert.equal(status.state, "error");
+  assert.equal(status.authenticated, false);
+  assert.equal(status.lastErrorCode, "E_VTS_PROTOCOL");
+});

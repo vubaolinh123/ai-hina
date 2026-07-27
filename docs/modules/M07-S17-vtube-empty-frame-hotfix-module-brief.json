@@ -1,0 +1,56 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M07-S17-vtube-empty-frame-hotfix",
+  "module_id": "M07",
+  "objective": "Make the optional VTube Studio adapter connect honestly when VTube Studio 1.35.10 returns an empty text frame for CurrentModelRequest while no Live2D model is loaded, without weakening parsing for other malformed responses.",
+  "non_goals": [
+    "Do not accept arbitrary malformed JSON or binary frames as successful API responses.",
+    "Do not expose the stored authentication token to logs, tests or the renderer.",
+    "Do not require VTube Studio for desktop startup or remove the VRM widget fallback.",
+    "Do not change Live2D model assets, hotkey semantics or renderer IPC contracts."
+  ],
+  "base_sha": "6820723",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "apps/desktop/electron/vtube-studio-client.ts",
+    "apps/desktop/test/vtube-studio-client.test.mjs",
+    "docs/modules/M07-S17-vtube-empty-frame-hotfix-module-brief.json"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "packages/contracts/",
+    "packages/safety-policy/",
+    "packages/text-brain/",
+    "workers/perception/",
+    "workers/speech/"
+  ],
+  "contracts": [
+    "Only an empty text frame received while exactly one CurrentModelRequest is pending is interpreted as modelLoaded=false.",
+    "Non-empty invalid JSON, binary data and oversized frames remain protocol errors.",
+    "A successful authentication with no model loaded reports connected=true, authenticated=true, model.loaded=false and an empty hotkey allowlist.",
+    "All requests remain loopback-only, bounded and timed out; the authentication token is never returned or logged."
+  ],
+  "allowed_dependencies": [
+    "Existing Node 24 built-in WebSocket implementation; no new dependency."
+  ],
+  "oss_candidates": [
+    "https://github.com/DenchiSoft/VTubeStudio"
+  ],
+  "acceptance_criteria": [
+    "A regression test reproduces the observed VTube Studio 1.35.10 empty CurrentModelRequest frame and reaches connected state without E_VTS_PROTOCOL.",
+    "A negative test proves non-empty malformed JSON still rejects with E_VTS_PROTOCOL.",
+    "Desktop build and the focused VTube Studio test suite pass.",
+    "A live loopback smoke authenticates with the existing token and reports connected with no model loaded."
+  ],
+  "required_test_commands": [
+    "pnpm --filter @hina/desktop build",
+    "node --test apps/desktop/test/vtube-studio-client.test.mjs"
+  ],
+  "latency_or_quality_budget": {
+    "api_timeout_milliseconds": 5000,
+    "loopback_only": true,
+    "malformed_non_empty_frame_fail_closed": true
+  },
+  "output_artifact_dir": "artifacts/verification/M07/"
+}

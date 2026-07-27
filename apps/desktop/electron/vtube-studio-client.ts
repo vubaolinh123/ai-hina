@@ -62,6 +62,7 @@ type WebSocketLike = {
 };
 
 type PendingRequest = {
+  messageType: string;
   resolve(value: Record<string, unknown>): void;
   reject(reason: Error): void;
   timer: NodeJS.Timeout;
@@ -354,7 +355,7 @@ export class VTubeStudioClient {
         this.pending.delete(requestID);
         reject(new Error(`E_VTS_TIMEOUT: ${messageType} timed out`));
       }, REQUEST_TIMEOUT_MILLISECONDS);
-      this.pending.set(requestID, { resolve, reject, timer });
+      this.pending.set(requestID, { messageType, resolve, reject, timer });
       try {
         this.socket?.send(encoded);
       } catch {
@@ -372,6 +373,26 @@ export class VTubeStudioClient {
     }
     if (new TextEncoder().encode(raw).byteLength > MAX_MESSAGE_BYTES) {
       this.rejectPending("E_VTS_PROTOCOL: response exceeds the desktop limit");
+      return;
+    }
+    // VTube Studio 1.35.10 emits exactly one empty text frame for
+    // CurrentModelRequest when the API is authenticated but no Live2D model is
+    // loaded. It carries no request ID, so accept this documented runtime quirk
+    // only when there is a single unambiguous CurrentModelRequest in flight.
+    if (raw.length === 0) {
+      const entries = [...this.pending.entries()];
+      const onlyPending = entries.length === 1 ? entries[0] : undefined;
+      if (
+        onlyPending
+        && onlyPending[1].messageType === "CurrentModelRequest"
+      ) {
+        const [requestID, pending] = onlyPending;
+        clearTimeout(pending.timer);
+        this.pending.delete(requestID);
+        pending.resolve({ modelLoaded: false });
+        return;
+      }
+      this.rejectPending("E_VTS_PROTOCOL: response is empty");
       return;
     }
     let parsed: unknown;
