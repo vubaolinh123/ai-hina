@@ -139,6 +139,14 @@ class ProviderAdapterTests(unittest.IsolatedAsyncioTestCase):
             _ProviderHandler.received_body["options"]["num_predict"],
             192,
         )
+        self.assertEqual(
+            _ProviderHandler.received_body["options"]["temperature"],
+            0.7,
+        )
+        self.assertEqual(
+            _ProviderHandler.received_body["options"]["repeat_penalty"],
+            1.15,
+        )
 
     async def test_openai_compatible_health_stream_and_secret_header(self) -> None:
         provider = LocalHttpChatProvider(

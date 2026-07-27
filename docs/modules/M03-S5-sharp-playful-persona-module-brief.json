@@ -1,0 +1,67 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M03-S5-sharp-playful-persona",
+  "module_id": "M03",
+  "objective": "Upgrade Hina's versioned Vietnamese system prompt with owner-authored few-shot examples for a concise adult anime VTuber persona that sounds gentle, witty and sharply playful while retaining truthfulness, empathy and safety boundaries.",
+  "non_goals": [
+    "Do not fine-tune model weights or train from raw public chat in this maintenance slice.",
+    "Do not install an uncensored model, remove safety policy or weaken prompt-injection controls.",
+    "Do not add Twitch, YouTube or TikTok ingestion before the dedicated live-chat module.",
+    "Do not change the active Qwen3.5-4B unified text/vision baseline or exceed the 14336 MiB all-on VRAM ceiling."
+  ],
+  "base_sha": "55b8918",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "packages/text-brain/personas/hina.v1.json",
+    "packages/text-brain/src/hina_text_brain/persona.py",
+    "packages/text-brain/src/hina_text_brain/context.py",
+    "packages/text-brain/src/hina_text_brain/config.py",
+    "packages/text-brain/src/hina_text_brain/providers.py",
+    "packages/text-brain/tests/",
+    "docs/modules/M03-S5-sharp-playful-persona-module-brief.json"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "packages/contracts/",
+    "packages/safety-policy/",
+    "packages/memory/",
+    "workers/perception/",
+    "workers/speech/",
+    "apps/desktop/"
+  ],
+  "contracts": [
+    "hina.prompt.v3 defaults to one or two direct Vietnamese sentences and no more than 45 words unless detail or safety genuinely requires expansion.",
+    "Five owner-authored/adapted examples are embedded in the rendered system prompt for viewer requests, game failure, creator teasing, toxic comments and empathetic support.",
+    "Trusted fixed chat-source metadata selects an owner, known-user or viewer interaction lane; untrusted user text cannot select its own role.",
+    "Roasts target the immediate behavior or comment, never protected traits, appearance, disability, private tragedy, self-worth or coordinated harassment.",
+    "Verified game/perception state remains factual; Hina may joke about failure but cannot deny evidence.",
+    "Normal spoken replies avoid markdown, decorative emoji and raw stage directions so downstream Vietnamese TTS receives clean text."
+  ],
+  "allowed_dependencies": [
+    "Existing Python standard library and the pinned local Ollama Qwen3.5-4B provider; no new dependency or model weight."
+  ],
+  "oss_candidates": [
+    "Owner-authored Vietnamese few-shot examples supplied on 2026-07-27"
+  ],
+  "acceptance_criteria": [
+    "Unit tests prove prompt version, all five style situations, clean-TTS instruction, concise limits, truthful game-state rule and fixed source-lane rendering.",
+    "Ollama chat payload includes the measured stable Qwen3.5-4B temperature 0.7 and repeat_penalty 1.15 while vision remains deterministic at temperature no greater than 0.2.",
+    "Existing safety, prompt-injection, memory, provider and context-budget tests remain green.",
+    "Live local Qwen3.5-4B smoke returns concise Vietnamese responses for creator, viewer roast, game loss and tired-viewer prompts without a generic closing offer."
+  ],
+  "required_test_commands": [
+    "pnpm test:text-brain",
+    "uv run --frozen python -m unittest packages/text-brain/tests/test_conversation.py packages/text-brain/tests/test_providers.py packages/text-brain/tests/test_config_resource.py"
+  ],
+  "latency_or_quality_budget": {
+    "default_max_sentences": 2,
+    "default_max_words": 45,
+    "normal_max_sentences": 3,
+    "normal_max_words": 80,
+    "max_tokens": 192,
+    "temperature": 0.7,
+    "repeat_penalty": 1.15
+  },
+  "output_artifact_dir": "artifacts/verification/M03/"
+}

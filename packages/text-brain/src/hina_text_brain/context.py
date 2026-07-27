@@ -63,7 +63,14 @@ class ContextComposer:
         source: str = "owner.console",
     ) -> ComposedContext:
         turns, relationship = await self.memory.context(session_id)
-        system = {"role": "system", "content": render_system_prompt(self.persona, relationship)}
+        system = {
+            "role": "system",
+            "content": render_system_prompt(
+                self.persona,
+                relationship,
+                source=source,
+            ),
+        }
         current = {"role": "user", "content": user_text}
         base_size = _message_bytes(system) + _message_bytes(current)
         if base_size > self.max_bytes:

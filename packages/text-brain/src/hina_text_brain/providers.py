@@ -392,6 +392,7 @@ class LocalHttpChatProvider:
                 "think": False,
                 "options": {
                     "temperature": self.config.temperature,
+                    "repeat_penalty": self.config.repeat_penalty,
                     "num_predict": self.config.max_tokens,
                 },
             }

@@ -47,6 +47,10 @@ class ConfigTests(unittest.TestCase):
         self.assertNotIn("owner-secret", str(status))
         self.assertEqual(config.max_tokens, 192)
         self.assertEqual(status["maxTokens"], 192)
+        self.assertEqual(config.temperature, 0.7)
+        self.assertEqual(status["temperature"], 0.7)
+        self.assertEqual(config.repeat_penalty, 1.15)
+        self.assertEqual(status["repeatPenalty"], 1.15)
         self.assertEqual(config.endpoint_path("chat"), "/v1/chat/completions")
 
     def test_config_rejects_remote_or_credentialed_endpoint(self) -> None:
@@ -57,6 +61,17 @@ class ConfigTests(unittest.TestCase):
         ):
             with self.subTest(url=url), self.assertRaises(TextBrainError):
                 ModelGatewayConfig(base_url=url)
+
+    def test_config_rejects_invalid_persona_sampling_values(self) -> None:
+        for field, value in (
+            ("temperature", True),
+            ("temperature", 2.1),
+            ("repeat_penalty", True),
+            ("repeat_penalty", 0),
+            ("repeat_penalty", 2.1),
+        ):
+            with self.subTest(field=field, value=value), self.assertRaises(TextBrainError):
+                ModelGatewayConfig(**{field: value})
 
 
 class ResourceSchedulerTests(unittest.IsolatedAsyncioTestCase):
