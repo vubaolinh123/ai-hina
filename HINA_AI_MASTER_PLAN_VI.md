@@ -1056,22 +1056,34 @@ Hoàn thành vertical slice text-only có persona Hina, interruption/cancellatio
 - Prompt/persona versioning.
 - Real local resource scheduler: inventory, NVML telemetry, lease admission, priority, timeout, preemption/unload policy.
 
-### Trạng thái local hiện tại (M03-S4)
+### Trạng thái local hiện tại (M03-S5)
 
-- Persona `hina.prompt.v2` mặc định trả lời trực tiếp trong 1–2 câu, thường
+- Persona `hina.prompt.v3` mặc định trả lời trực tiếp trong 1–2 câu, thường
   không quá 45 từ; chỉ dùng tối đa 3 câu/khoảng 80 từ khi thật sự cần ngữ cảnh.
 - Không lặp lại câu hỏi, tự giới thiệu ngoài ngữ cảnh, thêm disclaimer chung
   chung hoặc kết thúc bằng lời mời hỗ trợ thừa.
+- Năm few-shot do owner cung cấp đã được nhúng trực tiếp vào system prompt theo
+  năm lane hành vi: yêu cầu của khán giả, thất bại game, creator, bình luận
+  toxic và hỗ trợ người đang mệt. Bản nhúng giữ chất dịu nhưng sắc, song roast
+  chỉ nhắm vào bình luận/hành vi; observation/game fact không được phủ nhận và
+  nỗi đau cá nhân không được dùng làm punchline.
+- Source đã validate được map cố định thành `creator_owner`, `known_user` hoặc
+  `viewer`; text không tin cậy không thể tự nhận vai creator. Output nói bình
+  thường là plain text, không markdown/emoji/stage direction thô để đi thẳng
+  vào TTS.
 - Khi owner yêu cầu rõ chi tiết, code, danh sách hoặc từng bước, Hina được quyền
   mở rộng. Nếu thiếu dữ kiện, hỏi đúng một câu làm rõ ngắn.
 - Gateway mặc định `max_tokens=192` thay vì 512 để giới hạn runaway verbosity;
   đây là cấu hình có thể override, không phải cắt chuỗi sau sinh.
+- Ollama chat dùng `repeat_penalty=1.15`. A/B local với Qwen3.5-4B giữ
+  `temperature=0.7`: profile 0.85 đề xuất cho model cũ có lần kéo câu hát tới
+  79 từ, còn profile 0.7 cho sáu tình huống acceptance ở 9–34 từ và output sạch.
 - Đây là prompt/config maintenance, chưa train weight. Phong cách phản xạ ngắn,
   dí dỏm kiểu AI VTuber sẽ được huấn luyện tùy chọn ở M11 bằng dữ liệu
   repository-authored/consented, không sao chép dialogue hay dataset riêng của
   Neuro-sama.
-- Live Ollama `qwen3.5:4b` smoke cho câu “Bạn là ai?” đã hoàn tất bằng 1 câu/22
-  từ và không có closing offer; owner manual conversation test vẫn là authority.
+- Live Ollama `qwen3.5:4b` smoke cuối cho câu “Bạn là ai?” hoàn tất bằng đúng
+  một câu/9 từ; owner manual conversation test vẫn là authority.
 
 ### Eval
 
@@ -1287,6 +1299,22 @@ Kết nối VRM/Live2D, lip-sync, expression và operator controls mà không nh
 - Dashboard page **Live2D / VTube Studio**: trạng thái kết nối, authorization,
   model/hotkey thật và các preset biểu cảm được allowlist; VRM transparent vẫn
   là fallback offline.
+
+### Trạng thái local hiện tại (M07-S16/S17)
+
+- VTube Studio adapter chỉ chạy trong Electron main process tới
+  `ws://127.0.0.1:8001`; renderer chỉ có typed IPC cho status/connect/refresh,
+  hotkey allowlist và ba preset di chuyển cố định. Token xác thực bounded được
+  lưu cục bộ và không xuất hiện trong renderer/log.
+- VTube Studio 1.35.10 đã được tái hiện trả một text frame rỗng cho
+  `CurrentModelRequest` khi Plugin API đã xác thực nhưng cửa sổ chính chưa tải
+  Live2D model. Parser chỉ chấp nhận frame rỗng khi đúng một request loại này
+  đang chờ, rồi báo `modelLoaded=false`; binary, JSON hỏng hoặc frame quá cỡ
+  vẫn là protocol error.
+- Unit/build pass và live smoke với token owner trả
+  `connected=true/authenticated=true/modelLoaded=false/hotkeyCount=0`.
+  Dashboard phân biệt rõ “API đã nối” với “model đã tải” và hướng dẫn chọn model
+  trong VTube Studio rồi bấm **Đọc lại model**.
 
 ### Gate
 

@@ -6,11 +6,15 @@
 
 Module active hiện tại: **M08 — Perception: screen snapshot, OCR và optional
 VLM**. M01,
-M02 và M03 đã qua fast unit/contract/startup gate. M03-S4 maintenance dùng
-`hina.prompt.v2`: mặc định 1–2 câu/≤45 từ, normal ceiling 3 câu/80 từ,
-`max_tokens=192`, chỉ mở rộng khi owner yêu cầu; future M11 style data không
-copy Neuro-sama transcript/dataset. Fast unit xanh và live Ollama
-`qwen3.5:4b` trả câu hỏi “Bạn là ai?” bằng 1 câu/22 từ, không closing offer.
+M02 và M03 đã qua fast unit/contract/startup gate. M03-S5 maintenance dùng
+`hina.prompt.v3`: mặc định 1–2 câu/≤45 từ, normal ceiling 3 câu/80 từ,
+`max_tokens=192`, chỉ mở rộng khi owner yêu cầu. Năm few-shot do owner cung cấp
+đã được nhúng dưới dạng mẫu đã chỉnh để giữ sự thật, đồng cảm và roast hành
+vi/bình luận thay vì công kích con người; trusted source map cố định
+`creator_owner/known_user/viewer` và output mặc định sạch cho TTS. Ollama chat
+dùng `temperature=0.7` + `repeat_penalty=1.15`: A/B thật cho thấy 0.85 có lúc
+tràn 79 từ, còn profile 0.7 cho sáu tình huống live ở 9–34 từ, không
+markdown/emoji. Future M11 style data không copy Neuro-sama transcript/dataset.
 Repeat/soak/deep release verification được hoãn tới khi owner yêu cầu.
 M04-S1/S2 đã qua fast gate,
 real-provider smoke và independent review; P1 native inference timeout đã đóng
@@ -88,6 +92,15 @@ Ngày 2026-07-27 M07-S15 quality maintenance đã chuẩn hóa emoji trang trí
 đọc và tách phần aside thành chunk riêng với 160 ms pause. Câu hồi quy của owner
 được sinh WAV OmniVoice CUDA/FP16 24 kHz không clipping; Faster-Whisper
 large-v3 CUDA đọc lại similarity 0.9694. Speaking rate thực tế là 1.0×.
+Ngày 2026-07-27 M07-S16 thêm adapter VTube Studio Public API tùy chọn qua
+Electron main process, typed IPC và token cục bộ không lộ ra renderer; VRM
+transparent vẫn là fallback. M07-S17 đóng lỗi `E_VTS_PROTOCOL`: VTube Studio
+1.35.10 gửi đúng một text frame rỗng cho `CurrentModelRequest` khi API đã xác
+thực nhưng chưa tải Live2D model. Client chỉ diễn giải trường hợp hẹp, đơn nhất
+đó thành `modelLoaded=false`; JSON hỏng khác vẫn fail closed. Unit/build xanh và
+live loopback với token hiện tại trả `connected/authenticated=true`,
+`modelLoaded=false`, không còn lỗi; dashboard hướng dẫn owner tải model rồi đọc
+lại trạng thái.
 Ngày 2026-07-26 owner chỉ thị “Tiếp tục hoàn thành Plan” và chọn mở M08 —
 Perception trong fast-development mode; M07 giữ trạng thái runnable candidate
 với các deep gate (frozen OBS benchmark, lip-sync p95, final Hina asset, soak
@@ -101,8 +114,10 @@ getDisplayMedia. Slice được viết trong cloud sandbox (Claude) theo Solo-fi
 30 unit + 8 route tests xanh trên Python 3.11/3.13 sandbox. Ngày 2026-07-27,
 Windows `pnpm test:fast` (bao gồm 30 perception tests và runtime route tests)
 cùng `pnpm smoke:dev-console` đã pass; M08-S1 fast gate được coi là xanh.
-OCR/VLM chưa có dependency nào được thêm; OCR provider chỉ là contract-ready
-cho tới khi qua OSS/license review.
+M08-S2 sau đó tái sử dụng Qwen3.5-4B local làm VLM theo explicit capture,
+scheduler lease và `keep_alive=0`; không lưu pixel/base64, chỉ giữ summary
+untrusted trong TTL ≤15 giây. OCR chưa có dependency nào được thêm; OCR provider
+chỉ là contract-ready cho tới khi qua OSS/license review.
 
 Legacy AIRI skill paths dưới `D:\ProjectAiri` mặc định ánh xạ sang repository
 hiện tại `D:\ProjectHinaAI`, trừ khi owner chỉ định workspace khác.
