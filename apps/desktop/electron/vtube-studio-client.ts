@@ -1,3 +1,5 @@
+import NodeWebSocket from "ws";
+
 const VTS_ENDPOINT = "ws://127.0.0.1:8001";
 const API_NAME = "VTubeStudioPublicAPI";
 const API_VERSION = "1.0";
@@ -124,7 +126,7 @@ export class VTubeStudioClient {
     private readonly tokenStore: VTubeStudioTokenStore,
     private readonly webSocketFactory: (url: string) => WebSocketLike = (
       url,
-    ) => new WebSocket(url),
+    ) => new NodeWebSocket(url) as unknown as WebSocketLike,
   ) {}
 
   status(): VTubeStudioStatus {
@@ -375,10 +377,11 @@ export class VTubeStudioClient {
       this.rejectPending("E_VTS_PROTOCOL: response exceeds the desktop limit");
       return;
     }
-    // VTube Studio 1.35.10 emits exactly one empty text frame for
-    // CurrentModelRequest when the API is authenticated but no Live2D model is
-    // loaded. It carries no request ID, so accept this documented runtime quirk
-    // only when there is a single unambiguous CurrentModelRequest in flight.
+    // Keep compatibility with older/alternate VTube Studio runtimes that emit
+    // exactly one empty text frame for CurrentModelRequest. It carries no
+    // request ID, so accept this transport quirk only when there is a single
+    // unambiguous CurrentModelRequest in flight. The normal ws transport
+    // receives the JSON CurrentModelResponse, including modelLoaded=true.
     if (raw.length === 0) {
       const entries = [...this.pending.entries()];
       const onlyPending = entries.length === 1 ? entries[0] : undefined;

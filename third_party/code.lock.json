@@ -233,6 +233,36 @@
       ]
     },
     {
+      "name": "ws",
+      "source_url": "https://github.com/websockets/ws",
+      "revision": "npm:ws@8.21.1",
+      "license_spdx": "MIT",
+      "source_hash": "sha512-+0NTnW77fFN/DjQi6k/Sq/Yvk4Sgajw7urW8V+asjXnRgDs9gyGkdb7EzgfhA4goXsRIZKE28fzIXBHEzhuiWw==",
+      "destination_paths": [
+        "pnpm-lock.yaml",
+        "apps/desktop/package.json",
+        "apps/desktop/electron/vtube-studio-client.ts"
+      ],
+      "modifications": [
+        "Used as the Electron-main-process RFC-6455 client because the Node built-in WebSocket emitted an empty frame for the real VTube Studio response.",
+        "Only the fixed loopback endpoint is accepted; no source file or snippet is copied and optional native bufferutil/utf-8-validate addons are not installed."
+      ]
+    },
+    {
+      "name": "@types/ws",
+      "source_url": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/ws",
+      "revision": "npm:@types/ws@8.18.1",
+      "license_spdx": "MIT",
+      "source_hash": "sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==",
+      "destination_paths": [
+        "pnpm-lock.yaml",
+        "apps/desktop/package.json"
+      ],
+      "modifications": [
+        "Development-only TypeScript definitions for the pinned ws client; no runtime code is copied."
+      ]
+    },
+    {
       "name": "three",
       "source_url": "https://github.com/mrdoob/three.js",
       "revision": "npm:three@0.185.1",

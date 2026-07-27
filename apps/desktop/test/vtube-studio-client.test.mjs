@@ -198,7 +198,7 @@ test("status stays honest when permission has not been requested", async () => {
   await assert.rejects(client.refresh(), /E_VTS_AUTH_REQUIRED/);
 });
 
-test("empty CurrentModel frame means authenticated with no model loaded", async () => {
+test("legacy empty CurrentModel frame means authenticated with no model loaded", async () => {
   const store = tokenStore("owner-secret-token");
   const sockets = [];
   const client = new VTubeStudioClient(store, () => {

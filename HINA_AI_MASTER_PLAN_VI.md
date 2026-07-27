@@ -1300,21 +1300,27 @@ Kết nối VRM/Live2D, lip-sync, expression và operator controls mà không nh
   model/hotkey thật và các preset biểu cảm được allowlist; VRM transparent vẫn
   là fallback offline.
 
-### Trạng thái local hiện tại (M07-S16/S17)
+### Trạng thái local hiện tại (M07-S16/S17/S18)
 
 - VTube Studio adapter chỉ chạy trong Electron main process tới
   `ws://127.0.0.1:8001`; renderer chỉ có typed IPC cho status/connect/refresh,
   hotkey allowlist và ba preset di chuyển cố định. Token xác thực bounded được
   lưu cục bộ và không xuất hiện trong renderer/log.
-- VTube Studio 1.35.10 đã được tái hiện trả một text frame rỗng cho
-  `CurrentModelRequest` khi Plugin API đã xác thực nhưng cửa sổ chính chưa tải
-  Live2D model. Parser chỉ chấp nhận frame rỗng khi đúng một request loại này
-  đang chờ, rồi báo `modelLoaded=false`; binary, JSON hỏng hoặc frame quá cỡ
+- M07-S17 giữ compatibility branch cho VTube Studio runtime cũ/khác có thể trả
+  một text frame rỗng cho `CurrentModelRequest` khi API đã xác thực nhưng chưa
+  tải Live2D model. Parser chỉ chấp nhận frame rỗng khi đúng một request loại
+  này đang chờ, rồi báo `modelLoaded=false`; binary, JSON hỏng hoặc frame quá cỡ
   vẫn là protocol error.
-- Unit/build pass và live smoke với token owner trả
-  `connected=true/authenticated=true/modelLoaded=false/hotkeyCount=0`.
-  Dashboard phân biệt rõ “API đã nối” với “model đã tải” và hướng dẫn chọn model
-  trong VTube Studio rồi bấm **Đọc lại model**.
+- M07-S18 pin `ws@8.21.1` (MIT) và `@types/ws@8.18.1` thay cho Node built-in
+  WebSocket trong Electron main process. A/B trên VTube Studio 1.35.10 cho
+  thấy transport built-in phát frame rỗng dù model Hiyori đã tải, còn `ws`
+  nhận `CurrentModelResponse` JSON 668 byte với `modelLoaded=true`, model
+  `hiyori` và 3 hotkey. Dependency có registry integrity, provenance và notice;
+  không cần native optional addon.
+- Unit/build pass và live loopback với token owner hiện trả
+  `connected=true/authenticated=true/modelLoaded=true/modelName=hiyori/hotkeyCount=3`.
+  Dashboard vẫn phân biệt rõ “API đã nối” với “model đã tải” và hỗ trợ bấm
+  **Đọc lại model** sau khi owner đổi model trong VTube Studio.
 
 ### Gate
 

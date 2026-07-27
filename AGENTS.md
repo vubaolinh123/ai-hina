@@ -94,13 +94,15 @@ Ngày 2026-07-27 M07-S15 quality maintenance đã chuẩn hóa emoji trang trí
 large-v3 CUDA đọc lại similarity 0.9694. Speaking rate thực tế là 1.0×.
 Ngày 2026-07-27 M07-S16 thêm adapter VTube Studio Public API tùy chọn qua
 Electron main process, typed IPC và token cục bộ không lộ ra renderer; VRM
-transparent vẫn là fallback. M07-S17 đóng lỗi `E_VTS_PROTOCOL`: VTube Studio
-1.35.10 gửi đúng một text frame rỗng cho `CurrentModelRequest` khi API đã xác
-thực nhưng chưa tải Live2D model. Client chỉ diễn giải trường hợp hẹp, đơn nhất
-đó thành `modelLoaded=false`; JSON hỏng khác vẫn fail closed. Unit/build xanh và
-live loopback với token hiện tại trả `connected/authenticated=true`,
-`modelLoaded=false`, không còn lỗi; dashboard hướng dẫn owner tải model rồi đọc
-lại trạng thái.
+transparent vẫn là fallback. M07-S17 giữ compatibility branch cho runtime
+VTube Studio cũ/khác có thể gửi đúng một text frame rỗng cho
+`CurrentModelRequest`; client chỉ diễn giải trường hợp hẹp, đơn nhất đó thành
+`modelLoaded=false`, JSON hỏng khác vẫn fail closed. M07-S18 đã thay Node
+WebSocket built-in bằng `ws@8.21.1` (RFC-6455, MIT) sau A/B trên VTube Studio
+1.35.10: transport cũ nhận frame rỗng dù model Hiyori đã tải, còn `ws` nhận
+`CurrentModelResponse` JSON thật với `modelLoaded=true` và 3 hotkey. Unit/build
+xanh và live loopback hiện xác nhận model thật; dashboard không còn báo sai
+“chưa tải model” khi owner đã chọn model.
 Ngày 2026-07-26 owner chỉ thị “Tiếp tục hoàn thành Plan” và chọn mở M08 —
 Perception trong fast-development mode; M07 giữ trạng thái runnable candidate
 với các deep gate (frozen OBS benchmark, lip-sync p95, final Hina asset, soak

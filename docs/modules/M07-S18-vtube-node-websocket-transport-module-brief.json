@@ -1,0 +1,63 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M07-S18-vtube-node-websocket-transport",
+  "module_id": "M07",
+  "objective": "Replace Electron's problematic Node built-in WebSocket transport for the VTube Studio adapter with the pinned ws RFC-6455 client so CurrentModelResponse and hotkey responses are received reliably on the real loopback API.",
+  "non_goals": [
+    "Do not expose VTube Studio outside 127.0.0.1 or return the authentication token to the renderer.",
+    "Do not load or redistribute a Live2D model; the owner remains responsible for model rights and selection.",
+    "Do not accept arbitrary WebSocket URLs, headers, subprotocols or API payloads.",
+    "Do not remove the narrow empty-frame compatibility branch or fail-open on malformed frames."
+  ],
+  "base_sha": "3361309",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "apps/desktop/electron/vtube-studio-client.ts",
+    "apps/desktop/test/vtube-studio-client.test.mjs",
+    "apps/desktop/package.json",
+    "pnpm-lock.yaml",
+    "third_party/code.lock.json",
+    "third_party/THIRD_PARTY_NOTICES.md",
+    "docs/modules/M07-S18-vtube-node-websocket-transport-module-brief.json"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "packages/contracts/",
+    "packages/safety-policy/",
+    "packages/text-brain/",
+    "workers/perception/",
+    "workers/speech/"
+  ],
+  "contracts": [
+    "Only the Electron main process creates a ws client for the fixed VTube Studio loopback endpoint.",
+    "Text frames are delivered to the existing bounded parser as strings; binary frames remain protocol errors.",
+    "Authentication, request correlation, timeout, disconnect, token redaction and the VRM fallback contracts remain unchanged.",
+    "The dependency is pinned with registry integrity and MIT provenance in the repository lock/notice/SBOM inputs."
+  ],
+  "allowed_dependencies": [
+    "ws 8.21.1 for the Node RFC-6455 client",
+    "@types/ws 8.18.1 for TypeScript development checks"
+  ],
+  "oss_candidates": [
+    "https://github.com/websockets/ws"
+  ],
+  "acceptance_criteria": [
+    "A real loopback smoke with the stored token receives CurrentModelResponse.modelLoaded=true for the currently selected Hiyori model.",
+    "The focused fake WebSocket suite remains green, including empty-frame compatibility and malformed-frame fail-closed tests.",
+    "Desktop typecheck/build passes with no native optional WebSocket addon required.",
+    "The dependency provenance, license and integrity are recorded; no token or user model path appears in logs."
+  ],
+  "required_test_commands": [
+    "pnpm install --frozen-lockfile",
+    "pnpm --filter @hina/desktop build",
+    "node --test apps/desktop/test/vtube-studio-client.test.mjs"
+  ],
+  "latency_or_quality_budget": {
+    "api_timeout_milliseconds": 5000,
+    "loopback_only": true,
+    "native_addons_required": false,
+    "malformed_non_empty_frame_fail_closed": true
+  },
+  "output_artifact_dir": "artifacts/verification/M07/"
+}

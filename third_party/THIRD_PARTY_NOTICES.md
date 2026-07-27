@@ -105,13 +105,17 @@ The local operator desktop uses these exact npm packages:
 - vue-tsc 3.3.8 — MIT — https://github.com/vuejs/language-tools
 - @types/node 26.1.1 — MIT —
   https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/node
+- ws 8.21.1 — MIT — https://github.com/websockets/ws
+- @types/ws 8.18.1 — MIT —
+  https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/ws
 
 Each registry artifact is pinned by version and integrity in `pnpm-lock.yaml`
 and `third_party/code.lock.json`. No source file or snippet from these projects
-is copied into Hina. Electron, Vite, the Vue plugin, TypeScript, vue-tsc and
-@types/node are development/runtime-host tooling; Vue is the renderer runtime
-dependency. TypeScript 7 is not used because it is currently incompatible with
-the pinned Vue type checker.
+is copied into Hina. Electron, Vite, the Vue plugin, TypeScript, vue-tsc,
+@types/node and @types/ws are development/runtime-host tooling; Vue and ws are
+runtime dependencies. TypeScript 7 is not used because it is currently
+incompatible with the pinned Vue type checker. The optional native ws addons
+are not installed.
 
 ## M07 VRM renderer
 
@@ -141,7 +145,9 @@ separate asset with separate rights and provenance at
 No source file or snippet from these repositories is copied into Hina. Neuro
 and neurofrontend informed the module boundary and operator controls; Hina's
 TypeScript adapter was independently implemented against the public VTube
-Studio WebSocket protocol using the Node runtime's built-in WebSocket.
+Studio WebSocket protocol. The Electron transport uses the pinned `ws` client;
+the Node built-in WebSocket was observed to emit an empty frame for a valid
+`CurrentModelResponse` on this VTube Studio runtime.
 
 The Hiyori avatar shown in Neuro's screenshot is not contained in or licensed
 by Neuro's MIT repository. Hina does not bundle or redistribute Hiyori. Owners
