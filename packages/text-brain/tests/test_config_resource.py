@@ -45,6 +45,8 @@ class ConfigTests(unittest.TestCase):
         status = config.public_status()
         self.assertTrue(status["apiKeyConfigured"])
         self.assertNotIn("owner-secret", str(status))
+        self.assertEqual(config.max_tokens, 192)
+        self.assertEqual(status["maxTokens"], 192)
         self.assertEqual(config.endpoint_path("chat"), "/v1/chat/completions")
 
     def test_config_rejects_remote_or_credentialed_endpoint(self) -> None:

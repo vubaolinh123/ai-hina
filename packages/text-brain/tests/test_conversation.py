@@ -133,10 +133,13 @@ class ConversationTests(unittest.IsolatedAsyncioTestCase):
             [entry["state"] for entry in result["stateHistory"]],
             ["idle", "listening", "thinking", "speaking", "idle"],
         )
-        self.assertEqual(result["promptVersion"], "hina.prompt.v1")
+        self.assertEqual(result["promptVersion"], "hina.prompt.v2")
         system_prompt = gateway.messages[0][0]["content"]
         self.assertIn("không có observation màn hình/camera/game còn hạn", system_prompt)
         self.assertIn("Không đưa hidden reasoning", system_prompt)
+        self.assertIn("1–2 câu ngắn", system_prompt)
+        self.assertIn("không quá 45 từ", system_prompt)
+        self.assertIn("không kết thúc bằng lời mời hỗ trợ thêm", system_prompt)
         replay = await service.replay(SESSION_ID)
         self.assertEqual(replay["turnCount"], 1)
         self.assertEqual(replay["relationship"]["completedTurns"], 1)

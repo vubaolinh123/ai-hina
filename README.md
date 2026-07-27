@@ -75,6 +75,11 @@ model, launcher tự chạy `ollama pull qwen3.5:4b`; log provider nằm ở
 stream trả nội dung trong giới hạn token, tránh lỗi do reasoning chiếm hết
 `num_predict`.
 
+Persona `hina.prompt.v2` mặc định đi thẳng vào câu trả lời trong 1–2 câu,
+thường không quá 45 từ; chỉ mở rộng khi bạn yêu cầu rõ chi tiết, code, danh sách
+hoặc từng bước. Gateway dùng trần 192 output token để chặn câu trả lời lan man,
+nhưng có thể đổi bằng `HINA_MODEL_MAX_TOKENS` cho tác vụ dài.
+
 Nếu Ollama app đã chạy nền thì không cần chạy thêm `ollama serve`. Có thể đổi
 provider/model trước khi start:
 

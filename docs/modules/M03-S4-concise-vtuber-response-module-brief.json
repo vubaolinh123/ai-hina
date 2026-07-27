@@ -1,0 +1,67 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M03-S4-concise-vtuber-response-style",
+  "module_id": "M03",
+  "objective": "Make Hina's current local chat concise and direct by default, while defining a provenance-safe future training slice for short, playful Vietnamese VTuber responses without copying Neuro-sama private models, datasets or transcripts.",
+  "non_goals": [
+    "Do not fine-tune or modify model weights in this slice.",
+    "Do not scrape, transcribe or copy Neuro-sama streams, catchphrases or proprietary dialogue datasets.",
+    "Do not post-process or cut a generated sentence; the provider token budget remains explicitly configurable for detailed tasks.",
+    "Do not auto-train from raw owner, viewer or public chat.",
+    "Do not modify the speech, memory, perception or safety-policy implementations."
+  ],
+  "base_sha": "77b1bf6ae3f4be3e250f4f5244b53b6b8df0b136",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    ".env.example",
+    "AGENTS.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "README.md",
+    "docs/modules/",
+    "docs/research/",
+    "packages/text-brain/personas/",
+    "packages/text-brain/src/hina_text_brain/config.py",
+    "packages/text-brain/tests/",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    "packages/contracts/",
+    "packages/safety-policy/",
+    "workers/speech/",
+    "workers/perception/",
+    "voice_demo/"
+  ],
+  "contracts": [
+    "Hina answers directly in one or two short sentences and usually at most 45 Vietnamese words; up to three sentences and 80 words are allowed when context is needed, unless the owner requests detail, code, a list or a step-by-step explanation.",
+    "Hina does not repeat the question, add generic disclaimers, introduce herself unprompted or append an offer to help when the direct answer is complete.",
+    "Safety truthfulness, capability boundaries and explicit owner formatting requests override brevity.",
+    "The local gateway default output budget is 192 tokens and remains configurable through HINA_MODEL_MAX_TOKENS.",
+    "Future style training uses immutable consented or repository-authored data with independent safety and utility evaluation; raw public chat is never training input."
+  ],
+  "allowed_dependencies": [
+    "Existing versioned PersonaSpec, model gateway configuration and text-brain unit harness.",
+    "Existing offline M11 dataset and LoRA/QLoRA roadmap contracts."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "The versioned persona prompt contains an explicit one-to-two sentence, usually <=45-word default, a three-sentence/80-word normal ceiling and clear expansion exceptions.",
+    "ModelGatewayConfig defaults to 192 output tokens, exposes the effective limit in public status and passes the value to Ollama/OpenAI-compatible requests.",
+    "Unit tests freeze the concise response contract and default token budget.",
+    "The M11 plan defines a Vietnamese concise-witty style dataset and evaluation slice without copying Neuro-sama dialogue.",
+    "Focused text-brain tests and the fast unit suite pass once."
+  ],
+  "required_test_commands": [
+    "pnpm test:text-brain",
+    "pnpm test:fast"
+  ],
+  "latency_or_quality_budget": {
+    "default_max_output_tokens": 192,
+    "default_answer_sentences_min": 1,
+    "default_answer_sentences_max": 2,
+    "typical_answer_words_max": 45,
+    "normal_answer_words_ceiling": 80,
+    "future_training_requires_owner_blind_evaluation": true
+  },
+  "output_artifact_dir": "artifacts/verification/M03/"
+}

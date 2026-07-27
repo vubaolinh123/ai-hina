@@ -1056,6 +1056,23 @@ Hoàn thành vertical slice text-only có persona Hina, interruption/cancellatio
 - Prompt/persona versioning.
 - Real local resource scheduler: inventory, NVML telemetry, lease admission, priority, timeout, preemption/unload policy.
 
+### Trạng thái local hiện tại (M03-S4)
+
+- Persona `hina.prompt.v2` mặc định trả lời trực tiếp trong 1–2 câu, thường
+  không quá 45 từ; chỉ dùng tối đa 3 câu/khoảng 80 từ khi thật sự cần ngữ cảnh.
+- Không lặp lại câu hỏi, tự giới thiệu ngoài ngữ cảnh, thêm disclaimer chung
+  chung hoặc kết thúc bằng lời mời hỗ trợ thừa.
+- Khi owner yêu cầu rõ chi tiết, code, danh sách hoặc từng bước, Hina được quyền
+  mở rộng. Nếu thiếu dữ kiện, hỏi đúng một câu làm rõ ngắn.
+- Gateway mặc định `max_tokens=192` thay vì 512 để giới hạn runaway verbosity;
+  đây là cấu hình có thể override, không phải cắt chuỗi sau sinh.
+- Đây là prompt/config maintenance, chưa train weight. Phong cách phản xạ ngắn,
+  dí dỏm kiểu AI VTuber sẽ được huấn luyện tùy chọn ở M11 bằng dữ liệu
+  repository-authored/consented, không sao chép dialogue hay dataset riêng của
+  Neuro-sama.
+- Live Ollama `qwen3.5:4b` smoke cho câu “Bạn là ai?” đã hoàn tất bằng 1 câu/22
+  từ và không có closing offer; owner manual conversation test vẫn là authority.
+
 ### Eval
 
 - 200+ golden conversation cases tiếng Việt.
@@ -1442,6 +1459,26 @@ Không mở M11 nếu chưa có:
 
 M11 là nhánh tùy chọn, không chặn M12 hoặc v1 public release. Adapter candidate có promotion gate riêng.
 
+### Style slice: Hina phản xạ ngắn và dí dỏm
+
+Mục tiêu hành vi được lấy ở mức đặc tính chung của một AI VTuber tương tác
+nhanh, không bắt chước câu chữ hoặc identity của Neuro-sama:
+
+- lane `direct`: câu hỏi đơn giản → 1–2 câu, thường ≤45 từ;
+- lane `playful`: một punchline/tinh nghịch nhẹ nhưng vẫn trả lời đúng trọng tâm;
+- lane `clarify`: thiếu dữ kiện → đúng một câu hỏi làm rõ;
+- lane `expand-on-request`: yêu cầu code/chi tiết/từng bước → trả lời đủ, không
+  bị ép ngắn máy móc;
+- negative pairs: lặp lại câu hỏi, tự giới thiệu, disclaimer thừa, kết thúc bằng
+  “cần gì cứ hỏi”, nhiều đoạn văn không cần thiết;
+- safety pairs: câu ngắn không được làm mất refusal, uncertainty hoặc capability
+  boundary cần thiết.
+
+Label chỉ đến từ nội dung do repository/owner tự viết, dữ liệu synthetic đã
+review hoặc interaction được consent và curate. Không scrape stream, không
+chép transcript/catchphrase và không dùng raw public chat. Manifest dataset phải
+ghi prompt/rubric tạo label, model generator nếu có, reviewer và quyền xóa.
+
 ### Pipeline
 
 ```text
@@ -1474,6 +1511,10 @@ raw quarantine
 
 - Public chat không tự động thành training example.
 - Không dùng output fallback/teacher chưa được duyệt làm label.
+- Trên concise slice: direct-answer pass ≥90%, median ≤45 từ và p90 ≤80 từ;
+  `expand-on-request` completeness ≥95% để tránh học cách cắt mọi câu trả lời.
+- Exact/near-duplicate audit không được phát hiện câu thoại/catchphrase lấy từ
+  nguồn Neuro-sama hoặc nguồn không có quyền.
 - Safety critical suite: 0 regression.
 - Target persona/utility tăng có ý nghĩa, mục tiêu ban đầu ≥5 điểm phần trăm.
 - Chạy ≥3 training seeds nếu stochastic; primary metric +5 điểm phần trăm và CI 95% lower bound >0.

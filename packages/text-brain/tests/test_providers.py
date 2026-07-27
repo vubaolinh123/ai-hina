@@ -123,6 +123,10 @@ class ProviderAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(_ProviderHandler.received_body["stream"])
         self.assertEqual(_ProviderHandler.received_body["keep_alive"], 0)
         self.assertIs(_ProviderHandler.received_body["think"], False)
+        self.assertEqual(
+            _ProviderHandler.received_body["options"]["num_predict"],
+            192,
+        )
 
     async def test_openai_compatible_health_stream_and_secret_header(self) -> None:
         provider = LocalHttpChatProvider(
@@ -144,6 +148,7 @@ class ProviderAdapterTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(text, "Hello Hina")
         self.assertEqual(_ProviderHandler.authorization, "Bearer test-secret")
+        self.assertEqual(_ProviderHandler.received_body["max_tokens"], 192)
 
     async def test_malformed_provider_stream_fails_without_fake_text(self) -> None:
         _ProviderHandler.malformed = True

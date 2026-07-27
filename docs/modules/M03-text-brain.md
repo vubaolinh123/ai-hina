@@ -1,9 +1,9 @@
 # M03 — Text brain
 
-- Status: fast implementation complete; independent review passed without a confirmed P0/P1 blocker; owner manual acceptance remains available
-- Branch: `codex/M03-text-brain`
+- Status: M03-S4 concise-response maintenance is a fast candidate; owner manual acceptance remains authoritative
+- Branch: `main`
 - Base: `6c21754`
-- Completed slices: `M03-S1`, `M03-S2`
+- Completed slices: `M03-S1`, `M03-S2`, `M03-S3`, `M03-S4`
 - Reviewed candidate: `88d3dd72c3ae8ddc269fff371e30d6e6fc055407`
 - Next action: owner manual application test while M04 proceeds
 
@@ -78,3 +78,22 @@ development rule. No model is quality-promoted by this implementation gate.
 
 The reviewer did not run repeat/soak/deep model-quality verification. Those
 checks remain explicitly deferred by the owner's fast-development policy.
+
+## M03-S4 concise VTuber response maintenance
+
+- `hina.prompt.v2` answers directly in one or two short sentences and usually
+  no more than 45 Vietnamese words; three sentences/80 words are the normal
+  ceiling when context is necessary.
+- Repeating the question, unnecessary self-introduction, generic disclaimers
+  and trailing offers to help are explicitly discouraged.
+- Explicit requests for detail, code, lists or step-by-step output override the
+  concise default. Missing context produces one short clarification question.
+- The gateway default output budget is 192 tokens instead of 512 and remains
+  configurable with `HINA_MODEL_MAX_TOKENS`; no generated string is cut by a
+  post-processor.
+- Future M11 training targets the general traits “brief, reactive and lightly
+  playful” using repository-authored, synthetic-reviewed or consented data.
+  Neuro-sama transcripts, catchphrases, private models and datasets are not
+  copied.
+- One live Ollama `qwen3.5:4b` check for “Bạn là ai?” completed with
+  `hina.prompt.v2` in one sentence/22 words, with no trailing offer.

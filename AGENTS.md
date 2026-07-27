@@ -6,8 +6,13 @@
 
 Module active hiện tại: **M08 — Perception: screen snapshot, OCR và optional
 VLM**. M01,
-M02 và M03 đã qua fast unit/contract/startup gate; repeat/soak/deep release
-verification được hoãn tới khi owner yêu cầu. M04-S1/S2 đã qua fast gate,
+M02 và M03 đã qua fast unit/contract/startup gate. M03-S4 maintenance dùng
+`hina.prompt.v2`: mặc định 1–2 câu/≤45 từ, normal ceiling 3 câu/80 từ,
+`max_tokens=192`, chỉ mở rộng khi owner yêu cầu; future M11 style data không
+copy Neuro-sama transcript/dataset. Fast unit xanh và live Ollama
+`qwen3.5:4b` trả câu hỏi “Bạn là ai?” bằng 1 câu/22 từ, không closing offer.
+Repeat/soak/deep release verification được hoãn tới khi owner yêu cầu.
+M04-S1/S2 đã qua fast gate,
 real-provider smoke và independent review; P1 native inference timeout đã đóng
 tại `cba2a816e0d63f7d0c5756331374c0da9213cc02`. Ngày 2026-07-25 owner chỉ thị
 “Tiếp tục đi”, được ghi nhận là quyết định cho phép chuyển từ candidate M04 sang

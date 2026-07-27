@@ -29,7 +29,7 @@ class ModelGatewayConfig:
     max_output_bytes: int = 1_048_576
     model_vram_mib: int = 4_096
     model_ram_mib: int = 1_024
-    max_tokens: int = 512
+    max_tokens: int = 192
     temperature: float = 0.7
 
     def __post_init__(self) -> None:
@@ -90,7 +90,7 @@ class ModelGatewayConfig:
             circuit_reset_seconds=_env_float(values, "HINA_MODEL_CIRCUIT_RESET", 30.0),
             model_vram_mib=_env_int(values, "HINA_MODEL_VRAM_MIB", 4_096),
             model_ram_mib=_env_int(values, "HINA_MODEL_RAM_MIB", 1_024),
-            max_tokens=_env_int(values, "HINA_MODEL_MAX_TOKENS", 512),
+            max_tokens=_env_int(values, "HINA_MODEL_MAX_TOKENS", 192),
             temperature=_env_float(values, "HINA_MODEL_TEMPERATURE", 0.7),
         )
 
@@ -103,6 +103,8 @@ class ModelGatewayConfig:
             "healthTimeoutSeconds": self.health_timeout_seconds,
             "requestTimeoutSeconds": self.request_timeout_seconds,
             "retryAttempts": self.retry_attempts,
+            "maxTokens": self.max_tokens,
+            "temperature": self.temperature,
             "modelVramMiB": self.model_vram_mib,
             "reservedVramHeadroomMiB": 2_048,
         }
