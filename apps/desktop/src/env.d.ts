@@ -109,6 +109,35 @@ type WidgetStatus = {
   };
 };
 
+type VTubeStudioStatus = {
+  available: true;
+  endpoint: "ws://127.0.0.1:8001";
+  state:
+    | "offline"
+    | "connecting"
+    | "needs_authorization"
+    | "connected"
+    | "error";
+  connected: boolean;
+  authenticated: boolean;
+  authorizationStored: boolean;
+  model: {
+    loaded: boolean;
+    id: string | null;
+    name: string | null;
+    vtsModelName: string | null;
+  };
+  hotkeys: Array<{
+    id: string;
+    name: string;
+    type: string;
+  }>;
+  lastErrorCode: string | null;
+  renderer: "external-vtube-studio";
+  offlineFallback: "hina-vrm-widget";
+  hiyoriBundled: false;
+};
+
 type HinaDesktopApi = {
   getWindowMode(): Promise<DesktopWindowMode>;
   getWidgetStatus(): Promise<WidgetStatus>;
@@ -152,6 +181,14 @@ type HinaDesktopApi = {
     sessionId: string | null;
     source: "owner.console";
   }): Promise<Uint8Array>;
+  getVTubeStudioStatus(): Promise<VTubeStudioStatus>;
+  connectVTubeStudio(): Promise<VTubeStudioStatus>;
+  disconnectVTubeStudio(): Promise<VTubeStudioStatus>;
+  refreshVTubeStudio(): Promise<VTubeStudioStatus>;
+  triggerVTubeStudioHotkey(hotkeyId: string): Promise<VTubeStudioStatus>;
+  moveVTubeStudioModel(
+    preset: "chat" | "screen" | "react",
+  ): Promise<VTubeStudioStatus>;
 };
 
 interface Window {

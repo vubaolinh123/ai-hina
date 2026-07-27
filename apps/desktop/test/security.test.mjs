@@ -56,6 +56,12 @@ test("preload exposes named methods and never exposes raw ipcRenderer", () => {
     "getSafetyStatus",
     "applySafetyControl",
     "getRuntimeHealth",
+    "getVTubeStudioStatus",
+    "connectVTubeStudio",
+    "disconnectVTubeStudio",
+    "refreshVTubeStudio",
+    "triggerVTubeStudioHotkey",
+    "moveVTubeStudioModel",
   ]) {
     assert.match(preload, new RegExp(`${method}:`));
   }
@@ -75,6 +81,31 @@ test("Vue renderer has no direct network, Electron, Node or storage access", () 
   assert.doesNotMatch(renderer, /from\s+["']electron["']/);
   assert.doesNotMatch(renderer, /node:|indexedDB|localStorage|sessionStorage/);
   assert.doesNotMatch(renderer, /sqlite|qdrant|modelPath|process\.env/i);
+});
+
+test("VTube Studio stays in the main process behind operator-only typed IPC", () => {
+  const main = read("electron/main.ts");
+  const preload = read("electron/preload.ts");
+  const client = read("electron/vtube-studio-client.ts");
+  const app = read("src/App.vue");
+  assert.match(main, /E_VTS_AUTHORITY: operator window required/);
+  assert.match(main, /VTS_TOKEN_STATE_MAX_BYTES/);
+  assert.match(main, /hina-vtube-studio-token\.v1\.json/);
+  assert.doesNotMatch(preload, /authenticationToken|WebSocket/);
+  assert.match(client, /ws:\/\/127\.0\.0\.1:8001/);
+  assert.match(client, /VTubeStudioPublicAPI/);
+  assert.match(client, /AuthenticationTokenRequest/);
+  assert.match(client, /AuthenticationRequest/);
+  assert.match(client, /HotkeyTriggerRequest/);
+  assert.match(client, /MoveModelRequest/);
+  assert.match(client, /hiyoriBundled:\s*false/);
+  assert.doesNotMatch(client, /wss?:\/\/(?!127\.0\.0\.1)/);
+  assert.match(app, /Live2D \/ VTube Studio/);
+  assert.match(app, /connectVTubeStudio/);
+  assert.match(app, /triggerVTubeStudioHotkey/);
+  assert.match(app, /moveVTubeStudioModel/);
+  assert.match(app, /Hiyori là sample của Live2D/);
+  assert.match(app, /VRM local vẫn là fallback/);
 });
 
 test("transparent widget keeps hover Voice/Mic controls and a native drag surface", () => {

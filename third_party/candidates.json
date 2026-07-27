@@ -32,6 +32,71 @@
       ]
     },
     {
+      "id": "kimjammer-neuro",
+      "name": "kimjammer/Neuro",
+      "kind": "architecture_reference_only",
+      "source_url": "https://github.com/kimjammer/Neuro",
+      "revision": null,
+      "observed_revision": "5e4b4241c41bb40983aee2cb60d65d6bb481842b",
+      "observed_default_branch": "main",
+      "license": {
+        "spdx": "MIT",
+        "evidence_url": "https://github.com/kimjammer/Neuro/blob/5e4b4241c41bb40983aee2cb60d65d6bb481842b/LICENSE"
+      },
+      "intended_use": [
+        "vtube_studio_module_architecture_reference",
+        "multimodal_and_operator_control_research"
+      ],
+      "freeze_blockers": [
+        "no_source_file_copied",
+        "avatar_in_screenshot_is_not_part_of_repository",
+        "audit_any_future_selected_path_before_adaptation"
+      ]
+    },
+    {
+      "id": "kimjammer-neurofrontend",
+      "name": "kimjammer/neurofrontend",
+      "kind": "operator_ux_reference_only",
+      "source_url": "https://github.com/kimjammer/neurofrontend",
+      "revision": null,
+      "observed_revision": "365dd6d7f9febc87daccd7491054be8954a85c35",
+      "observed_default_branch": "main",
+      "license": {
+        "spdx": "MIT",
+        "evidence_url": "https://github.com/kimjammer/neurofrontend/blob/365dd6d7f9febc87daccd7491054be8954a85c35/LICENSE"
+      },
+      "intended_use": [
+        "dashboard_information_architecture_reference",
+        "hotkey_and_model_position_control_reference"
+      ],
+      "freeze_blockers": [
+        "no_source_file_copied",
+        "audit_any_future_selected_path_before_adaptation"
+      ]
+    },
+    {
+      "id": "denchisoft-vtube-studio-api",
+      "name": "VTube Studio Public API",
+      "kind": "external_loopback_protocol_reference",
+      "source_url": "https://github.com/DenchiSoft/VTubeStudio",
+      "revision": null,
+      "observed_revision": "882ba5fc8bf06d7795b28bbbb965464f75403618",
+      "observed_default_branch": "master",
+      "license": {
+        "spdx": "MIT",
+        "evidence_url": "https://github.com/DenchiSoft/VTubeStudio/blob/882ba5fc8bf06d7795b28bbbb965464f75403618/LICENSE"
+      },
+      "intended_use": [
+        "public_websocket_api_protocol",
+        "external_live2d_renderer_control"
+      ],
+      "freeze_blockers": [
+        "no_sdk_or_source_file_copied",
+        "vtube_studio_application_and_live2d_model_terms_remain_separate",
+        "real_owner_smoke_requires_vtube_studio_installation"
+      ]
+    },
+    {
       "id": "vedalai-neuro-sdk",
       "name": "VedalAI Neuro SDK",
       "kind": "protocol_reference_and_selective_copy_candidate",

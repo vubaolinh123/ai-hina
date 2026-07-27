@@ -15,7 +15,13 @@ import type { FrameMetricsReport } from "./frame-metrics.mjs";
 
 const VrmStage = defineAsyncComponent(() => import("./VrmStage.vue"));
 const DesktopWidget = defineAsyncComponent(() => import("./DesktopWidget.vue"));
-type DashboardPage = "overview" | "chat" | "speech" | "avatar" | "runtime";
+type DashboardPage =
+  | "overview"
+  | "chat"
+  | "speech"
+  | "avatar"
+  | "live2d"
+  | "runtime";
 
 const stateLabels: Record<AvatarState, string> = {
   idle: "Nghỉ",
@@ -30,6 +36,9 @@ const avatar = ref<AvatarStatus | null>(null);
 const windowMode = ref<DesktopWindowMode | null>(null);
 const safety = ref<SafetyStatus | null>(null);
 const widgetStatus = ref<WidgetStatus | null>(null);
+const vtubeStatus = ref<VTubeStudioStatus | null>(null);
+const vtubeBusy = ref(false);
+const vtubeMessage = ref("");
 const runtime = ref<RuntimeHealth | null>(null);
 const previewState = ref<AvatarState>("idle");
 const errorMessage = ref("");
@@ -460,6 +469,94 @@ async function refreshWidget(): Promise<void> {
   }
 }
 
+async function refreshVTubeStudioStatus(
+  refreshRemote = false,
+): Promise<void> {
+  try {
+    vtubeStatus.value = refreshRemote && vtubeStatus.value?.authenticated
+      ? await window.hinaDesktop.refreshVTubeStudio()
+      : await window.hinaDesktop.getVTubeStudioStatus();
+  } catch (error) {
+    vtubeMessage.value = error instanceof Error
+      ? error.message
+      : "E_VTS_STATUS";
+    vtubeStatus.value = await window.hinaDesktop.getVTubeStudioStatus();
+  }
+}
+
+async function connectVTubeStudio(): Promise<void> {
+  if (vtubeBusy.value) return;
+  vtubeBusy.value = true;
+  vtubeMessage.value =
+    "Đang kết nối. Nếu VTube Studio hỏi quyền plugin, hãy bấm Allow.";
+  try {
+    vtubeStatus.value = await window.hinaDesktop.connectVTubeStudio();
+    vtubeMessage.value = vtubeStatus.value.authenticated
+      ? "Đã kết nối. Hina đang điều khiển model Live2D đã chọn trong VTube Studio."
+      : "VTube Studio chưa cấp quyền plugin; hãy bấm kết nối lại và chọn Allow.";
+  } catch (error) {
+    vtubeMessage.value = error instanceof Error
+      ? error.message
+      : "E_VTS_CONNECT";
+    await refreshVTubeStudioStatus();
+  } finally {
+    vtubeBusy.value = false;
+  }
+}
+
+async function disconnectVTubeStudio(): Promise<void> {
+  if (vtubeBusy.value) return;
+  vtubeBusy.value = true;
+  try {
+    vtubeStatus.value = await window.hinaDesktop.disconnectVTubeStudio();
+    vtubeMessage.value =
+      "Đã ngắt VTube Studio. Widget VRM local vẫn hoạt động bình thường.";
+  } catch (error) {
+    vtubeMessage.value = error instanceof Error
+      ? error.message
+      : "E_VTS_DISCONNECT";
+  } finally {
+    vtubeBusy.value = false;
+  }
+}
+
+async function triggerVTubeStudioHotkey(hotkeyId: string): Promise<void> {
+  if (vtubeBusy.value) return;
+  vtubeBusy.value = true;
+  try {
+    vtubeStatus.value =
+      await window.hinaDesktop.triggerVTubeStudioHotkey(hotkeyId);
+    vtubeMessage.value = "Đã gửi hotkey tới model Live2D hiện tại.";
+  } catch (error) {
+    vtubeMessage.value = error instanceof Error
+      ? error.message
+      : "E_VTS_HOTKEY";
+    await refreshVTubeStudioStatus();
+  } finally {
+    vtubeBusy.value = false;
+  }
+}
+
+async function moveVTubeStudioModel(
+  preset: "chat" | "screen" | "react",
+): Promise<void> {
+  if (vtubeBusy.value) return;
+  vtubeBusy.value = true;
+  try {
+    vtubeStatus.value =
+      await window.hinaDesktop.moveVTubeStudioModel(preset);
+    vtubeMessage.value =
+      `Đã chuyển model sang bố cục ${preset}; không thay đổi file model.`;
+  } catch (error) {
+    vtubeMessage.value = error instanceof Error
+      ? error.message
+      : "E_VTS_MOVE";
+    await refreshVTubeStudioStatus();
+  } finally {
+    vtubeBusy.value = false;
+  }
+}
+
 async function retryConnection(): Promise<void> {
   busy.value = true;
   try {
@@ -653,6 +750,7 @@ onMounted(async () => {
     refreshSafety(),
     refreshWidget(),
     refreshSpeechRuntime(),
+    refreshVTubeStudioStatus(),
   ]);
   avatarTimer = window.setInterval(refreshAvatar, 250);
   safetyTimer = window.setInterval(refreshSafety, 1_000);
@@ -700,6 +798,10 @@ onBeforeUnmount(() => {
         Avatar Stage
         <small>Xem biểu cảm và lip-sync</small>
       </button>
+      <button type="button" :class="{ active: activePage === 'live2d' }" @click="activePage = 'live2d'">
+        Live2D / VTube Studio
+        <small>Hiyori hoặc model của bạn</small>
+      </button>
       <button type="button" :class="{ active: activePage === 'runtime' }" @click="activePage = 'runtime'">
         Runtime & Safety
         <small>Widget, mute và dừng khẩn cấp</small>
@@ -740,11 +842,23 @@ onBeforeUnmount(() => {
           <strong>{{ safety?.state.muted ? "Đang tắt" : "Đang bật" }}</strong>
           <p>Vào Chat với Hina để gửi câu hỏi. Khi bật voice, câu trả lời sẽ phát thành WAV thật.</p>
         </article>
+        <article class="overview-card">
+          <span>Avatar Live2D bên ngoài</span>
+          <strong :data-good="vtubeStatus?.authenticated">
+            {{ vtubeStatus?.authenticated ? "VTube Studio đã nối" : "Chưa kết nối" }}
+          </strong>
+          <p>
+            {{ vtubeStatus?.model.loaded
+              ? `Model: ${vtubeStatus.model.name || vtubeStatus.model.vtsModelName}`
+              : "VRM local vẫn là fallback; vào trang Live2D để thiết lập." }}
+          </p>
+        </article>
       </div>
       <div class="quick-actions">
         <button class="primary" type="button" @click="activePage = 'chat'">Mở chat với Hina</button>
         <button type="button" @click="activePage = 'speech'">Kiểm tra Mic / STT / TTS</button>
         <button type="button" @click="activePage = 'avatar'">Xem avatar</button>
+        <button type="button" @click="activePage = 'live2d'">Thiết lập Live2D / Hiyori</button>
         <button type="button" @click="activePage = 'runtime'">Quản lý widget và Safety</button>
       </div>
     </section>
@@ -889,6 +1003,172 @@ onBeforeUnmount(() => {
         kiểm tra Windows đã cấp quyền microphone cho ứng dụng desktop, chọn đúng mic mặc định,
         nói gần mic rồi xem correlation ID hoặc dòng <code>[hina-error]</code> trong cửa sổ
         <code>pnpm start:desktop</code>.
+      </aside>
+    </section>
+
+    <section v-else-if="activePage === 'live2d'" class="dashboard-page live2d-page">
+      <div class="page-heading">
+        <p class="eyebrow">M07 / EXTERNAL LIVE2D RENDERER</p>
+        <h2>Avatar Live2D qua VTube Studio</h2>
+        <p class="purpose">
+          Đây là cách project Neuro hiển thị nhân vật: model Live2D chạy trong
+          VTube Studio, còn Hina dùng API local để xem model hiện tại, bật hotkey
+          biểu cảm và đổi bố cục. Khi VTube Studio tắt, widget VRM trong suốt của
+          Hina vẫn là phương án dự phòng và chat/voice không bị dừng.
+        </p>
+      </div>
+
+      <div class="vtube-status-strip" :data-connected="vtubeStatus?.authenticated">
+        <div>
+          <span>Trạng thái</span>
+          <strong>
+            {{ vtubeStatus?.authenticated
+              ? "Đã kết nối và xác thực"
+              : vtubeStatus?.state === "needs_authorization"
+                ? "Đang chờ bạn cấp quyền"
+                : "Chưa kết nối" }}
+          </strong>
+        </div>
+        <div>
+          <span>Địa chỉ local cố định</span>
+          <strong><code>{{ vtubeStatus?.endpoint ?? "ws://127.0.0.1:8001" }}</code></strong>
+        </div>
+        <div>
+          <span>Renderer ưu tiên</span>
+          <strong>{{ vtubeStatus?.model.loaded ? "Live2D đã chọn" : "VRM fallback" }}</strong>
+        </div>
+        <div>
+          <span>Token</span>
+          <strong>{{ vtubeStatus?.authorizationStored ? "Đã lưu cục bộ" : "Chưa có" }}</strong>
+        </div>
+      </div>
+
+      <div class="live2d-grid">
+        <article class="live2d-card setup-card">
+          <p class="eyebrow">THIẾT LẬP MỘT LẦN</p>
+          <h3>Để dùng Hiyori giống ảnh của Neuro</h3>
+          <ol>
+            <li>Mở VTube Studio trên Windows và vào Settings → Plugins.</li>
+            <li>Bật “Allow Plugin API access”; API phải nghe ở cổng mặc định 8001.</li>
+            <li>Trong VTube Studio, chọn Hiyori hoặc model Live2D bạn có quyền dùng.</li>
+            <li>Bấm nút kết nối dưới đây rồi chọn <strong>Allow</strong> trong hộp thoại VTube Studio.</li>
+          </ol>
+          <div class="button-row">
+            <button
+              class="primary"
+              type="button"
+              :disabled="vtubeBusy || vtubeStatus?.authenticated"
+              @click="connectVTubeStudio"
+            >
+              Kết nối &amp; xin quyền
+            </button>
+            <button
+              type="button"
+              :disabled="vtubeBusy || !vtubeStatus?.authenticated"
+              @click="refreshVTubeStudioStatus(true)"
+            >
+              Đọc lại model
+            </button>
+            <button
+              type="button"
+              :disabled="vtubeBusy || !vtubeStatus?.connected"
+              @click="disconnectVTubeStudio"
+            >
+              Ngắt kết nối
+            </button>
+          </div>
+          <p v-if="vtubeMessage" class="vtube-message" role="status">{{ vtubeMessage }}</p>
+          <p v-if="vtubeStatus?.lastErrorCode" class="inline-error">
+            {{ vtubeStatus.lastErrorCode }} — hãy chắc rằng VTube Studio đang mở và Plugin API đã bật.
+          </p>
+        </article>
+
+        <article class="live2d-card">
+          <p class="eyebrow">MODEL ĐANG CHỌN TRONG VTUBE STUDIO</p>
+          <h3>{{ vtubeStatus?.model.name || "Chưa tải model Live2D" }}</h3>
+          <div class="status-grid">
+            <div><span>Model loaded</span><strong>{{ vtubeStatus?.model.loaded ? "Có" : "Không" }}</strong></div>
+            <div><span>Model ID</span><strong>{{ vtubeStatus?.model.id || "—" }}</strong></div>
+            <div><span>File VTS</span><strong>{{ vtubeStatus?.model.vtsModelName || "—" }}</strong></div>
+            <div><span>Số hotkey</span><strong>{{ vtubeStatus?.hotkeys.length ?? 0 }}</strong></div>
+          </div>
+          <p>
+            Hina không đọc file model từ ổ đĩa và không nhận frame video qua API.
+            VTube Studio tự render Live2D; Hina chỉ gửi những lệnh đã cố định bên dưới.
+          </p>
+        </article>
+
+        <article class="live2d-card hotkey-card">
+          <p class="eyebrow">BIỂU CẢM / ANIMATION</p>
+          <h3>Hotkey của model hiện tại</h3>
+          <p>
+            Dùng để thử biểu cảm hoặc animation đã được chính model cấu hình sẵn.
+            Dashboard chỉ cho bấm ID vừa đọc từ model; không gửi payload tùy ý.
+          </p>
+          <div v-if="vtubeStatus?.hotkeys.length" class="hotkey-grid">
+            <button
+              v-for="hotkey in vtubeStatus.hotkeys"
+              :key="hotkey.id"
+              type="button"
+              :disabled="vtubeBusy || !vtubeStatus.authenticated"
+              :title="hotkey.type"
+              @click="triggerVTubeStudioHotkey(hotkey.id)"
+            >
+              {{ hotkey.name }}
+              <small>{{ hotkey.type }}</small>
+            </button>
+          </div>
+          <p v-else class="empty-state">
+            Chưa có hotkey. Hãy kết nối, tải model trong VTube Studio rồi bấm “Đọc lại model”.
+          </p>
+        </article>
+
+        <article class="live2d-card movement-card">
+          <p class="eyebrow">BỐ CỤC STREAM</p>
+          <h3>Đưa nhân vật tới vị trí có sẵn</h3>
+          <p>
+            Ba preset chỉ thay vị trí/kích thước model đang mở. Chúng không sửa
+            model, không điều khiển chuột và có thể hoàn tác trực tiếp trong VTube Studio.
+          </p>
+          <div class="preset-grid">
+            <button
+              type="button"
+              :disabled="vtubeBusy || !vtubeStatus?.authenticated"
+              @click="moveVTubeStudioModel('chat')"
+            >
+              Chat
+              <small>Nhân vật lớn, gần trung tâm</small>
+            </button>
+            <button
+              type="button"
+              :disabled="vtubeBusy || !vtubeStatus?.authenticated"
+              @click="moveVTubeStudioModel('screen')"
+            >
+              Chia sẻ màn hình
+              <small>Dạt phải, dành chỗ cho nội dung</small>
+            </button>
+            <button
+              type="button"
+              :disabled="vtubeBusy || !vtubeStatus?.authenticated"
+              @click="moveVTubeStudioModel('react')"
+            >
+              React
+              <small>Nhỏ hơn để xem video/game</small>
+            </button>
+          </div>
+        </article>
+      </div>
+
+      <aside class="live2d-license-notice">
+        <strong>Vì sao Hiyori không nằm sẵn trong repo Hina?</strong>
+        <p>
+          Neuro chỉ nói rằng tác giả dùng model Hiyori mặc định; file Hiyori
+          không thuộc source MIT của họ. Hiyori là sample của Live2D và chịu
+          Free Material License/sample terms riêng. Vì vậy Hina kết nối tới
+          model bạn tự chọn trong VTube Studio, không copy hay nhận thay điều
+          khoản asset. Trang tham khảo:
+          <code>live2d.com/en/learn/sample/momose-hiyori-video/</code>.
+        </p>
       </aside>
     </section>
 

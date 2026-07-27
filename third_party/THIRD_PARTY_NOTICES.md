@@ -125,3 +125,27 @@ These packages are exact npm dependencies pinned by registry integrity. No
 upstream source file or snippet is copied into Hina. The VRM binary is a
 separate asset with separate rights and provenance at
 `assets/manifests/vrm1-constraint-twist-sample.v1.json`.
+
+## M07-S16 architecture and protocol references
+
+- kimjammer/Neuro at
+  `5e4b4241c41bb40983aee2cb60d65d6bb481842b` — MIT —
+  https://github.com/kimjammer/Neuro
+- kimjammer/neurofrontend at
+  `365dd6d7f9febc87daccd7491054be8954a85c35` — MIT —
+  https://github.com/kimjammer/neurofrontend
+- VTube Studio Public API at
+  `882ba5fc8bf06d7795b28bbbb965464f75403618` — MIT —
+  https://github.com/DenchiSoft/VTubeStudio
+
+No source file or snippet from these repositories is copied into Hina. Neuro
+and neurofrontend informed the module boundary and operator controls; Hina's
+TypeScript adapter was independently implemented against the public VTube
+Studio WebSocket protocol using the Node runtime's built-in WebSocket.
+
+The Hiyori avatar shown in Neuro's screenshot is not contained in or licensed
+by Neuro's MIT repository. Hina does not bundle or redistribute Hiyori. Owners
+may select Hiyori in a separately installed VTube Studio instance after
+reviewing Live2D's Free Material License and sample-model terms, or select a
+different model they are licensed to use. VTube Studio application/plugin
+terms and every selected Live2D model remain separate from this source notice.

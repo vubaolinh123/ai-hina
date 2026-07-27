@@ -6,7 +6,7 @@ import {
   session,
   type IpcMainInvokeEvent,
 } from "electron";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
   requestControl,
@@ -29,6 +29,12 @@ import {
   type Size,
   type WorkArea,
 } from "./widget-state";
+import {
+  VTS_TOKEN_STATE_MAX_BYTES,
+  VTubeStudioClient,
+  parseVTubeStudioTokenState,
+  serializeVTubeStudioTokenState,
+} from "./vtube-studio-client";
 
 const CHANNELS = Object.freeze({
   windowMode: "hina:window:mode",
@@ -49,10 +55,17 @@ const CHANNELS = Object.freeze({
   speechStatus: "hina:speech:status",
   ttsStatus: "hina:tts:status",
   ttsSynthesize: "hina:tts:synthesize",
+  vtubeStatus: "hina:vtube:status",
+  vtubeConnect: "hina:vtube:connect",
+  vtubeDisconnect: "hina:vtube:disconnect",
+  vtubeRefresh: "hina:vtube:refresh",
+  vtubeHotkey: "hina:vtube:hotkey",
+  vtubeMove: "hina:vtube:move",
 });
 
 const WIDGET_SIZE: Size = Object.freeze({ width: 440, height: 620 });
 const WIDGET_STATE_FILENAME = "hina-widget-state.v1.json";
+const VTS_TOKEN_STATE_FILENAME = "hina-vtube-studio-token.v1.json";
 
 let mainWindow: BrowserWindow | null = null;
 let widgetWindow: BrowserWindow | null = null;
@@ -60,6 +73,7 @@ let smokeTimer: NodeJS.Timeout | null = null;
 let widgetPositionTimer: NodeJS.Timeout | null = null;
 let widgetHoverTimer: NodeJS.Timeout | null = null;
 let widgetHoverInside = false;
+let vtubeStudioClient: VTubeStudioClient | null = null;
 
 type DesktopWindowMode = "operator" | "widget";
 type WidgetControlAction = "show" | "hide" | "reset_position";
@@ -82,6 +96,55 @@ function primaryWidgetPosition(): Point {
 
 function widgetStatePath(): string {
   return join(app.getPath("userData"), WIDGET_STATE_FILENAME);
+}
+
+function vtubeStudioTokenPath(): string {
+  return join(app.getPath("userData"), VTS_TOKEN_STATE_FILENAME);
+}
+
+function getVTubeStudioClient(): VTubeStudioClient {
+  if (vtubeStudioClient) return vtubeStudioClient;
+  vtubeStudioClient = new VTubeStudioClient({
+    async load(): Promise<string | null> {
+      try {
+        const path = vtubeStudioTokenPath();
+        const details = await stat(path);
+        if (details.size > VTS_TOKEN_STATE_MAX_BYTES) return null;
+        return parseVTubeStudioTokenState(await readFile(path, "utf8"));
+      } catch (error) {
+        if (
+          error
+          && typeof error === "object"
+          && "code" in error
+          && error.code === "ENOENT"
+        ) {
+          return null;
+        }
+        console.warn("[hina-desktop] E_VTS_TOKEN_READ");
+        return null;
+      }
+    },
+    async save(token: string): Promise<void> {
+      const path = vtubeStudioTokenPath();
+      await mkdir(dirname(path), { recursive: true });
+      await writeFile(path, serializeVTubeStudioTokenState(token), "utf8");
+    },
+    async clear(): Promise<void> {
+      try {
+        await unlink(vtubeStudioTokenPath());
+      } catch (error) {
+        if (
+          !error
+          || typeof error !== "object"
+          || !("code" in error)
+          || error.code !== "ENOENT"
+        ) {
+          console.warn("[hina-desktop] E_VTS_TOKEN_CLEAR");
+        }
+      }
+    },
+  });
+  return vtubeStudioClient;
 }
 
 async function loadWidgetPosition(): Promise<Point> {
@@ -351,6 +414,42 @@ function registerIpcHandlers(): void {
   ipcMain.handle(CHANNELS.ttsSynthesize, (event, payload: unknown) => {
     assertTrustedSender(event);
     return requestSpeechSynthesis(payload);
+  });
+  ipcMain.handle(CHANNELS.vtubeStatus, (event) => {
+    if (assertTrustedSender(event) !== "operator") {
+      throw new Error("E_VTS_AUTHORITY: operator window required");
+    }
+    return getVTubeStudioClient().status();
+  });
+  ipcMain.handle(CHANNELS.vtubeConnect, (event) => {
+    if (assertTrustedSender(event) !== "operator") {
+      throw new Error("E_VTS_AUTHORITY: operator window required");
+    }
+    return getVTubeStudioClient().connect(true);
+  });
+  ipcMain.handle(CHANNELS.vtubeDisconnect, (event) => {
+    if (assertTrustedSender(event) !== "operator") {
+      throw new Error("E_VTS_AUTHORITY: operator window required");
+    }
+    return getVTubeStudioClient().disconnect();
+  });
+  ipcMain.handle(CHANNELS.vtubeRefresh, (event) => {
+    if (assertTrustedSender(event) !== "operator") {
+      throw new Error("E_VTS_AUTHORITY: operator window required");
+    }
+    return getVTubeStudioClient().refresh();
+  });
+  ipcMain.handle(CHANNELS.vtubeHotkey, (event, hotkeyId: unknown) => {
+    if (assertTrustedSender(event) !== "operator") {
+      throw new Error("E_VTS_AUTHORITY: operator window required");
+    }
+    return getVTubeStudioClient().triggerHotkey(hotkeyId);
+  });
+  ipcMain.handle(CHANNELS.vtubeMove, (event, preset: unknown) => {
+    if (assertTrustedSender(event) !== "operator") {
+      throw new Error("E_VTS_AUTHORITY: operator window required");
+    }
+    return getVTubeStudioClient().moveModel(preset);
   });
 }
 
@@ -1091,6 +1190,9 @@ async function createWindows(): Promise<void> {
 
 app.on("before-quit", () => {
   stopWidgetHoverWatcher();
+  if (vtubeStudioClient) {
+    void vtubeStudioClient.disconnect();
+  }
   if (smokeTimer) {
     clearTimeout(smokeTimer);
     smokeTimer = null;

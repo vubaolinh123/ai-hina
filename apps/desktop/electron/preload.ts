@@ -19,6 +19,12 @@ const CHANNELS = Object.freeze({
   speechStatus: "hina:speech:status",
   ttsStatus: "hina:tts:status",
   ttsSynthesize: "hina:tts:synthesize",
+  vtubeStatus: "hina:vtube:status",
+  vtubeConnect: "hina:vtube:connect",
+  vtubeDisconnect: "hina:vtube:disconnect",
+  vtubeRefresh: "hina:vtube:refresh",
+  vtubeHotkey: "hina:vtube:hotkey",
+  vtubeMove: "hina:vtube:move",
 });
 
 const hinaDesktop = Object.freeze({
@@ -54,6 +60,14 @@ const hinaDesktop = Object.freeze({
   getSpeechStatus: () => ipcRenderer.invoke(CHANNELS.speechStatus),
   getTtsStatus: () => ipcRenderer.invoke(CHANNELS.ttsStatus),
   synthesizeSpeech: (payload: unknown) => ipcRenderer.invoke(CHANNELS.ttsSynthesize, payload),
+  getVTubeStudioStatus: () => ipcRenderer.invoke(CHANNELS.vtubeStatus),
+  connectVTubeStudio: () => ipcRenderer.invoke(CHANNELS.vtubeConnect),
+  disconnectVTubeStudio: () => ipcRenderer.invoke(CHANNELS.vtubeDisconnect),
+  refreshVTubeStudio: () => ipcRenderer.invoke(CHANNELS.vtubeRefresh),
+  triggerVTubeStudioHotkey: (hotkeyId: string) =>
+    ipcRenderer.invoke(CHANNELS.vtubeHotkey, hotkeyId),
+  moveVTubeStudioModel: (preset: "chat" | "screen" | "react") =>
+    ipcRenderer.invoke(CHANNELS.vtubeMove, preset),
 });
 
 contextBridge.exposeInMainWorld("hinaDesktop", hinaDesktop);

@@ -282,7 +282,7 @@ pre,
   z-index: 9;
   top: 76px;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   border-bottom: 1px solid var(--border);
   background: rgba(18, 16, 22, 0.96);
 }
@@ -326,7 +326,7 @@ pre,
 
 .overview-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
 }
 
@@ -350,6 +350,113 @@ pre,
 
 .overview-card > strong[data-good="true"] {
   color: var(--success);
+}
+
+.vtube-status-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+}
+
+.vtube-status-strip > div {
+  min-width: 0;
+  padding: 14px;
+  border-right: 1px solid var(--border);
+}
+
+.vtube-status-strip > div:last-child {
+  border-right: 0;
+}
+
+.vtube-status-strip span,
+.live2d-card .status-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.vtube-status-strip strong {
+  display: block;
+  overflow: hidden;
+  margin-top: 5px;
+  color: var(--danger);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vtube-status-strip[data-connected="true"] strong {
+  color: var(--success);
+}
+
+.live2d-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.live2d-card,
+.live2d-license-notice {
+  padding: 20px;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+}
+
+.live2d-card p,
+.live2d-license-notice p,
+.live2d-card li {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.live2d-card ol {
+  display: grid;
+  gap: 5px;
+  padding-left: 22px;
+}
+
+.setup-card {
+  border-color: rgba(240, 142, 107, 0.5);
+  background:
+    linear-gradient(135deg, rgba(240, 142, 107, 0.08), transparent 48%),
+    var(--surface-raised);
+}
+
+.vtube-message {
+  margin: 12px 0 0 !important;
+  padding: 10px;
+  border-left: 3px solid var(--accent);
+  background: rgba(240, 142, 107, 0.06);
+}
+
+.hotkey-grid,
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.hotkey-grid button,
+.preset-grid button {
+  display: grid;
+  gap: 3px;
+  text-align: left;
+}
+
+.hotkey-grid small,
+.preset-grid small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.empty-state {
+  padding: 12px;
+  border: 1px dashed var(--border);
+}
+
+.live2d-license-notice {
+  border-color: rgba(255, 207, 111, 0.35);
 }
 
 .overview-card p {
@@ -1088,6 +1195,23 @@ pre {
 }
 
 @media (max-width: 1050px) {
+  .overview-grid,
+  .live2d-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .vtube-status-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .vtube-status-strip > div:nth-child(2) {
+    border-right: 0;
+  }
+
+  .vtube-status-strip > div:nth-child(-n + 2) {
+    border-bottom: 1px solid var(--border);
+  }
+
   .speech-test-grid {
     grid-template-columns: 1fr;
   }

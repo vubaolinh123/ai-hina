@@ -1,14 +1,16 @@
 # M07 — Avatar stage và operator desktop
 
-- Status: M07-S1/S2/S3/S4/S5/S6/S7/S8/S9 runnable candidate; M07 remains active
-- Branch: `codex/M07-avatar-stage`
+- Status: M07-S1 through M07-S16 runnable candidate; M07 remains active
+- Branch: `main`
 - Base: `ac29424e4dc58f42f9eeeb9f7a7f2408ad5c2f4f`
 - Active slices: M07-S1 avatar state/control plane, M07-S2 code-native runtime
   stage, M07-S3 sandboxed Electron/Vue operator shell, M07-S4 real VRM
   development stage, M07-S5 audio-derived viseme pipeline, M07-S6 short-window
   performance telemetry and renderer recovery, M07-S7 colored Hina anime
   presentation and natural standing pose, M07-S8 transparent desktop widget,
-  M07-S9 widget persistence and Operator controls
+  M07-S9 widget persistence and Operator controls, M07-S10 desktop dashboard/
+  chat, M07-S11/S12 widget conversation, M07-S13/S14/S15 local voice-provider
+  iterations, M07-S16 external VTube Studio/Live2D adapter
 
 ## Runnable target
 
@@ -29,7 +31,7 @@ theo. Không được đánh dấu M07 complete khi các phần này chưa có e
 Fast hidden Electron telemetry chỉ là development sample, không thay thế frozen
 profile ghi rõ resolution/FPS/avatar/OBS state/duration.
 
-## Implemented in M07-S1/S2/S3/S4/S5/S6/S7/S8/S9
+## Implemented in M07-S1 through M07-S16
 
 - `packages/avatar`: typed renderer-safe state/cue service, trusted-source
   allowlist, bounded history, neutral fallback và recovery khỏi terminal state.
@@ -45,7 +47,7 @@ profile ghi rõ resolution/FPS/avatar/OBS state/duration.
 - `apps/desktop`: ứng dụng Electron 43/Vue 3 chạy thật từ local files; renderer
   bật Chromium sandbox + context isolation, tắt Node integration/webview/remote
   navigation và có CSP không cho renderer gọi network.
-- Preload chỉ expose sáu method có tên cố định. Electron main map từng method
+- Preload chỉ expose các method có tên cố định. Electron main map từng method
   sang allowlist route `127.0.0.1`; từ chối URL khác, cue giả danh runtime,
   safety action ngoài allowlist và IPC từ frame không phải main frame.
 - Desktop hiển thị avatar/safety state thật hoặc lỗi offline rõ ràng; manual
@@ -85,7 +87,7 @@ profile ghi rõ resolution/FPS/avatar/OBS state/duration.
   shadowless, always-on-top, skip-taskbar và đặt mặc định trong work area màn
   hình chính. Cửa sổ Operator đầy đủ vẫn giữ nguyên.
 - Widget dùng cùng renderer local và preload typed IPC; avatar surface là native
-  `-webkit-app-region: drag`, còn hai nút `Voice`/`Mic` là `no-drag`. Voice gọi
+  `-webkit-app-region: drag`, còn các nút `Voice`/`Mic`/`Auto nghe` là `no-drag`. Voice gọi
   safety `set_mute` cho đầu ra giọng nói Hina; Mic thu WAV trong RAM rồi chạy
   Moonshine → chat → VieNeu thật.
   Ngoài hover/focus-within không có nút, caption, card hay background UI nào.
@@ -100,6 +102,21 @@ profile ghi rõ resolution/FPS/avatar/OBS state/duration.
   trí**. Đây là typed IPC chỉ cho Operator main frame; widget renderer không
   được tự gọi các action này. Vị trí native drag được ghi debounce 250 ms và
   không chứa dữ liệu avatar, hội thoại, audio hay PII.
+- M07-S16 tham khảo kiến trúc avatar của `kimjammer/Neuro` ở commit
+  `5e4b4241c41bb40983aee2cb60d65d6bb481842b`: Neuro không chứa avatar trong
+  screenshot mà điều khiển model Hiyori mặc định ở VTube Studio qua API.
+- Electron main có adapter WebSocket API cố định
+  `ws://127.0.0.1:8001`: xin token plugin, xác thực, đọc model/hotkey, trigger
+  hotkey và ba preset vị trí `chat/screen/react`. Không dùng npm SDK, không gửi
+  payload tùy ý và widget renderer không được gọi IPC này.
+- Token plugin được validate/bounded rồi lưu riêng trong Electron `userData`;
+  không trả token cho Vue, không log token và tự xóa token bị VTube Studio từ
+  chối. VTube Studio offline không ảnh hưởng startup/chat/voice/VRM.
+- Dashboard desktop có page **Live2D / VTube Studio** với hướng dẫn cho người
+  không phải developer, model/hotkey/status thật và giải thích license. Hiyori
+  không được bundle vì là Live2D sample chịu Free Material License/sample terms
+  riêng, không thuộc MIT của Neuro. Owner chọn Hiyori hoặc model có license trực
+  tiếp trong VTube Studio; VRM trong suốt hiện tại là offline fallback.
 
 ## Fast evidence
 
@@ -149,3 +166,8 @@ profile ghi rõ resolution/FPS/avatar/OBS state/duration.
   state, màn hình phụ âm và display removal. Real Electron smoke xác nhận
   Operator hide/show/reset chạy thật, widget mode bị từ chối khi gọi widget
   control IPC, cùng toàn bộ S8 transparency/VRM/hover gate vẫn xanh.
+- M07-S16: desktop typecheck pass; production build pass; 33/33 Node tests pass
+  gồm fake VTube Studio WebSocket cho authorization/token redaction/model/
+  hotkey/movement/offline và security assertion operator-only. Electron smoke
+  vẫn load VRM thật, WebGL fallback/recovery, transparent widget hover controls
+  và Operator hide/show/reset; VTube Studio không cài vẫn startup bình thường.

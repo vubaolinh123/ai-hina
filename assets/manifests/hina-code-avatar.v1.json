@@ -31,17 +31,17 @@
     {
       "path": "apps/dev-console/public/index.html",
       "role": "inline SVG geometry and accessible labels",
-      "sha256": "cccdb064ea852d11ee0c1f44ae657cae0ea531bc1c7e99c8af190a9200cb4b27"
+      "sha256": "a1f001bc7647fa93ecde36c25fbc80bf7d8d23bab7be5e6ad6710e840975c40e"
     },
     {
       "path": "apps/dev-console/public/styles.css",
       "role": "avatar styling, expressions and state animation",
-      "sha256": "d6c3e90d71c1aca9f4252d3d8c3b4f1c176e7c6e51f2f790eea0cbc80af8550f"
+      "sha256": "06b8465e8cd8e9a1d20223080e3edc8921f0d021f1762504f1a95244fb9f6c31"
     },
     {
       "path": "apps/dev-console/public/app.js",
       "role": "renderer-safe runtime state and bounded audio-spectral viseme publication",
-      "sha256": "bd60d10bb89093b5997794b97434b2fe38c38b6e52717c3f5537ea13b67e87f8"
+      "sha256": "ecd9ccd15908759e739cc3c5f953d8bce66b1efd7be6d621f3cf944c4b75d785"
     },
     {
       "path": "apps/dev-console/public/audio-viseme.js",
@@ -51,12 +51,12 @@
     {
       "path": "apps/desktop/src/App.vue",
       "role": "desktop Vue stage and original inline SVG geometry",
-      "sha256": "4107a050c4bdf3f32ca23e62b3e0e023376269e9b855f4189fc660fbb81e9cc4"
+      "sha256": "ca8c93aee2eba4cc36fa261b9eb33684f94a554cf93c8bd9be99679922942d9b"
     },
     {
       "path": "apps/desktop/src/style.css",
       "role": "desktop avatar styling, expressions and state animation",
-      "sha256": "c2534da44de34a3f1f940b5c16e9b1db3eb9cfd35556c3d78bef4bc233f72064"
+      "sha256": "b60b0f2c383d000aedfb8b29431cc9737c98c3b85727d5f5b48f5dcdeac59b72"
     },
     {
       "path": "apps/desktop/src/DesktopWidget.vue",
