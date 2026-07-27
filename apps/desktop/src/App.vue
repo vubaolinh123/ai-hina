@@ -37,6 +37,7 @@ const windowMode = ref<DesktopWindowMode | null>(null);
 const safety = ref<SafetyStatus | null>(null);
 const widgetStatus = ref<WidgetStatus | null>(null);
 const vtubeStatus = ref<VTubeStudioStatus | null>(null);
+const spoutStatus = ref<SpoutBridgeStatus | null>(null);
 const vtubeBusy = ref(false);
 const vtubeMessage = ref("");
 const runtime = ref<RuntimeHealth | null>(null);
@@ -80,6 +81,7 @@ const vrmStageKey = ref(0);
 let avatarTimer: number | null = null;
 let safetyTimer: number | null = null;
 let widgetTimer: number | null = null;
+let spoutTimer: number | null = null;
 let avatarRefreshPending = false;
 let safetyRefreshPending = false;
 let controlRetryAt = 0;
@@ -484,6 +486,18 @@ async function refreshVTubeStudioStatus(
   }
 }
 
+async function refreshSpoutStatus(): Promise<void> {
+  try {
+    spoutStatus.value = await window.hinaDesktop.getSpoutStatus();
+  } catch (error) {
+    console.error(
+      "[hina-operator] E_SPOUT_STATUS",
+      error instanceof Error ? error.message : "E_SPOUT_STATUS",
+    );
+    spoutStatus.value = null;
+  }
+}
+
 async function connectVTubeStudio(): Promise<void> {
   if (vtubeBusy.value) return;
   vtubeBusy.value = true;
@@ -732,6 +746,10 @@ function stopPolling(): void {
     window.clearInterval(widgetTimer);
     widgetTimer = null;
   }
+  if (spoutTimer !== null) {
+    window.clearInterval(spoutTimer);
+    spoutTimer = null;
+  }
   if (chatPollTimer !== null) {
     window.clearTimeout(chatPollTimer);
     chatPollTimer = null;
@@ -753,10 +771,12 @@ onMounted(async () => {
     refreshWidget(),
     refreshSpeechRuntime(),
     refreshVTubeStudioStatus(),
+    refreshSpoutStatus(),
   ]);
   avatarTimer = window.setInterval(refreshAvatar, 250);
   safetyTimer = window.setInterval(refreshSafety, 1_000);
   widgetTimer = window.setInterval(refreshWidget, 1_000);
+  spoutTimer = window.setInterval(refreshSpoutStatus, 1_000);
   window.addEventListener("beforeunload", cleanupDesktop, { once: true });
 });
 
@@ -1053,6 +1073,8 @@ onBeforeUnmount(() => {
             <li>Mở VTube Studio trên Windows và vào Settings → Plugins.</li>
             <li>Bật “Allow Plugin API access”; API phải nghe ở cổng mặc định 8001.</li>
             <li>Trong VTube Studio, chọn Hiyori hoặc model Live2D bạn có quyền dùng.</li>
+            <li>Chuyển sang tab Settings → biểu tượng camera → kéo xuống “Spout2 Config” và bật “Activate Spout2”.</li>
+            <li>Trong phần Background chọn màu đen rồi bật “Transparent in capture” để widget không có nền.</li>
             <li>Bấm nút kết nối dưới đây rồi chọn <strong>Allow</strong> trong hộp thoại VTube Studio.</li>
           </ol>
           <div class="button-row">
@@ -1082,6 +1104,53 @@ onBeforeUnmount(() => {
           <p v-if="vtubeMessage" class="vtube-message" role="status">{{ vtubeMessage }}</p>
           <p v-if="vtubeStatus?.lastErrorCode" class="inline-error">
             {{ vtubeStatus.lastErrorCode }} — hãy chắc rằng VTube Studio đang mở và Plugin API đã bật.
+          </p>
+        </article>
+
+        <article class="live2d-card spout-card">
+          <p class="eyebrow">WIDGET / SPOUT2 FRAME BRIDGE</p>
+          <h3>
+            {{ spoutStatus?.frameReady
+              ? "Widget đang nhận frame Live2D thật"
+              : "Widget đang chờ frame Live2D" }}
+          </h3>
+          <p>
+            Cầu nối này chỉ nhận sender <code>VTubeStudioSpout</code> trên loopback,
+            giữ frame mới nhất trong RAM rồi đưa vào widget. Nếu bridge lỗi, VRM
+            local tự hiện lại; chat, mic và kéo thả không bị khóa.
+          </p>
+          <div class="status-grid">
+            <div>
+              <span>Bridge</span>
+              <strong :data-good="spoutStatus?.state === 'ready'">
+                {{ spoutStatus?.state ?? "chưa đọc" }}
+              </strong>
+            </div>
+            <div>
+              <span>Sender</span>
+              <strong>{{ spoutStatus?.sender ?? "—" }}</strong>
+            </div>
+            <div>
+              <span>Kích thước frame</span>
+              <strong>
+                {{ spoutStatus?.width && spoutStatus?.height
+                  ? `${spoutStatus.width} × ${spoutStatus.height}`
+                  : "—" }}
+              </strong>
+            </div>
+            <div>
+              <span>Nền trong suốt</span>
+              <strong :data-good="spoutStatus?.transparent">
+                {{ spoutStatus?.transparent ? "Đã bật" : "Chưa bật" }}
+              </strong>
+            </div>
+          </div>
+          <p v-if="spoutStatus?.lastErrorCode" class="inline-error">
+            {{ spoutStatus.lastErrorCode }}
+          </p>
+          <p v-else-if="spoutStatus?.frameReady && !spoutStatus.transparent" class="vtube-message">
+            Frame đã vào widget nhưng nền vẫn opaque. Bật “Transparent in capture”
+            trong VTube Studio để giữ nền desktop trong suốt.
           </p>
         </article>
 

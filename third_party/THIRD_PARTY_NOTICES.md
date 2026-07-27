@@ -155,3 +155,22 @@ may select Hiyori in a separately installed VTube Studio instance after
 reviewing Live2D's Free Material License and sample-model terms, or select a
 different model they are licensed to use. VTube Studio application/plugin
 terms and every selected Live2D model remain separate from this source notice.
+
+## M07-S19 Spout2 frame bridge
+
+- liru 0.2.6 — BSD-2-Clause — https://github.com/Ranttali/liru
+- Spout2 2.007 (redistributed by the liru wheel) — BSD-2-Clause —
+  https://github.com/leadedge/Spout2
+- ModernGL 5.12.0 — MIT — https://github.com/moderngl/moderngl
+- Pillow 11.3.0 — MIT-CMU — https://github.com/python-pillow/Pillow
+
+The bridge uses the exact CPython 3.13 Windows wheels through an isolated
+`uv run --no-project` environment. The liru wheel hash is
+`f02fb5a95fcf7da14959df65412a88232e1f932899dd69f3e1dad1500c735fe2`;
+ModernGL is
+`e34d1cd38f7998258f76a08bb5e87f351ec653b7ea1928b2711f8719c10cefd1`;
+Pillow is
+`0bce5c4fd0921f99d2e858dc4d4d64193407e1b99478bc5cacecba2311abde51`.
+The worker is optional, binds only to `127.0.0.1`, accepts only the
+`VTubeStudioSpout` sender, and keeps the latest PNG in memory. No upstream
+source file or model/avatar asset is copied into Hina.

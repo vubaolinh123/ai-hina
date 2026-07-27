@@ -25,6 +25,7 @@ const CHANNELS = Object.freeze({
   vtubeRefresh: "hina:vtube:refresh",
   vtubeHotkey: "hina:vtube:hotkey",
   vtubeMove: "hina:vtube:move",
+  spoutStatus: "hina:spout:status",
 });
 
 const hinaDesktop = Object.freeze({
@@ -68,6 +69,7 @@ const hinaDesktop = Object.freeze({
     ipcRenderer.invoke(CHANNELS.vtubeHotkey, hotkeyId),
   moveVTubeStudioModel: (preset: "chat" | "screen" | "react") =>
     ipcRenderer.invoke(CHANNELS.vtubeMove, preset),
+  getSpoutStatus: () => ipcRenderer.invoke(CHANNELS.spoutStatus),
 });
 
 contextBridge.exposeInMainWorld("hinaDesktop", hinaDesktop);

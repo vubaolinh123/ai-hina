@@ -138,6 +138,22 @@ type VTubeStudioStatus = {
   hiyoriBundled: false;
 };
 
+type SpoutBridgeStatus = {
+  available: true;
+  enabled: boolean;
+  state: "disabled" | "starting" | "ready" | "degraded" | "error";
+  sender: "VTubeStudioSpout";
+  endpoint: string | null;
+  frameUrl: string | null;
+  frameReady: boolean;
+  frameSequence: number;
+  frameAgeMilliseconds: number | null;
+  width: number;
+  height: number;
+  transparent: boolean;
+  lastErrorCode: string | null;
+};
+
 type HinaDesktopApi = {
   getWindowMode(): Promise<DesktopWindowMode>;
   getWidgetStatus(): Promise<WidgetStatus>;
@@ -189,6 +205,7 @@ type HinaDesktopApi = {
   moveVTubeStudioModel(
     preset: "chat" | "screen" | "react",
   ): Promise<VTubeStudioStatus>;
+  getSpoutStatus(): Promise<SpoutBridgeStatus>;
 };
 
 interface Window {

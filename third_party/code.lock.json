@@ -306,6 +306,47 @@
       "modifications": [
         "Used as an exact npm development type dependency; no upstream source file or snippet was copied."
       ]
+    },
+    {
+      "name": "liru",
+      "source_url": "https://github.com/Ranttali/liru",
+      "revision": "v0.2.6-beta@e584bb4235484b94c34f5c22566b3fb221b1e00e",
+      "license_spdx": "BSD-2-Clause",
+      "source_hash": "sha256:f02fb5a95fcf7da14959df65412a88232e1f932899dd69f3e1dad1500c735fe2",
+      "destination_paths": [
+        "tools/dev/vts_spout_bridge.py",
+        "apps/desktop/electron/spout-bridge.ts"
+      ],
+      "modifications": [
+        "Used only through the pinned CPython 3.13 Windows wheel to receive the fixed VTubeStudioSpout sender; no liru source is copied.",
+        "The alpha package is isolated behind an optional loopback worker and is not loaded by the Electron renderer."
+      ]
+    },
+    {
+      "name": "moderngl",
+      "source_url": "https://github.com/moderngl/moderngl",
+      "revision": "pypi:moderngl==5.12.0",
+      "license_spdx": "MIT",
+      "source_hash": "sha256:e34d1cd38f7998258f76a08bb5e87f351ec653b7ea1928b2711f8719c10cefd1",
+      "destination_paths": [
+        "tools/dev/vts_spout_bridge.py"
+      ],
+      "modifications": [
+        "Used as the headless OpenGL texture target for liru's Spout2 receiver; no upstream source is copied."
+      ]
+    },
+    {
+      "name": "Pillow",
+      "source_url": "https://github.com/python-pillow/Pillow",
+      "revision": "pypi:Pillow==11.3.0",
+      "license_spdx": "MIT-CMU",
+      "source_hash": "sha256:0bce5c4fd0921f99d2e858dc4d4d64193407e1b99478bc5cacecba2311abde51",
+      "destination_paths": [
+        "tools/dev/vts_spout_bridge.py"
+      ],
+      "modifications": [
+        "Used only for bounded in-memory crop/resize/PNG encoding; captured pixels are never persisted."
+      ]
     }
   ]
 }

@@ -1,0 +1,89 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M07-S19-spout2-widget-bridge",
+  "module_id": "M07",
+  "objective": "Hiển thị frame Live2D thật từ VTube Studio Spout2 trong desktop widget, giữ VRM local làm fallback có kiểm soát.",
+  "non_goals": [
+    "Không bundle, copy hoặc phân phối model Live2D/Hiyori; owner tự chịu trách nhiệm quyền sử dụng asset.",
+    "Không mở Spout, frame HTTP hoặc bất kỳ desktop control endpoint nào ra ngoài 127.0.0.1.",
+    "Không tự chroma-key nền opaque; widget phải báo rõ để owner bật Transparent in capture trong VTube Studio.",
+    "Không đưa raw frame hoặc screenshot vào disk, log, chat context hay training data.",
+    "Không thay đổi VTube Studio config ngoài ứng dụng hoặc nhận URL/sender tùy ý từ renderer."
+  ],
+  "base_sha": "990bdbad6164fb13ea8759b5b37ae4f39ae429a9",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "apps/desktop/electron/main.ts",
+    "apps/desktop/electron/preload.ts",
+    "apps/desktop/electron/spout-bridge.ts",
+    "apps/desktop/src/DesktopWidget.vue",
+    "apps/desktop/src/App.vue",
+    "apps/desktop/src/env.d.ts",
+    "apps/desktop/src/style.css",
+    "apps/desktop/index.html",
+    "apps/desktop/test/spout-bridge.test.mjs",
+    "apps/desktop/test/security.test.mjs",
+    "tools/dev/vts_spout_bridge.py",
+    "tools/dev/Start-HinaDesktop.ps1",
+    "docs/provenance/spout2-bridge.yaml",
+    "third_party/code.lock.json",
+    "third_party/THIRD_PARTY_NOTICES.md",
+    "docs/modules/M07-S19-spout2-widget-bridge-module-brief.json"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "packages/contracts/",
+    "packages/safety-policy/",
+    "packages/text-brain/",
+    "workers/perception/",
+    "workers/speech/",
+    "assets/avatars/"
+  ],
+  "contracts": [
+    "Only Electron main may start/stop the fixed Spout2 worker; renderer receives a bounded typed status snapshot.",
+    "The worker accepts only the fixed sender name VTubeStudioSpout and binds its HTTP server to 127.0.0.1.",
+    "Frame bytes remain ephemeral in memory; the worker exposes only the latest bounded PNG and status metadata.",
+    "A missing/opaque/failed frame never disables the existing VRM fallback or blocks chat, voice, drag and hover controls.",
+    "The bridge process is optional and must fail closed with a stable error code; no arbitrary command or URL is accepted from IPC.",
+    "The bridge must not load a second Hina VRM when a healthy Spout frame is active."
+  ],
+  "allowed_dependencies": [
+    "liru==0.2.6 (Python 3.13 Windows wheel, Spout2 receiver)",
+    "moderngl==5.12.0 (headless OpenGL texture target)",
+    "Pillow==11.3.0 (bounded in-memory PNG resize/encode)"
+  ],
+  "oss_candidates": [
+    "https://pypi.org/project/liru/0.2.6/",
+    "https://github.com/Ranttali/liru",
+    "https://github.com/leadedge/Spout2",
+    "https://github.com/moderngl/moderngl",
+    "https://github.com/python-pillow/Pillow",
+    "https://github.com/DenchiSoft/VTubeStudio/wiki/Recording-Streaming-with-OBS"
+  ],
+  "acceptance_criteria": [
+    "With VTubeStudioSpout broadcasting, a real bridge status reports sender, dimensions and frameReady=true without writing frame pixels to disk.",
+    "The widget renders the real Live2D frame URL when healthy and falls back to the existing VRM stage after bridge timeout/error.",
+    "The bridge reports transparent=false for the current opaque capture and transparent=true once VTube Studio Transparent in capture is enabled.",
+    "The widget keeps the native drag surface and exactly three hover-only Voice/Mic/Auto nghe controls in both renderer modes.",
+    "Malformed HTTP paths, oversized requests, non-loopback binds and worker stderr do not leak tokens, raw pixels or arbitrary paths.",
+    "Desktop build, focused bridge/security tests and the existing desktop smoke pass with Spout disabled in smoke mode."
+  ],
+  "required_test_commands": [
+    "pnpm --filter @hina/desktop build",
+    "node --test apps/desktop/test/spout-bridge.test.mjs apps/desktop/test/security.test.mjs",
+    "pnpm smoke:desktop"
+  ],
+  "latency_or_quality_budget": {
+    "loopback_only": true,
+    "sender_name": "VTubeStudioSpout",
+    "max_frame_width": 720,
+    "max_frame_height": 720,
+    "target_poll_hz": 10,
+    "frame_endpoint_max_bytes": 4194304,
+    "worker_startup_timeout_milliseconds": 20000,
+    "fallback_after_frame_stale_milliseconds": 2000,
+    "minimum_vram_headroom_mib": 2048
+  },
+  "output_artifact_dir": "artifacts/verification/M07/"
+}

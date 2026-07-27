@@ -1,0 +1,20 @@
+name: spout2-widget-bridge
+upstream_url: https://github.com/Ranttali/liru
+revision: v0.2.6-beta@e584bb4235484b94c34f5c22566b3fb221b1e00e
+distribution:
+  kind: pypi-wheel
+  filename: liru-0.2.6-cp313-cp313-win_amd64.whl
+  sha256: f02fb5a95fcf7da14959df65412a88232e1f932899dd69f3e1dad1500c735fe2
+original_paths: []
+license_spdx: BSD-2-Clause
+copyright: "Copyright liru contributors; Spout2 component retains its BSD-2-Clause notice."
+imported_at: 2026-07-27
+destination_paths:
+  - tools/dev/vts_spout_bridge.py
+  - apps/desktop/electron/spout-bridge.ts
+modifications:
+  - "No upstream source or avatar/model asset is copied; liru is invoked through an isolated pinned worker environment."
+  - "Hina fixes the sender to VTubeStudioSpout, binds HTTP to 127.0.0.1 and keeps only the latest bounded PNG in memory."
+  - "ModernGL and Pillow are used only for a GPU texture target and bounded in-memory encoding."
+reviewed_by: primary_orchestrator
+approved_by: repository_owner_for_local_testing

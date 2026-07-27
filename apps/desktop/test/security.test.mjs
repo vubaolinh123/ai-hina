@@ -62,6 +62,7 @@ test("preload exposes named methods and never exposes raw ipcRenderer", () => {
     "refreshVTubeStudio",
     "triggerVTubeStudioHotkey",
     "moveVTubeStudioModel",
+    "getSpoutStatus",
   ]) {
     assert.match(preload, new RegExp(`${method}:`));
   }
@@ -106,6 +107,30 @@ test("VTube Studio stays in the main process behind operator-only typed IPC", ()
   assert.match(app, /moveVTubeStudioModel/);
   assert.match(app, /Hiyori là sample của Live2D/);
   assert.match(app, /VRM local vẫn là fallback/);
+});
+
+test("Spout2 frame bridge is fixed to loopback and the allowlisted sender", () => {
+  const main = read("electron/main.ts");
+  const preload = read("electron/preload.ts");
+  const bridge = read("electron/spout-bridge.ts");
+  const worker = read("../../tools/dev/vts_spout_bridge.py");
+  const widget = read("src/DesktopWidget.vue");
+
+  assert.match(main, /CHANNELS\.spoutStatus/);
+  assert.match(preload, /getSpoutStatus:/);
+  assert.match(bridge, /const SENDER_NAME = "VTubeStudioSpout"/);
+  assert.match(bridge, /http:\/\/127\.0\.0\.1:\$\{port\}/);
+  assert.match(bridge, /shell:\s*false/);
+  assert.match(bridge, /liru==0\.2\.6/);
+  assert.match(bridge, /moderngl==5\.12\.0/);
+  assert.match(bridge, /Pillow==11\.3\.0/);
+  assert.match(worker, /\("127\.0\.0\.1", port\)/);
+  assert.match(worker, /SENDER_NAME = "VTubeStudioSpout"/);
+  assert.match(worker, /MAX_FRAME_BYTES = 4 \* 1024 \* 1024/);
+  assert.doesNotMatch(worker, /\b(?:open|write_text|write_bytes)\s*\(/);
+  assert.match(widget, /class="spout-frame"/);
+  assert.match(widget, /showVrmFallback/);
+  assert.match(widget, /getSpoutStatus/);
 });
 
 test("transparent widget keeps hover Voice/Mic controls and a native drag surface", () => {
@@ -432,9 +457,11 @@ test("renderer CSP denies network, objects, framing and form submission", () => 
   const html = read("index.html");
   assert.match(html, /connect-src 'self' blob:/);
   assert.match(html, /img-src 'self' data: blob:/);
+  assert.match(html, /img-src[^;]*http:\/\/127\.0\.0\.1:\*/);
+  assert.match(html, /connect-src[^;]*http:\/\/127\.0\.0\.1:\*/);
   assert.match(html, /object-src 'none'/);
   assert.match(html, /form-action 'none'/);
   assert.match(html, /frame-ancestors 'none'/);
-  assert.doesNotMatch(html, /https?:|wss?:/);
-  assert.doesNotMatch(html, /connect-src[^;]*(?:data:|https?:|wss?:)/);
+  assert.doesNotMatch(html, /https:\/\/|wss:\/\/|http:\/\/(?!127\.0\.0\.1:\*)/);
+  assert.doesNotMatch(html, /connect-src[^;]*(?:data:|https:\/\/|wss:\/\/)/);
 });

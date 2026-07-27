@@ -35,6 +35,10 @@ import {
   parseVTubeStudioTokenState,
   serializeVTubeStudioTokenState,
 } from "./vtube-studio-client";
+import {
+  SpoutBridge,
+  type SpoutBridgeStatus,
+} from "./spout-bridge";
 
 const CHANNELS = Object.freeze({
   windowMode: "hina:window:mode",
@@ -61,6 +65,7 @@ const CHANNELS = Object.freeze({
   vtubeRefresh: "hina:vtube:refresh",
   vtubeHotkey: "hina:vtube:hotkey",
   vtubeMove: "hina:vtube:move",
+  spoutStatus: "hina:spout:status",
 });
 
 const WIDGET_SIZE: Size = Object.freeze({ width: 440, height: 620 });
@@ -74,6 +79,8 @@ let widgetPositionTimer: NodeJS.Timeout | null = null;
 let widgetHoverTimer: NodeJS.Timeout | null = null;
 let widgetHoverInside = false;
 let vtubeStudioClient: VTubeStudioClient | null = null;
+let spoutBridge: SpoutBridge | null = null;
+let shutdownPending = false;
 
 type DesktopWindowMode = "operator" | "widget";
 type WidgetControlAction = "show" | "hide" | "reset_position";
@@ -145,6 +152,26 @@ function getVTubeStudioClient(): VTubeStudioClient {
     },
   });
   return vtubeStudioClient;
+}
+
+function getSpoutBridge(): SpoutBridge {
+  if (spoutBridge) return spoutBridge;
+  const smoke = process.env.HINA_DESKTOP_SMOKE === "1";
+  spoutBridge = new SpoutBridge({
+    repoRoot: join(__dirname, "..", "..", ".."),
+    enabled: !smoke || process.env.HINA_DESKTOP_SMOKE_SPOUT === "1",
+    uvPath: process.env.HINA_UV_PATH || undefined,
+    log: (level, message) => {
+      if (level === "error") {
+        console.error(message);
+      } else if (level === "warn") {
+        console.warn(message);
+      } else {
+        console.log(message);
+      }
+    },
+  });
+  return spoutBridge;
 }
 
 async function loadWidgetPosition(): Promise<Point> {
@@ -451,6 +478,10 @@ function registerIpcHandlers(): void {
     }
     return getVTubeStudioClient().moveModel(preset);
   });
+  ipcMain.handle(CHANNELS.spoutStatus, (event): SpoutBridgeStatus => {
+    assertTrustedSender(event);
+    return getSpoutBridge().status();
+  });
 }
 
 function registerMediaPermissions(): void {
@@ -481,6 +512,8 @@ function registerMediaPermissions(): void {
 
 async function createWindows(): Promise<void> {
   const smoke = process.env.HINA_DESKTOP_SMOKE === "1";
+  const smokeSpout =
+    smoke && process.env.HINA_DESKTOP_SMOKE_SPOUT === "1";
   const rendererPath = join(__dirname, "..", "dist", "index.html");
   const preloadPath = join(__dirname, "preload.js");
   const widgetWidth = 440;
@@ -867,6 +900,12 @@ async function createWindows(): Promise<void> {
                   }
                   resolve({
                     mode: await window.hinaDesktop.getWindowMode(),
+                    widgetRenderer:
+                      document.documentElement.dataset.widgetRenderer ?? null,
+                    spoutSender:
+                      document.documentElement.dataset.spoutSender ?? null,
+                    spoutTransparent:
+                      document.documentElement.dataset.spoutTransparent ?? null,
                     presentation:
                       document.documentElement.dataset.avatarPresentation,
                     loadedTextureCount: Number(
@@ -981,17 +1020,19 @@ async function createWindows(): Promise<void> {
             ? widgetSnapshot
             : {}
         ) as Record<string, unknown>;
+        const widgetAvatarValid = smokeSpout
+          ? widgetDiagnostic.widgetRenderer === "spout2"
+            && widgetDiagnostic.spoutSender === "VTubeStudioSpout"
+          : widgetDiagnostic.presentation === "hina-kawaii-v0.1"
+            && typeof widgetDiagnostic.loadedTextureCount === "number"
+            && Number.isFinite(widgetDiagnostic.loadedTextureCount)
+            && widgetDiagnostic.loadedTextureCount >= 8;
         if (
           !widgetSnapshot
           || typeof widgetSnapshot !== "object"
           || !("mode" in widgetSnapshot)
           || widgetSnapshot.mode !== "widget"
-          || !("presentation" in widgetSnapshot)
-          || widgetSnapshot.presentation !== "hina-kawaii-v0.1"
-          || !("loadedTextureCount" in widgetSnapshot)
-          || typeof widgetSnapshot.loadedTextureCount !== "number"
-          || !Number.isFinite(widgetSnapshot.loadedTextureCount)
-          || widgetSnapshot.loadedTextureCount < 8
+          || !widgetAvatarValid
           || !("bodyBackground" in widgetSnapshot)
           || widgetSnapshot.bodyBackground !== "rgba(0, 0, 0, 0)"
           || !("rootBackground" in widgetSnapshot)
@@ -1188,7 +1229,7 @@ async function createWindows(): Promise<void> {
   startWidgetHoverWatcher();
 }
 
-app.on("before-quit", () => {
+app.on("before-quit", (event) => {
   stopWidgetHoverWatcher();
   if (vtubeStudioClient) {
     void vtubeStudioClient.disconnect();
@@ -1197,10 +1238,22 @@ app.on("before-quit", () => {
     clearTimeout(smokeTimer);
     smokeTimer = null;
   }
+  if (spoutBridge && !shutdownPending) {
+    event.preventDefault();
+    shutdownPending = true;
+    void spoutBridge.stop().finally(() => app.quit());
+  }
 });
 app.whenReady().then(async () => {
   registerMediaPermissions();
   registerIpcHandlers();
+  try {
+    await getSpoutBridge().start();
+  } catch (error) {
+    console.warn(
+      `[hina-desktop] ${error instanceof Error ? error.message : "E_SPOUT_BRIDGE_START"}`,
+    );
+  }
   await createWindows();
 });
 app.on("activate", () => {

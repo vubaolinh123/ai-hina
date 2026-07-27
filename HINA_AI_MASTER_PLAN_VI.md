@@ -1300,7 +1300,7 @@ Kết nối VRM/Live2D, lip-sync, expression và operator controls mà không nh
   model/hotkey thật và các preset biểu cảm được allowlist; VRM transparent vẫn
   là fallback offline.
 
-### Trạng thái local hiện tại (M07-S16/S17/S18)
+### Trạng thái local hiện tại (M07-S16/S17/S18/S19)
 
 - VTube Studio adapter chỉ chạy trong Electron main process tới
   `ws://127.0.0.1:8001`; renderer chỉ có typed IPC cho status/connect/refresh,
@@ -1321,6 +1321,16 @@ Kết nối VRM/Live2D, lip-sync, expression và operator controls mà không nh
   `connected=true/authenticated=true/modelLoaded=true/modelName=hiyori/hotkeyCount=3`.
   Dashboard vẫn phân biệt rõ “API đã nối” với “model đã tải” và hỗ trợ bấm
   **Đọc lại model** sau khi owner đổi model trong VTube Studio.
+- M07-S19 nối sender `VTubeStudioSpout` thật qua một worker Python 3.13
+  isolated chạy loopback. Worker giữ PNG mới nhất trong RAM; Electron main
+  process đưa frame qua typed IPC cho widget, không để renderer đọc Spout
+  trực tiếp. Widget giữ native drag và đúng ba control hover, đồng thời
+  fallback về VRM khi bridge lỗi. Build, 39 desktop unit tests, real sender
+  smoke và Electron smoke với Spout bật đều xanh. VTube Studio hiện đang
+  phát frame thật với `transparent=false`; để bỏ nền hồng cần bật thêm
+  **Transparent in capture** sau khi đã Activate Spout2. `liru` là alpha/
+  BSD-2-Clause nên slice này chỉ là local testing candidate, chưa
+  production-promote.
 
 ### Gate
 

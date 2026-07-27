@@ -14,6 +14,14 @@ if (-not $logDirectory.StartsWith($repoRoot, [System.StringComparison]::OrdinalI
 }
 [System.IO.Directory]::CreateDirectory($logDirectory) | Out-Null
 
+$uvCommand = Get-Command uv -ErrorAction SilentlyContinue
+if ($null -eq $uvCommand) {
+    Write-Host "[hina-desktop] uv không có trong PATH; Spout2 bridge sẽ fallback về VRM local."
+}
+else {
+    Write-Host "[hina-desktop] Spout2 bridge tùy chọn sẽ nhận sender VTubeStudioSpout trên loopback."
+}
+
 function Test-HinaControlPlane {
     try {
         $response = Invoke-WebRequest -UseBasicParsing -Uri $healthUrl -TimeoutSec 2

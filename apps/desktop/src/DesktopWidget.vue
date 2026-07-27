@@ -11,6 +11,7 @@ const VrmStage = defineAsyncComponent(() => import("./VrmStage.vue"));
 
 const avatar = ref<AvatarStatus | null>(null);
 const safety = ref<SafetyStatus | null>(null);
+const spout = ref<SpoutBridgeStatus | null>(null);
 const busy = ref(false);
 const hovered = ref(false);
 const vrmReady = ref(false);
@@ -22,8 +23,10 @@ const voiceStatus = ref("");
 const chatSessionId = crypto.randomUUID();
 let avatarTimer: number | null = null;
 let safetyTimer: number | null = null;
+let spoutTimer: number | null = null;
 let avatarRefreshPending = false;
 let safetyRefreshPending = false;
+let spoutRefreshPending = false;
 let controlRetryAt = 0;
 let controlRetryDelay = 1_000;
 let recording: MicrophoneRecorder | null = null;
@@ -55,16 +58,70 @@ const stageIntensity = computed(() => (
     ? Math.min(1, Math.max(0, avatar.value.intensity))
     : 0
 ));
+const spoutEnabled = computed(() => spout.value?.enabled === true);
+const spoutFrameReady = ref(false);
+const spoutFrameUrl = ref("");
+const showVrmFallback = computed(() => (
+  !spoutEnabled.value
+  || spout.value?.state === "disabled"
+  || spout.value?.state === "degraded"
+  || spout.value?.state === "error"
+));
+const stageReady = computed(() => spoutFrameReady.value || vrmReady.value);
 const muted = computed(() => safety.value?.state.muted ?? false);
 const voiceLabel = computed(() => (
   muted.value ? "Voice · Bật giọng Hina" : "Voice · Tắt giọng Hina"
 ));
 
 function markWidgetReady(): void {
-  if (vrmReady.value && controlReady.value) {
+  if (stageReady.value && controlReady.value) {
     document.documentElement.dataset.widgetReady = "true";
     delete document.documentElement.dataset.widgetError;
   }
+}
+
+async function refreshSpout(): Promise<void> {
+  if (spoutRefreshPending) return;
+  spoutRefreshPending = true;
+  try {
+    const next = await window.hinaDesktop.getSpoutStatus();
+    spout.value = next;
+    if (next.frameReady && next.frameUrl && next.frameSequence > 0) {
+      const url = `${next.frameUrl}?sequence=${next.frameSequence}`;
+      if (url !== spoutFrameUrl.value) {
+        spoutFrameUrl.value = url;
+      }
+    } else if (next.state === "error" || next.state === "degraded") {
+      spoutFrameReady.value = false;
+      spoutFrameUrl.value = "";
+    }
+    if (next.frameReady && next.state === "ready") {
+      document.documentElement.dataset.spoutSender = next.sender;
+      document.documentElement.dataset.spoutTransparent = String(next.transparent);
+    }
+    markWidgetReady();
+  } catch (error) {
+    spoutFrameReady.value = false;
+    spoutFrameUrl.value = "";
+    console.warn(
+      "[hina-widget] E_SPOUT_STATUS",
+      error instanceof Error ? error.message : "E_SPOUT_STATUS",
+    );
+  } finally {
+    spoutRefreshPending = false;
+  }
+}
+
+function handleSpoutFrameReady(): void {
+  spoutFrameReady.value = true;
+  document.documentElement.dataset.widgetRenderer = "spout2";
+  markWidgetReady();
+}
+
+function handleSpoutFrameFailure(): void {
+  spoutFrameReady.value = false;
+  delete document.documentElement.dataset.widgetRenderer;
+  console.warn("[hina-widget] E_SPOUT_FRAME_LOAD");
 }
 
 async function refreshAvatar(): Promise<void> {
@@ -402,6 +459,10 @@ function stopPolling(): void {
     window.clearInterval(safetyTimer);
     safetyTimer = null;
   }
+  if (spoutTimer !== null) {
+    window.clearInterval(spoutTimer);
+    spoutTimer = null;
+  }
 }
 
 onMounted(async () => {
@@ -410,9 +471,10 @@ onMounted(async () => {
   unsubscribeWidgetHover = window.hinaDesktop.onWidgetHover((value) => {
     hovered.value = value;
   });
-  await Promise.all([refreshAvatar(), refreshSafety()]);
+  await Promise.all([refreshAvatar(), refreshSafety(), refreshSpout()]);
   avatarTimer = window.setInterval(refreshAvatar, 250);
   safetyTimer = window.setInterval(refreshSafety, 1_000);
+  spoutTimer = window.setInterval(refreshSpout, 100);
   window.addEventListener("beforeunload", stopPolling, { once: true });
 });
 
@@ -442,9 +504,21 @@ onBeforeUnmount(() => {
       :data-state="stageState"
       :data-expression="stageExpression"
       :data-viseme="stageViseme"
+      :data-renderer="spoutFrameReady ? 'spout2' : 'vrm-fallback'"
       aria-label="Avatar Hina có thể kéo để di chuyển"
     >
+      <img
+        v-if="spoutFrameUrl"
+        class="spout-frame"
+        :class="{ 'spout-frame-ready': spoutFrameReady }"
+        :src="spoutFrameUrl"
+        alt="Live2D Hina từ VTube Studio"
+        draggable="false"
+        @load="handleSpoutFrameReady"
+        @error="handleSpoutFrameFailure"
+      >
       <VrmStage
+        v-else-if="showVrmFallback"
         :class="{ 'vrm-stage-hidden': !vrmReady }"
         :state="stageState"
         :expression="stageExpression"
@@ -453,6 +527,9 @@ onBeforeUnmount(() => {
         @ready="handleVrmReady"
         @failed="handleVrmFailure"
       />
+      <div v-else class="spout-loading" role="status">
+        Đang chờ frame Live2D từ VTube Studio…
+      </div>
     </section>
 
     <div class="widget-voice-controls">
