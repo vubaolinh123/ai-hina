@@ -65,14 +65,13 @@
     "Control-plane route tests prove the X-Hina-OCR-Analyze header reaches the provider and the default route remains OCR-free.",
     "The Quan sát dashboard has a plain-language GPU OCR option, shows recognized text/confidence/error, and explains when to use OCR instead of the heavier VLM.",
     "A real owner-GPU smoke confirms Torch CUDA execution, reports measured VRAM and Vietnamese UI CER, and leaves at least 2048 MiB free headroom. A CER above 5 percent must be reported as qualityGatePassed=false and remains blocked from quality promotion.",
-    "Focused perception tests, core route tests, JavaScript syntax validation, and Dev Console startup smoke pass once."
+    "Focused perception tests, core route tests, JavaScript syntax validation, and Dev Console startup smoke pass once; the one-off owner GPU measurement is recorded in the module document rather than retained as a script."
   ],
   "required_test_commands": [
     "pnpm test:perception",
     "uv run --frozen python apps/core-runtime/tests/test_perception_routes.py",
     "node --check apps/dev-console/public/app.js",
-    "pnpm smoke:dev-console",
-    "uv run --frozen python tools/dev/m08_gpu_ocr_smoke.py"
+    "pnpm smoke:dev-console"
   ],
   "latency_or_quality_budget": {
     "maximum_observation_ttl_seconds": 15,

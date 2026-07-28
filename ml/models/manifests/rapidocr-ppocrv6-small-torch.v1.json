@@ -61,7 +61,7 @@
   },
   "measured_on_owner_gpu": {
     "gpu": "NVIDIA GeForce RTX 5070 Ti 16 GB",
-    "first_two_request_processing_milliseconds": 1133.85,
+    "first_two_request_processing_milliseconds": 1084.069,
     "peak_allocated_mib": 644.3,
     "peak_reserved_mib": 814.0,
     "effective_device": "cuda:0"
@@ -69,10 +69,10 @@
   "quality_evaluation": {
     "decision": "functional_gpu_candidate_pending_vietnamese_quality_work",
     "short_vietnamese_ui_cer_percent": 0.0,
-    "long_vietnamese_ui_cer_percent": 23.611,
+    "long_vietnamese_ui_cer_percent": 6.944,
     "clear_vietnamese_ui_gate_percent": 5.0,
     "quality_gate_passed": false,
-    "notes": "The provider is usable for owner inspection but does not yet meet the plan's clear Vietnamese UI CER gate. It cannot provide autonomous decision support."
+    "notes": "The synthetic corpus was corrected to render the long UTF-8 Vietnamese sentence over two uncropped UI-like lines and normalize only visual-wrap whitespace. The provider remains usable for owner inspection but does not meet the plan's clear Vietnamese UI CER gate. It cannot provide autonomous decision support."
   },
   "status": {
     "download_authorized_by_owner": true,

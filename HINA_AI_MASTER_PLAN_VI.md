@@ -1366,9 +1366,14 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
   explicit image snapshot qua Ollama, `keep_alive=0`, không load VLM thứ hai.
 - M08-S3 GPU OCR candidate (2026-07-28): RapidOCR 3.9.1 + PP-OCRv6 small Torch
   chạy `cuda:0` qua scheduler lease 1.024 MiB, chỉ owner-opt-in, không CPU
-  fallback và không persist pixel/text. Smoke RTX 5070 Ti xác nhận peak 814 MiB
-  reserved; mẫu UI tiếng Việt dài đo CER 23,611%, nên chưa đạt gate OCR UI rõ
-  ≤5%, không quality-promote và không dùng cho autonomous decision support.
+  fallback và không persist pixel/text. Corpus smoke đã được sửa để không crop
+  câu dài; RTX 5070 Ti đo peak 814 MiB reserved, CER UI Việt ngắn 0,0% và dài
+  6,944%, nên vẫn chưa đạt gate OCR UI rõ ≤5%, không quality-promote và không
+  dùng cho autonomous decision support.
+- Ghi chú calibration OCR (2026-07-28): A/B PP-OCRv6 medium CUDA không cải thiện
+  CER dài (cùng 6,944%) nhưng tăng peak reserved lên 2.220 MiB; tăng detector
+  small từ 960 lên 1.280 còn xấu hơn (12,5%). Vì vậy runtime giữ small/960 hiện
+  có; không tự thêm model medium vào product profile.
 
 ### Test matrix
 

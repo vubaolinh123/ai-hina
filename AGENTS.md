@@ -205,6 +205,21 @@ Không mở write phase module kế tiếp trước Gate 6.
   agent thay thế hoặc tạo chuỗi correction session.
 - Safety, privacy, consent, license, rollback failure và unknown provenance không được waiver.
 
+## Artifact hygiene (owner policy, 2026-07-28)
+
+- Sau mỗi test/smoke/benchmark, primary phải xóa cache model thử nghiệm, ảnh/audio
+  sinh tạm, script one-off, fixture, debug dump và generated artifact mà không
+  còn là runtime source, unit test bảo vệ hành vi, tài liệu/provenance bắt buộc
+  hoặc evidence release được owner yêu cầu.
+- Không giữ “just in case” code hay file demo sau khi đã lấy số đo. Lưu lại kết
+  luận và metric gọn trong module doc/manifest; không lưu raw input, screenshot,
+  OCR text hay log khổng lồ chỉ để chứng minh benchmark.
+- Trước khi dọn, phân biệt agent-created artifact với dữ liệu/model/voice/avatar
+  do owner cung cấp; không xóa tài sản owner hoặc thay đổi user-owned files.
+  `.gitignore` không thay thế cho việc dọn dẹp thực tế.
+- Nếu platform chặn thao tác xóa đã được kiểm tra scope, ghi rõ target còn lại và
+  lý do trong handoff; không cố lách cơ chế an toàn bằng shell khác.
+
 ## Open source
 
 - Ưu tiên dependency hoặc pin/fork hơn copy-paste.

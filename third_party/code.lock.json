@@ -120,7 +120,7 @@
       "modifications": [
         "Used as a pinned PyPI dependency behind Hina's OcrProvider interface; no upstream source file or snippet was copied.",
         "Hina pins RapidOCR 3.9.1 PP-OCRv6 small Torch artifacts by SHA-256, forces all inference stages to CUDA:0, verifies device placement and disables every CPU/remote fallback.",
-        "This is a local owner-testing candidate: the observed Vietnamese long-line CER is above the promotion threshold, so it remains untrusted, TTL-bound and unavailable for autonomous decisions."
+        "This is a local owner-testing candidate: the corrected uncropped Vietnamese long UI CER is 6.944%, above the promotion threshold, so it remains untrusted, TTL-bound and unavailable for autonomous decisions."
       ]
     },
     {

@@ -94,14 +94,25 @@ memory, chat prompt, tool hay bộ điều khiển game.
   khuyên owner đối chiếu chữ có dấu/chữ nhỏ quan trọng hoặc dùng VLM local cho
   ngữ cảnh ảnh phức tạp. Checkbox không bật capture tự động.
 - Smoke thật trên RTX 5070 Ti xác nhận `cuda:0`, peak 644,3 MiB allocated /
-  814,0 MiB reserved, không lưu pixel/text. Mẫu UI ngắn CER 0,0%; mẫu tiếng Việt
-  dài CER 23,611%, nên candidate này **chưa qua** gate OCR UI rõ ≤5% và không
-  được quality-promote. Số đo và SHA của weights nằm tại
+  814,0 MiB reserved, không lưu pixel/text. Corpus đã sửa để không crop câu dài
+  (câu được xuống dòng như UI, còn CER bỏ qua khác biệt whitespace của wrap): mẫu
+  UI ngắn CER 0,0%; mẫu tiếng Việt dài CER 6,944%. Candidate này **chưa qua**
+  gate OCR UI rõ ≤5% và không được quality-promote. Số đo và SHA của weights nằm tại
   `ml/models/manifests/rapidocr-ppocrv6-small-torch.v1.json`.
+
+## Ghi chú calibration OCR (2026-07-28)
+
+- Corpus UTF-8 được render không crop câu dài và đo riêng lần kiểm tra thật:
+  PP-OCRv6 small/960 có CER dài 6,944%, peak reserved 778–814 MiB; medium cùng
+  6,944% nhưng 2.184–2.220 MiB; small/1.280 tệ hơn ở 12,5%/1.430 MiB. Vì không
+  có lợi ích, runtime giữ `PP-OCRv6-small`/960/lease 1.024 MiB.
+- Đây là quyết định không-promotion. Owner vẫn đối chiếu chữ có dấu/chữ nhỏ quan
+  trọng bằng mắt hoặc VLM; output OCR vẫn `untrusted`, TTL ≤15 giây và không có
+  quyền tự điều khiển bất cứ thứ gì.
 
 ## Deferred M08 deliverables
 
-Chất lượng OCR tiếng Việt (benchmark UI rõ/game UI khó và thay/tinh chỉnh
+Chất lượng OCR tiếng Việt (benchmark corpus UI rõ/game UI khó và thay/tinh chỉnh
 provider nếu vẫn không qua CER), capture allowlist theo window/region ở tầng OS,
 privacy mask, event/intent-driven
 capture, replay ≥200 historical/stopped capture cases và các gate OCR CER/VLM
@@ -140,10 +151,9 @@ complete khi các phần này chưa có evidence.
   đưa raw PNG vào observation.
 - `node --check apps/dev-console/public/app.js` và `pnpm smoke:dev-console`
   pass.
-- `uv run --frozen python tools/dev/m08_gpu_ocr_smoke.py` chạy provider thật
+- One-off GPU smoke (đã dọn script tạm sau khi ghi số đo) chạy provider thật
   trên `cuda:0`, peak 644,3 MiB allocated / 814,0 MiB reserved, không persist
-  pixel/text. Script cố ý in CER và `clearUiQualityGatePassed=false` khi mẫu
-  tiếng Việt dài chưa đạt chuẩn, thay vì che giấu chất lượng.
+  pixel/text. Corpus UI Việt dài đo CER 6,944%, nên quality gate ≤5% vẫn fail.
 - Runtime route smoke thật đã bật feature flag qua safety API, gửi PNG có
   `X-Hina-OCR-Analyze: true` và nhận `HTTP 200`, `ocr.state=ready`,
   `effectiveDevice=cuda:0`, `decisionSupportEligible=false`.
