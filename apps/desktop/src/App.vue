@@ -14,6 +14,8 @@ import PerceptionPage from "./dashboard/pages/PerceptionPage.vue";
 import ResourcesPage from "./dashboard/pages/ResourcesPage.vue";
 import SpeechPage from "./dashboard/pages/SpeechPage.vue";
 import Live2DPage from "./dashboard/pages/Live2DPage.vue";
+import AvatarPage from "./dashboard/pages/AvatarPage.vue";
+import RuntimePage from "./dashboard/pages/RuntimePage.vue";
 import type {
   ChatContextUsage,
   ChatMessage,
@@ -1662,286 +1664,49 @@ onBeforeUnmount(() => {
       @move-model="moveVTubeStudioModel"
     />
 
-    <section v-else class="stage-grid" :data-page="activePage">
-      <article
-        v-if="activePage === 'avatar'"
-        class="stage"
-        :data-state="stageState"
-        :data-expression="stageExpression"
-        :data-viseme="stageViseme"
-        :data-vrm-loaded="vrmReady"
-      >
-        <div class="stage-topline">
-          <span>
-            {{ vrmReady
-              ? "HINA KAWAII v0.1 · COLORED ANIME PROTOTYPE"
-              : vrmError
-                ? "VRM LOAD FAILED · CODE-NATIVE FALLBACK"
-                : "CODE-NATIVE FALLBACK · VRM ĐANG TẢI" }}
-          </span>
-          <span>#{{ avatar?.sequence ?? 0 }} · {{ avatar?.mode ?? "offline" }}</span>
-        </div>
-        <VrmStage
-          :key="vrmStageKey"
-          :class="{ 'vrm-stage-hidden': !vrmReady }"
-          :state="stageState"
-          :expression="stageExpression"
-          :viseme="stageViseme"
-          :intensity="stageIntensity"
-          @ready="handleVrmReady"
-          @failed="handleVrmFailure"
-          @performance="handleVrmPerformance"
-        />
-        <svg
-          v-if="!vrmReady"
-          class="avatar"
-          viewBox="0 0 520 620"
-          role="img"
-          aria-label="Hina code-native avatar fallback"
-        >
-          <defs>
-            <linearGradient id="desktopHair" x1="0" x2="1" y1="0" y2="1">
-              <stop offset="0" stop-color="#3c3150"/>
-              <stop offset="1" stop-color="#17131f"/>
-            </linearGradient>
-            <radialGradient id="desktopSkin" cx="45%" cy="34%">
-              <stop offset="0" stop-color="#ffe8da"/>
-              <stop offset="1" stop-color="#e7bdac"/>
-            </radialGradient>
-          </defs>
-          <circle class="aura" cx="260" cy="285" r="215"/>
-          <g class="avatar-body">
-            <path class="hair" d="M91 514c12-118 7-246 46-352C164 88 210 52 265 52c71 0 126 58 147 151 24 108 6 226 24 311z"/>
-            <path class="coat" d="M80 620c11-109 71-174 180-174s170 65 181 174z"/>
-            <path class="shirt" d="M191 620l27-160h84l29 160z"/>
-            <path class="collar" d="M176 472l72 62-45 35-48-77zM344 472l-72 62 45 35 48-77z"/>
-            <path class="neck" d="M220 421h80v77c-18 16-62 16-80 0z"/>
-            <ellipse class="face" cx="260" cy="287" rx="137" ry="168"/>
-            <path class="hair fringe" d="M124 238c6-117 64-181 144-181 89 0 139 74 140 183-45-32-70-70-90-118-20 52-75 92-194 116z"/>
-            <path class="hair side" d="M124 219c-30 80-12 194 45 246l26-49c-34-58-41-128-28-211zM397 211c31 88 17 198-45 254l-28-48c37-64 43-136 27-218z"/>
-            <path class="eye left" d="M166 287q40-34 78 0q-39 25-78 0z"/>
-            <path class="eye right" d="M276 287q40-34 78 0q-39 25-78 0z"/>
-            <circle class="glint" cx="209" cy="279" r="5"/>
-            <circle class="glint" cx="319" cy="279" r="5"/>
-            <path class="line brow-left" d="M170 249q35-19 70 0"/>
-            <path class="line brow-right" d="M280 249q35-19 70 0"/>
-            <path class="line nose" d="M257 296l-7 48 19 4"/>
-            <ellipse class="blush" cx="176" cy="344" rx="28" ry="10"/>
-            <ellipse class="blush" cx="344" cy="344" rx="28" ry="10"/>
-            <path class="line mouth-line" d="M222 384q38 25 76 0"/>
-            <ellipse
-              class="mouth"
-              cx="260"
-              cy="390"
-              :rx="stageMouthRx"
-              :ry="stageMouthRy"
-            />
-            <g class="hairpin">
-              <path d="M130 196l66-39M136 218l67-37"/>
-              <circle cx="130" cy="196" r="8"/>
-              <circle cx="136" cy="218" r="8"/>
-            </g>
-          </g>
-        </svg>
-        <div class="stage-caption">
-          <strong>{{ stateLabels[stageState] }}</strong>
-          <span>
-            {{ stageState }} · {{ avatar?.expression ?? "offline" }} ·
-            {{ stageViseme }} {{ Math.round(stageIntensity * 100) }}% ·
-            {{ vrmReady ? `${vrmFps || "—"} FPS` : "SVG fallback" }}
-          </span>
-        </div>
-      </article>
+    <AvatarPage
+      v-else-if="activePage === 'avatar'"
+      :stage-component="VrmStage"
+      :stage-state="stageState"
+      :stage-expression="stageExpression"
+      :stage-viseme="stageViseme"
+      :stage-intensity="stageIntensity"
+      :stage-mouth-rx="stageMouthRx"
+      :stage-mouth-ry="stageMouthRy"
+      :avatar="avatar"
+      :safety="safety"
+      :busy="busy"
+      :connected="connected"
+      :preview-state="previewState"
+      :state-labels="stateLabels"
+      :vrm-ready="vrmReady"
+      :vrm-error="vrmError"
+      :vrm-fps="vrmFps"
+      :vrm-display-name="vrmDisplayName"
+      :vrm-presentation-id="vrmPresentationId"
+      :vrm-texture-count="vrmTextureCount"
+      :vrm-styled-material-count="vrmStyledMaterialCount"
+      :vrm-performance="vrmPerformance"
+      :vrm-stage-key="vrmStageKey"
+      :snapshot="snapshot"
+      @update:preview-state="previewState = $event"
+      @preview="preview"
+      @reset-avatar="resetAvatar"
+      @retry-vrm="retryVrm"
+      @vrm-ready="handleVrmReady"
+      @vrm-failed="handleVrmFailure"
+      @vrm-performance="handleVrmPerformance"
+    />
 
-      <aside class="operator-panel">
-        <div>
-          <p class="eyebrow">TYPED IPC / LOOPBACK ONLY</p>
-          <h2>Điều khiển operator</h2>
-          <p class="purpose">
-            Desktop chỉ nhận snapshot trình bày qua preload API có tên cố định.
-            Renderer không có Node, filesystem, database, model hay fetch trực tiếp.
-          </p>
-        </div>
-
-        <div class="status-grid">
-          <div><span>State</span><strong>{{ stateLabels[stageState] }}</strong></div>
-          <div><span>Biểu cảm</span><strong>{{ avatar?.expression ?? "—" }}</strong></div>
-          <div><span>Khẩu hình</span><strong>{{ stageViseme }} · {{ Math.round(stageIntensity * 100) }}%</strong></div>
-          <div><span>Nguồn cue</span><strong>{{ avatar?.source ?? "—" }}</strong></div>
-          <div><span>Safety revision</span><strong>{{ safety?.state.revision ?? "—" }}</strong></div>
-          <div><span>Visual Hina</span><strong>{{ vrmPresentationId || "Đang tải…" }}</strong></div>
-        </div>
-
-        <section class="control-card widget-settings-card">
-          <div class="presentation-heading">
-            <div>
-              <p class="eyebrow">DESKTOP WIDGET</p>
-              <h3>Quản lý widget avatar</h3>
-            </div>
-            <span class="presentation-status" :data-ready="widgetStatus?.visible">
-              {{ widgetStatus?.visible ? "Đang hiện" : "Đang ẩn" }}
-            </span>
-          </div>
-          <p>
-            Widget là avatar trong suốt nổi trên desktop. Kéo trực tiếp nhân vật
-            để di chuyển; vị trí hợp lệ sẽ được nhớ cho lần mở sau. Các nút này
-            chỉ quản lý cửa sổ, không thay đổi state hội thoại hay giọng nói.
-          </p>
-          <div class="status-grid widget-position-grid">
-            <div>
-              <span>Vị trí hiện tại</span>
-              <strong>
-                {{ widgetStatus ? `${widgetStatus.position.x}, ${widgetStatus.position.y}` : "Đang đọc…" }}
-              </strong>
-            </div>
-            <div>
-              <span>Luôn nổi</span>
-              <strong>{{ widgetStatus?.alwaysOnTop ? "Có" : "Không" }}</strong>
-            </div>
-          </div>
-          <div class="button-row">
-            <button
-              :disabled="busy || !widgetStatus?.visible"
-              @click="applyWidgetControl('hide')"
-            >
-              Ẩn widget
-            </button>
-            <button
-              :disabled="busy || widgetStatus?.visible"
-              @click="applyWidgetControl('show')"
-            >
-              Hiện widget
-            </button>
-            <button
-              :disabled="busy || !widgetStatus"
-              @click="applyWidgetControl('reset_position')"
-            >
-              Đặt lại vị trí
-            </button>
-          </div>
-        </section>
-
-        <section class="control-card presentation-card">
-          <div class="presentation-heading">
-            <div>
-              <p class="eyebrow">HINA VISUAL PROFILE</p>
-              <h3>{{ vrmDisplayName || "Đang chuẩn bị Hina…" }}</h3>
-            </div>
-            <span class="presentation-status" :data-ready="vrmReady">
-              {{ vrmReady ? "Đã có màu" : "Đang tải" }}
-            </span>
-          </div>
-          <p>
-            Bản này dùng khuôn VRM có license làm nền, sau đó áp bảng màu sakura,
-            nơ tóc/ngực, chớp mắt và dáng đứng tay hạ tự nhiên do dự án tự tạo.
-            Texture được nhúng local, không tải từ Internet.
-          </p>
-          <div class="palette-row" aria-label="Bảng màu Hina">
-            <span title="Sakura pink"></span>
-            <span title="Lavender"></span>
-            <span title="Warm cream"></span>
-            <span title="Plum"></span>
-          </div>
-          <small v-if="vrmReady">
-            Đã đọc {{ vrmTextureCount }} texture nhúng · đã phối màu
-            {{ vrmStyledMaterialCount }} material.
-          </small>
-        </section>
-
-        <section class="control-card">
-          <h3>Hiệu năng renderer thật</h3>
-          <p>
-            FPS là số khung hình mỗi giây. p95/p99 cho biết 95%/99% khung hình
-            hoàn tất nhanh hơn bao nhiêu mili-giây; drop là tỷ lệ khung ước tính
-            bị lỡ. Đây là cửa sổ đo ngắn 2 giây, không phải benchmark OBS dài giờ.
-          </p>
-          <div class="status-grid performance-grid">
-            <div><span>FPS / mục tiêu</span><strong>{{ vrmPerformance ? `${vrmPerformance.fps} / ${vrmPerformance.targetFps}` : "Đang đo…" }}</strong></div>
-            <div><span>Frame p95 / p99</span><strong>{{ vrmPerformance ? `${vrmPerformance.frameTimeP95Ms} / ${vrmPerformance.frameTimeP99Ms} ms` : "—" }}</strong></div>
-            <div><span>Ước tính drop</span><strong>{{ vrmPerformance ? `${vrmPerformance.droppedFramePercent}%` : "—" }}</strong></div>
-            <div><span>Mẫu / cửa sổ</span><strong>{{ vrmPerformance ? `${vrmPerformance.sampleCount} / ${vrmPerformance.windowMs} ms` : "—" }}</strong></div>
-          </div>
-        </section>
-
-        <section class="control-card">
-          <h3>Xem thử visual</h3>
-          <p>
-            Đây là <code>manual-preview</code>, chỉ đổi state renderer qua backend;
-            không tạo hội thoại hay TTS giả.
-          </p>
-          <label for="previewState">State muốn xem</label>
-          <select id="previewState" v-model="previewState" :disabled="busy">
-            <option v-for="(label, value) in stateLabels" :key="value" :value="value">
-              {{ label }} — {{ value }}
-            </option>
-          </select>
-          <div class="button-row">
-            <button class="primary" :disabled="busy || !connected" @click="preview">Xem thử</button>
-            <button :disabled="busy || !connected" @click="resetAvatar">Đặt về idle</button>
-          </div>
-        </section>
-
-        <section class="control-card">
-          <h3>Âm thanh & khẩn cấp</h3>
-          <p>Mute tắt âm thanh; emergency stop chặn hành động mới tại safety authority.</p>
-          <div class="button-row">
-            <button :disabled="busy || !safety" @click="toggleMute">
-              {{ safety?.state.muted ? "Tắt mute" : "Bật mute" }}
-            </button>
-            <button
-              class="danger"
-              :disabled="busy || !safety"
-              @click="toggleEmergency"
-            >
-              {{ safety?.state.emergencyStopped ? "Khôi phục hoạt động" : "Dừng khẩn cấp" }}
-            </button>
-          </div>
-        </section>
-
-        <section class="limitations">
-          <strong>Giới hạn trung thực</strong>
-          <span>
-            VRM: {{ vrmReady ? "đã tải local, có texture và profile Hina" : "chưa tải; đang dùng SVG" }}
-          </span>
-          <span>
-            Nhân vật: Hina prototype v0.1 dùng base VRM phát triển; chưa phải
-            model đặt vẽ độc quyền/final do owner duyệt
-          </span>
-          <span>
-            Miệng desktop: theo viseme phổ âm thanh thật khi Dev Console phát TTS;
-            đây là heuristic, chưa phải căn phoneme chính xác
-          </span>
-          <span>
-            Control plane: tự thử lại mỗi 250 ms; sau khi service restart,
-            avatar mới bắt đầu ở state idle an toàn
-          </span>
-          <span v-if="vrmError" class="inline-error">Lỗi VRM: {{ vrmError }}</span>
-          <button
-            v-if="vrmError"
-            id="retryVrmButton"
-            type="button"
-            @click="retryVrm"
-          >
-            Thử tải lại VRM local
-          </button>
-        </section>
-
-        <section class="asset-notice">
-          <strong>Asset đang dùng để làm gì?</strong>
-          <p>
-            <code>VRM1_Constraint_Twist_Sample</code> vẫn là base mesh VRM 1.0
-            chính thức thuộc pixiv Inc., cho phép avatar use, commercial use,
-            modification và redistribution theo metadata nhúng. Profile màu,
-            pose và phụ kiện “Hina Kawaii · Pastel Sakura” là code original trong
-            repository; đây chưa phải artwork VRM độc quyền do dự án sở hữu.
-          </p>
-        </section>
-
-        <details>
-          <summary>Snapshot renderer-safe</summary>
-          <pre>{{ snapshot }}</pre>
-        </details>
-      </aside>
-    </section>
+    <RuntimePage
+      v-else
+      :runtime="runtime"
+      :widget-status="widgetStatus"
+      :safety="safety"
+      :busy="busy"
+      @widget-control="applyWidgetControl"
+      @toggle-mute="toggleMute"
+      @toggle-emergency="toggleEmergency"
+    />
   </main>
 </template>

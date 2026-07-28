@@ -1503,6 +1503,16 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
   error log. Không đổi endpoint/auth, sender allowlist/loopback, transparent
   guidance hay VRM fallback. Desktop typecheck/build + 54 test xanh, không
   mở VTube Studio/Spout thật.
+- M08-S17 Avatar/Runtime page modularity (2026-07-29): toàn bộ workflow
+  **Avatar Stage** và **Runtime & Safety** đã rời legacy `App.vue` sang
+  `AvatarPage.vue` và `RuntimePage.vue`. Hai page chỉ nhận dữ liệu bounded và
+  phát stage event hoặc intent fixed; App/Electron main vẫn sole owner VRM lazy
+  load/recovery, avatar/widget/Safety IPC, polling, widget-position lifecycle,
+  retry/backoff và error log. Không đổi VRM/Live2D fallback, widget drag/
+  persistence, mute/emergency semantics hay control-plane. Đây hoàn tất migration
+  của toàn bộ dashboard page hiện có; UI mới không được thêm markup lớn vào
+  `App.vue`. Desktop typecheck/build + 54 test xanh, không chạy desktop/model/
+  VTube Studio/Spout/mic/TTS/Cloud thật.
 
 ### Test matrix
 

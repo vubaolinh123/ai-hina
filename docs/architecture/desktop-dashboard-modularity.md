@@ -21,12 +21,13 @@ workflow, not merely a visual section.
 - Page-specific CSS stays under a stable page/class prefix in `style.css` until
   a page has enough local styles to justify a colocated stylesheet.
 
-## Current migration state (M08-S16)
+## Current migration state (M08-S17)
 
 - Extracted: `DashboardNav.vue`, `pages/OverviewPage.vue`,
-  `pages/ChatPage.vue`, `pages/PerceptionPage.vue`, and
-  `pages/ResourcesPage.vue`, `pages/SpeechPage.vue`, and
-  `pages/Live2DPage.vue`.
+  `pages/ChatPage.vue`, `pages/PerceptionPage.vue`,
+  `pages/ResourcesPage.vue`, `pages/SpeechPage.vue`,
+  `pages/Live2DPage.vue`, `pages/AvatarPage.vue`, and
+  `pages/RuntimePage.vue`. There is no remaining legacy root dashboard page.
 - `ChatPage.vue` owns message-list follow behavior, scroll intent, composer
   accessibility and aggregate context display. The composer is sticky on
   desktop and becomes normal flow at narrow widths.
@@ -44,9 +45,15 @@ workflow, not merely a visual section.
 - `Live2DPage.vue` owns the VTube Studio/Spout status and fixed owner controls;
   it receives no token, WebSocket, raw frame or arbitrary command capability.
   `App.vue` retains typed IPC, token/transport lifecycle, polling and error state.
-- Existing Avatar/Runtime markup is legacy root markup. New controls must not be
-  appended to that root section; migrate the entire affected page into
-  `src/dashboard/pages/` as the next bounded UI slice.
+- `AvatarPage.vue` owns the stage/VRM fallback, renderer telemetry, manual visual
+  preview and provenance guidance. `App.vue` retains VRM lazy-load/recovery,
+  performance event handling, avatar polling and every typed avatar IPC call.
+- `RuntimePage.vue` owns widget and Safety presentation. `App.vue` retains widget
+  position lifecycle, widget/Safety typed IPC, retry/backoff and global error
+  logging. The page emits only the fixed show/hide/reset, mute and emergency
+  intents.
+- New dashboard UI must be added to the relevant page component; `App.vue` is the
+  shell/lifecycle boundary and must not regain page-sized markup.
 
 ## Conversation UI contract
 

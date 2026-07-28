@@ -1,0 +1,64 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M08-S17-avatar-runtime-page-modularity",
+  "module_id": "M08",
+  "objective": "Complete the desktop dashboard page migration by moving Avatar Stage and Runtime & Safety markup out of legacy App.vue into dedicated typed Vue components while preserving App.vue/Electron main ownership of avatar, widget and Safety IPC/lifecycle.",
+  "non_goals": [
+    "Do not change the VRM/Live2D renderer, avatar state machine, widget persistence/drag behavior, Safety controls, control-plane retry/backoff, event polling or typed IPC contracts.",
+    "Do not add a dependency, direct renderer Electron/network/storage/process access, new avatar asset, new model, widget background listener, or real desktop/widget/avatar smoke against the owner's active session.",
+    "Do not alter the existing safety policy, mute/emergency behavior, or widget visibility semantics."
+  ],
+  "base_sha": "3cbbb04",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "apps/desktop/src/App.vue",
+    "apps/desktop/src/dashboard/pages/AvatarPage.vue",
+    "apps/desktop/src/dashboard/pages/RuntimePage.vue",
+    "apps/desktop/test/security.test.mjs",
+    "docs/architecture/desktop-dashboard-modularity.md",
+    "docs/modules/M08-S17-avatar-runtime-page-modularity-module-brief.json",
+    "docs/modules/M08-perception.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "voice_demo/",
+    "var/perception-sessions/",
+    "apps/desktop/dist/",
+    "apps/desktop/dist-electron/",
+    "var/test-artifacts/"
+  ],
+  "contracts": [
+    "AvatarPage and RuntimePage are typed presentation only. They receive bounded status/telemetry and emit fixed owner intent; they do not import Electron, Node, direct network APIs, persistence, process access or model runtimes.",
+    "App.vue remains the sole owner of typed avatar/widget/Safety IPC, polling, control-plane retry/backoff, stage events, widget position lifecycle, VRM lazy-load/recovery and error logging.",
+    "The pages never receive raw IPC, OS window handles, stored widget-position records, secret/tokens, unbounded runtime logs or arbitrary commands.",
+    "Avatar manual cues, widget show/hide/reset, mute and emergency controls retain their exact pre-existing fixed action set and Safety checks.",
+    "Desktop security tests include both extracted pages and demonstrate no direct renderer capability or legacy root dashboard markup remains."
+  ],
+  "allowed_dependencies": [
+    "Existing Vue 3/TypeScript, current Electron typed IPC and repository test tooling; no new dependency."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "All Avatar Stage and Runtime & Safety dashboard markup is removed from App.vue and rendered through pages/AvatarPage.vue and pages/RuntimePage.vue.",
+    "The extracted pages preserve current status, manual avatar preview, widget controls, mute/emergency controls and operator guidance through typed props/emits only.",
+    "Dashboard module documentation records every current desktop page as migrated out of App.vue.",
+    "Desktop typecheck, desktop security/build test and the repository fast gate pass without generated test artifacts retained."
+  ],
+  "required_test_commands": [
+    "pnpm --filter @hina/desktop typecheck",
+    "pnpm test:desktop",
+    "pnpm test:fast",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "avatar_runtime_behavior_change": false,
+    "new_local_vram_mib": 0,
+    "new_network_calls": 0,
+    "new_system_commands": 0
+  },
+  "output_artifact_dir": "artifacts/verification/M08/"
+}

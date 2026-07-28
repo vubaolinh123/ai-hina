@@ -263,6 +263,16 @@ fixed intent, không import Electron/Node/WebSocket/network/storage/bridge.
 allowlist, Spout polling và error log. Không đổi endpoint/auth, sender
 allowlist/loopback, transparent guidance hay VRM fallback. Migration legacy còn
 lại: Avatar/Runtime. Desktop typecheck/build + 54 tests xanh, không mở VTS thật.
+Ngày 2026-07-29 M08-S17 chuyển toàn bộ trang **Avatar Stage** và **Runtime &
+Safety** sang `dashboard/pages/AvatarPage.vue` và `RuntimePage.vue`. Hai page
+chỉ là presentation/typed-intent: không import Electron/Node/network/storage/
+model runtime. `App.vue` vẫn sole owner VRM lazy-load/recovery, stage event,
+avatar/widget/Safety IPC, polling, widget persistence/drag lifecycle,
+retry/backoff và error log. Không đổi renderer, fallback, widget visibility,
+mute/emergency semantics hay control-plane. Migration dashboard page hiện tại đã
+hoàn tất; UI mới phải vào component/page thay vì thêm markup lớn vào `App.vue`.
+Desktop typecheck/build + 54 tests xanh, không chạy desktop/model/VTS/Spout/mic/
+TTS/Cloud thật.
 Ngày 2026-07-29 M08-S11 hotfix capture/runtime capacity: owner phê duyệt trần
 admission Hina **15.872 MiB (15,5 GiB)**. `nvidia-smi memory.free` đã phản ánh
 VRAM Windows/compositor/app khác, vì vậy scheduler không trừ thêm 2.048 MiB;

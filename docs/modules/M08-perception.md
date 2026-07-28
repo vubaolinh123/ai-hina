@@ -15,6 +15,7 @@
   M08-S14 Resources dashboard modularity is a runnable candidate;
   M08-S15 Speech dashboard modularity is a runnable candidate;
   M08-S16 Live2D dashboard modularity is a runnable candidate;
+  M08-S17 Avatar/Runtime dashboard modularity is a runnable candidate;
   M08 remains active
 - Branch: `main` (fast-development mode)
 - Active slices: M08-S1 perception spine (owner-consented snapshot ingestion,
@@ -669,4 +670,33 @@ Không được đánh dấu M08 complete khi các phần còn lại chưa có e
 - `pnpm test:desktop`: build + 54 tests pass, including ResourcesPage in
   renderer-isolation, typed resource IPC and no-direct-system-access checks.
 - No model, Cloud request, capture, audio, cache/model download, fixture or
+  one-off script was created for this UI-boundary slice.
+
+## Implemented in M08-S17 (Avatar and Runtime page modularity)
+
+- `apps/desktop/src/dashboard/pages/AvatarPage.vue` now owns the complete
+  owner-facing Avatar Stage: lazy-stage presentation, SVG fallback, renderer
+  telemetry, manual preview, visual provenance and bounded renderer snapshot.
+  It receives a stage component/status data and emits only typed stage events or
+  fixed preview/retry intent; it has no Electron, Node, network, storage or
+  model-runtime capability.
+- `apps/desktop/src/dashboard/pages/RuntimePage.vue` now owns the complete
+  **Runtime & Safety** page. Widget show/hide/reset, mute and emergency controls
+  emit only their pre-existing fixed action set. The page never receives a raw
+  IPC handle, window handle, token, stored position record or arbitrary command.
+- `App.vue` remains the sole owner of VRM lazy loading/recovery, typed avatar,
+  widget and Safety IPC, polling, retry/backoff, widget persistence lifecycle
+  and console error logging. No renderer, widget, VRM, Safety or control-plane
+  behavior changed; this is a page-boundary refactor only.
+- The dashboard migration is now complete for all current pages. New owner UI
+  belongs in a `dashboard/pages` component rather than the `App.vue` shell.
+
+## Fast evidence M08-S17 (owner machine)
+
+- `pnpm --filter @hina/desktop typecheck`: pass.
+- `pnpm test:desktop`: production build + 54 tests pass, including both pages in
+  renderer isolation and the preserved lazy-VRM/widget/Safety typed-boundary
+  checks.
+- No real desktop/widget/avatar session, VTube Studio/Spout connection,
+  microphone, TTS, model, Cloud request, cache/model download, fixture or
   one-off script was created for this UI-boundary slice.

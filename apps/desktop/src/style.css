@@ -349,6 +349,20 @@ pre,
   background: var(--surface);
 }
 
+.runtime-control-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.runtime-control-grid > .control-card {
+  height: 100%;
+}
+
+.runtime-limitations strong {
+  color: var(--text);
+}
+
 .page-heading {
   max-width: 850px;
 }
@@ -1641,10 +1655,6 @@ pre,
   font-size: 12px;
 }
 
-.stage-grid[data-page="runtime"] {
-  grid-template-columns: minmax(0, 1fr);
-}
-
 .brand {
   display: flex;
   align-items: center;
@@ -2144,8 +2154,13 @@ pre {
   .overview-grid,
   .live2d-grid,
   .vision-status-grid,
-  .resource-summary-grid {
+  .resource-summary-grid,
+  .runtime-control-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .runtime-control-grid {
+    grid-template-columns: 1fr;
   }
 
   .resource-chart-grid,

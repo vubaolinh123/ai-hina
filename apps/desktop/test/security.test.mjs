@@ -15,6 +15,8 @@ const readOperatorRenderer = () => [
   read("src/dashboard/pages/ResourcesPage.vue"),
   read("src/dashboard/pages/SpeechPage.vue"),
   read("src/dashboard/pages/Live2DPage.vue"),
+  read("src/dashboard/pages/AvatarPage.vue"),
+  read("src/dashboard/pages/RuntimePage.vue"),
 ].join("\n");
 const require = createRequire(import.meta.url);
 const control = require("../dist-electron/control-client.js");
@@ -149,6 +151,8 @@ test("operator dashboard keeps page markup modular and chat input reachable", ()
   const resources = read("src/dashboard/pages/ResourcesPage.vue");
   const speech = read("src/dashboard/pages/SpeechPage.vue");
   const live2d = read("src/dashboard/pages/Live2DPage.vue");
+  const avatar = read("src/dashboard/pages/AvatarPage.vue");
+  const runtime = read("src/dashboard/pages/RuntimePage.vue");
   const style = read("src/style.css");
 
   assert.match(app, /import DashboardNav from "\.\/dashboard\/DashboardNav\.vue"/);
@@ -158,11 +162,15 @@ test("operator dashboard keeps page markup modular and chat input reachable", ()
   assert.match(app, /import ResourcesPage from "\.\/dashboard\/pages\/ResourcesPage\.vue"/);
   assert.match(app, /import SpeechPage from "\.\/dashboard\/pages\/SpeechPage\.vue"/);
   assert.match(app, /import Live2DPage from "\.\/dashboard\/pages\/Live2DPage\.vue"/);
+  assert.match(app, /import AvatarPage from "\.\/dashboard\/pages\/AvatarPage\.vue"/);
+  assert.match(app, /import RuntimePage from "\.\/dashboard\/pages\/RuntimePage\.vue"/);
   assert.doesNotMatch(app, /<nav class="desktop-nav"/);
   assert.doesNotMatch(app, /class="screen-capture-panel"/);
   assert.doesNotMatch(app, /class="resource-summary-grid"/);
   assert.doesNotMatch(app, /class="speech-test-grid"/);
   assert.doesNotMatch(app, /class="live2d-grid"/);
+  assert.doesNotMatch(app, /class="stage-grid"/);
+  assert.doesNotMatch(app, /class="widget-settings-card"/);
   assert.match(nav, /Live2D \/ VTube Studio/);
   assert.match(overview, /Mở chat với Hina/);
   assert.match(chat, /Context hội thoại của Hina/);
@@ -184,6 +192,12 @@ test("operator dashboard keeps page markup modular and chat input reachable", ()
   assert.match(live2d, /VTubeStudioSpout/);
   assert.match(live2d, /emit\('triggerHotkey'/);
   assert.doesNotMatch(live2d, /window\.hinaDesktop|\bfetch\s*\(|\bWebSocket\b|from\s+["']electron["']/);
+  assert.match(avatar, /AVATAR RENDERER \/ LOCAL ONLY/);
+  assert.match(avatar, /emit\('vrmPerformance'/);
+  assert.doesNotMatch(avatar, /window\.hinaDesktop|\bfetch\s*\(|\bWebSocket\b|from\s+["']electron["']/);
+  assert.match(runtime, /Quản lý widget avatar/);
+  assert.match(runtime, /emit\('widgetControl'/);
+  assert.doesNotMatch(runtime, /window\.hinaDesktop|\bfetch\s*\(|\bWebSocket\b|from\s+["']electron["']/);
   assert.match(style, /\.chat-composer[\s\S]*position:\s*sticky/);
   assert.match(style, /\.chat-layout[\s\S]*grid-template-columns:\s*1fr/);
 });
@@ -407,22 +421,24 @@ test("VRM stage uses one fixed bundled asset and disposes graphics resources", (
 
 test("VRM is lazy-loaded and fixed-asset recovery exposes bounded real telemetry", () => {
   const app = read("src/App.vue");
+  const avatar = read("src/dashboard/pages/AvatarPage.vue");
   const main = read("electron/main.ts");
   assert.match(
     app,
     /defineAsyncComponent\(\(\)\s*=>\s*import\("\.\/VrmStage\.vue"\)\)/,
   );
-  assert.match(app, /:key="vrmStageKey"/);
-  assert.match(app, /'vrm-stage-hidden': !vrmReady/);
-  assert.doesNotMatch(app, /v-show="vrmReady"/);
+  assert.match(app, /:stage-component="VrmStage"/);
+  assert.match(avatar, /:key="props\.vrmStageKey"/);
+  assert.match(avatar, /'vrm-stage-hidden': !props\.vrmReady/);
+  assert.doesNotMatch(avatar, /v-show="props\.vrmReady"/);
   assert.match(app, /function retryVrm\(\)/);
   assert.match(app, /function retryConnection\(\)/);
-  assert.match(app, /id="retryVrmButton"/);
+  assert.match(avatar, /id="retryVrmButton"/);
   assert.match(app, /setInterval\(refreshAvatar, 250\)/);
   assert.match(app, /vrmStageKey\.value \+= 1/);
-  assert.match(app, /@performance="handleVrmPerformance"/);
-  assert.match(app, /frameTimeP95Ms/);
-  assert.match(app, /droppedFramePercent/);
+  assert.match(avatar, /@performance="emit\('vrmPerformance', \$event\)"/);
+  assert.match(avatar, /frameTimeP95Ms/);
+  assert.match(avatar, /droppedFramePercent/);
   assert.doesNotMatch(app, /assetPath|modelPath|URLSearchParams|querySelector.*path/i);
   assert.match(main, /E_DESKTOP_PERFORMANCE_SMOKE_TIMEOUT/);
   assert.match(main, /getExtension\("WEBGL_lose_context"\)/);
