@@ -12,6 +12,7 @@
   M08-S11 capture/runtime-capacity hotfix is a runnable candidate;
   M08-S12 conversation ergonomics/persona boundary is a runnable candidate;
   M08-S13 Perception dashboard modularity is a runnable candidate;
+  M08-S14 Resources dashboard modularity is a runnable candidate;
   M08 remains active
 - Branch: `main` (fast-development mode)
 - Active slices: M08-S1 perception spine (owner-consented snapshot ingestion,
@@ -568,7 +569,7 @@ Không được đánh dấu M08 complete khi các phần còn lại chưa có e
 ## Implemented in M08-S13 (Perception page modularity)
 
 - `apps/desktop/src/dashboard/pages/PerceptionPage.vue` now owns all owner-facing
-  markup for the explicit screen/cửa sổ picker, bounded resolution and OCR/VLM
+  markup for the explicit màn hình/cửa sổ picker, bounded resolution and OCR/VLM
   choices, result/error/timing explanation, and Cloud/local Vision provider
   controls. It has no direct Electron, Node, fetch, storage or model-runtime
   access.
@@ -589,5 +590,30 @@ Không được đánh dấu M08 complete khi các phần còn lại chưa có e
 - `pnpm --filter @hina/desktop typecheck`: pass.
 - `pnpm test:desktop`: build + 54 tests pass, including the extracted
   Perception page in renderer-isolation, key-boundary and opaque-grant checks.
+- No model, Cloud request, capture, audio, cache/model download, fixture or
+  one-off script was created for this UI-boundary slice.
+
+## Implemented in M08-S14 (Resources page modularity)
+
+- `apps/desktop/src/dashboard/pages/ResourcesPage.vue` now owns all owner-facing
+  markup for realtime RAM/VRAM telemetry, model residency, scheduler leases,
+  bounded in-memory timeline and Force load/unload affordances. It has no direct
+  Electron, Node, fetch, storage, NVIDIA tooling or model-runtime access.
+- `App.vue` remains the sole owner of visibility-scoped 1.5-second polling,
+  bounded 60-sample history, telemetry/error logging, resource analysis and the
+  typed, allowlisted resource-control IPC call. The page emits only refresh or a
+  `{ model, action }` intent; scheduler admission remains authoritative.
+- No resource behavior changed: Cloud remains a no-op for local residency,
+  missing driver metrics remain null/“Không hỗ trợ” instead of zero, and owner
+  controls still cannot execute arbitrary model names or system commands.
+- The dashboard architecture rule now records Resources as migrated. Speech,
+  Live2D and Avatar/Runtime remain legacy root pages and must be moved as whole,
+  bounded page slices.
+
+## Fast evidence M08-S14 (owner machine)
+
+- `pnpm --filter @hina/desktop typecheck`: pass.
+- `pnpm test:desktop`: build + 54 tests pass, including ResourcesPage in
+  renderer-isolation, typed resource IPC and no-direct-system-access checks.
 - No model, Cloud request, capture, audio, cache/model download, fixture or
   one-off script was created for this UI-boundary slice.

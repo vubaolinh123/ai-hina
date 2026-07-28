@@ -12,6 +12,7 @@ const readOperatorRenderer = () => [
   read("src/dashboard/pages/OverviewPage.vue"),
   read("src/dashboard/pages/ChatPage.vue"),
   read("src/dashboard/pages/PerceptionPage.vue"),
+  read("src/dashboard/pages/ResourcesPage.vue"),
 ].join("\n");
 const require = createRequire(import.meta.url);
 const control = require("../dist-electron/control-client.js");
@@ -143,14 +144,17 @@ test("operator dashboard keeps page markup modular and chat input reachable", ()
   const overview = read("src/dashboard/pages/OverviewPage.vue");
   const chat = read("src/dashboard/pages/ChatPage.vue");
   const perception = read("src/dashboard/pages/PerceptionPage.vue");
+  const resources = read("src/dashboard/pages/ResourcesPage.vue");
   const style = read("src/style.css");
 
   assert.match(app, /import DashboardNav from "\.\/dashboard\/DashboardNav\.vue"/);
   assert.match(app, /import OverviewPage from "\.\/dashboard\/pages\/OverviewPage\.vue"/);
   assert.match(app, /import ChatPage from "\.\/dashboard\/pages\/ChatPage\.vue"/);
   assert.match(app, /import PerceptionPage from "\.\/dashboard\/pages\/PerceptionPage\.vue"/);
+  assert.match(app, /import ResourcesPage from "\.\/dashboard\/pages\/ResourcesPage\.vue"/);
   assert.doesNotMatch(app, /<nav class="desktop-nav"/);
   assert.doesNotMatch(app, /class="screen-capture-panel"/);
+  assert.doesNotMatch(app, /class="resource-summary-grid"/);
   assert.match(nav, /Live2D \/ VTube Studio/);
   assert.match(overview, /Mở chat với Hina/);
   assert.match(chat, /Context hội thoại của Hina/);
@@ -161,6 +165,10 @@ test("operator dashboard keeps page markup modular and chat input reachable", ()
   assert.match(perception, /visionPreferenceTouched/);
   assert.match(perception, /Renderer không thể đọc ngược key đã lưu/);
   assert.doesNotMatch(perception, /window\.hinaDesktop|\bfetch\s*\(|from\s+["']electron["']/);
+  assert.match(resources, /MODEL RESIDENCY/);
+  assert.match(resources, /Force load/);
+  assert.match(resources, /emit\('controlModel'/);
+  assert.doesNotMatch(resources, /window\.hinaDesktop|\bfetch\s*\(|from\s+["']electron["']/);
   assert.match(style, /\.chat-composer[\s\S]*position:\s*sticky/);
   assert.match(style, /\.chat-layout[\s\S]*grid-template-columns:\s*1fr/);
 });

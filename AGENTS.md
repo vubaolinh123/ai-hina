@@ -241,6 +241,14 @@ và console error. Không thay capture explicit, grant 60 giây/single-use,
 source-ID boundary, key `safeStorage`, pixel persistence hay TTL. Dashboard
 migration còn lại chỉ gồm Speech/Resources/Live2D/Avatar/Runtime. Desktop
 typecheck và build + 54 tests xanh, không chạy model/Cloud/capture thật.
+Ngày 2026-07-29 M08-S14 chuyển toàn bộ trang **Tài nguyên AI** sang
+`dashboard/pages/ResourcesPage.vue`. Component chỉ nhận telemetry/residency/
+lease/timeline bounded và phát refresh hoặc `{ model, action }` intent, không
+import Electron/Node/network/storage/runtime. `App.vue` vẫn sở hữu poll 1,5
+giây, sample history, resource analysis, typed resource IPC và scheduler/error
+boundary. Không đổi VRAM limits, Cloud no-op, null telemetry hoặc allowlisted
+Force load/unload. Migration legacy còn lại: Speech/Live2D/Avatar/Runtime.
+Desktop typecheck/build + 54 tests xanh, không chạy model hay benchmark all-on.
 Ngày 2026-07-29 M08-S11 hotfix capture/runtime capacity: owner phê duyệt trần
 admission Hina **15.872 MiB (15,5 GiB)**. `nvidia-smi memory.free` đã phản ánh
 VRAM Windows/compositor/app khác, vì vậy scheduler không trừ thêm 2.048 MiB;

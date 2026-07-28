@@ -1481,6 +1481,14 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
   của Safety, session UUID, opaque capture grant, Vision key/IPC và error log.
   Không đổi auto-capture, source-ID, Cloud-key, image persistence hay TTL.
   Desktop typecheck/build + 54 test xanh; không chạy provider/Cloud/capture thật.
+- M08-S14 Resources page modularity (2026-07-29): toàn bộ owner workflow
+  **Tài nguyên AI** đã rời legacy `App.vue` sang `ResourcesPage.vue`. Component
+  chỉ hiển thị telemetry/residency/lease/timeline bounded và phát refresh hoặc
+  `{ model, action }` intent; App vẫn là sole owner của poll 1,5 giây, sample
+  history, resource analysis, typed IPC, scheduler admission và error log.
+  Không đổi trần VRAM, semantics Cloud/no-op, null telemetry hoặc allowlist
+  Force load/unload. Desktop typecheck/build + 54 test xanh; không chạy model
+  hay all-on benchmark thật.
 
 ### Test matrix
 

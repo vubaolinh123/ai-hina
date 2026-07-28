@@ -1,0 +1,63 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M08-S14-resources-page-modularity",
+  "module_id": "M08",
+  "objective": "Move the owner-facing realtime AI Resources dashboard out of legacy App.vue into a dedicated typed Vue page while preserving App.vue as the only owner of polling, resource-control IPC, scheduler state and live telemetry lifecycle.",
+  "non_goals": [
+    "Do not alter VRAM limits, scheduler admission, model force-load/unload behavior, poll interval, telemetry collection, provider residency, or Cloud/local resource semantics.",
+    "Do not add a dependency, new model, direct renderer system command, direct renderer network call, or real all-on/VRAM/model benchmark against the owner's active desktop.",
+    "Do not migrate Speech, Live2D or Avatar/Runtime pages in this slice."
+  ],
+  "base_sha": "9d49cbd",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "apps/desktop/src/App.vue",
+    "apps/desktop/src/dashboard/pages/ResourcesPage.vue",
+    "apps/desktop/test/security.test.mjs",
+    "docs/architecture/desktop-dashboard-modularity.md",
+    "docs/modules/M08-S14-resources-page-modularity-module-brief.json",
+    "docs/modules/M08-perception.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "voice_demo/",
+    "var/perception-sessions/",
+    "apps/desktop/dist/",
+    "apps/desktop/dist-electron/",
+    "var/test-artifacts/"
+  ],
+  "contracts": [
+    "ResourcesPage is typed presentation only. It receives bounded live view data and formatting/analysis values from App.vue, and emits refresh or model-control intent. It does not import Electron, Node, direct network APIs, persistence, NVIDIA tooling or model runtimes.",
+    "App.vue remains the sole owner of typed window.hinaDesktop resource calls, visibility-scoped polling, sample/history retention, error logging and allowlisted force-load/unload request dispatch.",
+    "The page can display physical telemetry, reservation/lease state and model residency, but must not turn unavailable/null metrics into zero, expose command lines/secrets or introduce raw system access into the renderer.",
+    "Owner model control stays bounded to the pre-existing typed IPC path and its scheduler/headroom enforcement; extracting markup must not make arbitrary model identifiers or actions executable.",
+    "Desktop renderer security tests include the extracted page and prove the resource boundary and dashboard modularity remain intact."
+  ],
+  "allowed_dependencies": [
+    "Existing Vue 3/TypeScript, current Electron typed IPC and repository test tooling; no new dependency."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "All Resources page markup is removed from App.vue and rendered through pages/ResourcesPage.vue.",
+    "The extracted page preserves refresh, bounded visual telemetry, model residency/lease/timeline explanation and owner force-control affordances through typed props/emits only.",
+    "Dashboard module documentation records ResourcesPage as extracted and names remaining legacy pages accurately.",
+    "Desktop typecheck, desktop security/build test and the repository fast gate pass without generated test artifacts retained."
+  ],
+  "required_test_commands": [
+    "pnpm --filter @hina/desktop typecheck",
+    "pnpm test:desktop",
+    "pnpm test:fast",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "resource_poll_interval_change": false,
+    "new_local_vram_mib": 0,
+    "new_network_calls": 0,
+    "new_system_commands": 0
+  },
+  "output_artifact_dir": "artifacts/verification/M08/"
+}
