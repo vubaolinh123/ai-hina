@@ -249,6 +249,13 @@ giây, sample history, resource analysis, typed resource IPC và scheduler/error
 boundary. Không đổi VRAM limits, Cloud no-op, null telemetry hoặc allowlisted
 Force load/unload. Migration legacy còn lại: Speech/Live2D/Avatar/Runtime.
 Desktop typecheck/build + 54 tests xanh, không chạy model hay benchmark all-on.
+Ngày 2026-07-29 M08-S15 chuyển toàn bộ trang **Mic / STT / TTS** sang
+`dashboard/pages/SpeechPage.vue`. Component chỉ là presentation/intent, không
+import Electron/Node/MediaDevices/network/storage/runtime. `App.vue` vẫn sở hữu
+mic stream, WAV, realtime throttle, audio URL lifecycle, typed speech IPC và
+error log. Không đổi provider/GPU/permission/audio bound/persistence hoặc
+auto-listen; nhãn TTS nay đúng OmniVoice. Migration legacy còn lại: Live2D và
+Avatar/Runtime. Desktop typecheck/build + 54 tests xanh, không chạy mic/TTS thật.
 Ngày 2026-07-29 M08-S11 hotfix capture/runtime capacity: owner phê duyệt trần
 admission Hina **15.872 MiB (15,5 GiB)**. `nvidia-smi memory.free` đã phản ánh
 VRAM Windows/compositor/app khác, vì vậy scheduler không trừ thêm 2.048 MiB;

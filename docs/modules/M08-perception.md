@@ -13,6 +13,7 @@
   M08-S12 conversation ergonomics/persona boundary is a runnable candidate;
   M08-S13 Perception dashboard modularity is a runnable candidate;
   M08-S14 Resources dashboard modularity is a runnable candidate;
+  M08-S15 Speech dashboard modularity is a runnable candidate;
   M08 remains active
 - Branch: `main` (fast-development mode)
 - Active slices: M08-S1 perception spine (owner-consented snapshot ingestion,
@@ -592,6 +593,32 @@ Không được đánh dấu M08 complete khi các phần còn lại chưa có e
   Perception page in renderer-isolation, key-boundary and opaque-grant checks.
 - No model, Cloud request, capture, audio, cache/model download, fixture or
   one-off script was created for this UI-boundary slice.
+
+## Implemented in M08-S15 (Speech page modularity)
+
+- `apps/desktop/src/dashboard/pages/SpeechPage.vue` now owns all owner-facing
+  markup for the explicit Mic/STT/TTS test workflow: runtime status, realtime
+  preference, start/stop recording controls, transcript/correlation display,
+  bounded TTS text and playback UI. It has no direct Electron, Node,
+  MediaDevices, fetch, storage or model-runtime access.
+- `App.vue` remains the sole owner of `MicrophoneRecorder`, `getUserMedia`, WAV
+  construction, realtime transcript throttling, TTS audio object-URL lifecycle,
+  typed speech IPC and error logging. The page emits intent or field updates;
+  recording still begins only after the existing explicit owner click.
+- This extraction does not change audio duration/size bounds, STT/TTS provider
+  selection, GPU scheduling, microphone permissions, persistence or speech
+  content. The TTS heading now correctly identifies the active OmniVoice GPU
+  runtime rather than the retired VieNeu label.
+- The dashboard architecture rule now records Speech as migrated. Only Live2D
+  and Avatar/Runtime remain legacy root pages for future bounded migration.
+
+## Fast evidence M08-S15 (owner machine)
+
+- `pnpm --filter @hina/desktop typecheck`: pass.
+- `pnpm test:desktop`: build + 54 tests pass, including SpeechPage in renderer
+  isolation and the preserved microphone/typed-IPC boundary checks.
+- No microphone capture, TTS inference, model, Cloud request, cache/model
+  download, fixture or one-off script was created for this UI-boundary slice.
 
 ## Implemented in M08-S14 (Resources page modularity)
 

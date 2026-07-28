@@ -13,6 +13,7 @@ const readOperatorRenderer = () => [
   read("src/dashboard/pages/ChatPage.vue"),
   read("src/dashboard/pages/PerceptionPage.vue"),
   read("src/dashboard/pages/ResourcesPage.vue"),
+  read("src/dashboard/pages/SpeechPage.vue"),
 ].join("\n");
 const require = createRequire(import.meta.url);
 const control = require("../dist-electron/control-client.js");
@@ -145,6 +146,7 @@ test("operator dashboard keeps page markup modular and chat input reachable", ()
   const chat = read("src/dashboard/pages/ChatPage.vue");
   const perception = read("src/dashboard/pages/PerceptionPage.vue");
   const resources = read("src/dashboard/pages/ResourcesPage.vue");
+  const speech = read("src/dashboard/pages/SpeechPage.vue");
   const style = read("src/style.css");
 
   assert.match(app, /import DashboardNav from "\.\/dashboard\/DashboardNav\.vue"/);
@@ -152,9 +154,11 @@ test("operator dashboard keeps page markup modular and chat input reachable", ()
   assert.match(app, /import ChatPage from "\.\/dashboard\/pages\/ChatPage\.vue"/);
   assert.match(app, /import PerceptionPage from "\.\/dashboard\/pages\/PerceptionPage\.vue"/);
   assert.match(app, /import ResourcesPage from "\.\/dashboard\/pages\/ResourcesPage\.vue"/);
+  assert.match(app, /import SpeechPage from "\.\/dashboard\/pages\/SpeechPage\.vue"/);
   assert.doesNotMatch(app, /<nav class="desktop-nav"/);
   assert.doesNotMatch(app, /class="screen-capture-panel"/);
   assert.doesNotMatch(app, /class="resource-summary-grid"/);
+  assert.doesNotMatch(app, /class="speech-test-grid"/);
   assert.match(nav, /Live2D \/ VTube Studio/);
   assert.match(overview, /Mở chat với Hina/);
   assert.match(chat, /Context hội thoại của Hina/);
@@ -169,6 +173,10 @@ test("operator dashboard keeps page markup modular and chat input reachable", ()
   assert.match(resources, /Force load/);
   assert.match(resources, /emit\('controlModel'/);
   assert.doesNotMatch(resources, /window\.hinaDesktop|\bfetch\s*\(|from\s+["']electron["']/);
+  assert.match(speech, /MIC → LOCAL STT REALTIME/);
+  assert.match(speech, /TEXT → OMNIVOICE VIETNAMESE GPU/);
+  assert.match(speech, /emit\('startMic'\)/);
+  assert.doesNotMatch(speech, /window\.hinaDesktop|\bfetch\s*\(|getUserMedia|from\s+["']electron["']/);
   assert.match(style, /\.chat-composer[\s\S]*position:\s*sticky/);
   assert.match(style, /\.chat-layout[\s\S]*grid-template-columns:\s*1fr/);
 });

@@ -1489,6 +1489,13 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
   Không đổi trần VRAM, semantics Cloud/no-op, null telemetry hoặc allowlist
   Force load/unload. Desktop typecheck/build + 54 test xanh; không chạy model
   hay all-on benchmark thật.
+- M08-S15 Speech page modularity (2026-07-29): toàn bộ owner workflow
+  **Mic / STT / TTS** đã rời legacy `App.vue` sang `SpeechPage.vue`. Component
+  chỉ hiển thị runtime/transcript/audio URL bounded và phát intent/update;
+  App vẫn là sole owner của microphone stream, WAV, realtime throttle, audio
+  URL cleanup, typed speech IPC và error log. Không đổi provider/GPU, permission,
+  audio bounds/persistence hay auto-listen; heading TTS được sửa thành OmniVoice
+  đang chạy. Desktop typecheck/build + 54 test xanh, không chạy mic/TTS thật.
 
 ### Test matrix
 

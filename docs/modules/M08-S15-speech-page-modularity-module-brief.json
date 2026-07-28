@@ -1,0 +1,63 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M08-S15-speech-page-modularity",
+  "module_id": "M08",
+  "objective": "Move the owner-facing Mic/STT/TTS test dashboard page out of legacy App.vue into a dedicated typed Vue component while preserving App.vue as the only owner of microphone capture, WAV construction, TTS audio lifecycle and typed speech IPC.",
+  "non_goals": [
+    "Do not change STT/TTS providers, GPU/CPU configuration, microphone permissions, realtime transcription cadence, audio format, speech persistence, voice cloning, model lifecycle or scheduler behavior.",
+    "Do not add a dependency, direct renderer network/runtime access, automatic microphone listening, background recording, or real speech/model benchmark against the owner's active desktop.",
+    "Do not migrate Live2D or Avatar/Runtime pages in this slice."
+  ],
+  "base_sha": "5935cae",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "apps/desktop/src/App.vue",
+    "apps/desktop/src/dashboard/pages/SpeechPage.vue",
+    "apps/desktop/test/security.test.mjs",
+    "docs/architecture/desktop-dashboard-modularity.md",
+    "docs/modules/M08-S15-speech-page-modularity-module-brief.json",
+    "docs/modules/M08-perception.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "voice_demo/",
+    "var/perception-sessions/",
+    "apps/desktop/dist/",
+    "apps/desktop/dist-electron/",
+    "var/test-artifacts/"
+  ],
+  "contracts": [
+    "SpeechPage is typed presentation only. It receives bounded speech runtime/status/transcript/audio URL state and emits owner intent or text/toggle updates; it does not import Electron, Node, MediaDevices, direct network APIs, persistence or model runtimes.",
+    "App.vue remains the sole owner of MicrophoneRecorder/getUserMedia, AudioWorklet-compatible capture, WAV conversion, transcription/TTS IPC, audio object URL revocation, live-transcript throttling and error logging.",
+    "The page does not turn on recording automatically. A microphone capture can start only from the existing explicit owner button/event and its existing duration/size bounds remain unchanged.",
+    "The page never receives raw PCM chunks, microphone stream handles, stored voice references, model weights, API keys or hidden model text.",
+    "Desktop renderer security tests include the extracted page and preserve the direct-media/IPC boundary."
+  ],
+  "allowed_dependencies": [
+    "Existing Vue 3/TypeScript, current Electron typed IPC and repository test tooling; no new dependency."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "All Mic/STT/TTS dashboard markup is removed from App.vue and rendered through pages/SpeechPage.vue.",
+    "The extracted page preserves explicit start/stop microphone controls, realtime toggle, transcript/correlation status, bounded TTS text input and audio playback view through typed props/emits only.",
+    "Dashboard module documentation records SpeechPage as extracted and names remaining legacy pages accurately.",
+    "Desktop typecheck, desktop security/build test and the repository fast gate pass without generated test artifacts retained."
+  ],
+  "required_test_commands": [
+    "pnpm --filter @hina/desktop typecheck",
+    "pnpm test:desktop",
+    "pnpm test:fast",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "recording_behavior_change": false,
+    "new_local_vram_mib": 0,
+    "new_network_calls": 0,
+    "new_microphone_access_paths": 0
+  },
+  "output_artifact_dir": "artifacts/verification/M08/"
+}

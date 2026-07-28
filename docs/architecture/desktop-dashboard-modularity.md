@@ -21,11 +21,11 @@ workflow, not merely a visual section.
 - Page-specific CSS stays under a stable page/class prefix in `style.css` until
   a page has enough local styles to justify a colocated stylesheet.
 
-## Current migration state (M08-S14)
+## Current migration state (M08-S15)
 
 - Extracted: `DashboardNav.vue`, `pages/OverviewPage.vue`,
   `pages/ChatPage.vue`, `pages/PerceptionPage.vue`, and
-  `pages/ResourcesPage.vue`.
+  `pages/ResourcesPage.vue`, and `pages/SpeechPage.vue`.
 - `ChatPage.vue` owns message-list follow behavior, scroll intent, composer
   accessibility and aggregate context display. The composer is sticky on
   desktop and becomes normal flow at narrow widths.
@@ -36,9 +36,13 @@ workflow, not merely a visual section.
 - `ResourcesPage.vue` owns telemetry/residency/lease presentation and emits only
   refresh or allowlisted control intent. `App.vue` keeps visibility-scoped
   polling, samples, telemetry/error state and the actual typed IPC call.
-- Existing Speech, Live2D and Avatar/Runtime markup is legacy root markup. New
-  controls must not be appended to those root sections; migrate the entire
-  affected page into `src/dashboard/pages/` as the next bounded UI slice.
+- `SpeechPage.vue` owns the owner-facing mic/STT/TTS test presentation and emits
+  only explicit start/stop/test or field updates. `App.vue` retains microphone
+  streams, WAV conversion, audio object-URL cleanup, realtime throttling and
+  typed speech IPC.
+- Existing Live2D and Avatar/Runtime markup is legacy root markup. New controls
+  must not be appended to those root sections; migrate the entire affected page
+  into `src/dashboard/pages/` as the next bounded UI slice.
 
 ## Conversation UI contract
 
