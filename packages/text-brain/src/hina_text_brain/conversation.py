@@ -129,6 +129,7 @@ class ConversationService:
         memory: ShortTermMemory | None = None,
         context_composer: ContextComposer | None = None,
         long_term_memory: Any | None = None,
+        fresh_observations: Any | None = None,
         on_error: Callable[[dict[str, str]], None] | None = None,
         on_state_change: Callable[[dict[str, str | None]], None] | None = None,
     ) -> None:
@@ -142,6 +143,7 @@ class ConversationService:
             persona,
             self.memory,
             long_term_memory=long_term_memory,
+            fresh_observations=fresh_observations,
         )
         self.on_error = on_error
         self.on_state_change = on_state_change

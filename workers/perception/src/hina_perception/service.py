@@ -468,6 +468,44 @@ class PerceptionService:
             "expiryClock": "monotonic-elapsed",
         }
 
+    async def fresh_context_for_turn(
+        self,
+        session_id: str,
+        *,
+        source: str,
+    ) -> tuple[dict[str, Any], ...]:
+        """Return at most one same-session semantic snapshot for owner chat.
+
+        Freshness is re-evaluated here through the monotonic ledger rather than
+        trusting a wall-clock timestamp copied into the observation. Historical
+        archive analysis is never added to this ledger and therefore cannot
+        become current chat context.
+        """
+
+        if self._closed or source != "owner.console":
+            return ()
+        _validate_uuid(session_id, "session ID")
+        for record in self._ledger.fresh():
+            if record.get("sessionId") != session_id:
+                continue
+            vision = record.get("vision")
+            ocr = record.get("ocr")
+            has_vision = (
+                isinstance(vision, dict)
+                and vision.get("state") == "ready"
+                and isinstance(vision.get("summary"), str)
+                and bool(vision["summary"].strip())
+            )
+            has_ocr = (
+                isinstance(ocr, dict)
+                and ocr.get("state") == "ready"
+                and isinstance(ocr.get("text"), str)
+                and bool(ocr["text"].strip())
+            )
+            if has_vision or has_ocr:
+                return (record,)
+        return ()
+
     async def clear(self, *, source: str) -> dict[str, Any]:
         if source not in _ALLOWED_SOURCES:
             raise PerceptionError(

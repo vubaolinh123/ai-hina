@@ -144,19 +144,6 @@ class HinaRuntimeApplication:
                         safety_policy.sanitize_input,
                     )
                     await memory_service.start()
-            if self.paths.persona_spec is not None:
-                if safety_policy is None:
-                    raise ValueError("persona_spec requires safety policy configuration")
-                from hina_text_brain import ConversationService, PersonaSpec
-
-                conversation = ConversationService(
-                    model_gateway,
-                    safety_policy,
-                    PersonaSpec.load(self.paths.persona_spec.resolve()),
-                    long_term_memory=memory_service,
-                    on_error=self._log_conversation_error,
-                    on_state_change=avatar_service.observe_turn_state,
-                )
             if speech_service is None:
                 from hina_speech import (
                     FasterWhisperProvider,
@@ -316,6 +303,20 @@ class HinaRuntimeApplication:
                     vision_provider=vision_provider,
                     ocr_provider=ocr_provider,
                     on_error=self._log_perception_error,
+                )
+            if self.paths.persona_spec is not None:
+                if safety_policy is None:
+                    raise ValueError("persona_spec requires safety policy configuration")
+                from hina_text_brain import ConversationService, PersonaSpec
+
+                conversation = ConversationService(
+                    model_gateway,
+                    safety_policy,
+                    PersonaSpec.load(self.paths.persona_spec.resolve()),
+                    long_term_memory=memory_service,
+                    fresh_observations=perception_service,
+                    on_error=self._log_conversation_error,
+                    on_state_change=avatar_service.observe_turn_state,
                 )
             server = ControlPlaneServer(
                 self.config,

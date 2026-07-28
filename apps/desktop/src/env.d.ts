@@ -441,6 +441,7 @@ type HinaDesktopApi = {
   }>;
   listScreenCaptureSources(): Promise<ScreenCaptureSourceListing>;
   captureScreenSource(input: {
+    sessionId: string;
     grantSessionId: string;
     sourceToken: string;
     maxSide: 640 | 960 | 1280;

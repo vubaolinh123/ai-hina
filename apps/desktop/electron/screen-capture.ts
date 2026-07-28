@@ -28,6 +28,7 @@ export type CaptureSourceListing = {
 };
 
 export type FullFrameCaptureRequest = {
+  sessionId: string;
   grantSessionId: string;
   sourceToken: string;
   maxSide: CaptureMaxSide;
@@ -154,6 +155,7 @@ export function validateFullFrameCaptureRequest(
     throw new Error("E_DESKTOP_CAPTURE_REQUEST: capture request must be an object");
   }
   const allowed = new Set([
+    "sessionId",
     "grantSessionId",
     "sourceToken",
     "maxSide",
@@ -168,6 +170,7 @@ export function validateFullFrameCaptureRequest(
   ) {
     throw new Error("E_DESKTOP_CAPTURE_REQUEST: capture request fields are invalid");
   }
+  assertUuid(raw.sessionId, "chat session");
   assertUuid(raw.grantSessionId, "grant session");
   assertUuid(raw.sourceToken, "source token");
   if (
@@ -191,6 +194,7 @@ export function validateFullFrameCaptureRequest(
     );
   }
   return {
+    sessionId: raw.sessionId,
     grantSessionId: raw.grantSessionId,
     sourceToken: raw.sourceToken,
     maxSide: raw.maxSide as CaptureMaxSide,

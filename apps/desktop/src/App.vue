@@ -481,6 +481,7 @@ async function captureSelectedScreenSource(): Promise<void> {
     `Đang chụp toàn bộ “${source.name}”, hạ cạnh dài xuống tối đa ${screenCaptureMaxSide.value} px…`;
   try {
     const result = await window.hinaDesktop.captureScreenSource({
+      sessionId: chatSessionId,
       grantSessionId: listing.grantSessionId,
       sourceToken: source.sourceToken,
       maxSide: screenCaptureMaxSide.value,
@@ -521,6 +522,19 @@ async function captureSelectedScreenSource(): Promise<void> {
 
 function markScreenCaptureVisionPreference(): void {
   screenCaptureVisionPreferenceTouched = true;
+}
+
+async function askHinaAboutLastCapture(): Promise<void> {
+  const observation = screenCaptureResult.value?.observation;
+  const hasSemanticContext = (
+    observation?.vision?.state === "ready"
+    || observation?.ocr?.state === "ready"
+  );
+  if (!hasSemanticContext || chatBusy.value) return;
+  activePage.value = "chat";
+  chatInput.value = screenCaptureVisionQuestion.value.trim()
+    || "Dựa trên ảnh vừa chụp, hãy mô tả ngắn gọn điều đáng chú ý.";
+  await sendDesktopChat();
 }
 
 function visionAnalysisErrorCode(
@@ -1803,6 +1817,26 @@ onBeforeUnmount(() => {
             <b>OCR chưa trả được kết quả:</b>
             {{ screenCaptureResult.observation.ocr.errorCode || "E_PERCEPTION_OCR" }}.
           </p>
+          <div
+            v-if="
+              screenCaptureResult.observation?.vision?.state === 'ready'
+                || screenCaptureResult.observation?.ocr?.state === 'ready'
+            "
+            class="button-row"
+          >
+            <button
+              class="primary"
+              type="button"
+              :disabled="chatBusy"
+              @click="askHinaAboutLastCapture"
+            >
+              Hỏi Hina ngay về ảnh vừa chụp
+            </button>
+            <small>
+              Nên bấm ngay: mô tả ảnh chỉ đi vào đúng phiên Chat này trong tối đa 15 giây,
+              rồi tự hết hạn.
+            </small>
+          </div>
         </div>
       </section>
 

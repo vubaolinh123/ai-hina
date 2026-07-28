@@ -259,7 +259,7 @@ async function submitDesktopCapture(raw: unknown): Promise<Record<string, unknow
   }
   const encoded = encodeBoundedCapture(selected.thumbnail, request.maxSide);
   const result = await requestPerceptionSnapshot(encoded.png, {
-    sessionId: crypto.randomUUID(),
+    sessionId: request.sessionId,
     label: request.label,
     analyzeOcr: request.analyzeOcr,
     analyzeVision: request.analyzeVision,

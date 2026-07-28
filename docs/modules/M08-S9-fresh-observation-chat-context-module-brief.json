@@ -1,0 +1,88 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M08-S9-fresh-observation-chat-context",
+  "module_id": "M08",
+  "objective": "Let Hina answer an owner's chat question about the most recent explicitly captured screen snapshot by composing exactly one same-session semantic observation while it is still fresh, as bounded untrusted user-role data rather than system instructions.",
+  "non_goals": [
+    "Do not add automatic, periodic, event-driven or background screen capture.",
+    "Do not inject raw PNG bytes, hashes, OCR boxes, provider payloads, API keys or hidden reasoning into chat.",
+    "Do not make archived/historical snapshots current, extend the 15-second TTL or persist transient observation text in long-term memory.",
+    "Do not enable model-generated tools, game actions or decision support from perception data.",
+    "Do not expose an owner snapshot to authenticated, viewer or public chat lanes.",
+    "Do not add a dependency, open another product module or run repeat, soak or full release verification."
+  ],
+  "base_sha": "d43d7f4fa687b695689503a96fc01523cfa2d770",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "packages/text-brain/src/hina_text_brain/context.py",
+    "packages/text-brain/src/hina_text_brain/conversation.py",
+    "packages/text-brain/src/hina_text_brain/persona.py",
+    "packages/text-brain/tests/test_conversation.py",
+    "workers/perception/src/hina_perception/service.py",
+    "workers/perception/tests/test_perception.py",
+    "apps/core-runtime/src/hina_core/runtime/application.py",
+    "apps/core-runtime/tests/test_dev_console.py",
+    "apps/desktop/electron/screen-capture.ts",
+    "apps/desktop/electron/main.ts",
+    "apps/desktop/src/App.vue",
+    "apps/desktop/src/env.d.ts",
+    "apps/desktop/test/screen-capture.test.mjs",
+    "apps/desktop/test/security.test.mjs",
+    "docs/modules/M08-S9-fresh-observation-chat-context-module-brief.json",
+    "docs/modules/M08-perception.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "README.md"
+  ],
+  "forbidden_paths": [
+    "packages/contracts/",
+    "packages/memory/",
+    "packages/safety-policy/",
+    "workers/speech/",
+    "packages/avatar/",
+    "voice_demo/",
+    "var/perception-sessions/"
+  ],
+  "contracts": [
+    "Context assembly reads freshness from the perception service's monotonic TTL ledger at turn composition time; expired, unknown and historical observations are absent.",
+    "At most the newest observation with semantic vision or OCR text, the same owner session ID and source owner.console is eligible; other sessions and all non-owner chat lanes receive none.",
+    "The observation is rendered as a bounded user-role block delimited UNTRUSTED_FRESH_OBSERVATION_DATA, never appended to the system prompt and never treated as an instruction.",
+    "The system prompt contains only trusted availability metadata and tells the model to describe an image captured moments ago rather than claim a live view.",
+    "Only bounded label, dimensions, remaining lifetime, final vision summary and OCR text may enter the model context; raw pixels, hashes, boxes, secrets and provider payloads remain excluded.",
+    "The desktop operator submits screen capture with the same UUID used by its chat session so the runtime can enforce session isolation.",
+    "Fresh observation context is not appended to short-term chat replay, long-term memory or any tool proposal, and chat without eligible context keeps its previous behavior."
+  ],
+  "allowed_dependencies": [
+    "Existing Python and TypeScript standard libraries plus already pinned workspace packages"
+  ],
+  "oss_candidates": [
+    "No new dependency or copied source; extend the existing FreshnessLedger, ContextComposer and desktop capture contracts."
+  ],
+  "acceptance_criteria": [
+    "A fresh same-session vision summary appears once in a user-role untrusted block and the turn context reports includedFreshObservations=1.",
+    "An observation containing prompt-injection text cannot alter the system-role persona text, escape its delimiter or enable tool execution.",
+    "Expired observations, observations from another session, metadata-only captures and archived historical reanalysis are not composed.",
+    "Viewer/public/authenticated chat cannot receive owner screen context even when it reuses the same session UUID.",
+    "If the fresh block cannot fit the model byte budget, chat falls back to the no-observation system state instead of failing or partially including it.",
+    "Desktop capture validation requires a canonical chat session UUID and forwards it as X-Hina-Session-Id.",
+    "Fast text-brain, perception and desktop tests pass, followed by one bounded real capture-to-chat smoke and one post-TTL negative smoke without retaining test pixels."
+  ],
+  "required_test_commands": [
+    "pnpm test:text-brain",
+    "pnpm test:perception",
+    "pnpm --filter @hina/desktop test",
+    "uv run --frozen python -c \"import json,jsonschema,pathlib; root=pathlib.Path('.'); jsonschema.Draft202012Validator(json.loads((root/'docs/schemas/module-brief.schema.json').read_text(encoding='utf-8'))).validate(json.loads((root/'docs/modules/M08-S9-fresh-observation-chat-context-module-brief.json').read_text(encoding='utf-8')))\""
+  ],
+  "latency_or_quality_budget": {
+    "maximum_fresh_observations_per_turn": 1,
+    "maximum_observation_ttl_seconds": 15,
+    "maximum_vision_characters": 2000,
+    "maximum_ocr_characters": 4000,
+    "cross_session_exposure": 0,
+    "non_owner_exposure": 0,
+    "automatic_capture": false,
+    "pixel_context_or_persistence": false
+  },
+  "output_artifact_dir": "artifacts/verification/M08/"
+}

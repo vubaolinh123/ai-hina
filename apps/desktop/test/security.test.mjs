@@ -154,6 +154,8 @@ test("full-frame screen capture stays in Electron main behind one-use grants", (
   assert.match(client, /"X-Hina-Source":\s*"owner\.desktop"/);
   assert.match(client, /"X-Hina-Owner-Confirmed":\s*"true"/);
   assert.match(renderer, /screenCaptureMaxSide\s*=\s*ref<640 \| 960 \| 1280>\(960\)/);
+  assert.match(renderer, /sessionId:\s*chatSessionId/);
+  assert.match(renderer, /askHinaAboutLastCapture/);
   assert.match(
     renderer,
     /screenCaptureAnalyzeVision\.value\s*=\s*\n?\s*visionProviderStatus\.value\.runtime\.available/,
@@ -560,6 +562,10 @@ test("control client sends bounded PNG only to the fixed perception route", asyn
   assert.equal(request.url, "http://127.0.0.1:8765/v1/perception/snapshots");
   assert.equal(request.options.method, "POST");
   assert.equal(request.options.headers["Content-Type"], "image/png");
+  assert.equal(
+    request.options.headers["X-Hina-Session-Id"],
+    "55555555-5555-4555-8555-555555555555",
+  );
   assert.equal(request.options.headers["X-Hina-Source"], "owner.desktop");
   assert.equal(request.options.headers["X-Hina-Owner-Confirmed"], "true");
   assert.equal(request.options.headers["X-Hina-OCR-Analyze"], "true");

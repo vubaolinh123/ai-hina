@@ -87,6 +87,7 @@ test("a new picker result revokes the previous transient source list", () => {
 
 test("full-frame request accepts only bounded explicit fields and presets", () => {
   const request = validateFullFrameCaptureRequest({
+    sessionId: UUIDS[2],
     grantSessionId: UUIDS[0],
     sourceToken: UUIDS[1],
     maxSide: 960,
@@ -96,6 +97,7 @@ test("full-frame request accepts only bounded explicit fields and presets", () =
     visionQuestion: "Nhân vật đang ở đâu?",
   });
   assert.deepEqual(request, {
+    sessionId: UUIDS[2],
     grantSessionId: UUIDS[0],
     sourceToken: UUIDS[1],
     maxSide: 960,
@@ -107,6 +109,10 @@ test("full-frame request accepts only bounded explicit fields and presets", () =
   assert.throws(
     () => validateFullFrameCaptureRequest({ ...request, maxSide: 1920 }),
     /maxSide/,
+  );
+  assert.throws(
+    () => validateFullFrameCaptureRequest({ ...request, sessionId: "not-a-uuid" }),
+    /chat session/,
   );
   assert.throws(
     () => validateFullFrameCaptureRequest({

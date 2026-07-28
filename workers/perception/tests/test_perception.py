@@ -543,6 +543,75 @@ class ServiceTests(unittest.TestCase):
         self.assertNotIn("Nhân vật đang đứng", str(result["observation"]))
         self.assertNotIn(encoded.hex()[:32], str(result))
 
+    def test_fresh_chat_context_is_semantic_same_session_owner_only_and_expires(self) -> None:
+        clock = FakeClock()
+
+        async def analyze(_image: bytes, _prompt: str) -> str:
+            return "Có một cửa sổ game và thanh trạng thái."
+
+        service = _service(
+            _RecordingEvaluate("allow"),
+            clock=clock,
+            vision_analyze=analyze,
+        )
+        result = asyncio.run(
+            service.ingest_snapshot(
+                encode_png(gradient()),
+                correlation_id=CORRELATION,
+                session_id=SESSION,
+                source="owner.desktop",
+                analyze_with_vlm=True,
+            )
+        )
+
+        fresh = asyncio.run(
+            service.fresh_context_for_turn(SESSION, source="owner.console")
+        )
+        self.assertEqual(1, len(fresh))
+        self.assertEqual(
+            result["observation"]["observationId"],
+            fresh[0]["observationId"],
+        )
+        self.assertEqual(
+            "Có một cửa sổ game và thanh trạng thái.",
+            fresh[0]["vision"]["summary"],
+        )
+        self.assertEqual(
+            (),
+            asyncio.run(
+                service.fresh_context_for_turn(
+                    "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                    source="owner.console",
+                )
+            ),
+        )
+        self.assertEqual(
+            (),
+            asyncio.run(service.fresh_context_for_turn(SESSION, source="viewer.chat")),
+        )
+
+        metadata_only = _service(_RecordingEvaluate("allow"))
+        asyncio.run(
+            metadata_only.ingest_snapshot(
+                encode_png(gradient()),
+                correlation_id=CORRELATION,
+                session_id=SESSION,
+                source="owner.console",
+            )
+        )
+        self.assertEqual(
+            (),
+            asyncio.run(
+                metadata_only.fresh_context_for_turn(SESSION, source="owner.console")
+            ),
+        )
+
+        clock.advance(15.0)
+        self.assertEqual(
+            (),
+            asyncio.run(service.fresh_context_for_turn(SESSION, source="owner.console")),
+        )
+
     def test_vision_failure_preserves_base_observation_and_is_reported(self) -> None:
         reports: list[dict[str, str]] = []
 

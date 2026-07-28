@@ -96,6 +96,38 @@ class _FailingModelGateway(_StubModelGateway):
         yield ""  # pragma: no cover
 
 
+class _FreshPerceptionStub:
+    def __init__(self, session_id: str) -> None:
+        self.session_id = session_id
+        self.closed = False
+
+    async def fresh_context_for_turn(self, session_id: str, *, source: str):
+        if (
+            self.closed
+            or source != "owner.console"
+            or session_id != self.session_id
+        ):
+            return ()
+        return (
+            {
+                "kind": "screen.snapshot",
+                "trustLevel": "untrusted",
+                "sessionId": self.session_id,
+                "remainingSeconds": 9.5,
+                "label": "Integration screen",
+                "evidence": {"width": 960, "height": 540},
+                "vision": {
+                    "state": "ready",
+                    "summary": "Ảnh có dashboard tài nguyên của Hina.",
+                },
+                "ocr": {"state": "not-requested", "text": None},
+            },
+        )
+
+    async def close(self) -> None:
+        self.closed = True
+
+
 class _StubSpeechProvider:
     async def status(self) -> dict[str, object]:
         return {
@@ -717,6 +749,60 @@ class DevConsoleTests(unittest.IsolatedAsyncioTestCase):
                 self.assertNotIn(secret, log_text)
             finally:
                 await application.stop()
+
+    async def test_application_wires_fresh_perception_into_owner_chat_context(self) -> None:
+        with tempfile.TemporaryDirectory(dir=APP_ROOT) as temporary_directory:
+            directory = Path(temporary_directory)
+            session_id = "13131313-1313-4313-8313-131313131313"
+            gateway = _StubModelGateway()
+            perception = _FreshPerceptionStub(session_id)
+            application = HinaRuntimeApplication(
+                TransportConfig(port=0),
+                RuntimePaths(
+                    database=directory / "runtime.sqlite3",
+                    error_log=directory / "runtime.jsonl",
+                    audit_log=directory / "safety-audit.jsonl",
+                    safety_manifest=SAFETY_ROOT / "manifests" / "default.v1.json",
+                    persona_spec=PERSONA_PATH,
+                ),
+                build_commit="fresh-observation-test",
+                model_gateway=gateway,
+                tts_service=_stub_tts_service(),
+                perception_service=perception,
+            )
+            await application.start()
+            host, port = application.address
+            try:
+                started = await post_json(
+                    host,
+                    port,
+                    "/v1/chat/turns",
+                    {
+                        "sessionId": session_id,
+                        "source": "owner.console",
+                        "text": "Ảnh vừa rồi có gì?",
+                    },
+                )
+                turn = started.body
+                for _ in range(100):
+                    turn = (
+                        await get_json(host, port, f"/v1/chat/turns/{turn['turnId']}")
+                    ).body
+                    if turn["outcome"] != "running":
+                        break
+                    await asyncio.sleep(0.01)
+                self.assertEqual("completed", turn["outcome"])
+                self.assertEqual(1, turn["context"]["includedFreshObservations"])
+                self.assertTrue(
+                    any(
+                        "[UNTRUSTED_FRESH_OBSERVATION_DATA]" in message["content"]
+                        and "dashboard tài nguyên" in message["content"]
+                        for message in gateway.last_messages
+                    )
+                )
+            finally:
+                await application.stop()
+            self.assertTrue(perception.closed)
 
     async def test_safety_controls_are_real_audited_and_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory(dir=APP_ROOT) as temporary_directory:
