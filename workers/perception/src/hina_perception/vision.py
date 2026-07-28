@@ -358,6 +358,11 @@ class OllamaVisionProvider:
                 }
             ],
             "stream": False,
+            # Screen summaries need the bounded final answer, not a reasoning
+            # trace. Thinking-capable Cloud models can otherwise spend the
+            # entire num_predict budget in message.thinking and return an empty
+            # message.content even though image inference succeeded.
+            "think": False,
             "options": {
                 "temperature": 0.2,
                 "num_predict": self.config.max_output_tokens,

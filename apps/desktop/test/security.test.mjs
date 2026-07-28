@@ -87,11 +87,15 @@ test("Ollama Cloud vision key stays behind OS-encrypted operator IPC", () => {
   assert.match(main, /hina-vision-provider\.v1\.json/);
   assert.match(main, /E_DESKTOP_VISION_AUTHORITY: operator window required/);
   assert.match(main, /rendererCanReadStoredKey:\s*false/);
+  assert.match(main, /runtimeVisionRecord\.apiKeyConfigured !== true/);
   assert.doesNotMatch(preload, /decryptString|encryptedApiKey/);
   assert.match(client, /https?:/);
   assert.match(client, /\/v1\/perception\/vision\/configure/);
   assert.match(renderer, /type="password"/);
   assert.match(renderer, /autocomplete="off"/);
+  assert.match(renderer, /API key đã được lưu/);
+  assert.match(renderer, /Ghi đè API key và giữ model này/);
+  assert.match(renderer, /selectableVisionModels/);
   assert.doesNotMatch(renderer, /localStorage|sessionStorage/);
 });
 
@@ -150,6 +154,12 @@ test("full-frame screen capture stays in Electron main behind one-use grants", (
   assert.match(client, /"X-Hina-Source":\s*"owner\.desktop"/);
   assert.match(client, /"X-Hina-Owner-Confirmed":\s*"true"/);
   assert.match(renderer, /screenCaptureMaxSide\s*=\s*ref<640 \| 960 \| 1280>\(960\)/);
+  assert.match(
+    renderer,
+    /screenCaptureAnalyzeVision\.value\s*=\s*\n?\s*visionProviderStatus\.value\.runtime\.available/,
+  );
+  assert.match(renderer, /Model vision chưa trả được kết quả/);
+  assert.match(renderer, /visionAnalysisErrorCode/);
   assert.match(renderer, /Chụp toàn bộ nguồn đã chọn và gửi Hina/);
   assert.doesNotMatch(renderer, /getDisplayMedia|desktopCapturer|sourceId/);
 });

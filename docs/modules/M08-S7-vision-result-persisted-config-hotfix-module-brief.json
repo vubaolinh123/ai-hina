@@ -1,0 +1,76 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M08-S7-vision-result-persisted-config-hotfix",
+  "module_id": "M08",
+  "objective": "Fix explicit desktop screen analysis so thinking-capable Ollama vision models return a bounded final answer, surface analysis success or failure instead of only snapshot acceptance, and restore the OS-encrypted API-key/model configuration clearly enough that the owner can reuse or overwrite the key without rediscovery or model reselection.",
+  "non_goals": [
+    "Do not add a new vision provider, dependency, model or endpoint.",
+    "Do not expose, decrypt into the renderer, log or return the persisted API key.",
+    "Do not add automatic/background screen capture or persist normal snapshot pixels.",
+    "Do not change the text-brain model, OCR model, scheduler budgets or observation TTL.",
+    "Do not open another product module or run deep/repeat/soak verification."
+  ],
+  "base_sha": "0c94c16c208b011ffd2662495dc750e71d529b39",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "workers/perception/src/hina_perception/vision.py",
+    "workers/perception/tests/test_vision_provider.py",
+    "apps/desktop/electron/main.ts",
+    "apps/desktop/src/App.vue",
+    "apps/desktop/src/env.d.ts",
+    "apps/desktop/src/style.css",
+    "apps/desktop/test/security.test.mjs",
+    "docs/modules/M08-S7-vision-result-persisted-config-hotfix-module-brief.json",
+    "docs/modules/M08-perception.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "README.md"
+  ],
+  "forbidden_paths": [
+    "packages/contracts/",
+    "packages/text-brain/",
+    "workers/speech/",
+    "packages/memory/",
+    "packages/avatar/",
+    "voice_demo/"
+  ],
+  "contracts": [
+    "Explicit vision requests set Ollama chat think=false so the bounded token budget is spent on message.content rather than a hidden reasoning trace.",
+    "A snapshot response distinguishes base evidence acceptance from OCR or vision analysis success, not-requested and error states.",
+    "The Dashboard shows provider/model error codes and correlation ID without returning raw provider payloads or secrets.",
+    "When the persisted provider, model and encrypted key exist, the Dashboard restores them without model discovery and defaults explicit capture to vision analysis until the owner changes that preference.",
+    "Submitting an empty key input reuses the stored key; submitting a non-empty key atomically validates and replaces the encrypted key only after runtime configuration succeeds.",
+    "The renderer may know only apiKeyConfigured=true/false and can never read the stored key."
+  ],
+  "allowed_dependencies": [
+    "Existing Python standard library and pinned perception worker dependencies",
+    "Vue 3 and Electron APIs already pinned in the workspace"
+  ],
+  "oss_candidates": [
+    "No new dependency; use the existing Ollama /api/chat contract and its documented think=false field."
+  ],
+  "acceptance_criteria": [
+    "The owner correlation case no longer renders only Hina đã nhận ảnh when vision analysis failed; the exact bounded provider error code is visible.",
+    "A thinking-capable Ollama response request contains think=false and returns only non-empty final content to the perception observation.",
+    "A saved Cloud key is labeled as stored with Windows encryption, and the persisted model remains selectable immediately after restart without discovery.",
+    "The owner can paste a replacement key and click one save/overwrite action while retaining the persisted model.",
+    "When a configured provider is restored, explicit screen capture has vision analysis selected by default; an intentional owner toggle remains respected.",
+    "Fast perception tests, desktop build/typecheck/unit tests, workspace check and one bounded real-provider smoke pass."
+  ],
+  "required_test_commands": [
+    "pnpm test:perception",
+    "pnpm --filter @hina/desktop test",
+    "pnpm --filter @hina/desktop typecheck",
+    "node tools/dev/check-node-workspace.mjs"
+  ],
+  "latency_or_quality_budget": {
+    "maximum_vision_output_tokens": 256,
+    "maximum_vision_request_seconds": 20,
+    "maximum_summary_characters": 2000,
+    "stored_secret_readable_by_renderer": false,
+    "automatic_capture": false,
+    "normal_pixel_persistence": false
+  },
+  "output_artifact_dir": "artifacts/verification/M08/"
+}

@@ -796,6 +796,20 @@ pre,
   white-space: pre-wrap;
 }
 
+.capture-result .capture-analysis-error {
+  padding: 10px 12px;
+  border-left: 3px solid var(--danger);
+  color: #ffb0ad;
+  background: rgba(255, 95, 90, 0.08);
+}
+
+.capture-result .capture-analysis-not-requested {
+  padding: 10px 12px;
+  border-left: 3px solid var(--warning);
+  color: #f4cf86;
+  background: rgba(240, 184, 95, 0.08);
+}
+
 .vision-status-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1312,6 +1326,29 @@ pre,
   color: var(--muted);
   font-size: 11px;
   font-weight: 700;
+}
+
+.vision-key-state {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid rgba(240, 184, 95, 0.42);
+  background: rgba(240, 184, 95, 0.07);
+}
+
+.vision-key-state[data-configured="true"] {
+  border-color: rgba(95, 221, 161, 0.46);
+  background: rgba(95, 221, 161, 0.08);
+}
+
+.vision-key-state strong {
+  color: var(--text);
+}
+
+.vision-key-state span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .vision-settings-card select,

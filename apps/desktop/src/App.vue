@@ -82,6 +82,7 @@ const screenCaptureVisionQuestion = ref("");
 const screenCaptureBusy = ref(false);
 const screenCaptureMessage = ref("");
 const screenCaptureResult = ref<DesktopPerceptionCaptureResult | null>(null);
+let screenCaptureVisionPreferenceTouched = false;
 const resourceStatus = ref<ResourceStatus | null>(null);
 const resourceError = ref("");
 const resourcePending = ref(false);
@@ -126,6 +127,38 @@ const selectedScreenCaptureSource = computed(
 const perceptionFeatureEnabled = computed(
   () => safety.value?.state.featureFlags?.perception === true,
 );
+const selectableVisionModels = computed<VisionModelOption[]>(() => {
+  const models = [...visionModels.value];
+  const persisted = visionProviderStatus.value?.persistence;
+  if (
+    persisted
+    && persisted.provider === visionProvider.value
+    && persisted.model
+    && !models.some((model) => model.name === persisted.model)
+  ) {
+    models.unshift({
+      name: persisted.model,
+      sizeBytes: null,
+      parameterSize: null,
+      quantization: null,
+      capabilities: ["vision"],
+      lightweight: true,
+      localGpuUsed: persisted.provider === "ollama_local",
+    });
+  }
+  return models;
+});
+const visionConfigurationActionLabel = computed(() => {
+  if (visionProvider.value === "ollama_local") {
+    return "Áp dụng và lưu model local";
+  }
+  if (visionProviderStatus.value?.persistence.apiKeyConfigured) {
+    return visionApiKey.value.trim()
+      ? "Ghi đè API key và giữ model này"
+      : "Dùng API key và model đã lưu";
+  }
+  return "Lưu API key và model";
+});
 
 function controlRequestAllowed(): boolean {
   return Date.now() >= controlRetryAt;
@@ -284,6 +317,20 @@ async function refreshVisionProviderStatus(): Promise<void> {
       visionProvider.value = persisted.provider;
       visionModel.value = persisted.model ?? "";
     }
+    if (!screenCaptureVisionPreferenceTouched) {
+      screenCaptureAnalyzeVision.value =
+        visionProviderStatus.value.runtime.available;
+    }
+    if (
+      !visionMessage.value
+      && persisted.provider === "ollama_cloud"
+      && persisted.model
+      && persisted.apiKeyConfigured
+    ) {
+      visionMessage.value =
+        `Đã khôi phục API key mã hóa và model ${persisted.model}. `
+        + "Bạn có thể dùng ngay, để trống ô key để giữ nguyên hoặc dán key mới để ghi đè.";
+    }
   } catch (error) {
     visionMessage.value = error instanceof Error
       ? error.message
@@ -297,9 +344,10 @@ async function discoverVisionModels(): Promise<void> {
   visionBusy.value = true;
   visionMessage.value = "Đang đọc danh sách model và kiểm tra capability vision…";
   try {
+    const suppliedApiKey = visionApiKey.value.trim();
     const result = await window.hinaDesktop.discoverVisionModels({
       provider: visionProvider.value,
-      ...(visionApiKey.value ? { apiKey: visionApiKey.value } : {}),
+      ...(suppliedApiKey ? { apiKey: suppliedApiKey } : {}),
     });
     visionModels.value = result.models;
     if (!result.models.some((item) => item.name === visionModel.value)) {
@@ -321,16 +369,21 @@ async function discoverVisionModels(): Promise<void> {
 async function applyVisionProvider(): Promise<void> {
   if (visionBusy.value || !visionModel.value) return;
   visionBusy.value = true;
-  visionMessage.value = "Đang xác minh model và lưu cấu hình bảo mật…";
+  const suppliedApiKey = visionApiKey.value.trim();
+  visionMessage.value = suppliedApiKey
+    && visionProviderStatus.value?.persistence.apiKeyConfigured
+    ? "Đang xác minh và ghi đè API key đã lưu…"
+    : "Đang xác minh model và lưu cấu hình bảo mật…";
   try {
     await window.hinaDesktop.configureVisionProvider({
       provider: visionProvider.value,
       model: visionModel.value,
-      ...(visionApiKey.value ? { apiKey: visionApiKey.value } : {}),
+      ...(suppliedApiKey ? { apiKey: suppliedApiKey } : {}),
     });
     visionApiKey.value = "";
     visionMessage.value = visionProvider.value === "ollama_cloud"
-      ? "Đã lưu. API key được mã hóa bởi Windows và ảnh sẽ gửi tới Ollama Cloud khi bạn chủ động yêu cầu phân tích."
+      ? `Đã lưu API key bằng mã hóa Windows và giữ model ${visionModel.value}. `
+        + "Lần sau mở Hina bạn không cần nhập hoặc chọn lại; dán key khác rồi bấm ghi đè nếu muốn thay."
       : "Đã lưu model Ollama local. Model chỉ được chạy qua GPU scheduler và tự unload sau mỗi lượt.";
     await refreshVisionProviderStatus();
   } catch (error) {
@@ -439,10 +492,16 @@ async function captureSelectedScreenSource(): Promise<void> {
         : null,
     });
     screenCaptureResult.value = result;
-    screenCaptureMessage.value =
-      result.status === "duplicate"
-        ? "Ảnh trùng với quan sát còn hạn; Hina dùng lại evidence hiện tại."
-        : `Đã gửi ảnh ${result.desktopCapture.width}×${result.desktopCapture.height} (${Math.ceil(result.desktopCapture.bytes / 1024)} KB).`;
+    screenCaptureMessage.value = describeScreenCaptureResult(result);
+    if (result.observation?.vision?.state === "error") {
+      const code = visionAnalysisErrorCode(result.observation.vision);
+      console.error(
+        "[hina-screen-capture] E_PERCEPTION_VISION",
+        code,
+        `correlationId=${result.correlationId}`,
+      );
+      await refreshVisionProviderStatus();
+    }
   } catch (error) {
     screenCaptureMessage.value = error instanceof Error
       ? error.message
@@ -458,6 +517,52 @@ async function captureSelectedScreenSource(): Promise<void> {
     screenCaptureSourceToken.value = "";
     screenCaptureBusy.value = false;
   }
+}
+
+function markScreenCaptureVisionPreference(): void {
+  screenCaptureVisionPreferenceTouched = true;
+}
+
+function visionAnalysisErrorCode(
+  vision: NonNullable<
+    NonNullable<DesktopPerceptionCaptureResult["observation"]>["vision"]
+  >,
+): string {
+  return (
+    vision.providerErrorCode
+    || vision.modelErrorCode
+    || vision.errorCode
+    || "E_PERCEPTION_VISION"
+  );
+}
+
+function describeScreenCaptureResult(
+  result: DesktopPerceptionCaptureResult,
+): string {
+  const prefix = result.status === "duplicate"
+    ? "Ảnh trùng với quan sát còn hạn."
+    : (
+      `Đã gửi ảnh ${result.desktopCapture.width}×${result.desktopCapture.height} `
+      + `(${Math.ceil(result.desktopCapture.bytes / 1024)} KB).`
+    );
+  const vision = result.observation?.vision;
+  if (vision?.state === "ready" && vision.summary) {
+    return `${prefix} Model vision đã phân tích thành công.`;
+  }
+  if (vision?.requested && vision.state !== "ready") {
+    return `${prefix} Phân tích vision thất bại: ${visionAnalysisErrorCode(vision)}.`;
+  }
+  const ocr = result.observation?.ocr;
+  if (ocr?.state === "ready") {
+    return `${prefix} OCR đã đọc ảnh; model vision chưa được yêu cầu.`;
+  }
+  if (ocr?.requested && ocr.state !== "ready") {
+    return `${prefix} OCR thất bại: ${ocr.errorCode || "E_PERCEPTION_OCR"}.`;
+  }
+  return (
+    `${prefix} Ảnh mới chỉ được nhận làm evidence, chưa được phân tích nội dung. `
+    + "Hãy bật “Phân tích bằng model vision” hoặc OCR trước khi chụp."
+  );
 }
 
 async function updateLiveTranscript(
@@ -1604,6 +1709,7 @@ onBeforeUnmount(() => {
                 v-model="screenCaptureAnalyzeVision"
                 type="checkbox"
                 :disabled="!visionProviderStatus?.runtime.available"
+                @change="markScreenCaptureVisionPreference"
               >
               <span>
                 <strong>Phân tích bằng model vision đang chọn</strong>
@@ -1653,7 +1759,11 @@ onBeforeUnmount(() => {
             {{
               screenCaptureResult.status === "duplicate"
                 ? "Đã dùng lại quan sát còn hạn"
-                : "Hina đã nhận ảnh"
+                : screenCaptureResult.observation?.vision?.state === "ready"
+                  ? "Hina đã nhìn và phân tích ảnh"
+                  : screenCaptureResult.observation?.ocr?.state === "ready"
+                    ? "Hina đã nhận ảnh và OCR đã đọc chữ"
+                    : "Hina đã nhận ảnh nhưng chưa phân tích thành công"
             }}
           </strong>
           <span>
@@ -1664,8 +1774,34 @@ onBeforeUnmount(() => {
           <p v-if="screenCaptureResult.observation?.vision?.summary">
             <b>Model vision:</b> {{ screenCaptureResult.observation.vision.summary }}
           </p>
+          <p
+            v-else-if="
+              screenCaptureResult.observation?.vision?.requested
+                && screenCaptureResult.observation.vision.state !== 'ready'
+            "
+            class="capture-analysis-error"
+          >
+            <b>Model vision chưa trả được kết quả:</b>
+            {{ visionAnalysisErrorCode(screenCaptureResult.observation.vision) }}.
+            Hãy xem trạng thái provider bên dưới hoặc thử lại; correlation ID ở
+            dòng trên dùng để tìm đúng lỗi trong console.
+          </p>
+          <p v-else class="capture-analysis-not-requested">
+            <b>Model vision:</b> chưa được yêu cầu trong lượt này. Bật
+            “Phân tích bằng model vision đang chọn” trước khi chụp để Hina mô tả ảnh.
+          </p>
           <p v-if="screenCaptureResult.observation?.ocr?.text">
             <b>OCR:</b> {{ screenCaptureResult.observation.ocr.text }}
+          </p>
+          <p
+            v-else-if="
+              screenCaptureResult.observation?.ocr?.requested
+                && screenCaptureResult.observation.ocr.state !== 'ready'
+            "
+            class="capture-analysis-error"
+          >
+            <b>OCR chưa trả được kết quả:</b>
+            {{ screenCaptureResult.observation.ocr.errorCode || "E_PERCEPTION_OCR" }}.
           </p>
         </div>
       </section>
@@ -1703,7 +1839,32 @@ onBeforeUnmount(() => {
           </select>
 
           <template v-if="visionProvider === 'ollama_cloud'">
-            <label for="visionApiKey">Ollama Cloud API key</label>
+            <div
+              class="vision-key-state"
+              :data-configured="String(visionProviderStatus?.persistence.apiKeyConfigured === true)"
+            >
+              <strong>
+                {{
+                  visionProviderStatus?.persistence.apiKeyConfigured
+                    ? "API key đã được lưu"
+                    : "Chưa có API key được lưu"
+                }}
+              </strong>
+              <span>
+                {{
+                  visionProviderStatus?.persistence.apiKeyConfigured
+                    ? `Windows đã mã hóa key; Hina sẽ tự dùng lại với model ${visionProviderStatus.persistence.model || "đã lưu"}.`
+                    : "Nhập key một lần để Hina mã hóa và tự khôi phục ở những lần mở sau."
+                }}
+              </span>
+            </div>
+            <label for="visionApiKey">
+              {{
+                visionProviderStatus?.persistence.apiKeyConfigured
+                  ? "API key mới (không bắt buộc)"
+                  : "Ollama Cloud API key"
+              }}
+            </label>
             <input
               id="visionApiKey"
               v-model="visionApiKey"
@@ -1716,9 +1877,12 @@ onBeforeUnmount(() => {
                 : 'Dán API key Ollama Cloud'"
             >
             <p class="vision-help">
-              Khi bấm Áp dụng, Electron mã hóa key bằng <code>safeStorage</code>
-              của Windows trong thư mục ứng dụng. Key không vào Git, log,
-              bộ nhớ web hay response trả về renderer.
+              {{
+                visionProviderStatus?.persistence.apiKeyConfigured
+                  ? "Để trống để tiếp tục dùng key hiện tại. Dán key khác rồi bấm nút ghi đè để thay key mà không cần đọc lại danh sách hoặc chọn lại model."
+                  : "Khi bấm lưu, Electron mã hóa key bằng safeStorage của Windows trong thư mục ứng dụng."
+              }}
+              Key không vào Git, log, bộ nhớ web hay response trả về renderer.
             </p>
           </template>
           <p v-else class="vision-help">
@@ -1744,13 +1908,13 @@ onBeforeUnmount(() => {
           <select
             id="visionModel"
             v-model="visionModel"
-            :disabled="visionBusy || visionModels.length === 0"
+            :disabled="visionBusy || selectableVisionModels.length === 0"
           >
-            <option v-if="visionModels.length === 0" value="">
+            <option v-if="selectableVisionModels.length === 0" value="">
               Hãy đọc danh sách model trước
             </option>
             <option
-              v-for="model in visionModels"
+              v-for="model in selectableVisionModels"
               :key="model.name"
               :value="model.name"
             >
@@ -1760,7 +1924,7 @@ onBeforeUnmount(() => {
           </select>
 
           <div v-if="visionModel" class="vision-model-detail">
-            <template v-for="model in visionModels" :key="`detail-${model.name}`">
+            <template v-for="model in selectableVisionModels" :key="`detail-${model.name}`">
               <div v-if="model.name === visionModel">
                 <span>Tham số</span><strong>{{ model.parameterSize || "Cloud" }}</strong>
                 <span>Dung lượng</span><strong>{{ formatVisionModelSize(model.sizeBytes) }}</strong>
@@ -1777,7 +1941,7 @@ onBeforeUnmount(() => {
               :disabled="visionBusy || !visionModel"
               @click="applyVisionProvider"
             >
-              Áp dụng và lưu lâu dài
+              {{ visionConfigurationActionLabel }}
             </button>
             <button
               type="button"

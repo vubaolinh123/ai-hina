@@ -333,11 +333,15 @@ type DesktopPerceptionCaptureResult = {
     };
     ocr?: {
       state: string;
+      requested: boolean;
       text?: string;
       errorCode?: string;
     };
     vision?: {
       state: string;
+      requested: boolean;
+      provider?: string;
+      model?: string | null;
       summary?: string;
       errorCode?: string;
       providerErrorCode?: string;

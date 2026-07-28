@@ -172,6 +172,17 @@ chọn cạnh dài 640/960/1.280 px (mặc định 960), OCR/VLM opt-in rồi b�
 một lần; widget bị chặn và không có auto-capture/persistence. Fast desktop
 build/typecheck + 52 tests xanh; Electron smoke thật tìm 9 source, không lộ ID
 và gửi full-frame 640×360/144.619 byte tới runtime với `status=observed`.
+Ngày 2026-07-29 M08-S7 đóng lỗi owner correlation
+`c5b5b0d3-ba26-48b1-8c01-12770539ea47`: snapshot đã được nhận nhưng MiniMax M3
+trả `E_PERCEPTION_VISION_EMPTY` vì token budget bị dùng cho thinking và desktop
+không render nhánh vision error. Provider explicit screen analysis nay gửi
+Ollama `think=false`; Dashboard tự chọn vision khi provider đã restore, phân
+biệt evidence-only/success/error và hiện provider error + correlation ID. Key
+Cloud/model mã hóa đã lưu được hydrate ngay không cần discovery/chọn lại; ô key
+trống dùng key cũ, key mới chỉ ghi đè sau khi `/api/show` + configure thành
+công. Real `minimax-m3` Cloud smoke trả summary Việt 140 ký tự,
+`vision.state=ready`, không persist pixel; feature flag được trả về trạng thái
+tắt sau smoke. Perception 50 tests và desktop 52 tests xanh.
 
 Legacy AIRI skill paths dưới `D:\ProjectAiri` mặc định ánh xạ sang repository
 hiện tại `D:\ProjectHinaAI`, trừ khi owner chỉ định workspace khác.

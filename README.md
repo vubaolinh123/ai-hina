@@ -213,9 +213,12 @@ memory hoặc tự kích hoạt công cụ.
 2. Chọn OCR GPU hoặc model vision nếu cần, rồi bấm
    **Chụp toàn bộ nguồn đã chọn và gửi Hina**.
 3. Để cấu hình model vision, chọn `Ollama Cloud` hoặc `Ollama local`.
-4. Với Cloud, dán API key một lần rồi bấm **Đọc danh sách model**. Dashboard chỉ
-   liệt kê model khai báo capability vision.
-5. Chọn model và bấm **Áp dụng & lưu**.
+4. Với Cloud ở lần đầu, dán API key rồi bấm **Đọc danh sách model**. Dashboard
+   chỉ liệt kê model khai báo capability vision; chọn model và bấm lưu.
+5. Những lần mở sau, Dashboard báo **API key đã được lưu**, tự khôi phục model
+   và mặc định bật phân tích vision. Để trống ô key để dùng lại; dán key mới và
+   bấm **Ghi đè API key và giữ model này** để thay key mà không discovery hoặc
+   chọn model lại.
 
 Desktop lưu provider/model và ciphertext do Electron `safeStorage` mã hóa trong
 `userData`; khóa rõ chỉ tồn tại trong Electron main và bộ nhớ runtime loopback.
@@ -224,6 +227,13 @@ bấm **Xóa khóa đã lưu**. Renderer, status, log và Git không đọc đư
 lưu. Ollama Cloud không chiếm VRAM model cục bộ nhưng ảnh được gửi tới provider
 Cloud đã chọn; Ollama local giữ ảnh trên máy và Dashboard chỉ cho chọn model
 vision nhẹ trong profile tối đa khoảng 5 GB/5B.
+
+Kết quả capture luôn tách hai trạng thái: “runtime đã nhận snapshot evidence”
+không đồng nghĩa model đã phân tích. Dashboard hiện summary khi vision/OCR
+thành công; nếu chưa chọn phân tích hoặc provider lỗi, nó hiện đúng trạng thái,
+mã lỗi và correlation ID thay vì chỉ báo chung “Hina đã nhận ảnh”. Với model
+Ollama có thinking, screen analysis chủ động đặt `think=false` để giới hạn
+256 token được dùng cho câu mô tả cuối, không phát hidden reasoning.
 
 Capture mặc định tắt: nút bật/tắt quyền nằm ngay trên trang **Quan sát**, và
 safety policy (`perception.observe`, decision `ask`) yêu cầu đúng hành động xác

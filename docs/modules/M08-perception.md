@@ -5,6 +5,7 @@
   configurable vision provider + optional session archive is a runnable
   candidate; M08-S5 realtime resource dashboard is a runnable candidate;
   M08-S6 desktop full-frame low-resolution capture is a runnable candidate;
+  M08-S7 vision result + persisted configuration hotfix is a runnable candidate;
   M08 remains active
 - Branch: `main` (fast-development mode)
 - Active slices: M08-S1 perception spine (owner-consented snapshot ingestion,
@@ -15,7 +16,8 @@
   owner-started, bounded PNG retention for a game session; M08-S5 exposes the
   all-on RAM/VRAM/model state needed to operate those providers safely;
   M08-S6 moves the primary capture authority into Electron main and sends the
-  complete selected source at a bounded owner-selected resolution
+  complete selected source at a bounded owner-selected resolution; M08-S7
+  makes final analysis/error state and persisted Cloud configuration explicit
 
 ## Runnable target
 
@@ -225,6 +227,28 @@ is retained only for audit/rollback comparison.
 - Electron 43 API được dùng trực tiếp từ dependency đã pin; không thêm package
   hoặc source copy mới.
 
+## Implemented in M08-S7 (vision result and persisted configuration hotfix)
+
+- Correlation `c5b5b0d3-ba26-48b1-8c01-12770539ea47` chứng minh base snapshot
+  được nhận nhưng MiniMax M3 Cloud trả `E_PERCEPTION_VISION_EMPTY`. Model có
+  capability thinking và request cũ không đặt `think`, nên budget 256 token có
+  thể kết thúc trước khi `message.content` xuất hiện.
+- Explicit image analysis nay gửi `think=false`. Hidden reasoning không được
+  dùng làm fallback/summary; chỉ final `message.content` không rỗng mới tạo
+  `vision.state=ready`.
+- Dashboard không còn đồng nhất snapshot acceptance với analysis success. Nó
+  hiện riêng `ready`, `not-requested` hoặc `error`, provider/model error code và
+  correlation ID; console cũng ghi error code bounded.
+- Khi status trả provider/model/key đã lưu, model được thêm ngay vào select dù
+  chưa discovery và vision checkbox mặc định bật cho capture explicit. Sau khi
+  owner tự đổi checkbox, refresh status không ghi đè lựa chọn đó.
+- UI chỉ nhận boolean `apiKeyConfigured`. Ô key trống tiếp tục dùng ciphertext
+  cũ; key mới được verify với provider trước rồi mới atomically thay ciphertext,
+  không trả plaintext về renderer/log/status.
+- Real Cloud smoke sau restart dùng chính persisted `minimax-m3`, trả
+  `vision.state=ready` và summary Việt 140 ký tự. Archive vẫn tắt, normal capture
+  không persist pixel và feature perception được restore về tắt sau smoke.
+
 ## Deferred M08 deliverables
 
 Chất lượng OCR tiếng Việt (benchmark corpus UI rõ/game UI khó và thay/tinh chỉnh
@@ -323,3 +347,13 @@ Không được đánh dấu M08 complete khi các phần còn lại chưa có e
   640×360/144.619-byte tới runtime với `status=observed`,
   `persistedByDesktop=false`, không gọi OCR/VLM, rồi trả feature flag về trạng
   thái ban đầu. Không tạo screenshot/audio/script test trên đĩa.
+
+## Fast evidence M08-S7 (owner machine)
+
+- `pnpm test:perception`: 50 tests pass.
+- `pnpm --filter @hina/desktop test`: build + 52 tests pass.
+- `pnpm --filter @hina/desktop typecheck`: pass.
+- Real persisted MiniMax M3 Cloud request trên PNG tracked hiện hữu:
+  `vision.state=ready`, summary 140 ký tự, provider/model error `null`.
+- Không tạo raw screenshot, audio, fixture hoặc one-off script mới; archive và
+  normal pixel persistence đều giữ tắt.

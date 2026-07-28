@@ -199,6 +199,7 @@ class OllamaVisionProviderTests(unittest.IsolatedAsyncioTestCase):
         chat = next(call for call in fake.calls if call["url"].endswith("/api/chat"))
         self.assertEqual(chat["apiKey"], secret)
         assert chat["payload"] is not None
+        self.assertIs(chat["payload"]["think"], False)
         image = chat["payload"]["messages"][0]["images"][0]  # type: ignore[index]
         self.assertEqual(
             base64.b64decode(image),

@@ -821,14 +821,26 @@ function registerIpcHandlers(): void {
     const stored = await loadVisionProviderState();
     let runtimeStatus = await requestVisionStatus();
     const runtimeVision = runtimeStatus.vision;
+    const runtimeVisionRecord = (
+      runtimeVision
+      && typeof runtimeVision === "object"
+      && !Array.isArray(runtimeVision)
+    )
+      ? runtimeVision as Record<string, unknown>
+      : null;
     if (
       stored.persisted.provider !== "disabled"
       && stored.persisted.model !== null
       && (
-        !runtimeVision
-        || typeof runtimeVision !== "object"
-        || (runtimeVision as Record<string, unknown>).provider !== stored.persisted.provider
-        || (runtimeVision as Record<string, unknown>).model !== stored.persisted.model
+        runtimeVisionRecord === null
+        || runtimeVisionRecord.provider !== stored.persisted.provider
+        || runtimeVisionRecord.model !== stored.persisted.model
+        || runtimeVisionRecord.available !== true
+        || (
+          stored.persisted.provider === "ollama_cloud"
+          && stored.apiKey !== null
+          && runtimeVisionRecord.apiKeyConfigured !== true
+        )
       )
     ) {
       await syncPersistedVisionProvider();

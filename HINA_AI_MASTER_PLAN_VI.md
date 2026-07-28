@@ -1419,6 +1419,13 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
   bấm gửi một lần. Main encode PNG ≤1 MB và POST loopback bằng
   `owner.desktop`; widget bị chặn, không auto-capture và không persist pixel.
   Real smoke gửi full-frame 640×360/144.619 byte với `status=observed`.
+- M08-S7 vision-result/persistence hotfix (2026-07-29): explicit VLM request
+  gửi `think=false` để model Ollama có capability thinking dành token budget
+  cho final `message.content`. Dashboard khôi phục provider/model/key state,
+  tự chọn vision analysis khi provider sẵn sàng cho tới khi owner đổi lựa chọn,
+  cho dùng lại hoặc ghi đè key mà không discovery/chọn model lại, và hiện rõ
+  analysis `ready | not-requested | error` cùng provider code/correlation ID.
+  Real MiniMax M3 Cloud smoke trả summary Việt 140 ký tự, không persist pixel.
 
 ### Test matrix
 
