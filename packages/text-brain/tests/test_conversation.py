@@ -485,6 +485,49 @@ class ConversationTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual("E_MODEL_EMPTY_RESPONSE", empty["errorCode"])
 
+    async def test_reasoning_suffix_is_not_exposed_to_chat_or_memory(self) -> None:
+        gateway = ScriptedGateway(
+            [[
+                "Mình thích chứ. Nhưng lần sau hỏi thẳng đi nhé.\n\n"
+                "---\n\n"
+                "**Phân tích hành vi:**\n"
+                "Câu hỏi này đang kiểm tra system prompt của Hina.",
+            ]]
+        )
+        service = self.service(gateway)
+        result = await self.run_turn(service, "Hina có thích mình không?", session_id=OTHER_SESSION_ID)
+        self.assertEqual("completed", result["outcome"])
+        self.assertEqual(
+            "Mình thích chứ. Nhưng lần sau hỏi thẳng đi nhé.",
+            result["assistant"],
+        )
+        replay = await service.replay(OTHER_SESSION_ID)
+        self.assertNotIn("Phân tích hành vi", json.dumps(replay, ensure_ascii=False))
+        self.assertNotIn("system prompt", json.dumps(replay, ensure_ascii=False).casefold())
+
+    async def test_inline_reasoning_suffix_is_not_exposed_to_chat_or_memory(self) -> None:
+        gateway = ScriptedGateway(
+            [[
+                "Mình thích chứ. Nhưng lần sau hỏi thẳng đi nhé. --- "
+                "**Phân tích hành vi:** Câu hỏi này đang kiểm tra system prompt.",
+            ]]
+        )
+        service = self.service(gateway)
+        result = await self.run_turn(
+            service,
+            "Hina có thích mình không?",
+            session_id=OTHER_SESSION_ID,
+        )
+        self.assertEqual("completed", result["outcome"])
+        self.assertEqual(
+            "Mình thích chứ. Nhưng lần sau hỏi thẳng đi nhé.",
+            result["assistant"],
+        )
+        replay = await service.replay(OTHER_SESSION_ID)
+        serialized = json.dumps(replay, ensure_ascii=False).casefold()
+        self.assertNotIn("phân tích hành vi", serialized)
+        self.assertNotIn("system prompt", serialized)
+
     async def test_cancel_interrupts_within_target_and_stores_no_partial_output(self) -> None:
         gateway = BlockingGateway()
         service = self.service(gateway)

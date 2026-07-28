@@ -51,6 +51,7 @@ const activePage = ref<DashboardPage>("avatar");
 const chatInput = ref("");
 const chatMessages = ref<Array<{ role: "user" | "assistant" | "system"; text: string }>>([]);
 const chatBusy = ref(false);
+const chatTurnState = ref<AvatarState>("idle");
 const chatError = ref("");
 const chatVoiceEnabled = ref(true);
 const chatSessionId = crypto.randomUUID();
@@ -86,6 +87,8 @@ let screenCaptureVisionPreferenceTouched = false;
 const resourceStatus = ref<ResourceStatus | null>(null);
 const resourceError = ref("");
 const resourcePending = ref(false);
+const resourceControlBusyId = ref<string | null>(null);
+const resourceControlMessage = ref("");
 const resourceSamples = ref<Array<{
   sampledAt: number;
   usedVramMiB: number;
@@ -201,12 +204,19 @@ async function playAssistantVoice(text: string): Promise<void> {
 async function pollDesktopChat(turnId: string): Promise<void> {
   try {
     const turn = await window.hinaDesktop.getChatTurn(turnId);
+    if (turn.state) {
+      chatTurnState.value = turn.state;
+    } else if (turn.outcome === "running") {
+      chatTurnState.value = "thinking";
+    }
     if (turn.outcome === "running") {
       chatPollTimer = window.setTimeout(() => void pollDesktopChat(turnId), 180);
       return;
     }
     activeChatTurnId = null;
     chatBusy.value = false;
+    const completedState = turn.outcome === "completed" ? "idle" : turn.outcome === "interrupted" ? "interrupted" : "error";
+    chatTurnState.value = completedState;
     if (turn.outcome === "completed" && turn.assistant) {
       appendChatMessage("assistant", turn.assistant);
       try {
@@ -230,6 +240,7 @@ async function pollDesktopChat(turnId: string): Promise<void> {
   } catch (error) {
     activeChatTurnId = null;
     chatBusy.value = false;
+    chatTurnState.value = "error";
     chatError.value = error instanceof Error ? error.message : "E_DESKTOP_CHAT";
     console.error("[hina-chat] E_DESKTOP_CHAT_POLL", chatError.value);
   }
@@ -239,6 +250,7 @@ async function sendDesktopChat(): Promise<void> {
   const text = chatInput.value.trim();
   if (!text || chatBusy.value) return;
   chatBusy.value = true;
+  chatTurnState.value = "thinking";
   chatError.value = "";
   appendChatMessage("user", text);
   chatInput.value = "";
@@ -252,6 +264,7 @@ async function sendDesktopChat(): Promise<void> {
     await pollDesktopChat(turn.turnId);
   } catch (error) {
     chatBusy.value = false;
+    chatTurnState.value = "error";
     chatError.value = error instanceof Error ? error.message : "E_DESKTOP_CHAT";
     appendChatMessage("system", chatError.value);
     console.error("[hina-chat] E_DESKTOP_CHAT_START", chatError.value);
@@ -267,6 +280,7 @@ async function cancelDesktopChat(): Promise<void> {
   }
   activeChatTurnId = null;
   chatBusy.value = false;
+  chatTurnState.value = "interrupted";
 }
 
 function cleanupSpeechRecorder(): void {
@@ -1004,6 +1018,43 @@ async function refreshResources(): Promise<void> {
   }
 }
 
+async function controlResourceModel(
+  model: ResourceModel,
+  action: "load" | "unload",
+): Promise<void> {
+  if (
+    resourceControlBusyId.value !== null
+    || !model.controlSupported
+    || model.location === "cloud"
+  ) {
+    return;
+  }
+  resourceControlBusyId.value = model.id;
+  resourceControlMessage.value = "";
+  try {
+    const result = await window.hinaDesktop.controlResourceModel(model.id, action);
+    if (result.resources) {
+      resourceStatus.value = result.resources;
+    }
+    resourceControlMessage.value = result.message;
+    resourceError.value = "";
+  } catch (error) {
+    resourceControlMessage.value = "";
+    resourceError.value = error instanceof Error
+      ? error.message
+      : "E_DESKTOP_RESOURCE_CONTROL";
+    console.error(
+      "[hina-resource-monitor] E_DESKTOP_RESOURCE_CONTROL",
+      resourceError.value,
+      `modelId=${model.id}`,
+      `action=${action}`,
+    );
+  } finally {
+    resourceControlBusyId.value = null;
+    await refreshResources();
+  }
+}
+
 function startResourcePolling(): void {
   if (resourceTimer !== null || windowMode.value !== "operator") return;
   void refreshResources();
@@ -1472,6 +1523,16 @@ onBeforeUnmount(() => {
           <div v-for="(message, index) in chatMessages" :key="`${index}-${message.role}`" class="chat-message" :data-role="message.role">
             <span>{{ message.role === 'user' ? 'Bạn' : message.role === 'assistant' ? 'Hina' : 'Hệ thống' }}</span>
             <p>{{ message.text }}</p>
+          </div>
+          <div
+            v-if="chatBusy"
+            class="chat-thinking"
+            role="status"
+            aria-live="polite"
+            data-testid="chat-thinking"
+          >
+            <span>Hina đang {{ chatTurnState === "speaking" ? "chuẩn bị nói" : "suy nghĩ" }}…</span>
+            <i aria-hidden="true"></i><i aria-hidden="true"></i><i aria-hidden="true"></i>
           </div>
         </div>
         <form class="chat-composer" @submit.prevent="sendDesktopChat">
@@ -2172,6 +2233,9 @@ onBeforeUnmount(() => {
             unload” nghĩa là model vẫn được cấu hình nhưng đã nhả bộ nhớ và sẽ
             load lại khi cần. Cloud không lấy VRAM cho trọng số model trên máy này.
           </p>
+          <p v-if="resourceControlMessage" class="resource-control-message" role="status">
+            {{ resourceControlMessage }}
+          </p>
           <div class="resource-table-wrap">
             <table class="resource-table">
               <thead>
@@ -2182,6 +2246,7 @@ onBeforeUnmount(() => {
                   <th>Trạng thái</th>
                   <th>Ngân sách VRAM</th>
                   <th>VRAM model đo được</th>
+                  <th>Owner control</th>
                 </tr>
               </thead>
               <tbody>
@@ -2204,6 +2269,47 @@ onBeforeUnmount(() => {
                   </td>
                   <td>{{ formatMiB(model.configuredVramMiB) }}</td>
                   <td>{{ formatMiB(model.measuredVramMiB) }}</td>
+                  <td class="resource-model-actions">
+                    <button
+                      type="button"
+                      class="compact"
+                      :disabled="
+                        resourceControlBusyId !== null
+                        || !model.controlSupported
+                        || model.location === 'cloud'
+                        || !model.available
+                        || model.state === 'loaded'
+                        || model.state === 'loading'
+                      "
+                      :title="
+                        model.controlSupported
+                          ? 'Giữ model trên GPU bằng scheduler; nếu thiếu headroom thao tác sẽ bị từ chối an toàn.'
+                          : model.controlNote
+                      "
+                      @click="controlResourceModel(model, 'load')"
+                    >
+                      {{ resourceControlBusyId === model.id ? "Đang xử lý…" : "Force load" }}
+                    </button>
+                    <button
+                      type="button"
+                      class="compact danger"
+                      :disabled="
+                        resourceControlBusyId !== null
+                        || !model.controlSupported
+                        || model.location === 'cloud'
+                        || (model.state !== 'loaded' && model.state !== 'loading')
+                      "
+                      :title="
+                        model.controlSupported
+                          ? 'Trả model về scheduler sau khi tác vụ đang chạy kết thúc.'
+                          : model.controlNote
+                      "
+                      @click="controlResourceModel(model, 'unload')"
+                    >
+                      Force unload
+                    </button>
+                    <small>{{ model.controlNote }}</small>
+                  </td>
                 </tr>
               </tbody>
             </table>

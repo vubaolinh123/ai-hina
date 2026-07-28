@@ -8,6 +8,7 @@
   M08-S7 vision result + persisted configuration hotfix is a runnable candidate;
   M08-S8 bounded empty/truncated vision recovery is a runnable candidate;
   M08-S9 fresh same-session observation context is a runnable candidate;
+  M08-S10 resource controls + output-quality maintenance is a runnable candidate;
   M08 remains active
 - Branch: `main` (fast-development mode)
 - Active slices: M08-S1 perception spine (owner-consented snapshot ingestion,
@@ -22,7 +23,9 @@
   makes final analysis/error state and persisted Cloud configuration explicit;
   M08-S8 retries only empty or output-budget-truncated VLM completions once;
   M08-S9 lets one fresh same-session semantic observation inform owner chat
-  without turning the snapshot into system instructions, memory or a tool
+  without turning the snapshot into system instructions, memory or a tool;
+  M08-S10 adds owner-only scheduler-safe model controls and prevents hidden
+  model text from reaching the chat or TTS output
 
 ## Runnable target
 
@@ -298,6 +301,32 @@ is retained only for audit/rollback comparison.
   `</think>`; block có `<think>` thật vẫn fail closed và hidden text không đi
   vào replay/TTS.
 
+## Implemented in M08-S10 (resource control and output quality)
+
+- Trang **Tài nguyên AI** có thao tác **Tải cưỡng ép** và **Gỡ cưỡng ép** cho
+  từng provider local. Electron renderer chỉ gọi typed operator IPC; runtime
+  chỉ nhận model ID allowlist, `load|unload`, `owner.desktop` và xác nhận owner.
+  Không có đường truyền lệnh hay tên model tùy ý. Cloud vision báo rõ không có
+  VRAM local để tải và trả no-op thay vì giả lập resident state.
+- Warmup luôn xin lease từ scheduler nên vẫn giữ headroom 2.048 MiB. Text brain
+  có operator pin riêng; STT, TTS, OCR và local VLM chỉ unload sau công việc
+  đang chạy. Local VLM serializes warmup/unload để force-unload không giải
+  phóng checkpoint giữa một lượt phân tích.
+- VLM prompt yêu cầu overview tiếng Việt 6–8 câu, bao quát cảnh/bố cục,
+  thực thể và trạng thái, chữ đọc được, tín hiệu trực quan, cùng mức độ không
+  chắc chắn. Initial budget là 512 token, recovery cho empty/truncated vẫn
+  giới hạn 768 token; summary bị bound ở 3.500 ký tự.
+- Conversation chỉ phát final answer sạch. Prefix/suffix hidden reasoning,
+  system/developer prompt, control token, markdown heading nội bộ và pattern
+  `--- **Phân tích hành vi:**` cùng dòng đều bị loại trước moderation, replay
+  và TTS. Dashboard hiện **Hina đang suy nghĩ…** trong lúc turn còn chạy rồi
+  xóa nó khi complete/interrupted/error.
+- Persona yêu cầu câu trả lời tiếng Việt ngắn, dấu câu đầy đủ và không markdown;
+  normalizer đổi dash thành ranh giới câu rõ ràng trước OmniVoice. Profile
+  OmniVoice vẫn giữ rate tự nhiên 1.0x, tối đa 110 ký tự mỗi chunk.
+- Không thêm dependency/model, không lưu hidden text/pixel/audio/API key, không
+  mở release promotion hoặc deep verification trong slice này.
+
 ## Deferred M08 deliverables
 
 Chất lượng OCR tiếng Việt (benchmark corpus UI rõ/game UI khó và thay/tinh chỉnh
@@ -435,3 +464,22 @@ Không được đánh dấu M08 complete khi các phần còn lại chưa có e
 - Smoke giữ PNG trong `MemoryStream`, không ghi ảnh ra đĩa; archive tắt,
   `pixelDataRetained=false`, feature perception được trả về tắt. Script
   one-off và artifact latency đã được xóa sau khi lấy số đo.
+
+## Fast evidence M08-S10 (owner machine)
+
+- Narrow tests passed: text brain 44, speech 22, perception 61 and resource
+  route 5. Desktop build + 53 tests and desktop typecheck passed.
+- The real startup path (`HINA_DESKTOP_SMOKE=1` with
+  `tools/dev/Start-HinaDesktop.ps1`) passed end-to-end after it brought up the
+  loopback control plane. The legacy `pnpm smoke:desktop` helper starts
+  Electron directly and is therefore not evidence for this slice until its
+  launcher wiring is corrected.
+- New tests cover allowlist/owner confirmation, scheduler denial, local
+  warmup/unload state, active VLM analysis waiting for unload, detailed
+  recovery prompt and inline hidden-analysis stripping.
+- This slice created no raw screenshot, audio, cache/model download, fixture,
+  debug dump or one-off script. A cleanup audit identified legacy M07 smoke
+  files under `var/tmp`; the platform denied the verified deletion operation,
+  so their exact targets remain listed for owner cleanup. Generated desktop
+  build output remains the normal runnable artifact of `pnpm start:desktop`,
+  not verification evidence.

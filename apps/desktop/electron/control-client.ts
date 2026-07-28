@@ -14,7 +14,8 @@ type ControlOperation =
   | "speech.status"
   | "tts.status"
   | "perception.status"
-  | "resources.status";
+  | "resources.status"
+  | "resources.model";
 
 type OperationSpec = {
   method: "GET" | "POST";
@@ -33,6 +34,7 @@ const OPERATIONS: Readonly<Record<ControlOperation, OperationSpec>> = Object.fre
   "tts.status": { method: "GET", path: "/v1/tts/status" },
   "perception.status": { method: "GET", path: "/v1/perception/status" },
   "resources.status": { method: "GET", path: "/v1/resources/status" },
+  "resources.model": { method: "POST", path: "/v1/resources/models/control" },
 });
 
 const AVATAR_STATES = new Set([
@@ -216,6 +218,43 @@ function validateChatText(value: unknown): string {
 
 export async function requestChatStatus(): Promise<JsonObject> {
   return requestControl("chat.status" as ControlOperation);
+}
+
+const RESOURCE_MODEL_IDS = new Set([
+  "brain.text",
+  "speech.stt",
+  "speech.tts",
+  "perception.ocr",
+  "perception.vision",
+]);
+
+export function validateResourceModelControl(
+  modelId: unknown,
+  action: unknown,
+): JsonObject {
+  if (
+    typeof modelId !== "string"
+    || !RESOURCE_MODEL_IDS.has(modelId)
+    || (action !== "load" && action !== "unload")
+  ) {
+    throw new Error("E_DESKTOP_RESOURCE_CONTROL: model or action is invalid");
+  }
+  return {
+    modelId,
+    action,
+    source: "owner.desktop",
+    ownerConfirmed: true,
+  };
+}
+
+export async function requestResourceModelControl(
+  modelId: unknown,
+  action: unknown,
+): Promise<JsonObject> {
+  return requestControl(
+    "resources.model",
+    validateResourceModelControl(modelId, action),
+  );
 }
 
 const VISION_PROVIDERS = new Set(["ollama_local", "ollama_cloud"]);

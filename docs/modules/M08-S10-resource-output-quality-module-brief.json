@@ -1,0 +1,87 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M08-S10-resource-output-quality",
+  "module_id": "M08",
+  "objective": "Give the owner explicit, scheduler-safe model load/unload controls, richer bounded image overviews, clean final chat answers with visible thinking state, and punctuation-aware TTS text so hidden reasoning never reaches the operator or voice output.",
+  "non_goals": [
+    "Do not bypass the shared GPU scheduler, reduce the mandatory 2048 MiB VRAM headroom, or force cloud models into local memory.",
+    "Do not persist chat content, hidden reasoning, screen pixels, generated audio, API keys, or benchmark artifacts.",
+    "Do not add a new model, dependency, training corpus, or public/production promotion in this maintenance slice.",
+    "Do not run repeat, soak, frozen-SHA, or full release verification unless the owner explicitly requests it."
+  ],
+  "base_sha": "da979ef728c71c30c5ba2831af79c1085a93a791",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "packages/text-brain/src/hina_text_brain/conversation.py",
+    "packages/text-brain/src/hina_text_brain/gateway.py",
+    "packages/text-brain/src/hina_text_brain/persona.py",
+    "packages/text-brain/src/hina_text_brain/providers.py",
+    "packages/text-brain/src/hina_text_brain/context.py",
+    "packages/text-brain/tests/",
+    "workers/speech/src/hina_speech/",
+    "workers/speech/tests/",
+    "workers/perception/src/hina_perception/",
+    "workers/perception/tests/",
+    "apps/core-runtime/src/hina_core/runtime/transport.py",
+    "apps/core-runtime/tests/",
+    "apps/desktop/electron/",
+    "apps/desktop/src/",
+    "apps/desktop/test/",
+    "packages/contracts/openapi/control-plane.v1.json",
+    "docs/modules/M08-S10-resource-output-quality-module-brief.json",
+    "docs/modules/M08-perception.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "README.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "voice_demo/",
+    "var/perception-sessions/",
+    "apps/desktop/dist/",
+    "apps/desktop/dist-electron/",
+    "var/test-artifacts/"
+  ],
+  "contracts": [
+    "POST /v1/resources/models/control accepts only an allowlisted model id, load or unload action, source owner.desktop, and ownerConfirmed=true; it never accepts arbitrary commands or model names.",
+    "A load action uses the existing scheduler lease and fails with a bounded resource error when admission would violate headroom; an unload action releases only the selected provider lease after active work completes.",
+    "Cloud vision is reported as cloud-ready and never pretends to load local VRAM.",
+    "Chat final output is plain answer text only; hidden reasoning, system/developer prompt text, analysis headings, separators, and control tokens are removed or fail closed before moderation and TTS.",
+    "Conversation status exposes the existing turn state so the desktop can render a non-persistent thinking indicator while a turn is running.",
+    "Vision summaries are bounded Vietnamese overviews covering scene, layout, entities/state, readable text, visual cues, and uncertainty using only evidence in the captured frame.",
+    "TTS normalization creates explicit sentence boundaries around dashes and keeps the OmniVoice quality profile at natural 1.0x speaking rate."
+  ],
+  "allowed_dependencies": [
+    "Existing Python standard library, existing scheduler/provider interfaces, existing Electron typed preload IPC, and existing Vue/CSS; no new dependency."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "Resource dashboard shows a load and unload action for each configured local model, reports pending/error feedback, and refreshes truthful state after the operation.",
+    "Runtime unit tests prove malformed control payloads, cloud no-op behavior, scheduler denial, and successful provider warmup/unload paths.",
+    "A regression test proves a model response containing the screenshot's '--- **Phân tích hành vi:**' suffix yields only the final answer and never exposes the analysis.",
+    "Desktop chat shows 'Hina đang suy nghĩ…' while the turn state is thinking and clears it on completion, interruption, or failure.",
+    "Vision and TTS tests cover detailed overview bounds, dash/punctuation normalization, and fixed natural OmniVoice rate.",
+    "Fast unit/build/smoke commands pass and all one-off generated artifacts are removed before commit."
+  ],
+  "required_test_commands": [
+    "$env:PYTHONPATH='apps/core-runtime/src;packages/contracts/src;packages/safety-policy/src;packages/text-brain/src;workers/speech/src;workers/perception/src'; uv run --frozen python -m unittest discover -s packages/text-brain/tests -p 'test_*.py'",
+    "$env:PYTHONPATH='apps/core-runtime/src;packages/contracts/src;packages/safety-policy/src;packages/text-brain/src;workers/speech/src;workers/perception/src'; uv run --frozen python -m unittest discover -s workers/speech/tests -p 'test_tts.py'",
+    "$env:PYTHONPATH='apps/core-runtime/src;packages/contracts/src;packages/safety-policy/src;packages/text-brain/src;workers/speech/src;workers/perception/src'; uv run --frozen python -m unittest discover -s workers/perception/tests -p 'test_*.py'",
+    "$env:PYTHONPATH='apps/core-runtime/src;packages/contracts/src;packages/safety-policy/src;packages/text-brain/src;workers/speech/src;workers/perception/src'; uv run --frozen python -m unittest discover -s apps/core-runtime/tests -p 'test_resource_routes.py'",
+    "pnpm --filter @hina/desktop test",
+    "pnpm --filter @hina/desktop typecheck",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "vision_max_output_tokens": 512,
+    "vision_summary_max_characters": 3500,
+    "chat_thinking_poll_milliseconds": 180,
+    "tts_max_chunk_characters": 110,
+    "tts_speaking_rate": 1.0,
+    "all_on_vram_ceiling_mib": 14336,
+    "minimum_free_vram_mib": 2048
+  },
+  "output_artifact_dir": "artifacts/verification/M08/"
+}

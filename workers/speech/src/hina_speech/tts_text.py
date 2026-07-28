@@ -13,6 +13,8 @@ _SOFT_BOUNDARY = re.compile(r"(?<=[,，—–])\s+")
 _WHITESPACE = re.compile(r"\s+")
 _EXPRESSIVE_CUE = re.compile(r"\[([^\[\]]{1,48})\]", re.IGNORECASE)
 _PARENTHETICAL_ASIDE = re.compile(r"\s*\(([^()\r\n]{1,300})\)")
+_DASH_BOUNDARY = re.compile(r"\s*[—–]\s*")
+_SPACE_BEFORE_PUNCTUATION = re.compile(r"\s+([,.;:!?])")
 _CUE_ALIASES = {
     "chuckle": "chuckle",
     "chuckles": "chuckle",
@@ -56,7 +58,11 @@ def normalize_tts_text(raw: str, *, max_characters: int = 2_000) -> str:
     text = _EXPRESSIVE_CUE.sub(_normalize_expressive_cue, text)
     text = _PARENTHETICAL_ASIDE.sub(_normalize_parenthetical_aside, text)
     text = _URL.sub(_speak_url, text)
+    # A long dash is visually convenient but makes local voices concatenate
+    # clauses unpredictably. Turn it into a sentence pause before chunking.
+    text = _DASH_BOUNDARY.sub(". ", text)
     text = _WHITESPACE.sub(" ", text).strip()
+    text = _SPACE_BEFORE_PUNCTUATION.sub(r"\1", text)
     if not text:
         raise TtsError("E_TTS_TEXT", "TTS text is empty")
     if len(text) > max_characters:

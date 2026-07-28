@@ -502,6 +502,34 @@ class ControlPlaneServer:
             return self._safety_call("moderate", payload)
         if path == "/v1/chat/turns":
             return await self._chat_call("start_turn", payload)
+        if path == "/v1/resources/models/control":
+            required = {"modelId", "action", "source", "ownerConfirmed"}
+            if set(payload) != required:
+                raise PrimitiveError(
+                    RuntimeErrorCode.HTTP_BAD_REQUEST,
+                    "resource model control fields are invalid",
+                )
+            if (
+                payload.get("modelId")
+                not in {
+                    "brain.text",
+                    "speech.stt",
+                    "speech.tts",
+                    "perception.ocr",
+                    "perception.vision",
+                }
+                or payload.get("action") not in {"load", "unload"}
+                or payload.get("source") != "owner.desktop"
+                or payload.get("ownerConfirmed") is not True
+            ):
+                raise PrimitiveError(
+                    RuntimeErrorCode.HTTP_BAD_REQUEST,
+                    "resource model control requires an owner-confirmed allowlisted action",
+                )
+            return await self._resource_model_control(
+                str(payload["modelId"]),
+                str(payload["action"]),
+            )
         if path == "/v1/avatar/cues":
             if payload.get("source") not in {"owner.console", "speech.output"}:
                 raise PrimitiveError(  # type: ignore[arg-type]
@@ -881,6 +909,79 @@ class ControlPlaneServer:
                 "perProcessVram": "Provider-reported when available; unknown values are never converted to zero.",
                 "historyPersistence": False,
             },
+        }
+
+    async def _resource_model_control(
+        self,
+        model_id: str,
+        action: str,
+    ) -> dict[str, Any]:
+        """Apply one explicit owner action without bypassing admission."""
+
+        rows = await self._resource_status()
+        row = next(
+            (item for item in rows["models"] if item.get("id") == model_id),
+            None,
+        )
+        if not isinstance(row, dict):
+            raise PrimitiveError(RuntimeErrorCode.HTTP_BAD_REQUEST, "model is unknown")
+        if row.get("location") == "cloud":
+            # Cloud vision has no local resident weights to manage.
+            return {
+                "status": "cloud-ready",
+                "modelId": model_id,
+                "action": action,
+                "noOp": True,
+                "message": "Mô hình cloud không chiếm VRAM cục bộ; không cần load/unload.",
+                "resources": rows,
+            }
+        if row.get("configured") is not True:
+            raise PrimitiveError(
+                RuntimeErrorCode.HTTP_BAD_REQUEST,
+                "model is not configured",
+            )
+        service: Any
+        operation: str
+        if model_id == "brain.text":
+            service, operation = self.model_gateway, "warmup" if action == "load" else "unload"
+        elif model_id == "speech.stt":
+            service, operation = self.speech_service, "warmup" if action == "load" else "unload"
+        elif model_id == "speech.tts":
+            service, operation = self.tts_service, "warmup" if action == "load" else "unload"
+        elif model_id == "perception.ocr":
+            service, operation = (
+                self.perception_service,
+                "warmup_ocr" if action == "load" else "unload_ocr",
+            )
+        else:
+            service, operation = (
+                self.perception_service,
+                "warmup_vision" if action == "load" else "unload_vision",
+            )
+        if service is None or not callable(getattr(service, operation, None)):
+            raise PrimitiveError(
+                RuntimeErrorCode.OPERATION_FAILED,
+                "selected provider does not support manual model control",
+            )
+        try:
+            await getattr(service, operation)()
+        except Exception as exc:
+            code = getattr(exc, "code", None)
+            if not isinstance(code, str) or not code.startswith(("E_RESOURCE_", "E_MODEL_", "E_STT_", "E_TTS_", "E_PERCEPTION_")):
+                raise
+            raise PrimitiveError(code, getattr(exc, "detail", "model control failed")) from exc
+        updated = await self._resource_status()
+        return {
+            "status": "loaded" if action == "load" else "unloaded",
+            "modelId": model_id,
+            "action": action,
+            "noOp": False,
+            "message": (
+                "Mô hình đã được giữ trong scheduler theo yêu cầu owner."
+                if action == "load"
+                else "Mô hình đã được unload và trả tài nguyên về scheduler."
+            ),
+            "resources": updated,
         }
 
     async def _serve_tts_synthesis(
@@ -1851,6 +1952,14 @@ class ControlPlaneServer:
             return HTTPStatus.FORBIDDEN
         if code_value == "E_AVATAR_UNAVAILABLE":
             return HTTPStatus.SERVICE_UNAVAILABLE
+        if code_value in {
+            "E_RESOURCE_CAPACITY",
+            "E_RESOURCE_LEASE_EXPIRED",
+            "E_MODEL_UNAVAILABLE",
+            "E_STT_UNAVAILABLE",
+            "E_TTS_UNAVAILABLE",
+        }:
+            return HTTPStatus.SERVICE_UNAVAILABLE
         if code_value in {"E_PERCEPTION_DENIED", "E_PERCEPTION_CONFIRMATION"}:
             return HTTPStatus.FORBIDDEN
         if code_value == "E_PERCEPTION_RATE_LIMIT":
@@ -2202,6 +2311,7 @@ def _resource_model_rows(
     model_provider = _mapping(model_status.get("provider"))
     brain_name = _public_text(model_config.get("model"))
     brain_resident = resident.get(brain_name.casefold()) if brain_name else None
+    brain_operator_resident = bool(model_status.get("operatorResident"))
 
     speech_config = _mapping(speech_status.get("configured"))
     speech_provider = _mapping(speech_status.get("provider"))
@@ -2213,6 +2323,16 @@ def _resource_model_rows(
     vision_name = _public_text(vision.get("model"))
     vision_provider = _public_text(vision.get("provider")) or "none"
     vision_resident = resident.get(vision_name.casefold()) if vision_name else None
+    speech_operator_resident = bool(speech_provider.get("operatorResident"))
+    tts_operator_resident = (
+        _public_text(_mapping(tts_provider.get("resourceLease")).get("state"))
+        == "active"
+    )
+    ocr_operator_resident = (
+        _public_text(_mapping(ocr.get("resourceLease")).get("state"))
+        == "active"
+    )
+    vision_operator_resident = bool(vision.get("operatorResident"))
 
     return [
         _resource_model_row(
@@ -2224,8 +2344,8 @@ def _resource_model_rows(
             configured=brain_name is not None,
             available=bool(model_provider.get("reachable"))
             and bool(model_provider.get("modelAvailable")),
-            loaded=brain_resident is not None,
-            active="model.text" in lease_owners,
+            loaded=brain_resident is not None or brain_operator_resident,
+            active="model.text" in lease_owners or brain_operator_resident,
             configured_vram_mib=_public_int(model_config.get("modelVramMiB")),
             measured_vram_mib=_bytes_to_mib(
                 brain_resident.get("sizeVramBytes")
@@ -2233,6 +2353,8 @@ def _resource_model_rows(
                 else None
             ),
             error_code=_public_text(model_provider.get("errorCode")),
+            control_supported=True,
+            operator_resident=brain_operator_resident,
         ),
         _resource_model_row(
             model_id="speech.stt",
@@ -2243,11 +2365,13 @@ def _resource_model_rows(
             location="local",
             configured=bool(speech_config),
             available=bool(speech_status.get("available")),
-            loaded=bool(speech_provider.get("modelLoaded")),
-            active=any(owner.startswith("stt.") for owner in lease_owners),
+            loaded=bool(speech_provider.get("modelLoaded")) or speech_operator_resident,
+            active=any(owner.startswith("stt.") for owner in lease_owners) or speech_operator_resident,
             configured_vram_mib=_public_int(speech_config.get("modelVramMiB")),
             measured_vram_mib=None,
             error_code=_public_text(speech_provider.get("lastErrorCode")),
+            control_supported=True,
+            operator_resident=speech_operator_resident,
         ),
         _resource_model_row(
             model_id="speech.tts",
@@ -2258,8 +2382,8 @@ def _resource_model_rows(
             location="local",
             configured=bool(tts_config),
             available=bool(tts_status.get("available")),
-            loaded=bool(tts_provider.get("modelLoaded")),
-            active=any(owner.startswith("tts.") for owner in lease_owners),
+            loaded=bool(tts_provider.get("modelLoaded")) or tts_operator_resident,
+            active=any(owner.startswith("tts.") for owner in lease_owners) or tts_operator_resident,
             configured_vram_mib=_public_int(tts_config.get("modelVramMiB")),
             measured_vram_mib=(
                 _public_number(tts_provider.get("modelBaselineAllocatedMiB"))
@@ -2267,6 +2391,8 @@ def _resource_model_rows(
                 else None
             ),
             error_code=_public_text(tts_provider.get("lastErrorCode")),
+            control_supported=True,
+            operator_resident=tts_operator_resident,
         ),
         _resource_model_row(
             model_id="perception.ocr",
@@ -2276,11 +2402,13 @@ def _resource_model_rows(
             location="local",
             configured=bool(ocr),
             available=bool(ocr.get("available")),
-            loaded=bool(ocr.get("modelLoaded")),
-            active="perception.ocr" in lease_owners,
+            loaded=bool(ocr.get("modelLoaded")) or ocr_operator_resident,
+            active="perception.ocr" in lease_owners or ocr_operator_resident,
             configured_vram_mib=_public_int(ocr_config.get("modelVramMiB")),
             measured_vram_mib=None,
             error_code=_public_text(ocr.get("lastErrorCode")),
+            control_supported=True,
+            operator_resident=ocr_operator_resident,
         ),
         _resource_model_row(
             model_id="perception.vision",
@@ -2293,8 +2421,9 @@ def _resource_model_rows(
             loaded=(
                 vision_provider == "ollama_cloud"
                 or vision_resident is not None
+                or vision_operator_resident
             ),
-            active="perception.vision" in lease_owners,
+            active="perception.vision" in lease_owners or vision_operator_resident,
             configured_vram_mib=(
                 0
                 if vision_provider == "ollama_cloud"
@@ -2308,6 +2437,11 @@ def _resource_model_rows(
                 else None
             ),
             error_code=_public_text(vision.get("lastErrorCode")),
+            control_supported=(
+                vision_provider == "ollama_local"
+                and bool(vision.get("available"))
+            ),
+            operator_resident=vision_operator_resident,
         ),
     ]
 
@@ -2326,6 +2460,8 @@ def _resource_model_row(
     configured_vram_mib: int | None,
     measured_vram_mib: int | float | None,
     error_code: str | None,
+    control_supported: bool,
+    operator_resident: bool,
 ) -> dict[str, object]:
     if not configured:
         state = "unconfigured"
@@ -2353,6 +2489,17 @@ def _resource_model_row(
         "configuredVramMiB": configured_vram_mib,
         "measuredVramMiB": measured_vram_mib,
         "errorCode": error_code,
+        "controlSupported": control_supported,
+        "operatorResident": operator_resident,
+        "controlNote": (
+            "Cloud model không chiếm VRAM cục bộ."
+            if location == "cloud"
+            else (
+                "Có thể giữ hoặc trả model bằng scheduler."
+                if control_supported
+                else "Provider hiện chỉ load theo từng request."
+            )
+        ),
     }
 
 

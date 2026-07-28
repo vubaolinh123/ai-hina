@@ -81,6 +81,7 @@ test("preload exposes named methods and never exposes raw ipcRenderer", () => {
     "configureVisionProvider",
     "clearVisionApiKey",
     "getResourceStatus",
+    "controlResourceModel",
     "listScreenCaptureSources",
     "captureScreenSource",
   ]) {
@@ -128,7 +129,7 @@ test("Vue renderer has no direct network, Electron, Node or storage access", () 
   assert.doesNotMatch(renderer, /sqlite|qdrant|modelPath|process\.env/i);
 });
 
-test("resource telemetry stays behind read-only operator IPC", () => {
+test("resource telemetry and owner controls stay behind typed operator IPC", () => {
   const main = read("electron/main.ts");
   const preload = read("electron/preload.ts");
   const client = read("electron/control-client.ts");
@@ -138,8 +139,13 @@ test("resource telemetry stays behind read-only operator IPC", () => {
   assert.match(main, /CHANNELS\.resourcesStatus/);
   assert.match(main, /E_DESKTOP_RESOURCE_AUTHORITY: operator window required/);
   assert.match(main, /requestControl\("resources\.status"\)/);
+  assert.match(main, /CHANNELS\.resourcesControl/);
+  assert.match(main, /requestResourceModelControl/);
   assert.match(preload, /getResourceStatus:/);
+  assert.match(preload, /controlResourceModel:/);
   assert.match(client, /"resources\.status":\s*\{\s*method:\s*"GET",\s*path:\s*"\/v1\/resources\/status"/);
+  assert.match(client, /"resources\.model":\s*\{\s*method:\s*"POST",\s*path:\s*"\/v1\/resources\/models\/control"/);
+  assert.match(client, /ownerConfirmed:\s*true/);
   assert.match(monitor, /ModelTransitionTracker/);
   assert.match(monitor, /historyPersistence|transitionHistory/);
   assert.doesNotMatch(renderer, /child_process|nvidia-smi|process\.memoryUsage|node:os/);

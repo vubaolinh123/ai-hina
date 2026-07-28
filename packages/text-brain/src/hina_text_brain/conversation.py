@@ -28,6 +28,21 @@ _CHAT_SOURCES = frozenset(
     }
 )
 _TOOL_NAME = re.compile(r"^[a-z][a-z0-9_.-]{0,127}$")
+_HIDDEN_OUTPUT_HEADING = re.compile(
+    r"(?im)^\s*(?:(?:[-_*]){3,}\s*$|"
+    r"(?:\*\*\s*)?(?:phân tích hành vi|phân tích|analysis|chain[- ]of[- ]thought|"
+    r"system prompt|developer instructions?|quy tắc hệ thống|hidden reasoning)"
+    r"\s*:?\s*(?:\*\*)?\s*)$",
+)
+_HIDDEN_OUTPUT_INLINE = re.compile(
+    r"(?i)(?:phân tích hành vi|system prompt|developer instructions?|"
+    r"chain[- ]of[- ]thought|hidden reasoning|quy tắc hệ thống)\s*:?\s*(?:\*\*)?$",
+)
+_HIDDEN_OUTPUT_SEPARATOR = re.compile(r"(?:[-_*]){3,}")
+_HIDDEN_OUTPUT_MARKDOWN_HEADING = re.compile(
+    r"(?i)\*\*\s*(?:phân tích hành vi|phân tích|analysis|chain[- ]of[- ]thought|"
+    r"system prompt|developer instructions?|quy tắc hệ thống|hidden reasoning)\s*:?\s*\*\*"
+)
 
 
 class TurnState(StrEnum):
@@ -298,7 +313,7 @@ class ConversationService:
             )
             record.prompt_version = context.prompt_version
             record.context_summary = context.as_json()
-            response = _discard_orphan_thinking_prefix(
+            response = _sanitize_model_final_answer(
                 await self._collect_model_output(record, context)
             )
             proposal = _parse_tool_proposal(response)
@@ -492,6 +507,72 @@ def _discard_orphan_thinking_prefix(text: str) -> str:
         raise TextBrainError(
             "E_MODEL_EMPTY_RESPONSE",
             "model returned no final text after hidden reasoning",
+        )
+    return final
+
+
+def _sanitize_model_final_answer(text: str) -> str:
+    """Return only user-facing prose and fail closed on prompt/reasoning leaks.
+
+    Local instruct checkpoints occasionally append an internal self-critique
+    after an otherwise valid answer (for example ``---`` followed by
+    ``**Phân tích hành vi:**``).  That material must never reach moderation,
+    memory, the operator UI, or TTS.  We truncate only at a complete line
+    marker so ordinary punctuation and user-requested prose remain intact.
+    If the whole response is meta-analysis, reject it instead of guessing.
+    """
+
+    if not isinstance(text, str):
+        raise TextBrainError("E_CHAT_OUTPUT_BLOCKED", "model output is not text")
+    cleaned = _discard_orphan_thinking_prefix(text).replace("\r\n", "\n").strip()
+    if not cleaned:
+        raise TextBrainError("E_MODEL_EMPTY_RESPONSE", "model returned no final text")
+    lines = cleaned.split("\n")
+    first_content = next((line.strip() for line in lines if line.strip()), "")
+    if _HIDDEN_OUTPUT_HEADING.fullmatch(first_content) or _HIDDEN_OUTPUT_INLINE.search(
+        first_content
+    ):
+        raise TextBrainError(
+            "E_CHAT_OUTPUT_BLOCKED",
+            "model output contained hidden reasoning or prompt text",
+        )
+
+    kept: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if _HIDDEN_OUTPUT_HEADING.fullmatch(stripped):
+            break
+        # A few local checkpoints concatenate the answer, a horizontal
+        # separator and their self-critique onto one line. The final answer
+        # is still recoverable before the marker; everything after it is
+        # internal-only and must be discarded before any other output path.
+        marker = _HIDDEN_OUTPUT_SEPARATOR.search(line)
+        if marker is None:
+            marker = _HIDDEN_OUTPUT_MARKDOWN_HEADING.search(line)
+        if marker is not None:
+            prefix = line[: marker.start()].rstrip()
+            if prefix:
+                kept.append(prefix)
+            break
+        if _HIDDEN_OUTPUT_INLINE.search(stripped):
+            # A prompt-leak heading can be emitted on the same line as the
+            # final sentence. Preserve the answer before it, then stop.
+            prefix = _HIDDEN_OUTPUT_INLINE.split(line, maxsplit=1)[0].rstrip()
+            if prefix:
+                kept.append(prefix)
+            break
+        kept.append(line.rstrip())
+    final = "\n".join(kept).strip()
+    final = re.sub(r"\n{3,}", "\n\n", final)
+    if not final:
+        raise TextBrainError(
+            "E_CHAT_OUTPUT_BLOCKED",
+            "model output contained no safe final answer",
+        )
+    if "<think>" in final.casefold() or "</think>" in final.casefold():
+        raise TextBrainError(
+            "E_CHAT_OUTPUT_BLOCKED",
+            "model output still contains hidden reasoning delimiters",
         )
     return final
 

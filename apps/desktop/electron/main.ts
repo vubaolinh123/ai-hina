@@ -29,6 +29,7 @@ import {
   validateVisionProvider,
   validateAvatarCue,
   validateSafetyControl,
+  requestResourceModelControl,
 } from "./control-client";
 import {
   WIDGET_STATE_MAX_BYTES,
@@ -101,6 +102,7 @@ const CHANNELS = Object.freeze({
   visionConfigure: "hina:vision:configure",
   visionClearKey: "hina:vision:clear-key",
   resourcesStatus: "hina:resources:status",
+  resourcesControl: "hina:resources:control",
   captureSources: "hina:capture:sources",
   captureSubmit: "hina:capture:submit",
 });
@@ -749,6 +751,34 @@ function registerIpcHandlers(): void {
     const status = await requestControl("resources.status");
     return augmentResourceStatus(status, resourceTransitionTracker);
   });
+  ipcMain.handle(
+    CHANNELS.resourcesControl,
+    async (event, modelId: unknown, action: unknown) => {
+      if (assertTrustedSender(event) !== "operator") {
+        throw new Error("E_DESKTOP_RESOURCE_AUTHORITY: operator window required");
+      }
+      try {
+        const result = await requestResourceModelControl(modelId, action);
+        const resources = result.resources;
+        return resources && typeof resources === "object"
+          ? {
+              ...result,
+              resources: augmentResourceStatus(
+                resources,
+                resourceTransitionTracker,
+              ),
+            }
+          : result;
+      } catch (error) {
+        console.error(
+          `[hina-desktop:resources:ERROR] ${
+            error instanceof Error ? error.message.slice(0, 256) : "resource model control failed"
+          }`,
+        );
+        throw error;
+      }
+    },
+  );
   ipcMain.handle(CHANNELS.captureSources, async (event) => {
     if (assertTrustedSender(event) !== "operator") {
       throw new Error("E_DESKTOP_CAPTURE_AUTHORITY: operator window required");

@@ -198,7 +198,7 @@ def _render_fresh_observation(record: Any, *, session_id: str) -> str | None:
     vision = record.get("vision")
     ocr = record.get("ocr")
     vision_summary = (
-        _bounded_external_text(vision.get("summary"), 2_000)
+        _bounded_external_text(vision.get("summary"), 3_500)
         if isinstance(vision, dict) and vision.get("state") == "ready"
         else None
     )

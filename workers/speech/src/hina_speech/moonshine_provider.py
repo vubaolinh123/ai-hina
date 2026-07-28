@@ -48,12 +48,22 @@ class MoonshineProvider:
             "available": dependency_available,
             "dependencyAvailable": dependency_available,
             "modelLoaded": self._transcriber is not None,
+            "operatorResident": self._transcriber is not None,
             "modelCached": _model_is_cached(self.config),
             "effectiveDevice": "cpu",
             "downloadOnFirstUse": self.config.allow_download,
             "lastErrorCode": self._last_error_code,
             "drainingTimedOutInference": self._drain_task is not None and not self._drain_task.done(),
         }
+
+    async def warmup(self) -> None:
+        if self._closed:
+            raise SpeechError("E_STT_UNAVAILABLE", "STT provider is closed", retryable=True)
+        async with self._model_lock:
+            await asyncio.get_running_loop().run_in_executor(
+                self._executor,
+                self._load_transcriber,
+            )
 
     async def transcribe(self, audio: NormalizedAudio) -> SttResult:
         if audio.sample_rate_hz != 16_000:

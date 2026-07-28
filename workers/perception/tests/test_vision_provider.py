@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import unittest
 from typing import Any
@@ -156,6 +157,45 @@ class _SequencedChatOllama(_FakeOllama):
         return response
 
 
+class _BlockingLocalChatOllama(_FakeOllama):
+    def __init__(self) -> None:
+        super().__init__()
+        self.chat_started = asyncio.Event()
+        self.allow_chat_completion = asyncio.Event()
+
+    async def request(
+        self,
+        method: str,
+        url: str,
+        payload: dict[str, object] | None,
+        api_key: str | None,
+        timeout: float,
+        max_bytes: int,
+    ) -> dict[str, Any]:
+        if not url.endswith("/api/chat"):
+            return await super().request(
+                method,
+                url,
+                payload,
+                api_key,
+                timeout,
+                max_bytes,
+            )
+        self.calls.append(
+            {
+                "method": method,
+                "url": url,
+                "payload": payload,
+                "apiKey": api_key,
+                "timeout": timeout,
+                "maxBytes": max_bytes,
+            }
+        )
+        self.chat_started.set()
+        await self.allow_chat_completion.wait()
+        return {"message": {"content": "Ảnh hiển thị một menu trò chơi."}}
+
+
 class _Lease:
     def __init__(self) -> None:
         self.asserted = False
@@ -306,10 +346,11 @@ class OllamaVisionProviderTests(unittest.IsolatedAsyncioTestCase):
         assert second_payload is not None
         self.assertIs(first_payload["think"], False)
         self.assertIs(second_payload["think"], False)
-        self.assertEqual(first_payload["options"]["num_predict"], 256)  # type: ignore[index]
+        self.assertEqual(first_payload["options"]["num_predict"], 512)  # type: ignore[index]
         self.assertEqual(second_payload["options"]["num_predict"], 768)  # type: ignore[index]
         recovery_prompt = second_payload["messages"][0]["content"]  # type: ignore[index]
         self.assertIn("Yêu cầu phục hồi", recovery_prompt)
+        self.assertIn("6 đến 8 câu", recovery_prompt)
         self.assertNotIn("private-first", recovery_prompt)
 
     async def test_partial_length_response_is_not_accepted_as_complete(self) -> None:
@@ -556,6 +597,85 @@ class OllamaVisionProviderTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(leases), 1)
         self.assertEqual(leases[0].assert_count, 2)
         self.assertEqual(leases[0].release_count, 1)
+
+    async def test_manual_local_warmup_holds_one_lease_until_unload(self) -> None:
+        fake = _FakeOllama()
+        leases: list[_Lease] = []
+
+        async def acquire(_unload: Any) -> _Lease:
+            lease = _Lease()
+            leases.append(lease)
+            return lease
+
+        provider = OllamaVisionProvider(
+            VisionConfig(),
+            request_json=fake.request,
+            acquire_local_lease=acquire,
+        )
+        await provider.configure(
+            provider="ollama_local",
+            model="qwen3-vl:2b",
+            api_key=None,
+        )
+        await provider.warmup()
+        self.assertTrue((await provider.status())["operatorResident"])
+        self.assertEqual(len(leases), 1)
+
+        result = await provider.analyze(
+            b"\x89PNG\r\n\x1a\nowner-pixels",
+            "Mô tả ảnh.",
+        )
+        self.assertEqual(result, "Trong ảnh có một cửa sổ game.")
+        self.assertEqual(leases[0].release_count, 0)
+        chat = next(call for call in fake.calls if call["url"].endswith("/api/chat"))
+        assert chat["payload"] is not None
+        self.assertEqual(chat["payload"]["keep_alive"], -1)
+
+        await provider.unload()
+        self.assertFalse((await provider.status())["operatorResident"])
+        self.assertEqual(leases[0].release_count, 1)
+
+    async def test_unload_waits_for_active_local_analysis(self) -> None:
+        fake = _BlockingLocalChatOllama()
+        leases: list[_Lease] = []
+
+        async def acquire(_unload: Any) -> _Lease:
+            lease = _Lease()
+            leases.append(lease)
+            return lease
+
+        provider = OllamaVisionProvider(
+            VisionConfig(),
+            request_json=fake.request,
+            acquire_local_lease=acquire,
+        )
+        await provider.configure(
+            provider="ollama_local",
+            model="qwen3-vl:2b",
+            api_key=None,
+        )
+        analysis = asyncio.create_task(
+            provider.analyze(b"\x89PNG\r\n\x1a\nowner-pixels", "Mô tả ảnh.")
+        )
+        await asyncio.wait_for(fake.chat_started.wait(), timeout=0.5)
+        unloading = asyncio.create_task(provider.unload())
+        await asyncio.sleep(0)
+        self.assertFalse(unloading.done())
+        self.assertFalse(
+            any(call["url"].endswith("/api/generate") for call in fake.calls)
+        )
+
+        fake.allow_chat_completion.set()
+        self.assertEqual(await analysis, "Ảnh hiển thị một menu trò chơi.")
+        await asyncio.wait_for(unloading, timeout=0.5)
+        self.assertEqual(len(leases), 1)
+        self.assertEqual(leases[0].release_count, 1)
+        unload_calls = [call for call in fake.calls if call["url"].endswith("/api/generate")]
+        self.assertEqual(len(unload_calls), 1)
+        self.assertEqual(
+            unload_calls[0]["payload"],
+            {"model": "qwen3-vl:2b", "keep_alive": 0},
+        )
 
     async def test_recovery_budget_cannot_be_lower_than_initial_budget(self) -> None:
         with self.assertRaises(PerceptionError) as raised:

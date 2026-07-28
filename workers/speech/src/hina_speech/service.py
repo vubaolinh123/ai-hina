@@ -199,6 +199,19 @@ class SpeechInputService:
         else:
             await self.provider.unload()
 
+    async def warmup(self) -> None:
+        warmup = getattr(self.provider, "warmup", None)
+        if warmup is None:
+            raise SpeechError(
+                "E_STT_UNAVAILABLE",
+                "configured STT provider does not support manual loading",
+                retryable=True,
+            )
+        await warmup()
+
+    async def unload(self) -> None:
+        await self.provider.unload()
+
     def _report_error(
         self,
         error: SpeechError,

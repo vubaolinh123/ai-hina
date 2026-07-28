@@ -1113,6 +1113,15 @@ pre,
   margin-top: 10px;
 }
 
+.resource-control-message {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--success);
+  color: var(--success);
+  background: rgba(95, 221, 161, 0.07);
+  font-size: 12px;
+}
+
 .resource-table-wrap {
   overflow-x: auto;
   margin-top: 16px;
@@ -1160,6 +1169,25 @@ pre,
 .resource-table td small {
   margin-top: 4px;
   color: var(--muted);
+}
+
+.resource-model-actions {
+  min-width: 210px;
+}
+
+.resource-model-actions button.compact {
+  margin: 0 5px 6px 0;
+  padding: 7px 9px;
+  font-size: 11px;
+}
+
+.resource-model-actions button.danger {
+  border-color: rgba(255, 125, 133, 0.48);
+  color: #ffb0ad;
+}
+
+.resource-model-actions button:disabled {
+  opacity: 0.45;
 }
 
 .model-state {
@@ -1513,6 +1541,38 @@ pre,
   margin: 5px 0 0;
   line-height: 1.55;
   white-space: pre-wrap;
+}
+
+.chat-thinking {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 5px;
+  padding: 10px 13px;
+  border: 1px dashed rgba(240, 142, 107, 0.45);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.chat-thinking i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: hina-thinking-dot 1.1s infinite ease-in-out;
+}
+
+.chat-thinking i:nth-of-type(2) {
+  animation-delay: 0.15s;
+}
+
+.chat-thinking i:nth-of-type(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes hina-thinking-dot {
+  0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-2px); }
 }
 
 .chat-composer {

@@ -26,7 +26,7 @@ class VisionConfig:
     cloud_base_url: str = "https://ollama.com"
     request_timeout_seconds: float = 20.0
     max_response_bytes: int = 2_097_152
-    max_output_tokens: int = 256
+    max_output_tokens: int = 512
     recovery_output_tokens: int = 768
     local_context_tokens: int = 4_096
     local_gpu_layers: int = 999
@@ -86,7 +86,7 @@ class VisionConfig:
                 "HINA_VISION_TIMEOUT_SECONDS",
                 20.0,
             ),
-            max_output_tokens=_env_int(values, "HINA_VISION_MAX_TOKENS", 256),
+            max_output_tokens=_env_int(values, "HINA_VISION_MAX_TOKENS", 512),
             recovery_output_tokens=_env_int(
                 values,
                 "HINA_VISION_RECOVERY_MAX_TOKENS",
@@ -122,6 +122,9 @@ class VisionConfig:
 
 
 class VisionLease(Protocol):
+    @property
+    def state(self) -> str: ...
+
     def assert_active(self) -> None: ...
 
     async def release(self) -> bool: ...
@@ -160,6 +163,9 @@ class OllamaVisionProvider:
         self._model_details: dict[str, object] | None = None
         self._last_error_code: str | None = None
         self._closed = False
+        self._operator_lease: VisionLease | None = None
+        self._operator_users = 0
+        self._operator_condition = asyncio.Condition()
 
     async def status(self) -> dict[str, Any]:
         async with self._state_lock:
@@ -181,11 +187,75 @@ class OllamaVisionProvider:
             "automatic": False,
             "decisionSupportEligible": False,
             "localGpuUsed": provider is VisionProviderKind.OLLAMA_LOCAL,
+            "operatorResident": self._operator_lease is not None
+            and getattr(self._operator_lease, "state", "active") == "active",
             "cloudImageUpload": provider is VisionProviderKind.OLLAMA_CLOUD,
             "modelDetails": details,
             "lastErrorCode": last_error_code,
             "configured": self.config.public_status(),
         }
+
+    async def warmup(self) -> None:
+        async with self._state_lock:
+            kind = self._provider
+            model = self._model
+            closed = self._closed
+        if closed or kind is None or model is None:
+            raise PerceptionError(
+                "E_PERCEPTION_VISION_UNAVAILABLE",
+                "vision provider has not been configured",
+                retryable=True,
+            )
+        if kind is VisionProviderKind.OLLAMA_CLOUD:
+            return
+        if self._acquire_local_lease is None:
+            raise PerceptionError(
+                "E_PERCEPTION_VISION_CAPACITY",
+                "local vision inference requires Hina's shared GPU scheduler",
+                retryable=True,
+            )
+        # Do not hold the condition while asking the scheduler or Ollama to
+        # load weights.  A scheduler preemption invokes ``unload`` and that
+        # callback must be able to acquire the condition without deadlocking
+        # an owner-initiated force-load.
+        async with self._inference_lock:
+            stale_lease: VisionLease | None = None
+            async with self._operator_condition:
+                lease = self._operator_lease
+                if lease is not None and getattr(lease, "state", "active") == "active":
+                    lease.assert_active()
+                    return
+                if lease is not None:
+                    self._operator_lease = None
+                    stale_lease = lease
+            if stale_lease is not None:
+                await stale_lease.release()
+            lease = await self._acquire_local_lease(self.unload)
+            lease.assert_active()
+            try:
+                await self._request_json(
+                    "POST",
+                    f"{self.config.local_base_url}/api/generate",
+                    {
+                        "model": model,
+                        "prompt": " ",
+                        "stream": False,
+                        "keep_alive": -1,
+                        "options": {
+                            "num_predict": 1,
+                            "num_ctx": min(self.config.local_context_tokens, 2_048),
+                            "num_gpu": self.config.local_gpu_layers,
+                        },
+                    },
+                    None,
+                    min(self.config.request_timeout_seconds, 20.0),
+                    self.config.max_response_bytes,
+                )
+            except Exception:
+                await lease.release()
+                raise
+            async with self._operator_condition:
+                self._operator_lease = lease
 
     async def discover_models(
         self,
@@ -369,6 +439,7 @@ class OllamaVisionProvider:
             (_recovery_prompt(clean_prompt), self.config.recovery_output_tokens),
         )
         lease: VisionLease | None = None
+        borrowed_operator = False
         async with self._inference_lock:
             try:
                 if kind is VisionProviderKind.OLLAMA_LOCAL:
@@ -377,7 +448,15 @@ class OllamaVisionProvider:
                             "E_PERCEPTION_VISION_CAPACITY",
                             "local vision inference requires Hina's shared GPU scheduler",
                         )
-                    lease = await self._acquire_local_lease(self.unload)
+                    async with self._operator_condition:
+                        operator = self._operator_lease
+                        if operator is not None and getattr(operator, "state", "active") == "active":
+                            operator.assert_active()
+                            self._operator_users += 1
+                            lease = operator
+                            borrowed_operator = True
+                    if lease is None:
+                        lease = await self._acquire_local_lease(self.unload)
                 for attempt_index, (attempt_prompt, token_limit) in enumerate(attempts):
                     body = _chat_body(
                         kind=kind,
@@ -386,6 +465,7 @@ class OllamaVisionProvider:
                         encoded_image=encoded_image,
                         token_limit=token_limit,
                         config=self.config,
+                        keep_alive=-1 if borrowed_operator else 0,
                     )
                     result = await self._request_json(
                         "POST",
@@ -421,25 +501,45 @@ class OllamaVisionProvider:
                 raise
             finally:
                 if lease is not None:
-                    await lease.release()
+                    if borrowed_operator:
+                        async with self._operator_condition:
+                            self._operator_users = max(0, self._operator_users - 1)
+                            self._operator_condition.notify_all()
+                    else:
+                        await lease.release()
 
     async def unload(self) -> None:
-        async with self._state_lock:
-            kind = self._provider
-            model = self._model
-        if kind is not VisionProviderKind.OLLAMA_LOCAL or model is None:
-            return
-        try:
-            await self._request_json(
-                "POST",
-                f"{self.config.local_base_url}/api/generate",
-                {"model": model, "keep_alive": 0},
-                None,
-                min(self.config.request_timeout_seconds, 5.0),
-                self.config.max_response_bytes,
-            )
-        except Exception:
-            return
+        # Manual unload and scheduler preemption must not evict a model while
+        # a normal request is still using it.  ``analyze`` owns this lock for
+        # its full request/recovery sequence, so this naturally waits for the
+        # active work to finish before returning VRAM.
+        async with self._inference_lock:
+            async with self._operator_condition:
+                while self._operator_users:
+                    await self._operator_condition.wait()
+                operator_lease = self._operator_lease
+                self._operator_lease = None
+            async with self._state_lock:
+                kind = self._provider
+                model = self._model
+            if kind is not VisionProviderKind.OLLAMA_LOCAL or model is None:
+                if operator_lease is not None:
+                    await operator_lease.release()
+                return
+            try:
+                await self._request_json(
+                    "POST",
+                    f"{self.config.local_base_url}/api/generate",
+                    {"model": model, "keep_alive": 0},
+                    None,
+                    min(self.config.request_timeout_seconds, 5.0),
+                    self.config.max_response_bytes,
+                )
+            except Exception:
+                pass
+            finally:
+                if operator_lease is not None:
+                    await operator_lease.release()
 
     async def close(self) -> None:
         await self.unload()
@@ -526,6 +626,7 @@ def _chat_body(
     encoded_image: str,
     token_limit: int,
     config: VisionConfig,
+    keep_alive: int = 0,
 ) -> dict[str, object]:
     body: dict[str, object] = {
         "model": model,
@@ -547,7 +648,7 @@ def _chat_body(
         },
     }
     if kind is VisionProviderKind.OLLAMA_LOCAL:
-        body["keep_alive"] = 0
+        body["keep_alive"] = keep_alive
         options = body["options"]
         assert isinstance(options, dict)
         options["num_ctx"] = config.local_context_tokens
@@ -558,9 +659,11 @@ def _chat_body(
 def _recovery_prompt(prompt: str) -> str:
     return (
         f"{prompt}\n\n"
-        "Yêu cầu phục hồi: bắt đầu ngay bằng kết luận nhìn thấy trong ảnh, không "
-        "trình bày quá trình suy nghĩ. Chỉ trả lời 1 đến 3 câu tiếng Việt hoàn "
-        "chỉnh, tối đa 80 từ."
+        "Yêu cầu phục hồi: bắt đầu ngay bằng overview chi tiết nhìn thấy trong ảnh, "
+        "không trình bày quá trình suy nghĩ. Giữ đủ cảnh tổng thể, bố cục, đối tượng "
+        "và trạng thái, chữ/nhãn đọc được, màu sắc/cảnh báo và điểm không chắc; viết "
+        "6 đến 8 câu tiếng Việt hoàn chỉnh, khoảng 180 từ hoặc ngắn hơn nếu ảnh ít "
+        "thông tin."
     )
 
 

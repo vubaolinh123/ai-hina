@@ -182,6 +182,25 @@ class RapidOcrProvider:
             result["processingMilliseconds"] = _elapsed_ms(started)
             return result
 
+    async def warmup(self) -> None:
+        async with self._operation_lock:
+            self._assert_open()
+            self._require_cuda()
+            try:
+                await asyncio.get_running_loop().run_in_executor(
+                    self._executor,
+                    self._warmup_sync,
+                )
+            except PerceptionError:
+                raise
+            except Exception as exc:
+                self._last_error_code = "E_PERCEPTION_OCR_INFERENCE"
+                raise PerceptionError(
+                    "E_PERCEPTION_OCR_INFERENCE",
+                    "local GPU OCR warmup failed",
+                    retryable=True,
+                ) from exc
+
     async def unload(self) -> None:
         async with self._operation_lock:
             engine = self._engine
@@ -216,6 +235,14 @@ class RapidOcrProvider:
         )
         result["effectiveDevice"] = f"cuda:{self.config.device_index}"
         return result
+
+    def _warmup_sync(self) -> None:
+        if self._engine is None:
+            self._artifact_ensurer(_ARTIFACTS, self.config)
+            engine = self._create_engine()
+            self._validate_engine_device(engine)
+            self._engine = engine
+            self._effective_device = f"cuda:{self.config.device_index}"
 
     def _create_engine(self) -> Any:
         params = self._engine_params()
@@ -328,6 +355,15 @@ class ScheduledOcrProvider:
             lease = await self._ensure_lease_locked()
             lease.assert_active()
             return await self.provider.recognize(encoded_png)
+
+    async def warmup(self) -> None:
+        async with self._operation_lock:
+            self._assert_open()
+            lease = await self._ensure_lease_locked()
+            lease.assert_active()
+            warmup = getattr(self.provider, "warmup", None)
+            if warmup is not None:
+                await warmup()
 
     async def unload(self) -> None:
         async with self._operation_lock:

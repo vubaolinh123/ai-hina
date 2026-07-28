@@ -161,6 +161,17 @@ class TextAndAudioTests(unittest.TestCase):
         self.assertEqual(" ".join(chunks).split(), text.split())
         self.assertTrue(any(chunk.endswith((",", "–")) for chunk in chunks))
 
+    def test_long_dash_becomes_an_explicit_tts_pause(self) -> None:
+        normalized = normalize_tts_text(
+            "Một ý trước – một ý sau — và một ý cuối."
+        )
+        self.assertNotIn("–", normalized)
+        self.assertNotIn("—", normalized)
+        self.assertEqual(
+            normalized,
+            "Một ý trước. một ý sau. và một ý cuối.",
+        )
+
     def test_regression_sentence_removes_decorative_emoji_and_splits_parenthetical_tail(self) -> None:
         text = (
             "Tại sao cục tẩy lại khóc nức nở vì nó không thể xóa bỏ nỗi đau "

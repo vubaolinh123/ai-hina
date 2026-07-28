@@ -22,6 +22,8 @@ class ChatProvider(Protocol):
 
     async def unload(self) -> None: ...
 
+    async def warmup(self) -> None: ...
+
 
 class ModelGateway:
     def __init__(
@@ -41,6 +43,10 @@ class ModelGateway:
         self._failure_count = 0
         self._opened_at: float | None = None
         self._half_open_in_flight = False
+        self._operator_lock = asyncio.Condition()
+        self._operator_lease: Any | None = None
+        self._operator_users = 0
+        self._request_users = 0
 
     async def status(self) -> dict[str, Any]:
         health = await self.provider.health()
@@ -67,7 +73,76 @@ class ModelGateway:
                 and resource_available
                 and circuit["state"] != "open"
             ),
+            "operatorResident": await self._operator_is_resident(),
         }
+
+    async def warmup(self) -> dict[str, Any]:
+        """Pin the text model through the shared scheduler until unload.
+
+        This is an owner-only operator action. It deliberately uses a
+        non-preemptible, bounded lease rather than asking Ollama to remain
+        resident outside Hina's resource accounting.
+        """
+
+        async with self._operator_lock:
+            lease = self._operator_lease
+            if lease is not None and lease.state == "active":
+                lease.assert_active()
+                return {"state": "loaded", "operatorResident": True}
+            if lease is not None:
+                self._operator_lease = None
+                await lease.release()
+            try:
+                lease = await self.scheduler.acquire(
+                    LocalResourceRequest(
+                        owner="model.text.operator",
+                        vram_mib=self.config.model_vram_mib,
+                        ram_mib=self.config.model_ram_mib,
+                        priority=95,
+                        ttl_seconds=86_400,
+                        preemptible=False,
+                    ),
+                    wait_timeout_seconds=min(
+                        _ADMISSION_TIMEOUT_SECONDS,
+                        self.config.health_timeout_seconds,
+                    ),
+                )
+                pin = getattr(self.provider, "set_operator_pinned", None)
+                if pin is not None:
+                    pin(True)
+                warmup = getattr(self.provider, "warmup", None)
+                if warmup is None:
+                    raise TextBrainError(
+                        "E_MODEL_REQUEST",
+                        "configured model provider does not support manual loading",
+                    )
+                await warmup()
+            except Exception:
+                if lease is not None:
+                    await lease.release()
+                pin = getattr(self.provider, "set_operator_pinned", None)
+                if pin is not None:
+                    pin(False)
+                raise
+            self._operator_lease = lease
+            return {"state": "loaded", "operatorResident": True}
+
+    async def unload(self) -> None:
+        """Release an owner-pinned text lease after active work is finished."""
+
+        async with self._operator_lock:
+            while self._operator_users or self._request_users:
+                await self._operator_lock.wait()
+            lease = self._operator_lease
+            self._operator_lease = None
+            pin = getattr(self.provider, "set_operator_pinned", None)
+            if pin is not None:
+                pin(False)
+            try:
+                await self.provider.unload()
+            finally:
+                if lease is not None:
+                    await lease.release()
 
     async def resident_models(self) -> list[dict[str, object]]:
         resident = getattr(self.provider, "resident_models", None)
@@ -91,20 +166,9 @@ class ModelGateway:
         try:
             for attempt in range(self.config.retry_attempts + 1):
                 emitted = False
-                lease = await self.scheduler.acquire(
-                    LocalResourceRequest(
-                        owner="model.text",
-                        vram_mib=self.config.model_vram_mib,
-                        ram_mib=self.config.model_ram_mib,
-                        priority=80,
-                        ttl_seconds=self.config.request_timeout_seconds + 10,
-                        preemptible=True,
-                    ),
-                    wait_timeout_seconds=min(
-                        _ADMISSION_TIMEOUT_SECONDS,
-                        self.config.health_timeout_seconds,
-                    ),
-                    on_preempt=self.provider.unload,
+                lease, owned = await self._borrow_or_acquire(
+                    owner="model.text",
+                    priority=80,
                 )
                 try:
                     async for token in self.provider.stream_chat(messages):
@@ -126,7 +190,7 @@ class ModelGateway:
                         await self._record_failure()
                         raise
                 finally:
-                    await lease.release()
+                    await self._return_lease(lease, owned)
             assert last_error is not None
             await self._record_failure()
             raise last_error
@@ -142,20 +206,9 @@ class ModelGateway:
         last_error: TextBrainError | None = None
         try:
             for attempt in range(self.config.retry_attempts + 1):
-                lease = await self.scheduler.acquire(
-                    LocalResourceRequest(
-                        owner="model.vision",
-                        vram_mib=self.config.model_vram_mib,
-                        ram_mib=self.config.model_ram_mib,
-                        priority=70,
-                        ttl_seconds=self.config.request_timeout_seconds + 10,
-                        preemptible=True,
-                    ),
-                    wait_timeout_seconds=min(
-                        _ADMISSION_TIMEOUT_SECONDS,
-                        self.config.health_timeout_seconds,
-                    ),
-                    on_preempt=self.provider.unload,
+                lease, owned = await self._borrow_or_acquire(
+                    owner="model.vision",
+                    priority=70,
                 )
                 try:
                     result = await self.provider.analyze_image(image_png, prompt)
@@ -175,7 +228,7 @@ class ModelGateway:
                         await self._record_failure()
                         raise
                 finally:
-                    await lease.release()
+                    await self._return_lease(lease, owned)
             assert last_error is not None
             await self._record_failure()
             raise last_error
@@ -203,6 +256,70 @@ class ModelGateway:
                         retryable=True,
                     )
                 self._half_open_in_flight = True
+
+    async def _borrow_or_acquire(
+        self,
+        *,
+        owner: str,
+        priority: int,
+    ) -> tuple[Any, bool]:
+        async with self._operator_lock:
+            operator = self._operator_lease
+            if operator is not None and operator.state == "active":
+                try:
+                    operator.assert_active()
+                except Exception:
+                    self._operator_lease = None
+                    pin = getattr(self.provider, "set_operator_pinned", None)
+                    if pin is not None:
+                        pin(False)
+                    await operator.release()
+                else:
+                    self._operator_users += 1
+                    return operator, False
+            elif operator is not None:
+                self._operator_lease = None
+                await operator.release()
+        lease = await self.scheduler.acquire(
+            LocalResourceRequest(
+                owner=owner,
+                vram_mib=self.config.model_vram_mib,
+                ram_mib=self.config.model_ram_mib,
+                priority=priority,
+                ttl_seconds=self.config.request_timeout_seconds + 10,
+                preemptible=True,
+            ),
+            wait_timeout_seconds=min(
+                _ADMISSION_TIMEOUT_SECONDS,
+                self.config.health_timeout_seconds,
+            ),
+            on_preempt=self.provider.unload,
+        )
+        async with self._operator_lock:
+            self._request_users += 1
+        return lease, True
+
+    async def _return_lease(self, lease: Any, owned: bool) -> None:
+        if owned:
+            await lease.release()
+            async with self._operator_lock:
+                self._request_users = max(0, self._request_users - 1)
+                self._operator_lock.notify_all()
+            return
+        async with self._operator_lock:
+            self._operator_users = max(0, self._operator_users - 1)
+            self._operator_lock.notify_all()
+
+    async def _operator_is_resident(self) -> bool:
+        async with self._operator_lock:
+            lease = self._operator_lease
+            if lease is None:
+                return False
+            try:
+                lease.assert_active()
+            except Exception:
+                return False
+            return True
 
     async def _record_success(self) -> None:
         async with self._circuit_lock:

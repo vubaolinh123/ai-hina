@@ -74,6 +74,7 @@ class _StreamFailure:
 class LocalHttpChatProvider:
     def __init__(self, config: ModelGatewayConfig) -> None:
         self.config = config
+        self._operator_pinned = False
 
     async def health(self) -> ProviderHealth:
         try:
@@ -181,10 +182,22 @@ class LocalHttpChatProvider:
     async def unload(self) -> None:
         if self.config.provider is not ProviderKind.OLLAMA:
             return
+        self._operator_pinned = False
         try:
             await asyncio.to_thread(self._unload_sync)
         except TextBrainError:
             return
+
+    async def warmup(self) -> None:
+        if self.config.provider is not ProviderKind.OLLAMA:
+            raise TextBrainError(
+                "E_MODEL_REQUEST",
+                "manual model loading requires the configured Ollama provider",
+            )
+        await asyncio.to_thread(self._warmup_sync)
+
+    def set_operator_pinned(self, enabled: bool) -> None:
+        self._operator_pinned = bool(enabled)
 
     async def resident_models(self) -> list[dict[str, object]]:
         """Return Ollama models that are currently resident, not merely installed."""
@@ -460,6 +473,48 @@ class LocalHttpChatProvider:
         finally:
             connection.close()
 
+    def _warmup_sync(self) -> None:
+        connection = self._connection(self.config.health_timeout_seconds)
+        body = json.dumps(
+            {
+                "model": self.config.model,
+                "prompt": " ",
+                "stream": False,
+                "keep_alive": -1,
+                "options": {
+                    "num_predict": 1,
+                    "num_ctx": min(self.config.context_tokens, 2_048),
+                    "num_gpu": self.config.ollama_gpu_layers,
+                },
+            },
+            separators=(",", ":"),
+        ).encode("utf-8")
+        try:
+            connection.request(
+                "POST",
+                "/api/generate",
+                body=body,
+                headers=self._headers(content_length=len(body)),
+            )
+            response = connection.getresponse()
+            response.read(self.config.max_output_bytes + 1)
+            if response.status != 200:
+                raise TextBrainError(
+                    "E_MODEL_UNAVAILABLE",
+                    "provider warmup failed",
+                    retryable=True,
+                )
+        except TextBrainError:
+            raise
+        except (OSError, TimeoutError, http.client.HTTPException) as exc:
+            raise TextBrainError(
+                "E_MODEL_UNAVAILABLE",
+                "provider warmup failed",
+                retryable=True,
+            ) from exc
+        finally:
+            connection.close()
+
     def _analyze_image_sync(self, image_png: bytes, prompt: str) -> str:
         connection = self._connection(self.config.request_timeout_seconds)
         body = self._vision_body(image_png, prompt)
@@ -540,7 +595,7 @@ class LocalHttpChatProvider:
                 # 16 GiB card. Keeping Ollama resident after the stream leaves
                 # no truthful way for the shared scheduler to preserve its
                 # mandatory 2 GiB headroom.
-                "keep_alive": 0,
+                "keep_alive": -1 if self._operator_pinned else 0,
                 "think": True,
                 "options": {
                     "temperature": self.config.temperature,
@@ -548,6 +603,15 @@ class LocalHttpChatProvider:
                     "num_predict": self.config.thinking_max_tokens,
                     "num_ctx": self.config.context_tokens,
                     "num_gpu": self.config.ollama_gpu_layers,
+                    "stop": [
+                        "<|im_end|>",
+                        "<think>",
+                        "\n---\n",
+                        "\n**Phân tích hành vi",
+                        "\nPhân tích hành vi:",
+                        "\nSystem prompt:",
+                        "\nDeveloper instruction:",
+                    ],
                 },
             }
         else:
@@ -576,7 +640,7 @@ class LocalHttpChatProvider:
             "prompt": _qwen_no_think_prompt(messages),
             "raw": True,
             "stream": True,
-            "keep_alive": 0,
+            "keep_alive": -1 if self._operator_pinned else 0,
             "options": {
                 "temperature": self.config.temperature,
                 "repeat_penalty": self.config.repeat_penalty,
@@ -585,7 +649,15 @@ class LocalHttpChatProvider:
                 "num_gpu": self.config.ollama_gpu_layers,
                 # If the thinking checkpoint tries to open another thought
                 # block, stop instead of exposing hidden reasoning as text.
-                "stop": ["<|im_end|>", "<think>"],
+                "stop": [
+                    "<|im_end|>",
+                    "<think>",
+                    "\n---\n",
+                    "\n**Phân tích hành vi",
+                    "\nPhân tích hành vi:",
+                    "\nSystem prompt:",
+                    "\nDeveloper instruction:",
+                ],
             },
         }
         return json.dumps(
@@ -619,7 +691,7 @@ class LocalHttpChatProvider:
             "model": self.config.model,
             "messages": messages,
             "stream": False,
-            "keep_alive": 0,
+            "keep_alive": -1 if self._operator_pinned else 0,
             "think": True,
             "options": {
                 "temperature": (

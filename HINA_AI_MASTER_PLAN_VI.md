@@ -1442,6 +1442,19 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
   capture-to-chat báo `includedFreshObservations=1`, còn lượt sau 16 giây báo
   `0`. Startup dùng đúng same-weight GPU fast-path rồi `keep_alive=0` để tránh
   cold first-turn timeout mà không giữ checkpoint thứ hai.
+- M08-S10 resource control and output quality (2026-07-29): Dashboard **Tài
+  nguyên AI** có force-load/force-unload typed operator IPC cho allowlist model
+  local; runtime vẫn xin scheduler lease, giữ headroom 2.048 MiB và chờ active
+  VLM work hoàn tất trước unload. Cloud vision là no-op trung thực, không giả
+  local VRAM. VLM overview tăng thành 6–8 câu có scene/layout/entity/text/cue/
+  uncertainty, bounded 3.500 ký tự. Conversation loại hidden reasoning,
+  prompt/control token và suffix `--- **Phân tích hành vi:**` trước moderation,
+  replay và TTS; UI hiện trạng thái đang suy nghĩ. Persona/TTS chuẩn hóa dấu
+  câu và dash nhưng giữ OmniVoice 1.0x/110-character chunk. Fast evidence:
+  text 44, speech 22, perception 61, resource route 5, desktop 53/typecheck
+  và launcher startup smoke xanh. Slice không tạo raw artifact mới; audit đã
+  xác định legacy M07 smoke files trong `var/tmp` còn chờ owner cleanup vì môi
+  trường chặn thao tác xóa đã xác minh.
 
 ### Test matrix
 

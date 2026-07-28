@@ -69,6 +69,17 @@ class SpeechOutputService:
         warmup = getattr(self.provider, "warmup", None)
         if warmup is not None:
             await warmup()
+        else:
+            raise TtsError(
+                "E_TTS_UNAVAILABLE",
+                "configured TTS provider does not support manual loading",
+                retryable=True,
+            )
+
+    async def unload(self) -> None:
+        unload = getattr(self.provider, "unload", None)
+        if unload is not None:
+            await unload()
 
     async def synthesize(
         self,

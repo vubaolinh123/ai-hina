@@ -204,6 +204,20 @@ không persist pixel. Text-brain 41, perception 59, core integration 9, desktop
 GPU trong 2,76 giây rồi `keep_alive=0`, đóng cold first-turn timeout mà không
 giữ model thứ hai. Prefix trước orphan `</think>` cũng bị loại trước
 moderation/replay/TTS; explicit `<think>` vẫn fail closed.
+Ngày 2026-07-29 M08-S10 thêm owner-only force load/unload trong trang **Tài
+nguyên AI**. Control route chỉ nhận allowlist model, action `load|unload`,
+`owner.desktop` và `ownerConfirmed=true`; scheduler/headroom vẫn là authority,
+Cloud vision no-op thay vì giả có VRAM. Text brain có lease pin operator;
+STT/TTS/OCR/local VLM chỉ unload sau active work, local VLM serialize
+warmup/unload. VLM overview bounded 6–8 câu/3.500 ký tự. Hidden reasoning,
+prompt/control token và inline suffix `--- **Phân tích hành vi:**` bị cắt
+trước moderation/replay/TTS; desktop hiện thinking non-persistent. TTS chuẩn
+hóa dash/dấu câu nhưng giữ OmniVoice natural 1.0x/110 ký tự. Fast gate xanh:
+text 44, speech 22, perception 61, resource route 5, desktop 53/typecheck và
+startup smoke qua launcher. Slice không tạo raw test artifact mới; legacy M07
+smoke files trong `var/tmp` đã được audit nhưng còn chờ owner cleanup vì môi
+trường chặn thao tác xóa đã xác minh. M08 vẫn active; không có deep/release
+promotion.
 
 Legacy AIRI skill paths dưới `D:\ProjectAiri` mặc định ánh xạ sang repository
 hiện tại `D:\ProjectHinaAI`, trừ khi owner chỉ định workspace khác.

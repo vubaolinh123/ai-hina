@@ -95,6 +95,9 @@ type ResourceModel = {
   configuredVramMiB: number | null;
   measuredVramMiB: number | null;
   errorCode: string | null;
+  controlSupported: boolean;
+  operatorResident: boolean;
+  controlNote: string;
 };
 
 type ResourceModelTransition = {
@@ -150,6 +153,7 @@ type ResourceStatus = {
 type ChatTurn = {
   turnId: string;
   sessionId: string;
+  state?: AvatarState;
   outcome: "running" | "completed" | "interrupted" | "failed";
   text?: string;
   assistant?: string;
@@ -391,6 +395,17 @@ type HinaDesktopApi = {
   ): Promise<unknown>;
   getRuntimeHealth(): Promise<RuntimeHealth>;
   getResourceStatus(): Promise<ResourceStatus>;
+  controlResourceModel(
+    modelId: string,
+    action: "load" | "unload",
+  ): Promise<{
+    status: string;
+    modelId: string;
+    action: string;
+    noOp: boolean;
+    message: string;
+    resources: ResourceStatus;
+  }>;
   getChatStatus(): Promise<Record<string, unknown>>;
   startChatTurn(payload: {
     sessionId: string;

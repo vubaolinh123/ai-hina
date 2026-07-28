@@ -31,6 +31,7 @@ const CHANNELS = Object.freeze({
   visionConfigure: "hina:vision:configure",
   visionClearKey: "hina:vision:clear-key",
   resourcesStatus: "hina:resources:status",
+  resourcesControl: "hina:resources:control",
   captureSources: "hina:capture:sources",
   captureSubmit: "hina:capture:submit",
 });
@@ -84,6 +85,8 @@ const hinaDesktop = Object.freeze({
     ipcRenderer.invoke(CHANNELS.visionConfigure, input),
   clearVisionApiKey: () => ipcRenderer.invoke(CHANNELS.visionClearKey),
   getResourceStatus: () => ipcRenderer.invoke(CHANNELS.resourcesStatus),
+  controlResourceModel: (modelId: string, action: "load" | "unload") =>
+    ipcRenderer.invoke(CHANNELS.resourcesControl, modelId, action),
   listScreenCaptureSources: () => ipcRenderer.invoke(CHANNELS.captureSources),
   captureScreenSource: (input: unknown) =>
     ipcRenderer.invoke(CHANNELS.captureSubmit, input),

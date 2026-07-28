@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT / "packages" / "contracts" / "src"))
 sys.path.insert(0, str(APP_ROOT / "src"))
 
 from hina_core.runtime.transport import ControlPlaneServer, TransportConfig  # noqa: E402
-from hina_core.runtime.transport_client import get_json  # noqa: E402
+from hina_core.runtime.transport_client import get_json, post_json  # noqa: E402
 
 
 class _Scheduler:
@@ -54,6 +54,9 @@ class _Scheduler:
 class _ModelGateway:
     def __init__(self) -> None:
         self.scheduler = _Scheduler()
+        self.controls: list[str] = []
+        self.operator_resident = False
+        self.deny_next_warmup = False
 
     async def status(self) -> dict[str, object]:
         return {
@@ -68,7 +71,20 @@ class _ModelGateway:
                 "errorCode": None,
             },
             "available": True,
+            "operatorResident": self.operator_resident,
         }
+
+    async def warmup(self) -> dict[str, object]:
+        if self.deny_next_warmup:
+            self.deny_next_warmup = False
+            raise _ResourceDenied()
+        self.controls.append("load")
+        self.operator_resident = True
+        return {"state": "loaded", "operatorResident": True}
+
+    async def unload(self) -> None:
+        self.controls.append("unload")
+        self.operator_resident = False
 
     async def resident_models(self) -> list[dict[str, object]]:
         return [
@@ -82,9 +98,38 @@ class _ModelGateway:
 class _Service:
     def __init__(self, status: dict[str, object]) -> None:
         self._status = status
+        self.controls: list[str] = []
 
     async def status(self) -> dict[str, object]:
         return self._status
+
+    async def warmup(self) -> dict[str, object]:
+        self.controls.append("load")
+        return self._status
+
+    async def unload(self) -> None:
+        self.controls.append("unload")
+
+    async def warmup_ocr(self) -> dict[str, object]:
+        self.controls.append("load")
+        return self._status
+
+    async def unload_ocr(self) -> dict[str, object]:
+        self.controls.append("unload")
+        return self._status
+
+    async def warmup_vision(self) -> dict[str, object]:
+        self.controls.append("load")
+        return self._status
+
+    async def unload_vision(self) -> dict[str, object]:
+        self.controls.append("unload")
+        return self._status
+
+
+class _ResourceDenied(Exception):
+    code = "E_RESOURCE_CAPACITY"
+    detail = "resource admission would violate local headroom"
 
 
 class ResourceRouteTests(unittest.IsolatedAsyncioTestCase):
@@ -188,6 +233,91 @@ class ResourceRouteTests(unittest.IsolatedAsyncioTestCase):
             "E_RESOURCE_TELEMETRY",
         )
         self.assertNotIn("driver details", str(response.body))
+
+    async def test_owner_can_control_allowlisted_model_and_malformed_request_is_rejected(self) -> None:
+        host, port = self.server.address
+        loaded = await post_json(
+            host,
+            port,
+            "/v1/resources/models/control",
+            {
+                "modelId": "brain.text",
+                "action": "load",
+                "source": "owner.desktop",
+                "ownerConfirmed": True,
+            },
+        )
+        self.assertEqual(loaded.status, HTTPStatus.OK)
+        self.assertEqual(loaded.body["status"], "loaded")
+        self.assertIn("load", self.server.model_gateway.controls)
+        models = {item["id"]: item for item in loaded.body["resources"]["models"]}
+        self.assertTrue(models["brain.text"]["operatorResident"])
+
+        unloaded = await post_json(
+            host,
+            port,
+            "/v1/resources/models/control",
+            {
+                "modelId": "brain.text",
+                "action": "unload",
+                "source": "owner.desktop",
+                "ownerConfirmed": True,
+            },
+        )
+        self.assertEqual(unloaded.status, HTTPStatus.OK)
+        self.assertEqual(unloaded.body["status"], "unloaded")
+        self.assertIn("unload", self.server.model_gateway.controls)
+        models = {item["id"]: item for item in unloaded.body["resources"]["models"]}
+        self.assertFalse(models["brain.text"]["operatorResident"])
+
+        malformed = await post_json(
+            host,
+            port,
+            "/v1/resources/models/control",
+            {
+                "modelId": "arbitrary-shell-model",
+                "action": "load",
+                "source": "owner.desktop",
+                "ownerConfirmed": True,
+            },
+        )
+        self.assertEqual(malformed.status, HTTPStatus.BAD_REQUEST)
+        self.assertEqual(malformed.body["errorCode"], "E_HTTP_BAD_REQUEST")
+
+    async def test_scheduler_denial_is_returned_as_a_bounded_service_error(self) -> None:
+        self.server.model_gateway.deny_next_warmup = True
+        host, port = self.server.address
+        denied = await post_json(
+            host,
+            port,
+            "/v1/resources/models/control",
+            {
+                "modelId": "brain.text",
+                "action": "load",
+                "source": "owner.desktop",
+                "ownerConfirmed": True,
+            },
+        )
+        self.assertEqual(denied.status, HTTPStatus.SERVICE_UNAVAILABLE)
+        self.assertEqual(denied.body["errorCode"], "E_RESOURCE_CAPACITY")
+        self.assertNotIn("Traceback", str(denied.body))
+
+    async def test_cloud_model_control_is_explicit_noop(self) -> None:
+        host, port = self.server.address
+        response = await post_json(
+            host,
+            port,
+            "/v1/resources/models/control",
+            {
+                "modelId": "perception.vision",
+                "action": "load",
+                "source": "owner.desktop",
+                "ownerConfirmed": True,
+            },
+        )
+        self.assertEqual(response.status, HTTPStatus.OK)
+        self.assertTrue(response.body["noOp"])
+        self.assertEqual(response.body["status"], "cloud-ready")
 
 
 if __name__ == "__main__":

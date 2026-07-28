@@ -96,6 +96,40 @@
         }
       }
     },
+    "/v1/resources/models/control": {
+      "post": {
+        "operationId": "controlResourceModel",
+        "description": "Owner-confirmed scheduler-safe load or unload of one allowlisted local model. Cloud models are no-ops.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResourceModelControlRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Control result and refreshed bounded resource snapshot.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceModelControlResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The model id, action, source, or owner confirmation is invalid."
+          },
+          "503": {
+            "description": "Scheduler headroom or provider admission denied the action."
+          }
+        }
+      }
+    },
     "/v1/chat/status": {
       "get": {
         "operationId": "getChatStatus",
@@ -968,6 +1002,71 @@
       }
     },
     "schemas": {
+      "ResourceModelControlRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "modelId",
+          "action",
+          "source",
+          "ownerConfirmed"
+        ],
+        "properties": {
+          "modelId": {
+            "enum": [
+              "brain.text",
+              "speech.stt",
+              "speech.tts",
+              "perception.ocr",
+              "perception.vision"
+            ]
+          },
+          "action": {
+            "enum": [
+              "load",
+              "unload"
+            ]
+          },
+          "source": {
+            "const": "owner.desktop"
+          },
+          "ownerConfirmed": {
+            "const": true
+          }
+        }
+      },
+      "ResourceModelControlResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "modelId",
+          "action",
+          "noOp",
+          "message",
+          "resources"
+        ],
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "modelId": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "noOp": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "resources": {
+            "type": "object"
+          }
+        }
+      },
       "AvatarCueRequest": {
         "type": "object",
         "additionalProperties": false,

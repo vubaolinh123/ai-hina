@@ -37,6 +37,8 @@ class ScriptedProvider:
         self.calls = 0
         self.vision_calls = 0
         self.unloads = 0
+        self.warmups = 0
+        self.pinned = False
 
     async def health(self) -> ProviderHealth:
         return ProviderHealth(True, True, "test", "test-model", ("test-model",))
@@ -51,6 +53,12 @@ class ScriptedProvider:
 
     async def unload(self) -> None:
         self.unloads += 1
+
+    async def warmup(self) -> None:
+        self.warmups += 1
+
+    def set_operator_pinned(self, enabled: bool) -> None:
+        self.pinned = enabled
 
     async def analyze_image(self, image_png: bytes, prompt: str) -> str:
         item = self.vision_scripts[self.vision_calls]
@@ -85,6 +93,28 @@ async def _collect(gateway: ModelGateway) -> str:
 
 
 class GatewayTests(unittest.IsolatedAsyncioTestCase):
+    async def test_owner_warmup_holds_scheduler_lease_until_explicit_unload(self) -> None:
+        provider = ScriptedProvider([["đã sẵn sàng"]])
+        scheduler = LocalResourceScheduler(StaticTelemetry())
+        gateway = ModelGateway(
+            ModelGatewayConfig(
+                model="test-model",
+                model_vram_mib=1_024,
+                model_ram_mib=512,
+            ),
+            scheduler,
+            provider=provider,
+        )
+        loaded = await gateway.warmup()
+        self.assertEqual(loaded["state"], "loaded")
+        self.assertTrue(provider.pinned)
+        self.assertEqual((await scheduler.snapshot()).active_leases, 1)
+        self.assertEqual(await _collect(gateway), "đã sẵn sàng")
+        self.assertEqual((await scheduler.snapshot()).active_leases, 1)
+        await gateway.unload()
+        self.assertFalse(provider.pinned)
+        self.assertEqual((await scheduler.snapshot()).active_leases, 0)
+
     async def test_retry_occurs_only_before_first_token(self) -> None:
         provider = ScriptedProvider(
             [
