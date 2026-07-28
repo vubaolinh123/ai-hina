@@ -108,6 +108,23 @@ test("Vue renderer has no direct network, Electron, Node or storage access", () 
   assert.doesNotMatch(renderer, /sqlite|qdrant|modelPath|process\.env/i);
 });
 
+test("resource telemetry stays behind read-only operator IPC", () => {
+  const main = read("electron/main.ts");
+  const preload = read("electron/preload.ts");
+  const client = read("electron/control-client.ts");
+  const monitor = read("electron/resource-monitor.ts");
+  const renderer = read("src/App.vue");
+
+  assert.match(main, /CHANNELS\.resourcesStatus/);
+  assert.match(main, /E_DESKTOP_RESOURCE_AUTHORITY: operator window required/);
+  assert.match(main, /requestControl\("resources\.status"\)/);
+  assert.match(preload, /getResourceStatus:/);
+  assert.match(client, /"resources\.status":\s*\{\s*method:\s*"GET",\s*path:\s*"\/v1\/resources\/status"/);
+  assert.match(monitor, /ModelTransitionTracker/);
+  assert.match(monitor, /historyPersistence|transitionHistory/);
+  assert.doesNotMatch(renderer, /child_process|nvidia-smi|process\.memoryUsage|node:os/);
+});
+
 test("VTube Studio stays in the main process behind operator-only typed IPC", () => {
   const main = read("electron/main.ts");
   const preload = read("electron/preload.ts");

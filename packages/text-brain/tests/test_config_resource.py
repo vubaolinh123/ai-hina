@@ -17,6 +17,7 @@ from hina_text_brain import (  # noqa: E402
     TelemetrySnapshot,
     TextBrainError,
 )
+from hina_text_brain.resource import _parse_nvidia_smi_output  # noqa: E402
 
 
 class MutableTelemetry:
@@ -67,6 +68,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(status["reasoningPolicy"], "deterministic-auto")
         self.assertFalse(status["hiddenReasoningExposed"])
         self.assertEqual(config.endpoint_path("chat"), "/v1/chat/completions")
+        self.assertEqual(default.endpoint_path("resident"), "/api/ps")
 
     def test_config_rejects_remote_or_credentialed_endpoint(self) -> None:
         for url in (
@@ -94,6 +96,42 @@ class ConfigTests(unittest.TestCase):
 
 
 class ResourceSchedulerTests(unittest.IsolatedAsyncioTestCase):
+    async def test_monitor_status_separates_physical_use_and_active_leases(self) -> None:
+        scheduler = LocalResourceScheduler(
+            MutableTelemetry(free_vram=11_000),
+            clock=lambda: 100.0,
+        )
+        await scheduler.acquire(
+            LocalResourceRequest(
+                owner="tts.omnivoice",
+                vram_mib=3_072,
+                ram_mib=6_144,
+                priority=60,
+                ttl_seconds=90,
+                preemptible=True,
+            )
+        )
+        status = await scheduler.monitor_status()
+        self.assertTrue(status["available"])
+        self.assertEqual(status["telemetry"]["usedVramMiB"], 5_000)
+        self.assertEqual(status["reservedVramMiB"], 3_072)
+        self.assertEqual(status["activeLeases"], 1)
+        self.assertEqual(
+            status["leases"],
+            [
+                {
+                    "owner": "tts.omnivoice",
+                    "state": "active",
+                    "reservedVramMiB": 3_072,
+                    "reservedRamMiB": 6_144,
+                    "priority": 60,
+                    "preemptible": True,
+                    "remainingTtlSeconds": 90.0,
+                }
+            ],
+        )
+        self.assertNotIn("leaseId", str(status))
+
     async def test_live_admission_preserves_headroom_and_release_is_idempotent(self) -> None:
         telemetry = MutableTelemetry(free_vram=10_000)
         scheduler = LocalResourceScheduler(telemetry)
@@ -158,6 +196,47 @@ class ResourceSchedulerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(low.state, "preempted")
         self.assertEqual(high.state, "active")
         self.assertEqual((await scheduler.snapshot()).active_leases, 1)
+
+
+class NvidiaTelemetryParsingTests(unittest.TestCase):
+    def test_parser_exposes_optional_gpu_metrics(self) -> None:
+        snapshot = _parse_nvidia_smi_output(
+            b"NVIDIA GeForce RTX 5070 Ti, 16303, 4476, 11520, 4, 45, 33.57\r\n",
+            total_ram_mib=64_000,
+            free_ram_mib=40_000,
+        )
+        status = snapshot.as_json()
+        self.assertEqual(status["usedVramMiB"], 4_476)
+        self.assertEqual(status["gpuUtilizationPercent"], 4.0)
+        self.assertEqual(status["temperatureCelsius"], 45.0)
+        self.assertEqual(status["powerDrawWatts"], 33.57)
+        self.assertEqual(status["usedRamMiB"], 24_000)
+
+    def test_parser_keeps_unsupported_values_unknown(self) -> None:
+        snapshot = _parse_nvidia_smi_output(
+            b"Test GPU, 16000, [N/A], 12000, N/A, N/A, N/A\n",
+            total_ram_mib=32_000,
+            free_ram_mib=20_000,
+        )
+        status = snapshot.as_json()
+        self.assertEqual(status["usedVramMiB"], 4_000)
+        self.assertIsNone(status["gpuUtilizationPercent"])
+        self.assertIsNone(status["temperatureCelsius"])
+        self.assertIsNone(status["powerDrawWatts"])
+
+    def test_parser_rejects_unbounded_or_malformed_output(self) -> None:
+        for raw in (
+            b"",
+            b"GPU, 16000, 1000\n",
+            b"GPU, 16000, nope, 15000, 5, 40, 20\n",
+            b"GPU, 16000, 1000, 15000, 101, 40, 20\n",
+        ):
+            with self.subTest(raw=raw), self.assertRaises(TextBrainError):
+                _parse_nvidia_smi_output(
+                    raw,
+                    total_ram_mib=32_000,
+                    free_ram_mib=20_000,
+                )
 
 
 if __name__ == "__main__":

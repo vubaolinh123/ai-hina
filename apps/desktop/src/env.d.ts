@@ -46,6 +46,103 @@ type RuntimeHealth = {
   uptimeSeconds: number;
 };
 
+type ResourceTelemetry = {
+  gpuName: string;
+  totalVramMiB: number;
+  usedVramMiB: number;
+  freeVramMiB: number;
+  totalRamMiB: number;
+  usedRamMiB: number;
+  freeRamMiB: number;
+  gpuUtilizationPercent: number | null;
+  temperatureCelsius: number | null;
+  powerDrawWatts: number | null;
+};
+
+type ResourceLease = {
+  owner: string;
+  state: string;
+  reservedVramMiB: number;
+  reservedRamMiB: number;
+  priority: number;
+  preemptible: boolean;
+  remainingTtlSeconds: number;
+};
+
+type ResourceModelState =
+  | "loaded"
+  | "loading"
+  | "unloaded"
+  | "unavailable"
+  | "unconfigured"
+  | "cloud-ready";
+
+type ResourceModel = {
+  id: string;
+  role: string;
+  name: string | null;
+  provider: string | null;
+  location: "local" | "cloud";
+  state: ResourceModelState;
+  configured: boolean;
+  available: boolean;
+  loaded: boolean;
+  active: boolean;
+  configuredVramMiB: number | null;
+  measuredVramMiB: number | null;
+  errorCode: string | null;
+};
+
+type ResourceModelTransition = {
+  sequence: number;
+  modelId: string;
+  role: string;
+  name: string | null;
+  fromState: ResourceModelState | null;
+  toState: ResourceModelState;
+  action: "loaded" | "unloaded" | "state-changed" | "observed";
+  occurredAtUnixMilliseconds: number;
+};
+
+type ResourceProcess = {
+  label: string;
+  rssMiB: number | null;
+  heapUsedMiB?: number;
+  externalMiB?: number;
+};
+
+type ResourceStatus = {
+  schemaVersion: "1.0";
+  sampledAtUnixMilliseconds: number;
+  limits: {
+    allOnVramCeilingMiB: number;
+    minimumFreeVramMiB: number;
+  };
+  physical: {
+    available: boolean;
+    errorCode?: string;
+    telemetry: ResourceTelemetry | null;
+    activeLeases: number;
+    reservedVramMiB: number;
+    reservedRamMiB: number;
+    availableVramMiB: number | null;
+    availableRamMiB: number | null;
+    headroomMiB: number;
+    leases: ResourceLease[];
+  };
+  processes: {
+    coreRuntime: ResourceProcess;
+    desktopMain: ResourceProcess;
+  };
+  models: ResourceModel[];
+  modelTransitions: ResourceModelTransition[];
+  transitionHistory: {
+    persistence: false;
+    limit: number;
+    count: number;
+  };
+};
+
 type ChatTurn = {
   turnId: string;
   sessionId: string;
@@ -224,6 +321,7 @@ type HinaDesktopApi = {
     | { action: "emergency_reset" }
   ): Promise<unknown>;
   getRuntimeHealth(): Promise<RuntimeHealth>;
+  getResourceStatus(): Promise<ResourceStatus>;
   getChatStatus(): Promise<Record<string, unknown>>;
   startChatTurn(payload: {
     sessionId: string;

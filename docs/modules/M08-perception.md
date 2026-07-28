@@ -3,14 +3,16 @@
 - Status: M08-S1/S2 runnable candidate; M08-S3 functional GPU OCR candidate
   pending Vietnamese quality promotion; M08-S4 8B Thinking text brain +
   configurable vision provider + optional session archive is a runnable
-  candidate; M08 remains active
+  candidate; M08-S5 realtime resource dashboard is a runnable candidate;
+  M08 remains active
 - Branch: `main` (fast-development mode)
 - Active slices: M08-S1 perception spine (owner-consented snapshot ingestion,
   freshness/TTL ledger, safety gating, Dev Console page); M08-S2 explicit
   local image analysis through the shared model scheduler (historical);
   M08-S4 keeps one Qwen3-VL 8B Thinking text-brain checkpoint, moves screen
   reading to a separate Ollama Cloud/lightweight-local provider and adds
-  owner-started, bounded PNG retention for a game session
+  owner-started, bounded PNG retention for a game session; M08-S5 exposes the
+  all-on RAM/VRAM/model state needed to operate those providers safely
 
 ## Runnable target
 
@@ -170,6 +172,29 @@ is retained only for audit/rollback comparison.
   recorded in
   `ml/models/manifests/qwen3-vl-8b-thinking-q4-k-m.v1.json`.
 
+## Implemented in M08-S5 (realtime resource observability)
+
+- Control plane có route chỉ đọc `GET /v1/resources/status`. Response chỉ gồm
+  telemetry vật lý, lease scheduler, model/service state và RSS tiến trình đã
+  whitelist; không trả prompt, chat, ảnh, API key, command line hoặc đường dẫn
+  voice/private.
+- `NvidiaSmiTelemetry` đọc VRAM total/used/free, GPU utilization, nhiệt độ,
+  power và RAM hệ thống bằng subprocess không qua shell với output bounded.
+  Trường driver không hỗ trợ được giữ là `null`, không giả thành số 0.
+- `LocalResourceScheduler.monitor_status()` trả reservation và lease owner,
+  priority, preemptible, TTL còn lại. Reservation được ghi rõ là admission
+  budget, không phải allocation cộng thêm vào số physical.
+- Ollama `/api/ps` phân biệt model đã cài với model đang resident. STT/TTS/OCR
+  dùng status `modelLoaded` của provider; vision Cloud được đánh dấu remote và
+  có local model VRAM bằng 0.
+- Electron main giữ history tối đa 100 transition load/unload trong RAM và bổ
+  sung RSS của desktop. Renderer chỉ gọi typed operator IPC, không có quyền
+  process/network/filesystem. Poll 1,5 giây chỉ chạy khi page **Tài nguyên AI**
+  đang mở; chart giữ tối đa 60 mẫu.
+- Dashboard giải thích cho người không phải developer: physical use khác
+  reservation thế nào, loaded/unloaded nghĩa gì, Cloud ảnh hưởng VRAM ra sao,
+  và cảnh báo đỏ khi vượt trần 14.336 MiB hoặc còn dưới 2.048 MiB VRAM.
+
 ## Deferred M08 deliverables
 
 Chất lượng OCR tiếng Việt (benchmark corpus UI rõ/game UI khó và thay/tinh chỉnh
@@ -238,3 +263,19 @@ complete khi các phần này chưa có evidence.
   ten-second/14-GiB gates listed above. Real local model discovery returned only
   capability-verified candidates and excluded the 8B brain from the
   lightweight vision selection.
+
+## Fast evidence M08-S5 (owner machine)
+
+- `pnpm test:text-brain`: 38 tests pass, gồm `/api/ps` residency parsing và
+  không lộ digest/field ngoài allowlist.
+- Resource scheduler/config tests: 10 pass; resource control-plane route tests:
+  2 pass, gồm degraded telemetry và redaction.
+- `pnpm --filter @hina/desktop test`: build + 46 tests pass, gồm bounded
+  transition tracker, operator-only IPC và renderer không có process/network.
+- `node tools/dev/check-node-workspace.mjs`: pass.
+- Fast Electron startup smoke qua page thật pass: typed IPC trả 5 model row,
+  chart nhận sample đầu và core RSS là số dương. Live endpoint sau smoke trên
+  RTX 5070 Ti trả 2.199 MiB VRAM used, 13.797 MiB free, 15.496 MiB RAM system
+  used và 563 MiB core RSS; không có lease active, text/STT/TTS/OCR đều
+  `unloaded`, vision Cloud `cloud-ready`. Đây là snapshot quan sát, không phải
+  all-on benchmark hoặc số cố định.

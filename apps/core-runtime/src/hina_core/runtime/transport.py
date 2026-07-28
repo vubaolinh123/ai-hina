@@ -438,6 +438,8 @@ class ControlPlaneServer:
                     "model gateway is unavailable",
                 )
             body = await self.model_gateway.status()
+        elif path == "/v1/resources/status":
+            body = await self._resource_status()
         elif path == "/v1/chat/status":
             body = await self._chat_call("status")
         elif path == "/v1/speech/status":
@@ -824,6 +826,62 @@ class ControlPlaneServer:
                 "speech output service returned invalid status",
             )
         return result
+
+    async def _resource_status(self) -> dict[str, Any]:
+        model_task = _safe_status_call(self.model_gateway)
+        speech_task = _safe_status_call(self.speech_service)
+        tts_task = _safe_status_call(self.tts_service)
+        perception_task = _safe_status_call(self.perception_service)
+        resident_task = _safe_resident_models(self.model_gateway)
+        scheduler = getattr(self.model_gateway, "scheduler", None)
+        scheduler_task = _safe_scheduler_status(scheduler)
+        (
+            model_status,
+            speech_status,
+            tts_status,
+            perception_status,
+            resident_models,
+            scheduler_status,
+        ) = await asyncio.gather(
+            model_task,
+            speech_task,
+            tts_task,
+            perception_task,
+            resident_task,
+            scheduler_task,
+        )
+        leases = scheduler_status.get("leases")
+        lease_rows = leases if isinstance(leases, list) else []
+        return {
+            "schemaVersion": "1.0",
+            "sampledAtUnixMilliseconds": int(time.time() * 1_000),
+            "limits": {
+                "allOnVramCeilingMiB": 14_336,
+                "minimumFreeVramMiB": 2_048,
+            },
+            "physical": scheduler_status,
+            "processes": {
+                "coreRuntime": {
+                    "label": "Hina core runtime + native AI workers",
+                    "rssMiB": _current_process_rss_mib(),
+                }
+            },
+            "models": _resource_model_rows(
+                model_status=model_status,
+                speech_status=speech_status,
+                tts_status=tts_status,
+                perception_status=perception_status,
+                resident_models=resident_models,
+                leases=lease_rows,
+            ),
+            "semantics": {
+                "physical": "Measured system use reported by NVIDIA and the operating system.",
+                "reservation": "Admission budget held by Hina; it is not an additional physical allocation.",
+                "modelState": "Loaded means weights are resident now; unloaded means configured but not resident.",
+                "perProcessVram": "Provider-reported when available; unknown values are never converted to zero.",
+                "historyPersistence": False,
+            },
+        }
 
     async def _serve_tts_synthesis(
         self,
@@ -2034,3 +2092,361 @@ def _read_recent_error_records(path: Path, limit: int) -> list[dict[str, Any]]:
     except OSError:
         return []
     return list(records)
+
+
+async def _safe_status_call(service: Any | None) -> dict[str, Any]:
+    if service is None:
+        return {
+            "available": False,
+            "errorCode": "E_COMPONENT_UNAVAILABLE",
+        }
+    status = getattr(service, "status", None)
+    if status is None:
+        return {
+            "available": False,
+            "errorCode": "E_COMPONENT_STATUS_UNAVAILABLE",
+        }
+    try:
+        result = await asyncio.wait_for(status(), timeout=3.8)
+    except Exception as exc:
+        return {
+            "available": False,
+            "errorCode": _public_error_code(exc, "E_COMPONENT_STATUS"),
+        }
+    return result if isinstance(result, dict) else {
+        "available": False,
+        "errorCode": "E_COMPONENT_STATUS_INVALID",
+    }
+
+
+async def _safe_resident_models(model_gateway: Any | None) -> list[dict[str, object]]:
+    resident = getattr(model_gateway, "resident_models", None)
+    if resident is None:
+        return []
+    try:
+        result = await asyncio.wait_for(resident(), timeout=3.8)
+    except Exception:
+        return []
+    if not isinstance(result, list):
+        return []
+    return [item for item in result[:64] if isinstance(item, dict)]
+
+
+async def _safe_scheduler_status(scheduler: Any | None) -> dict[str, Any]:
+    monitor = getattr(scheduler, "monitor_status", None)
+    if monitor is None:
+        return {
+            "available": False,
+            "errorCode": "E_RESOURCE_TELEMETRY",
+            "telemetry": None,
+            "activeLeases": 0,
+            "reservedVramMiB": 0,
+            "reservedRamMiB": 0,
+            "availableVramMiB": None,
+            "availableRamMiB": None,
+            "headroomMiB": 2_048,
+            "leases": [],
+        }
+    try:
+        result = await asyncio.wait_for(monitor(), timeout=3.8)
+    except Exception as exc:
+        return {
+            "available": False,
+            "errorCode": _public_error_code(exc, "E_RESOURCE_TELEMETRY"),
+            "telemetry": None,
+            "activeLeases": 0,
+            "reservedVramMiB": 0,
+            "reservedRamMiB": 0,
+            "availableVramMiB": None,
+            "availableRamMiB": None,
+            "headroomMiB": 2_048,
+            "leases": [],
+        }
+    return result if isinstance(result, dict) else {
+        "available": False,
+        "errorCode": "E_RESOURCE_TELEMETRY",
+        "telemetry": None,
+        "activeLeases": 0,
+        "reservedVramMiB": 0,
+        "reservedRamMiB": 0,
+        "availableVramMiB": None,
+        "availableRamMiB": None,
+        "headroomMiB": 2_048,
+        "leases": [],
+    }
+
+
+def _resource_model_rows(
+    *,
+    model_status: dict[str, Any],
+    speech_status: dict[str, Any],
+    tts_status: dict[str, Any],
+    perception_status: dict[str, Any],
+    resident_models: list[dict[str, object]],
+    leases: list[Any],
+) -> list[dict[str, object]]:
+    resident = {
+        name.casefold(): item
+        for item in resident_models
+        if isinstance(item, dict)
+        and (name := _public_text(item.get("name"))) is not None
+    }
+    lease_owners = {
+        owner
+        for item in leases[:64]
+        if isinstance(item, dict)
+        and (owner := _public_text(item.get("owner"))) is not None
+    }
+
+    model_config = _mapping(model_status.get("configured"))
+    model_provider = _mapping(model_status.get("provider"))
+    brain_name = _public_text(model_config.get("model"))
+    brain_resident = resident.get(brain_name.casefold()) if brain_name else None
+
+    speech_config = _mapping(speech_status.get("configured"))
+    speech_provider = _mapping(speech_status.get("provider"))
+    tts_config = _mapping(tts_status.get("configured"))
+    tts_provider = _mapping(tts_status.get("provider"))
+    ocr = _mapping(perception_status.get("ocr"))
+    ocr_config = _mapping(ocr.get("configured"))
+    vision = _mapping(perception_status.get("vision"))
+    vision_name = _public_text(vision.get("model"))
+    vision_provider = _public_text(vision.get("provider")) or "none"
+    vision_resident = resident.get(vision_name.casefold()) if vision_name else None
+
+    return [
+        _resource_model_row(
+            model_id="brain.text",
+            role="Bộ não hội thoại",
+            name=brain_name,
+            provider=_public_text(model_config.get("provider")),
+            location="local",
+            configured=brain_name is not None,
+            available=bool(model_provider.get("reachable"))
+            and bool(model_provider.get("modelAvailable")),
+            loaded=brain_resident is not None,
+            active="model.text" in lease_owners,
+            configured_vram_mib=_public_int(model_config.get("modelVramMiB")),
+            measured_vram_mib=_bytes_to_mib(
+                brain_resident.get("sizeVramBytes")
+                if isinstance(brain_resident, dict)
+                else None
+            ),
+            error_code=_public_text(model_provider.get("errorCode")),
+        ),
+        _resource_model_row(
+            model_id="speech.stt",
+            role="Nhận giọng nói (STT)",
+            name=_public_text(speech_config.get("model"))
+            or _public_text(speech_config.get("provider")),
+            provider=_public_text(speech_config.get("provider")),
+            location="local",
+            configured=bool(speech_config),
+            available=bool(speech_status.get("available")),
+            loaded=bool(speech_provider.get("modelLoaded")),
+            active=any(owner.startswith("stt.") for owner in lease_owners),
+            configured_vram_mib=_public_int(speech_config.get("modelVramMiB")),
+            measured_vram_mib=None,
+            error_code=_public_text(speech_provider.get("lastErrorCode")),
+        ),
+        _resource_model_row(
+            model_id="speech.tts",
+            role="Tạo giọng Hina (TTS)",
+            name=_public_text(tts_config.get("model"))
+            or _public_text(tts_config.get("provider")),
+            provider=_public_text(tts_config.get("provider")),
+            location="local",
+            configured=bool(tts_config),
+            available=bool(tts_status.get("available")),
+            loaded=bool(tts_provider.get("modelLoaded")),
+            active=any(owner.startswith("tts.") for owner in lease_owners),
+            configured_vram_mib=_public_int(tts_config.get("modelVramMiB")),
+            measured_vram_mib=(
+                _public_number(tts_provider.get("modelBaselineAllocatedMiB"))
+                if bool(tts_provider.get("modelLoaded"))
+                else None
+            ),
+            error_code=_public_text(tts_provider.get("lastErrorCode")),
+        ),
+        _resource_model_row(
+            model_id="perception.ocr",
+            role="Đọc chữ màn hình (OCR)",
+            name=_public_text(ocr.get("model")),
+            provider=_public_text(ocr.get("provider")),
+            location="local",
+            configured=bool(ocr),
+            available=bool(ocr.get("available")),
+            loaded=bool(ocr.get("modelLoaded")),
+            active="perception.ocr" in lease_owners,
+            configured_vram_mib=_public_int(ocr_config.get("modelVramMiB")),
+            measured_vram_mib=None,
+            error_code=_public_text(ocr.get("lastErrorCode")),
+        ),
+        _resource_model_row(
+            model_id="perception.vision",
+            role="Đọc hình ảnh (VLM)",
+            name=vision_name,
+            provider=vision_provider,
+            location="cloud" if vision_provider == "ollama_cloud" else "local",
+            configured=vision_name is not None and vision_provider != "none",
+            available=bool(vision.get("available")),
+            loaded=(
+                vision_provider == "ollama_cloud"
+                or vision_resident is not None
+            ),
+            active="perception.vision" in lease_owners,
+            configured_vram_mib=(
+                0
+                if vision_provider == "ollama_cloud"
+                else _public_int(
+                    _mapping(vision.get("configured")).get("localModelVramMiB")
+                )
+            ),
+            measured_vram_mib=_bytes_to_mib(
+                vision_resident.get("sizeVramBytes")
+                if isinstance(vision_resident, dict)
+                else None
+            ),
+            error_code=_public_text(vision.get("lastErrorCode")),
+        ),
+    ]
+
+
+def _resource_model_row(
+    *,
+    model_id: str,
+    role: str,
+    name: str | None,
+    provider: str | None,
+    location: str,
+    configured: bool,
+    available: bool,
+    loaded: bool,
+    active: bool,
+    configured_vram_mib: int | None,
+    measured_vram_mib: int | float | None,
+    error_code: str | None,
+) -> dict[str, object]:
+    if not configured:
+        state = "unconfigured"
+    elif location == "cloud" and available:
+        state = "cloud-ready"
+    elif loaded:
+        state = "loaded"
+    elif active:
+        state = "loading"
+    elif available:
+        state = "unloaded"
+    else:
+        state = "unavailable"
+    return {
+        "id": model_id,
+        "role": role,
+        "name": name,
+        "provider": provider,
+        "location": location,
+        "state": state,
+        "configured": configured,
+        "available": available,
+        "loaded": loaded,
+        "active": active,
+        "configuredVramMiB": configured_vram_mib,
+        "measuredVramMiB": measured_vram_mib,
+        "errorCode": error_code,
+    }
+
+
+def _mapping(value: object) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _public_text(value: object) -> str | None:
+    if not isinstance(value, str) or not value:
+        return None
+    normalized = "".join(character for character in value if ord(character) >= 0x20)
+    return normalized[:160] or None
+
+
+def _public_error_code(error: Exception, fallback: str) -> str:
+    return _public_text(getattr(error, "code", None)) or fallback
+
+
+def _public_int(value: object) -> int | None:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or not 0 <= value <= 262_144
+    ):
+        return None
+    return value
+
+
+def _public_number(value: object) -> int | float | None:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not 0 <= value <= 262_144
+    ):
+        return None
+    return value
+
+
+def _bytes_to_mib(value: object) -> int | None:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or value < 0
+        or value > 1 << 50
+    ):
+        return None
+    return round(value / (1024 * 1024))
+
+
+def _current_process_rss_mib() -> int | None:
+    try:
+        if os.name == "nt":
+            import ctypes
+            from ctypes import wintypes
+
+            class _ProcessMemoryCounters(ctypes.Structure):
+                _fields_ = [
+                    ("cb", wintypes.DWORD),
+                    ("PageFaultCount", wintypes.DWORD),
+                    ("PeakWorkingSetSize", ctypes.c_size_t),
+                    ("WorkingSetSize", ctypes.c_size_t),
+                    ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                    ("PagefileUsage", ctypes.c_size_t),
+                    ("PeakPagefileUsage", ctypes.c_size_t),
+                    ("PrivateUsage", ctypes.c_size_t),
+                ]
+
+            counters = _ProcessMemoryCounters()
+            counters.cb = ctypes.sizeof(counters)
+            kernel32 = ctypes.windll.kernel32
+            psapi = ctypes.windll.psapi
+            kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+            psapi.GetProcessMemoryInfo.argtypes = [
+                wintypes.HANDLE,
+                ctypes.POINTER(_ProcessMemoryCounters),
+                wintypes.DWORD,
+            ]
+            psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
+            handle = kernel32.GetCurrentProcess()
+            if not psapi.GetProcessMemoryInfo(
+                handle,
+                ctypes.byref(counters),
+                counters.cb,
+            ):
+                return None
+            return int(counters.WorkingSetSize // (1024 * 1024))
+        statm = Path("/proc/self/statm")
+        if statm.is_file():
+            fields = statm.read_text(encoding="ascii").split()
+            page_size = os.sysconf("SC_PAGE_SIZE")
+            return int(int(fields[1]) * page_size // (1024 * 1024))
+    except (AttributeError, IndexError, OSError, ValueError):
+        return None
+    return None

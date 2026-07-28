@@ -1,0 +1,86 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M08-S5-resource-observability-dashboard",
+  "module_id": "M08",
+  "objective": "Add a read-only realtime Resource Monitor page to the Electron operator dashboard that reports truthful physical RAM/VRAM telemetry, shared-scheduler reservations and leases, loaded or unloaded local/cloud model state, bounded transition history, and plain-Vietnamese headroom analysis while preserving the M08 perception architecture and local safety boundaries.",
+  "non_goals": [
+    "Do not allow the dashboard to start, stop, load, unload or reconfigure models in this slice.",
+    "Do not run shell commands, process inspection, persistence or network access from the sandboxed Vue renderer.",
+    "Do not claim Windows WDDM per-process VRAM values when NVIDIA does not expose them.",
+    "Do not add background telemetry persistence, raw command logs, chat content, screen pixels or API credentials.",
+    "Do not open a new product module or run repeat, soak, frozen-SHA or full release verification."
+  ],
+  "base_sha": "4ceb9214ee00de824b40ed695292b04df05ceb0e",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "packages/text-brain/src/hina_text_brain/resource.py",
+    "packages/text-brain/tests/",
+    "apps/core-runtime/src/hina_core/runtime/transport.py",
+    "apps/core-runtime/tests/",
+    "apps/desktop/electron/",
+    "apps/desktop/src/",
+    "apps/desktop/test/",
+    "docs/modules/M08-S5-resource-observability-dashboard-module-brief.json",
+    "docs/modules/M08-perception.md",
+    "README.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "packages/contracts/",
+    "packages/safety-policy/",
+    "packages/memory/",
+    "workers/speech/",
+    "workers/perception/",
+    "voice_demo/",
+    "var/perception-sessions/"
+  ],
+  "contracts": [
+    "The renderer receives resource data only through an operator-only typed preload IPC channel; it has no direct child_process, os, filesystem, persistence or network access.",
+    "The control-plane resource route is loopback-only, read-only, bounded and returns no API key, prompt, chat content, screen pixel, owner path or arbitrary process command line.",
+    "Physical RAM/VRAM measurements and scheduler reservations are labeled as different concepts and are never summed as if both were allocations.",
+    "The dashboard marks the all-on local budget unhealthy when physical GPU usage exceeds 14336 MiB or free VRAM drops below 2048 MiB.",
+    "NVIDIA telemetry failure degrades to an explicit unavailable state without failing the rest of the dashboard.",
+    "Windows WDDM per-process VRAM N/A is displayed as unavailable and never converted to zero.",
+    "Model state combines runtime provider status, service configuration and bounded scheduler leases; cloud models are marked remote and consume zero local model VRAM.",
+    "Polling runs only while the Resource Monitor page is active, prevents overlapping requests and keeps at most 60 chart samples and 100 in-memory model transitions.",
+    "The page is explanatory enough for a non-developer to distinguish loaded, configured, reserved and unavailable model states."
+  ],
+  "allowed_dependencies": [
+    "Existing Python and Node standard libraries, existing Hina resource scheduler, Electron typed IPC and the fixed NVIDIA nvidia-smi executable; no new package dependency."
+  ],
+  "oss_candidates": [
+    "https://docs.nvidia.com/deploy/nvidia-smi/",
+    "https://docs.ollama.com/api/ps"
+  ],
+  "acceptance_criteria": [
+    "GET /v1/resources/status returns bounded scheduler telemetry, active lease details and model/service state without secret or user-content fields.",
+    "Scheduler unit tests prove lease snapshots expose owner, reservation, priority, preemptibility and remaining TTL while expired leases are pruned.",
+    "Python unit tests prove robust bounded NVIDIA telemetry parsing while the desktop explicitly treats unavailable provider/process measurements as unknown rather than zero.",
+    "Electron unit tests prove bounded model load/unload transition history and desktop security tests prove resource IPC is operator-only.",
+    "The new Tài nguyên AI page updates approximately every 1.5 seconds only while visible and shows RAM, VRAM, GPU load, temperature, power, active leases, model state, transition history and a 60-sample trend.",
+    "The page visibly distinguishes physical use from reservation, explains cloud/local effects and reports a clear healthy, near-limit or headroom-violation analysis.",
+    "Desktop build/unit tests and narrow core-runtime resource route tests pass without retaining generated test artifacts."
+  ],
+  "required_test_commands": [
+    "$env:PYTHONPATH='apps/core-runtime/src;packages/contracts/src;packages/safety-policy/src;packages/text-brain/src;workers/speech/src;workers/perception/src'; uv run --frozen python -m unittest discover -s packages/text-brain/tests -p \"test_config_resource.py\"; if ($LASTEXITCODE -eq 0) { uv run --frozen python -m unittest discover -s apps/core-runtime/tests -p \"test_resource_routes.py\" }",
+    "pnpm --filter @hina/desktop test",
+    "node tools/dev/check-node-workspace.mjs",
+    "pnpm smoke:desktop"
+  ],
+  "latency_or_quality_budget": {
+    "poll_interval_milliseconds": 1500,
+    "snapshot_deadline_milliseconds": 4000,
+    "chart_sample_limit": 60,
+    "transition_limit": 100,
+    "all_on_vram_ceiling_mib": 14336,
+    "minimum_free_vram_mib": 2048,
+    "maximum_control_response_bytes": 262144,
+    "nvidia_smi_timeout_milliseconds": 2000,
+    "nvidia_smi_max_output_bytes": 65536
+  },
+  "output_artifact_dir": "artifacts/verification/M08/"
+}

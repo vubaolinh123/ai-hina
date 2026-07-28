@@ -69,6 +69,18 @@ class ModelGateway:
             ),
         }
 
+    async def resident_models(self) -> list[dict[str, object]]:
+        resident = getattr(self.provider, "resident_models", None)
+        if resident is None:
+            return []
+        try:
+            result = await resident()
+        except TextBrainError:
+            return []
+        if not isinstance(result, list):
+            return []
+        return [item for item in result[:64] if isinstance(item, dict)]
+
     async def stream_chat(
         self,
         messages: list[dict[str, str]],

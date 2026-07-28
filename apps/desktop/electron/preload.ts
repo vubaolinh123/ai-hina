@@ -30,6 +30,7 @@ const CHANNELS = Object.freeze({
   visionDiscover: "hina:vision:discover",
   visionConfigure: "hina:vision:configure",
   visionClearKey: "hina:vision:clear-key",
+  resourcesStatus: "hina:resources:status",
 });
 
 const hinaDesktop = Object.freeze({
@@ -80,6 +81,7 @@ const hinaDesktop = Object.freeze({
   configureVisionProvider: (input: unknown) =>
     ipcRenderer.invoke(CHANNELS.visionConfigure, input),
   clearVisionApiKey: () => ipcRenderer.invoke(CHANNELS.visionClearKey),
+  getResourceStatus: () => ipcRenderer.invoke(CHANNELS.resourcesStatus),
 });
 
 contextBridge.exposeInMainWorld("hinaDesktop", hinaDesktop);

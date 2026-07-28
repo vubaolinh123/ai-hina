@@ -151,6 +151,19 @@ PNG session archive mặc định tắt, quota 300 ảnh/256 MiB dưới
 Ảnh lịch sử không làm mới TTL, luôn `currentObservation=false` và
 `decisionSupportEligible=false`; stop/shutdown không tự xóa file vì owner sẽ
 tự dọn sau phiên chơi.
+M08-S5 resource observability là runnable candidate: control plane expose một
+route read-only đã whitelist cho physical RAM/VRAM, scheduler reservation/lease
+và trạng thái model; Ollama `/api/ps` phân biệt installed với resident.
+Dashboard desktop có page **Tài nguyên AI**, poll 1,5 giây chỉ khi page đang mở,
+giữ chart 60 mẫu và timeline load/unload 100 transition trong RAM. Electron
+main bổ sung RSS desktop qua operator-only typed IPC; renderer không đọc
+process/GPU/network trực tiếp. UI phân biệt physical allocation với admission
+reservation, ghi Cloud vision dùng 0 local model VRAM và cảnh báo khi used vượt
+14.336 MiB hoặc free dưới 2.048 MiB. NVIDIA field không hỗ trợ giữ `null`, không
+giả thành 0. Fast unit/build và Electron startup/page smoke hiện xanh; live
+post-smoke snapshot báo 2.199 MiB VRAM used, 13.797 MiB free và core RSS
+563 MiB khi không có lease active. Đây không phải all-on benchmark; deep
+all-on/soak vẫn deferred theo owner.
 
 Legacy AIRI skill paths dưới `D:\ProjectAiri` mặc định ánh xạ sang repository
 hiện tại `D:\ProjectHinaAI`, trừ khi owner chỉ định workspace khác.

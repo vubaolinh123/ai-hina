@@ -13,7 +13,8 @@ type ControlOperation =
   | "chat.status"
   | "speech.status"
   | "tts.status"
-  | "perception.status";
+  | "perception.status"
+  | "resources.status";
 
 type OperationSpec = {
   method: "GET" | "POST";
@@ -31,6 +32,7 @@ const OPERATIONS: Readonly<Record<ControlOperation, OperationSpec>> = Object.fre
   "speech.status": { method: "GET", path: "/v1/speech/status" },
   "tts.status": { method: "GET", path: "/v1/tts/status" },
   "perception.status": { method: "GET", path: "/v1/perception/status" },
+  "resources.status": { method: "GET", path: "/v1/resources/status" },
 });
 
 const AVATAR_STATES = new Set([

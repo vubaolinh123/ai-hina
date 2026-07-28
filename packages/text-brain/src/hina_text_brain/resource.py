@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import csv
 import ctypes
+import io
 import inspect
 import re
 import time
@@ -13,6 +15,7 @@ from .errors import TextBrainError
 
 
 MIN_VRAM_HEADROOM_MIB = 2_048
+MAX_TELEMETRY_OUTPUT_BYTES = 65_536
 _OWNER = re.compile(r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$")
 UnloadCallback = Callable[[], Awaitable[None] | None]
 
@@ -24,6 +27,10 @@ class TelemetrySnapshot:
     free_vram_mib: int
     total_ram_mib: int
     free_ram_mib: int
+    used_vram_mib: int | None = None
+    gpu_utilization_percent: float | None = None
+    temperature_celsius: float | None = None
+    power_draw_watts: float | None = None
 
     def __post_init__(self) -> None:
         values = (
@@ -41,14 +48,40 @@ class TelemetrySnapshot:
             or not 0 <= self.free_ram_mib <= self.total_ram_mib
         ):
             raise TextBrainError("E_RESOURCE_TELEMETRY", "resource telemetry is invalid")
+        optional_values = (
+            (self.used_vram_mib, 0, self.total_vram_mib),
+            (self.gpu_utilization_percent, 0, 100),
+            (self.temperature_celsius, -100, 200),
+            (self.power_draw_watts, 0, 10_000),
+        )
+        if any(
+            value is not None
+            and (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not lower <= value <= upper
+            )
+            for value, lower, upper in optional_values
+        ):
+            raise TextBrainError("E_RESOURCE_TELEMETRY", "resource telemetry is invalid")
 
     def as_json(self) -> dict[str, object]:
+        used_vram_mib = (
+            self.used_vram_mib
+            if self.used_vram_mib is not None
+            else self.total_vram_mib - self.free_vram_mib
+        )
         return {
             "gpuName": self.gpu_name,
             "totalVramMiB": self.total_vram_mib,
+            "usedVramMiB": used_vram_mib,
             "freeVramMiB": self.free_vram_mib,
             "totalRamMiB": self.total_ram_mib,
             "freeRamMiB": self.free_ram_mib,
+            "usedRamMiB": self.total_ram_mib - self.free_ram_mib,
+            "gpuUtilizationPercent": self.gpu_utilization_percent,
+            "temperatureCelsius": self.temperature_celsius,
+            "powerDrawWatts": self.power_draw_watts,
         }
 
 
@@ -65,16 +98,20 @@ class NvidiaSmiTelemetry:
         try:
             process = await asyncio.create_subprocess_exec(
                 self.command,
-                "--query-gpu=name,memory.total,memory.free",
+                (
+                    "--query-gpu=name,memory.total,memory.used,memory.free,"
+                    "utilization.gpu,temperature.gpu,power.draw"
+                ),
                 "--format=csv,noheader,nounits",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.DEVNULL,
+                limit=MAX_TELEMETRY_OUTPUT_BYTES,
             )
             stdout, _ = await asyncio.wait_for(
                 process.communicate(),
                 timeout=self.timeout_seconds,
             )
-        except (FileNotFoundError, OSError, TimeoutError) as exc:
+        except (FileNotFoundError, OSError, TimeoutError, ValueError) as exc:
             raise TextBrainError(
                 "E_RESOURCE_TELEMETRY",
                 "NVIDIA telemetry is unavailable",
@@ -86,23 +123,18 @@ class NvidiaSmiTelemetry:
                 "NVIDIA telemetry command failed",
                 retryable=True,
             )
-        try:
-            first_line = stdout.decode("utf-8").splitlines()[0]
-            gpu_name, total_vram, free_vram = (part.strip() for part in first_line.split(",", 2))
-            total_ram, free_ram = _system_memory_mib()
-            return TelemetrySnapshot(
-                gpu_name=gpu_name,
-                total_vram_mib=int(total_vram),
-                free_vram_mib=int(free_vram),
-                total_ram_mib=total_ram,
-                free_ram_mib=free_ram,
-            )
-        except (IndexError, UnicodeDecodeError, ValueError) as exc:
+        if len(stdout) > MAX_TELEMETRY_OUTPUT_BYTES:
             raise TextBrainError(
                 "E_RESOURCE_TELEMETRY",
-                "NVIDIA telemetry output is invalid",
+                "NVIDIA telemetry output exceeds the limit",
                 retryable=True,
-            ) from exc
+            )
+        total_ram, free_ram = _system_memory_mib()
+        return _parse_nvidia_smi_output(
+            stdout,
+            total_ram_mib=total_ram,
+            free_ram_mib=free_ram,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -303,6 +335,50 @@ class LocalResourceScheduler:
             await _safe_unload(callback)
         return snapshot
 
+    async def monitor_status(self) -> dict[str, object]:
+        """Return a bounded, read-only scheduler view for owner diagnostics.
+
+        Physical measurements may fail independently from the lease ledger.
+        Reservations are therefore still visible during a telemetry outage and
+        are explicitly kept separate from measured allocation.
+        """
+
+        callbacks: list[UnloadCallback]
+        async with self._condition:
+            callbacks = self._prune_expired_locked()
+            leases = self._lease_status_locked()
+            reserved_vram = sum(
+                record.lease.request.vram_mib for record in self._leases.values()
+            )
+            reserved_ram = sum(
+                record.lease.request.ram_mib for record in self._leases.values()
+            )
+            try:
+                telemetry = await self.telemetry.snapshot()
+            except TextBrainError as exc:
+                status: dict[str, object] = {
+                    "available": False,
+                    "errorCode": exc.code,
+                    "telemetry": None,
+                    "activeLeases": len(self._leases),
+                    "reservedVramMiB": reserved_vram,
+                    "reservedRamMiB": reserved_ram,
+                    "availableVramMiB": None,
+                    "availableRamMiB": None,
+                    "headroomMiB": self.headroom_mib,
+                    "leases": leases,
+                }
+            else:
+                snapshot = self._snapshot_locked(telemetry)
+                status = {
+                    "available": True,
+                    **snapshot.as_json(),
+                    "leases": leases,
+                }
+        for callback in callbacks:
+            await _safe_unload(callback)
+        return status
+
     def _can_admit_locked(
         self,
         request: LocalResourceRequest,
@@ -410,6 +486,30 @@ class LocalResourceScheduler:
             self._condition.notify_all()
         return callbacks
 
+    def _lease_status_locked(self) -> list[dict[str, object]]:
+        now = self.clock()
+        return [
+            {
+                "owner": record.lease.request.owner,
+                "state": record.lease.state,
+                "reservedVramMiB": record.lease.request.vram_mib,
+                "reservedRamMiB": record.lease.request.ram_mib,
+                "priority": record.lease.request.priority,
+                "preemptible": record.lease.request.preemptible,
+                "remainingTtlSeconds": round(
+                    max(0.0, record.lease.expires_at_monotonic - now),
+                    3,
+                ),
+            }
+            for record in sorted(
+                self._leases.values(),
+                key=lambda item: (
+                    -item.lease.request.priority,
+                    item.lease.request.owner,
+                ),
+            )
+        ]
+
 
 async def _safe_unload(callback: UnloadCallback) -> None:
     try:
@@ -452,3 +552,52 @@ def _system_memory_mib() -> tuple[int, int]:
         )
     except (AttributeError, OSError, ValueError) as exc:
         raise TextBrainError("E_RESOURCE_TELEMETRY", "system RAM telemetry failed") from exc
+
+
+def _parse_nvidia_smi_output(
+    raw: bytes,
+    *,
+    total_ram_mib: int,
+    free_ram_mib: int,
+) -> TelemetrySnapshot:
+    try:
+        text = raw.decode("utf-8")
+        rows = list(csv.reader(io.StringIO(text)))
+        if len(rows) != 1 or len(rows[0]) != 7:
+            raise ValueError
+        fields = [field.strip() for field in rows[0]]
+        gpu_name = fields[0]
+        total_vram = int(fields[1])
+        used_vram = _optional_int(fields[2])
+        free_vram = int(fields[3])
+        utilization = _optional_float(fields[4])
+        temperature = _optional_float(fields[5])
+        power_draw = _optional_float(fields[6])
+        return TelemetrySnapshot(
+            gpu_name=gpu_name,
+            total_vram_mib=total_vram,
+            free_vram_mib=free_vram,
+            total_ram_mib=total_ram_mib,
+            free_ram_mib=free_ram_mib,
+            used_vram_mib=used_vram,
+            gpu_utilization_percent=utilization,
+            temperature_celsius=temperature,
+            power_draw_watts=power_draw,
+        )
+    except (IndexError, UnicodeDecodeError, ValueError) as exc:
+        raise TextBrainError(
+            "E_RESOURCE_TELEMETRY",
+            "NVIDIA telemetry output is invalid",
+            retryable=True,
+        ) from exc
+
+
+def _optional_int(value: str) -> int | None:
+    parsed = _optional_float(value)
+    return int(parsed) if parsed is not None else None
+
+
+def _optional_float(value: str) -> float | None:
+    if value.casefold() in {"n/a", "[n/a]", "na", "not supported"}:
+        return None
+    return float(value)

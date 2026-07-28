@@ -1,6 +1,6 @@
 # Hina AI — Master Plan xây AI VTuber kiểu Neuro-sama
 
-> Trạng thái: đang implementation; module active M07 — Avatar stage và operator desktop
+> Trạng thái: đang implementation; module active M08 — Perception, screen snapshot, OCR và optional VLM
 > Nguồn đầu vào chính: `deep-research-report.md`  
 > Mục tiêu phần cứng ban đầu: Windows, NVIDIA RTX 5070 Ti 16 GB; RAM/driver/runtime phải được xác minh lại ở M00  
 > Nguyên tắc phát triển: một module sản phẩm tại một thời điểm; nhiều agent làm song song bên trong module; chỉ mở module kế tiếp sau khi module hiện tại qua toàn bộ quality gate
@@ -1085,13 +1085,13 @@ Hoàn thành vertical slice text-only có persona Hina, interruption/cancellatio
 - Live Ollama `qwen3.5:4b` smoke cuối cho câu “Bạn là ai?” hoàn tất bằng đúng
   một câu/9 từ; owner manual conversation test vẫn là authority.
 - M08-S4 (2026-07-28) supersede runtime model mặc định bằng đúng một checkpoint
-  `qwen3-vl:8b-thinking-q4_K_M` pinned cho cả text và explicit image. Câu đơn
-  giản và routine image description dùng same-weight preclosed-thought/prefill;
-  câu text/ảnh phức tạp dùng hidden thinking bounded. Không load/swap bản
-  Instruct thứ hai. Context 8.192, budget 192/256/768, admission 1 giây +
-  provider 9 giây; real owner-GPU smoke
-  simple/complex/routine-vision đều dưới 10 giây và peak total physical VRAM
-  9.975 MiB.
+  `qwen3-vl:8b-thinking-q4_K_M` chỉ cho text brain. Câu text đơn giản dùng
+  same-weight preclosed-thought/prefill; câu text phức tạp dùng hidden thinking
+  bounded. Không load/swap bản Instruct thứ hai. Context 8.192, budget
+  192/768, admission 1 giây + provider 9 giây; real owner-GPU smoke
+  simple/complex đều dưới 10 giây và peak total physical VRAM 9.975 MiB.
+  Explicit image đã tách sang provider vision Cloud/local nhẹ của M08, không
+  còn đi qua text-brain gateway.
 
 ### Eval
 
@@ -1402,6 +1402,14 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
   exact path và start/stop/reanalyze. Stop/shutdown không tự xóa PNG theo quyết
   định owner; historical reanalysis không tạo current observation, không làm
   mới TTL và không được autonomous decision support.
+- M08-S5 resource observability (2026-07-28): Dashboard desktop có page
+  **Tài nguyên AI** chỉ đọc, poll khoảng 1,5 giây khi page đang mở. Trang phân
+  biệt số đo RAM/VRAM vật lý với scheduler reservation, hiển thị lease đang giữ,
+  model local đã load/unload, provider Cloud, RAM core/desktop, GPU
+  utilization/nhiệt độ/công suất và timeline transition bounded chỉ ở RAM.
+  Ollama `/api/ps` là nguồn residency thật của text/local VLM; provider STT,
+  TTS và OCR tự báo `modelLoaded`. Telemetry lỗi thì page degrade có mã lỗi,
+  không đổi giá trị không rõ thành 0 và không cho renderer chạy lệnh hệ thống.
 
 ### Test matrix
 
@@ -1431,6 +1439,9 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
   total 9.975 MiB, còn 6.328 MiB physical free; Ollama Cloud vision thêm 0 MiB
   model VRAM local. Workload OCR/STT/TTS toàn chuỗi phải được đo lại khi
   provider/profile của các module đó thay đổi.
+- Owner dashboard phải cảnh báo khi physical used vượt 14.336 MiB hoặc free
+  VRAM dưới 2.048 MiB; reservation luôn được ghi nhãn là admission budget,
+  không cộng lần hai vào physical allocation.
 
 ### Companion Gate B
 

@@ -160,6 +160,7 @@ class ModelGatewayConfig:
         if self.provider is ProviderKind.OLLAMA:
             suffix = {
                 "health": "/api/tags",
+                "resident": "/api/ps",
                 "chat": "/api/chat",
                 "generate": "/api/generate",
             }[operation]

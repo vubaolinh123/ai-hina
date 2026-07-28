@@ -186,6 +186,13 @@ class LocalHttpChatProvider:
         except TextBrainError:
             return
 
+    async def resident_models(self) -> list[dict[str, object]]:
+        """Return Ollama models that are currently resident, not merely installed."""
+
+        if self.config.provider is not ProviderKind.OLLAMA:
+            return []
+        return await asyncio.to_thread(self._resident_models_sync)
+
     def _health_sync(self) -> list[str]:
         connection = self._connection(self.config.health_timeout_seconds)
         try:
@@ -226,6 +233,79 @@ class LocalHttpChatProvider:
             raise TextBrainError(
                 "E_MODEL_UNAVAILABLE",
                 "local model provider health is unavailable",
+                retryable=True,
+            ) from exc
+        finally:
+            connection.close()
+
+    def _resident_models_sync(self) -> list[dict[str, object]]:
+        connection = self._connection(self.config.health_timeout_seconds)
+        try:
+            connection.request(
+                "GET",
+                self.config.endpoint_path("resident"),
+                headers=self._headers(),
+            )
+            response = connection.getresponse()
+            body = response.read(1_048_577)
+            if response.status != 200:
+                raise TextBrainError(
+                    "E_MODEL_UNAVAILABLE",
+                    f"local model provider residency returned HTTP {response.status}",
+                    retryable=True,
+                )
+            if len(body) > 1_048_576:
+                raise TextBrainError(
+                    "E_MODEL_PROTOCOL",
+                    "provider residency response is too large",
+                )
+            payload = json.loads(body.decode("utf-8"))
+            raw_models = payload.get("models") if isinstance(payload, dict) else None
+            if not isinstance(raw_models, list):
+                raise ValueError
+            models: list[dict[str, object]] = []
+            for item in raw_models[:64]:
+                if not isinstance(item, dict):
+                    continue
+                name = item.get("name") or item.get("model")
+                if not isinstance(name, str) or not name or len(name) > 128:
+                    continue
+                details = item.get("details")
+                quantization = (
+                    details.get("quantization_level")
+                    if isinstance(details, dict)
+                    else None
+                )
+                models.append(
+                    {
+                        "name": name,
+                        "sizeBytes": _bounded_nonnegative_int(item.get("size")),
+                        "sizeVramBytes": _bounded_nonnegative_int(
+                            item.get("size_vram")
+                        ),
+                        "contextLength": _bounded_nonnegative_int(
+                            item.get("context_length")
+                        ),
+                        "quantization": (
+                            quantization[:32]
+                            if isinstance(quantization, str)
+                            else None
+                        ),
+                    }
+                )
+            return models
+        except TextBrainError:
+            raise
+        except (
+            OSError,
+            TimeoutError,
+            json.JSONDecodeError,
+            UnicodeDecodeError,
+            ValueError,
+        ) as exc:
+            raise TextBrainError(
+                "E_MODEL_UNAVAILABLE",
+                "local model provider residency is unavailable",
                 retryable=True,
             ) from exc
         finally:
@@ -705,3 +785,14 @@ def _validate_vision_request(image_png: Any, prompt: Any) -> tuple[bytes, str]:
     if not normalized_prompt or len(prompt_bytes) > MAX_VISION_PROMPT_BYTES:
         raise TextBrainError("E_MODEL_REQUEST", "vision prompt exceeds byte limit")
     return image_png, normalized_prompt
+
+
+def _bounded_nonnegative_int(value: object) -> int | None:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, int)
+        or value < 0
+        or value > 1 << 50
+    ):
+        return None
+    return value

@@ -252,10 +252,18 @@ launcher tự mở service loopback ở nền và dừng service đó khi deskto
 Nếu service tạm offline, renderer retry theo backoff tối đa 30 giây thay vì
 gọi status mỗi 250 ms và spam lỗi.
 
-Cửa sổ operator là dashboard gồm Tổng quan, Chat với Hina, Avatar Stage và
-Runtime & Safety. Trang Chat gửi turn thật tới local LLM, hiển thị text trả lời
-và có thể phát cùng câu trả lời bằng OmniVoice TTS; voice vẫn tuân theo global
-mute.
+Cửa sổ operator là dashboard gồm Tổng quan, Chat với Hina, Mic/STT/TTS, Quan
+sát, Tài nguyên AI, Avatar Stage, Live2D và Runtime & Safety. Trang Chat gửi
+turn thật tới local LLM, hiển thị text trả lời và có thể phát cùng câu trả lời
+bằng OmniVoice TTS; voice vẫn tuân theo global mute.
+
+Trang **Tài nguyên AI** cập nhật khoảng 1,5 giây một lần nhưng chỉ khi đang mở.
+Nó hiển thị RAM/VRAM vật lý, tải/nhiệt độ/công suất GPU, RSS của core và
+desktop, lease scheduler, model nào đang load/unload và timeline thay đổi trong
+RAM. Trần vận hành Hina là 14 GB VRAM với tối thiểu 2 GB còn trống; page cảnh
+báo khi vi phạm. “Reservation” là ngân sách scheduler dùng để cấp quyền chạy,
+không phải một phần VRAM phải cộng thêm lần nữa vào số đo vật lý. Model Cloud
+được ghi rõ là không giữ trọng số trong VRAM local.
 
 Desktop tải real VRM 1.0 bằng Three.js/`@pixiv/three-vrm`. Base hiện tại là
 `VRM1_Constraint_Twist_Sample` chính thức của pixiv/VRM Consortium, được bundle

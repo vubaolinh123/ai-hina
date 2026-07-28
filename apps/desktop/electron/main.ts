@@ -53,6 +53,10 @@ import {
   serializeVisionProviderState,
   type PersistedVisionProviderState,
 } from "./vision-provider-state";
+import {
+  ModelTransitionTracker,
+  augmentResourceStatus,
+} from "./resource-monitor";
 
 const CHANNELS = Object.freeze({
   windowMode: "hina:window:mode",
@@ -84,12 +88,14 @@ const CHANNELS = Object.freeze({
   visionDiscover: "hina:vision:discover",
   visionConfigure: "hina:vision:configure",
   visionClearKey: "hina:vision:clear-key",
+  resourcesStatus: "hina:resources:status",
 });
 
 const WIDGET_SIZE: Size = Object.freeze({ width: 440, height: 620 });
 const WIDGET_STATE_FILENAME = "hina-widget-state.v1.json";
 const VTS_TOKEN_STATE_FILENAME = "hina-vtube-studio-token.v1.json";
 const VISION_PROVIDER_STATE_FILENAME = "hina-vision-provider.v1.json";
+const resourceTransitionTracker = new ModelTransitionTracker(100);
 
 let mainWindow: BrowserWindow | null = null;
 let widgetWindow: BrowserWindow | null = null;
@@ -561,6 +567,13 @@ function registerIpcHandlers(): void {
   ipcMain.handle(CHANNELS.runtimeHealth, (event) => {
     assertTrustedSender(event);
     return requestControl("runtime.health");
+  });
+  ipcMain.handle(CHANNELS.resourcesStatus, async (event) => {
+    if (assertTrustedSender(event) !== "operator") {
+      throw new Error("E_DESKTOP_RESOURCE_AUTHORITY: operator window required");
+    }
+    const status = await requestControl("resources.status");
+    return augmentResourceStatus(status, resourceTransitionTracker);
   });
   ipcMain.handle(CHANNELS.chatStatus, (event) => {
     assertTrustedSender(event);
@@ -1049,6 +1062,36 @@ async function createWindows(): Promise<void> {
                 };
                 check();
               });
+              const resourceTab = Array.from(
+                document.querySelectorAll(".desktop-nav button")
+              ).find((button) => button.textContent?.includes("Tài nguyên AI"));
+              if (!(resourceTab instanceof HTMLButtonElement)) {
+                throw new Error("E_DESKTOP_RESOURCE_PAGE_CONTROL");
+              }
+              resourceTab.click();
+              await new Promise((resolve, reject) => {
+                const deadline = Date.now() + 10000;
+                const check = () => {
+                  const sampleCount = Number(
+                    document.documentElement.dataset.resourceSampleCount
+                  );
+                  if (
+                    document.documentElement.dataset.resourceMonitorState
+                    && Number.isFinite(sampleCount)
+                    && sampleCount >= 1
+                  ) {
+                    resolve(true);
+                    return;
+                  }
+                  if (Date.now() >= deadline) {
+                    reject(new Error("E_DESKTOP_RESOURCE_PAGE_TIMEOUT"));
+                    return;
+                  }
+                  setTimeout(check, 50);
+                };
+                check();
+              });
+              const resourceStatus = await window.hinaDesktop.getResourceStatus();
               return {
                 runtime: health.status,
                 avatarState: avatar.state,
@@ -1059,6 +1102,16 @@ async function createWindows(): Promise<void> {
                 styledMaterialCount,
                 performance,
                 visionProvider,
+                resourceStatus,
+                resourcePage: {
+                  state: document.documentElement.dataset.resourceMonitorState,
+                  sampleCount: Number(
+                    document.documentElement.dataset.resourceSampleCount
+                  ),
+                  modelCount: Number(
+                    document.documentElement.dataset.resourceModelCount
+                  )
+                },
                 recovery: {
                   webglContextLost: true,
                   svgFallbackObserved: true,
@@ -1139,6 +1192,37 @@ async function createWindows(): Promise<void> {
           || !("runtime" in snapshot.visionProvider)
           || !snapshot.visionProvider.runtime
           || typeof snapshot.visionProvider.runtime !== "object"
+          || !("resourceStatus" in snapshot)
+          || !snapshot.resourceStatus
+          || typeof snapshot.resourceStatus !== "object"
+          || !("schemaVersion" in snapshot.resourceStatus)
+          || snapshot.resourceStatus.schemaVersion !== "1.0"
+          || !("models" in snapshot.resourceStatus)
+          || !Array.isArray(snapshot.resourceStatus.models)
+          || snapshot.resourceStatus.models.length < 4
+          || !("physical" in snapshot.resourceStatus)
+          || !snapshot.resourceStatus.physical
+          || typeof snapshot.resourceStatus.physical !== "object"
+          || !("processes" in snapshot.resourceStatus)
+          || !snapshot.resourceStatus.processes
+          || typeof snapshot.resourceStatus.processes !== "object"
+          || !("coreRuntime" in snapshot.resourceStatus.processes)
+          || !snapshot.resourceStatus.processes.coreRuntime
+          || typeof snapshot.resourceStatus.processes.coreRuntime !== "object"
+          || !("rssMiB" in snapshot.resourceStatus.processes.coreRuntime)
+          || typeof snapshot.resourceStatus.processes.coreRuntime.rssMiB !== "number"
+          || snapshot.resourceStatus.processes.coreRuntime.rssMiB <= 0
+          || !("resourcePage" in snapshot)
+          || !snapshot.resourcePage
+          || typeof snapshot.resourcePage !== "object"
+          || !("state" in snapshot.resourcePage)
+          || typeof snapshot.resourcePage.state !== "string"
+          || !("sampleCount" in snapshot.resourcePage)
+          || typeof snapshot.resourcePage.sampleCount !== "number"
+          || snapshot.resourcePage.sampleCount < 1
+          || !("modelCount" in snapshot.resourcePage)
+          || typeof snapshot.resourcePage.modelCount !== "number"
+          || snapshot.resourcePage.modelCount < 4
           || !("recovery" in snapshot)
           || !snapshot.recovery
           || typeof snapshot.recovery !== "object"

@@ -34,6 +34,22 @@ class _ProviderHandler(BaseHTTPRequestHandler):
         if self.path == "/api/tags":
             self._json({"models": [{"name": "hina-local:4b"}]})
             return
+        if self.path == "/api/ps":
+            self._json(
+                {
+                    "models": [
+                        {
+                            "name": "hina-local:4b",
+                            "size": 4_500_000_000,
+                            "size_vram": 4_200_000_000,
+                            "context_length": 8_192,
+                            "details": {"quantization_level": "Q4_K_M"},
+                            "digest": "must-not-be-exposed",
+                        }
+                    ]
+                }
+            )
+            return
         if self.path == "/v1/models":
             self._json({"data": [{"id": "hina-local:4b"}]})
             return
@@ -179,6 +195,25 @@ class ProviderAdapterTests(unittest.IsolatedAsyncioTestCase):
             _ProviderHandler.received_body["options"]["repeat_penalty"],
             1.15,
         )
+
+    async def test_ollama_residency_distinguishes_loaded_from_installed(self) -> None:
+        provider = LocalHttpChatProvider(
+            ModelGatewayConfig(base_url=self.base_url, model="hina-local:4b")
+        )
+        models = await provider.resident_models()
+        self.assertEqual(
+            models,
+            [
+                {
+                    "name": "hina-local:4b",
+                    "sizeBytes": 4_500_000_000,
+                    "sizeVramBytes": 4_200_000_000,
+                    "contextLength": 8_192,
+                    "quantization": "Q4_K_M",
+                }
+            ],
+        )
+        self.assertNotIn("digest", str(models))
 
     async def test_complex_ollama_chat_uses_bounded_hidden_thinking(self) -> None:
         provider = LocalHttpChatProvider(
