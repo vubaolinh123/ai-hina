@@ -1,17 +1,21 @@
 $ErrorActionPreference = "Stop"
 
 $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
+$desktopScript = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "Start-HinaDesktop.ps1"))
 $previousSmoke = $env:HINA_DESKTOP_SMOKE
 $previousWarnings = $env:ELECTRON_ENABLE_SECURITY_WARNINGS
 $env:HINA_DESKTOP_SMOKE = "1"
 $env:ELECTRON_ENABLE_SECURITY_WARNINGS = "true"
 
+if (-not $desktopScript.StartsWith($repoRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "Desktop launcher escaped the repository"
+}
+
 try {
-    & pnpm --filter @hina/desktop build
-    if ($LASTEXITCODE -ne 0) {
-        throw "Desktop build failed with exit code $LASTEXITCODE"
-    }
-    & pnpm --filter @hina/desktop start
+    # The Electron renderer uses typed IPC against the loopback control plane.
+    # Run the same launcher as pnpm start:desktop so smoke cannot falsely test
+    # an offline renderer without first starting and waiting for that plane.
+    & $desktopScript
     if ($LASTEXITCODE -ne 0) {
         throw "Desktop smoke failed with exit code $LASTEXITCODE"
     }

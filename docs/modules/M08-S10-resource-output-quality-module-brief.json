@@ -28,6 +28,7 @@
     "apps/desktop/electron/",
     "apps/desktop/src/",
     "apps/desktop/test/",
+    "tools/dev/Run-M07DesktopSmoke.ps1",
     "packages/contracts/openapi/control-plane.v1.json",
     "docs/modules/M08-S10-resource-output-quality-module-brief.json",
     "docs/modules/M08-perception.md",
@@ -72,6 +73,7 @@
     "$env:PYTHONPATH='apps/core-runtime/src;packages/contracts/src;packages/safety-policy/src;packages/text-brain/src;workers/speech/src;workers/perception/src'; uv run --frozen python -m unittest discover -s apps/core-runtime/tests -p 'test_resource_routes.py'",
     "pnpm --filter @hina/desktop test",
     "pnpm --filter @hina/desktop typecheck",
+    "pnpm smoke:desktop",
     "git diff --check"
   ],
   "latency_or_quality_budget": {

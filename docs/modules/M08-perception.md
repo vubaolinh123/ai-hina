@@ -469,11 +469,10 @@ Không được đánh dấu M08 complete khi các phần còn lại chưa có e
 
 - Narrow tests passed: text brain 44, speech 22, perception 61 and resource
   route 5. Desktop build + 53 tests and desktop typecheck passed.
-- The real startup path (`HINA_DESKTOP_SMOKE=1` with
-  `tools/dev/Start-HinaDesktop.ps1`) passed end-to-end after it brought up the
-  loopback control plane. The legacy `pnpm smoke:desktop` helper starts
-  Electron directly and is therefore not evidence for this slice until its
-  launcher wiring is corrected.
+- `pnpm smoke:desktop` now uses the same launcher as `pnpm start:desktop`,
+  waits for the loopback control plane and passed end-to-end in smoke mode.
+  This prevents the former false `E_DESKTOP_CONTROL_OFFLINE` result caused by
+  starting Electron directly.
 - New tests cover allowlist/owner confirmation, scheduler denial, local
   warmup/unload state, active VLM analysis waiting for unload, detailed
   recovery prompt and inline hidden-analysis stripping.
