@@ -13,6 +13,7 @@ import ChatPage from "./dashboard/pages/ChatPage.vue";
 import PerceptionPage from "./dashboard/pages/PerceptionPage.vue";
 import ResourcesPage from "./dashboard/pages/ResourcesPage.vue";
 import SpeechPage from "./dashboard/pages/SpeechPage.vue";
+import Live2DPage from "./dashboard/pages/Live2DPage.vue";
 import type {
   ChatContextUsage,
   ChatMessage,
@@ -1648,220 +1649,18 @@ onBeforeUnmount(() => {
       @control-model="controlResourceModel($event.model, $event.action)"
     />
 
-    <section v-else-if="activePage === 'live2d'" class="dashboard-page live2d-page">
-      <div class="page-heading">
-        <p class="eyebrow">M07 / EXTERNAL LIVE2D RENDERER</p>
-        <h2>Avatar Live2D qua VTube Studio</h2>
-        <p class="purpose">
-          Đây là cách project Neuro hiển thị nhân vật: model Live2D chạy trong
-          VTube Studio, còn Hina dùng API local để xem model hiện tại, bật hotkey
-          biểu cảm và đổi bố cục. Khi VTube Studio tắt, widget VRM trong suốt của
-          Hina vẫn là phương án dự phòng và chat/voice không bị dừng.
-        </p>
-      </div>
-
-      <div class="vtube-status-strip" :data-connected="vtubeStatus?.authenticated">
-        <div>
-          <span>Trạng thái</span>
-          <strong>
-            {{ vtubeStatus?.authenticated
-              ? "Đã kết nối và xác thực"
-              : vtubeStatus?.state === "needs_authorization"
-                ? "Đang chờ bạn cấp quyền"
-                : "Chưa kết nối" }}
-          </strong>
-        </div>
-        <div>
-          <span>Địa chỉ local cố định</span>
-          <strong><code>{{ vtubeStatus?.endpoint ?? "ws://127.0.0.1:8001" }}</code></strong>
-        </div>
-        <div>
-          <span>Renderer ưu tiên</span>
-          <strong>{{ vtubeStatus?.model.loaded ? "Live2D đã chọn" : "VRM fallback" }}</strong>
-        </div>
-        <div>
-          <span>Token</span>
-          <strong>{{ vtubeStatus?.authorizationStored ? "Đã lưu cục bộ" : "Chưa có" }}</strong>
-        </div>
-      </div>
-
-      <div class="live2d-grid">
-        <article class="live2d-card setup-card">
-          <p class="eyebrow">THIẾT LẬP MỘT LẦN</p>
-          <h3>Để dùng Hiyori giống ảnh của Neuro</h3>
-          <ol>
-            <li>Mở VTube Studio trên Windows và vào Settings → Plugins.</li>
-            <li>Bật “Allow Plugin API access”; API phải nghe ở cổng mặc định 8001.</li>
-            <li>Trong VTube Studio, chọn Hiyori hoặc model Live2D bạn có quyền dùng.</li>
-            <li>Chuyển sang tab Settings → biểu tượng camera → kéo xuống “Spout2 Config” và bật “Activate Spout2”.</li>
-            <li>Trong phần Background chọn màu đen rồi bật “Transparent in capture” để widget không có nền.</li>
-            <li>Bấm nút kết nối dưới đây rồi chọn <strong>Allow</strong> trong hộp thoại VTube Studio.</li>
-          </ol>
-          <div class="button-row">
-            <button
-              class="primary"
-              type="button"
-              :disabled="vtubeBusy || vtubeStatus?.authenticated"
-              @click="connectVTubeStudio"
-            >
-              Kết nối &amp; xin quyền
-            </button>
-            <button
-              type="button"
-              :disabled="vtubeBusy || !vtubeStatus?.authenticated"
-              @click="refreshVTubeStudioStatus(true)"
-            >
-              Đọc lại model
-            </button>
-            <button
-              type="button"
-              :disabled="vtubeBusy || !vtubeStatus?.connected"
-              @click="disconnectVTubeStudio"
-            >
-              Ngắt kết nối
-            </button>
-          </div>
-          <p v-if="vtubeMessage" class="vtube-message" role="status">{{ vtubeMessage }}</p>
-          <p v-if="vtubeStatus?.lastErrorCode" class="inline-error">
-            {{ vtubeStatus.lastErrorCode }} — hãy chắc rằng VTube Studio đang mở và Plugin API đã bật.
-          </p>
-        </article>
-
-        <article class="live2d-card spout-card">
-          <p class="eyebrow">WIDGET / SPOUT2 FRAME BRIDGE</p>
-          <h3>
-            {{ spoutStatus?.frameReady
-              ? "Widget đang nhận frame Live2D thật"
-              : "Widget đang chờ frame Live2D" }}
-          </h3>
-          <p>
-            Cầu nối này chỉ nhận sender <code>VTubeStudioSpout</code> trên loopback,
-            giữ frame mới nhất trong RAM rồi đưa vào widget. Nếu bridge lỗi, VRM
-            local tự hiện lại; chat, mic và kéo thả không bị khóa.
-          </p>
-          <div class="status-grid">
-            <div>
-              <span>Bridge</span>
-              <strong :data-good="spoutStatus?.state === 'ready'">
-                {{ spoutStatus?.state ?? "chưa đọc" }}
-              </strong>
-            </div>
-            <div>
-              <span>Sender</span>
-              <strong>{{ spoutStatus?.sender ?? "—" }}</strong>
-            </div>
-            <div>
-              <span>Kích thước frame</span>
-              <strong>
-                {{ spoutStatus?.width && spoutStatus?.height
-                  ? `${spoutStatus.width} × ${spoutStatus.height}`
-                  : "—" }}
-              </strong>
-            </div>
-            <div>
-              <span>Nền trong suốt</span>
-              <strong :data-good="spoutStatus?.transparent">
-                {{ spoutStatus?.transparent ? "Đã bật" : "Chưa bật" }}
-              </strong>
-            </div>
-          </div>
-          <p v-if="spoutStatus?.lastErrorCode" class="inline-error">
-            {{ spoutStatus.lastErrorCode }}
-          </p>
-          <p v-else-if="spoutStatus?.frameReady && !spoutStatus.transparent" class="vtube-message">
-            Frame đã vào widget nhưng nền vẫn opaque. Bật “Transparent in capture”
-            trong VTube Studio để giữ nền desktop trong suốt.
-          </p>
-        </article>
-
-        <article class="live2d-card">
-          <p class="eyebrow">MODEL ĐANG CHỌN TRONG VTUBE STUDIO</p>
-          <h3>{{ vtubeStatus?.model.name || "Chưa tải model Live2D" }}</h3>
-          <div class="status-grid">
-            <div><span>Model loaded</span><strong>{{ vtubeStatus?.model.loaded ? "Có" : "Không" }}</strong></div>
-            <div><span>Model ID</span><strong>{{ vtubeStatus?.model.id || "—" }}</strong></div>
-            <div><span>File VTS</span><strong>{{ vtubeStatus?.model.vtsModelName || "—" }}</strong></div>
-            <div><span>Số hotkey</span><strong>{{ vtubeStatus?.hotkeys.length ?? 0 }}</strong></div>
-          </div>
-          <p>
-            Hina không đọc file model từ ổ đĩa và không nhận frame video qua API.
-            VTube Studio tự render Live2D; Hina chỉ gửi những lệnh đã cố định bên dưới.
-          </p>
-        </article>
-
-        <article class="live2d-card hotkey-card">
-          <p class="eyebrow">BIỂU CẢM / ANIMATION</p>
-          <h3>Hotkey của model hiện tại</h3>
-          <p>
-            Dùng để thử biểu cảm hoặc animation đã được chính model cấu hình sẵn.
-            Dashboard chỉ cho bấm ID vừa đọc từ model; không gửi payload tùy ý.
-          </p>
-          <div v-if="vtubeStatus?.hotkeys.length" class="hotkey-grid">
-            <button
-              v-for="hotkey in vtubeStatus.hotkeys"
-              :key="hotkey.id"
-              type="button"
-              :disabled="vtubeBusy || !vtubeStatus.authenticated"
-              :title="hotkey.type"
-              @click="triggerVTubeStudioHotkey(hotkey.id)"
-            >
-              {{ hotkey.name }}
-              <small>{{ hotkey.type }}</small>
-            </button>
-          </div>
-          <p v-else class="empty-state">
-            Chưa có hotkey. Hãy kết nối, tải model trong VTube Studio rồi bấm “Đọc lại model”.
-          </p>
-        </article>
-
-        <article class="live2d-card movement-card">
-          <p class="eyebrow">BỐ CỤC STREAM</p>
-          <h3>Đưa nhân vật tới vị trí có sẵn</h3>
-          <p>
-            Ba preset chỉ thay vị trí/kích thước model đang mở. Chúng không sửa
-            model, không điều khiển chuột và có thể hoàn tác trực tiếp trong VTube Studio.
-          </p>
-          <div class="preset-grid">
-            <button
-              type="button"
-              :disabled="vtubeBusy || !vtubeStatus?.authenticated"
-              @click="moveVTubeStudioModel('chat')"
-            >
-              Chat
-              <small>Nhân vật lớn, gần trung tâm</small>
-            </button>
-            <button
-              type="button"
-              :disabled="vtubeBusy || !vtubeStatus?.authenticated"
-              @click="moveVTubeStudioModel('screen')"
-            >
-              Chia sẻ màn hình
-              <small>Dạt phải, dành chỗ cho nội dung</small>
-            </button>
-            <button
-              type="button"
-              :disabled="vtubeBusy || !vtubeStatus?.authenticated"
-              @click="moveVTubeStudioModel('react')"
-            >
-              React
-              <small>Nhỏ hơn để xem video/game</small>
-            </button>
-          </div>
-        </article>
-      </div>
-
-      <aside class="live2d-license-notice">
-        <strong>Vì sao Hiyori không nằm sẵn trong repo Hina?</strong>
-        <p>
-          Neuro chỉ nói rằng tác giả dùng model Hiyori mặc định; file Hiyori
-          không thuộc source MIT của họ. Hiyori là sample của Live2D và chịu
-          Free Material License/sample terms riêng. Vì vậy Hina kết nối tới
-          model bạn tự chọn trong VTube Studio, không copy hay nhận thay điều
-          khoản asset. Trang tham khảo:
-          <code>live2d.com/en/learn/sample/momose-hiyori-video/</code>.
-        </p>
-      </aside>
-    </section>
+    <Live2DPage
+      v-else-if="activePage === 'live2d'"
+      :vtube-status="vtubeStatus"
+      :spout-status="spoutStatus"
+      :vtube-busy="vtubeBusy"
+      :vtube-message="vtubeMessage"
+      @connect="connectVTubeStudio"
+      @refresh-model="refreshVTubeStudioStatus(true)"
+      @disconnect="disconnectVTubeStudio"
+      @trigger-hotkey="triggerVTubeStudioHotkey"
+      @move-model="moveVTubeStudioModel"
+    />
 
     <section v-else class="stage-grid" :data-page="activePage">
       <article

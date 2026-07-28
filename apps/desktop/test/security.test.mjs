@@ -14,6 +14,7 @@ const readOperatorRenderer = () => [
   read("src/dashboard/pages/PerceptionPage.vue"),
   read("src/dashboard/pages/ResourcesPage.vue"),
   read("src/dashboard/pages/SpeechPage.vue"),
+  read("src/dashboard/pages/Live2DPage.vue"),
 ].join("\n");
 const require = createRequire(import.meta.url);
 const control = require("../dist-electron/control-client.js");
@@ -147,6 +148,7 @@ test("operator dashboard keeps page markup modular and chat input reachable", ()
   const perception = read("src/dashboard/pages/PerceptionPage.vue");
   const resources = read("src/dashboard/pages/ResourcesPage.vue");
   const speech = read("src/dashboard/pages/SpeechPage.vue");
+  const live2d = read("src/dashboard/pages/Live2DPage.vue");
   const style = read("src/style.css");
 
   assert.match(app, /import DashboardNav from "\.\/dashboard\/DashboardNav\.vue"/);
@@ -155,10 +157,12 @@ test("operator dashboard keeps page markup modular and chat input reachable", ()
   assert.match(app, /import PerceptionPage from "\.\/dashboard\/pages\/PerceptionPage\.vue"/);
   assert.match(app, /import ResourcesPage from "\.\/dashboard\/pages\/ResourcesPage\.vue"/);
   assert.match(app, /import SpeechPage from "\.\/dashboard\/pages\/SpeechPage\.vue"/);
+  assert.match(app, /import Live2DPage from "\.\/dashboard\/pages\/Live2DPage\.vue"/);
   assert.doesNotMatch(app, /<nav class="desktop-nav"/);
   assert.doesNotMatch(app, /class="screen-capture-panel"/);
   assert.doesNotMatch(app, /class="resource-summary-grid"/);
   assert.doesNotMatch(app, /class="speech-test-grid"/);
+  assert.doesNotMatch(app, /class="live2d-grid"/);
   assert.match(nav, /Live2D \/ VTube Studio/);
   assert.match(overview, /Mở chat với Hina/);
   assert.match(chat, /Context hội thoại của Hina/);
@@ -177,6 +181,9 @@ test("operator dashboard keeps page markup modular and chat input reachable", ()
   assert.match(speech, /TEXT → OMNIVOICE VIETNAMESE GPU/);
   assert.match(speech, /emit\('startMic'\)/);
   assert.doesNotMatch(speech, /window\.hinaDesktop|\bfetch\s*\(|getUserMedia|from\s+["']electron["']/);
+  assert.match(live2d, /VTubeStudioSpout/);
+  assert.match(live2d, /emit\('triggerHotkey'/);
+  assert.doesNotMatch(live2d, /window\.hinaDesktop|\bfetch\s*\(|\bWebSocket\b|from\s+["']electron["']/);
   assert.match(style, /\.chat-composer[\s\S]*position:\s*sticky/);
   assert.match(style, /\.chat-layout[\s\S]*grid-template-columns:\s*1fr/);
 });

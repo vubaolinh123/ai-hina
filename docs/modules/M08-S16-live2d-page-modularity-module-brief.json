@@ -1,0 +1,63 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M08-S16-live2d-page-modularity",
+  "module_id": "M08",
+  "objective": "Move the owner-facing Live2D/VTube Studio and Spout2 dashboard page out of legacy App.vue into a dedicated typed Vue component while preserving Electron main as the only owner of the VTube Studio token, WebSocket transport, Spout bridge and typed IPC.",
+  "non_goals": [
+    "Do not change the VTube Studio Public API protocol, authentication token storage, RFC-6455 transport, hotkey/movement allowlist, Spout sender allowlist, bridge lifecycle, transparent capture behavior or VRM fallback.",
+    "Do not add a dependency, direct renderer WebSocket, direct renderer network or file access, new external port, model asset, or real VTube Studio/Spout smoke against the owner's active desktop.",
+    "Do not migrate Avatar/Runtime in this slice."
+  ],
+  "base_sha": "18c8e26",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "apps/desktop/src/App.vue",
+    "apps/desktop/src/dashboard/pages/Live2DPage.vue",
+    "apps/desktop/test/security.test.mjs",
+    "docs/architecture/desktop-dashboard-modularity.md",
+    "docs/modules/M08-S16-live2d-page-modularity-module-brief.json",
+    "docs/modules/M08-perception.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "voice_demo/",
+    "var/perception-sessions/",
+    "apps/desktop/dist/",
+    "apps/desktop/dist-electron/",
+    "var/test-artifacts/"
+  ],
+  "contracts": [
+    "Live2DPage is typed presentation only. It receives bounded VTube Studio/Spout status and emits fixed owner intent; it does not import Electron, Node, WebSocket, direct network APIs, persistence or bridge runtimes.",
+    "App.vue and Electron main remain the sole owners of typed VTube Studio IPC, token lifecycle, authentication, fixed hotkey/movement dispatch, Spout polling and bridge error logging.",
+    "The page never receives authentication tokens, raw VTube Studio protocol frames, a WebSocket handle, arbitrary hotkey/model/movement payload capability, or raw Spout pixels.",
+    "The VTube Studio and Spout fallback/loopback/allowlist invariants remain unchanged; markup extraction must not change connection behavior.",
+    "Desktop security tests include the extracted page and retain all operator-only IPC and no-direct-network assertions."
+  ],
+  "allowed_dependencies": [
+    "Existing Vue 3/TypeScript, current Electron typed IPC and repository test tooling; no new dependency."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "All Live2D/VTube Studio dashboard markup is removed from App.vue and rendered through pages/Live2DPage.vue.",
+    "The extracted page preserves status, explicit connect/disconnect/refresh controls, fixed hotkey/movement controls, Spout status and safety/asset explanation through typed props/emits only.",
+    "Dashboard module documentation records Live2DPage as extracted and names remaining legacy pages accurately.",
+    "Desktop typecheck, desktop security/build test and the repository fast gate pass without generated test artifacts retained."
+  ],
+  "required_test_commands": [
+    "pnpm --filter @hina/desktop typecheck",
+    "pnpm test:desktop",
+    "pnpm test:fast",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "vts_transport_change": false,
+    "spout_bridge_change": false,
+    "new_local_vram_mib": 0,
+    "new_network_calls": 0
+  },
+  "output_artifact_dir": "artifacts/verification/M08/"
+}

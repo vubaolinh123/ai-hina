@@ -14,6 +14,7 @@
   M08-S13 Perception dashboard modularity is a runnable candidate;
   M08-S14 Resources dashboard modularity is a runnable candidate;
   M08-S15 Speech dashboard modularity is a runnable candidate;
+  M08-S16 Live2D dashboard modularity is a runnable candidate;
   M08 remains active
 - Branch: `main` (fast-development mode)
 - Active slices: M08-S1 perception spine (owner-consented snapshot ingestion,
@@ -618,6 +619,31 @@ Không được đánh dấu M08 complete khi các phần còn lại chưa có e
 - `pnpm test:desktop`: build + 54 tests pass, including SpeechPage in renderer
   isolation and the preserved microphone/typed-IPC boundary checks.
 - No microphone capture, TTS inference, model, Cloud request, cache/model
+  download, fixture or one-off script was created for this UI-boundary slice.
+
+## Implemented in M08-S16 (Live2D page modularity)
+
+- `apps/desktop/src/dashboard/pages/Live2DPage.vue` now owns all owner-facing
+  markup for VTube Studio status, explicit connect/disconnect/refresh, fixed
+  hotkey and movement controls, Spout2 status and asset/provenance explanation.
+  It has no direct Electron, Node, WebSocket, fetch, storage or bridge-runtime
+  access.
+- `App.vue` and Electron main remain sole owners of typed VTube Studio IPC,
+  encrypted token lifecycle, `ws` transport, fixed hotkey/movement dispatch,
+  Spout bridge polling and error logging. The extracted page receives no token,
+  protocol frame, WebSocket handle, arbitrary payload capability or raw frame.
+- This extraction does not change VTube Studio endpoint/authorization behavior,
+  Spout sender allowlist/loopback, transparent-capture guidance or the VRM
+  fallback. The user-visible controls retain their existing disabled states.
+- The dashboard architecture rule now records Live2D as migrated. Avatar/Runtime
+  remains the final legacy root page for a future bounded migration slice.
+
+## Fast evidence M08-S16 (owner machine)
+
+- `pnpm --filter @hina/desktop typecheck`: pass.
+- `pnpm test:desktop`: build + 54 tests pass, including Live2DPage in renderer
+  isolation and preserved VTube Studio/Spout typed-boundary checks.
+- No VTube Studio connection, Spout capture, model, Cloud request, cache/model
   download, fixture or one-off script was created for this UI-boundary slice.
 
 ## Implemented in M08-S14 (Resources page modularity)

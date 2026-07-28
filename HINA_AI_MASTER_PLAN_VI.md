@@ -1496,6 +1496,13 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
   URL cleanup, typed speech IPC và error log. Không đổi provider/GPU, permission,
   audio bounds/persistence hay auto-listen; heading TTS được sửa thành OmniVoice
   đang chạy. Desktop typecheck/build + 54 test xanh, không chạy mic/TTS thật.
+- M08-S16 Live2D page modularity (2026-07-29): toàn bộ workflow **Live2D /
+  VTube Studio** đã rời legacy `App.vue` sang `Live2DPage.vue`. Component chỉ
+  nhận status bounded và phát fixed intent; App/Electron main vẫn sole owner
+  token, `ws` transport, typed IPC, hotkey/movement allowlist, Spout poll và
+  error log. Không đổi endpoint/auth, sender allowlist/loopback, transparent
+  guidance hay VRM fallback. Desktop typecheck/build + 54 test xanh, không
+  mở VTube Studio/Spout thật.
 
 ### Test matrix
 

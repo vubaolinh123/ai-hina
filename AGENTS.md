@@ -256,6 +256,13 @@ mic stream, WAV, realtime throttle, audio URL lifecycle, typed speech IPC và
 error log. Không đổi provider/GPU/permission/audio bound/persistence hoặc
 auto-listen; nhãn TTS nay đúng OmniVoice. Migration legacy còn lại: Live2D và
 Avatar/Runtime. Desktop typecheck/build + 54 tests xanh, không chạy mic/TTS thật.
+Ngày 2026-07-29 M08-S16 chuyển toàn bộ trang **Live2D / VTube Studio** sang
+`dashboard/pages/Live2DPage.vue`. Component chỉ nhận status bounded và phát
+fixed intent, không import Electron/Node/WebSocket/network/storage/bridge.
+`App.vue`/Electron main vẫn sở hữu token, `ws`, typed IPC, hotkey/movement
+allowlist, Spout polling và error log. Không đổi endpoint/auth, sender
+allowlist/loopback, transparent guidance hay VRM fallback. Migration legacy còn
+lại: Avatar/Runtime. Desktop typecheck/build + 54 tests xanh, không mở VTS thật.
 Ngày 2026-07-29 M08-S11 hotfix capture/runtime capacity: owner phê duyệt trần
 admission Hina **15.872 MiB (15,5 GiB)**. `nvidia-smi memory.free` đã phản ánh
 VRAM Windows/compositor/app khác, vì vậy scheduler không trừ thêm 2.048 MiB;
