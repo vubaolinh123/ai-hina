@@ -98,7 +98,7 @@ function Write-HinaRuntimeErrors {
 $controlProcess = $null
 $startedControlPlane = $false
 try {
-    & $modelScript -PullMissingModel
+    & $modelScript -PullMissingModel -StartupCheck
     if (-not $?) {
         throw "Local model provider bootstrap failed."
     }

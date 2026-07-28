@@ -29,6 +29,9 @@
     "apps/desktop/src/env.d.ts",
     "apps/desktop/test/screen-capture.test.mjs",
     "apps/desktop/test/security.test.mjs",
+    "tools/dev/Start-HinaDesktop.ps1",
+    "tools/dev/.m08-s9-smoke.ps1",
+    "tools/dev/.m08-s9-latency.py",
     "docs/modules/M08-S9-fresh-observation-chat-context-module-brief.json",
     "docs/modules/M08-perception.md",
     "HINA_AI_MASTER_PLAN_VI.md",
@@ -51,6 +54,8 @@
     "The system prompt contains only trusted availability metadata and tells the model to describe an image captured moments ago rather than claim a live view.",
     "Only bounded label, dimensions, remaining lifetime, final vision summary and OCR text may enter the model context; raw pixels, hashes, boxes, secrets and provider payloads remain excluded.",
     "The desktop operator submits screen capture with the same UUID used by its chat session so the runtime can enforce session isolation.",
+    "Desktop startup runs the existing bounded same-weight GPU fast-path check once, with keep_alive=0, so the first owner turn does not fail only because of a cold model load.",
+    "An orphan model </think> delimiter causes every byte before that delimiter to be discarded before moderation, replay or TTS; an explicit opening <think> block remains fail-closed.",
     "Fresh observation context is not appended to short-term chat replay, long-term memory or any tool proposal, and chat without eligible context keeps its previous behavior."
   ],
   "allowed_dependencies": [
@@ -66,6 +71,8 @@
     "Viewer/public/authenticated chat cannot receive owner screen context even when it reuses the same session UUID.",
     "If the fresh block cannot fit the model byte budget, chat falls back to the no-observation system state instead of failing or partially including it.",
     "Desktop capture validation requires a canonical chat session UUID and forwards it as X-Hina-Session-Id.",
+    "Desktop launcher performs the bounded Qwen3-VL Thinking fast-path warmup and unloads it before the operator starts using the app.",
+    "An orphan closing think delimiter returns only the final answer after it, while an opening think block is still blocked and hidden text is never replayed.",
     "Fast text-brain, perception and desktop tests pass, followed by one bounded real capture-to-chat smoke and one post-TTL negative smoke without retaining test pixels."
   ],
   "required_test_commands": [

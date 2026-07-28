@@ -9,6 +9,19 @@ const read = (path) => readFileSync(new URL(path, ROOT), "utf8");
 const require = createRequire(import.meta.url);
 const control = require("../dist-electron/control-client.js");
 
+test("desktop warms the one 8B brain through the bounded GPU fast path", () => {
+  const launcher = read("../../tools/dev/Start-HinaDesktop.ps1");
+  const providerBootstrap = read("../../tools/dev/Start-HinaModelProvider.ps1");
+  assert.match(
+    launcher,
+    /&\s+\$modelScript\s+-PullMissingModel\s+-StartupCheck/,
+  );
+  assert.match(providerBootstrap, /keep_alive\s*=\s*0/);
+  assert.match(providerBootstrap, /num_predict\s*=\s*8/);
+  assert.match(providerBootstrap, /num_gpu\s*=\s*999/);
+  assert.match(providerBootstrap, /Elapsed\.TotalSeconds\s+-ge\s+10/);
+});
+
 test("BrowserWindow keeps renderer sandboxed and blocks navigation surfaces", () => {
   const main = read("electron/main.ts");
   assert.match(main, /nodeIntegration:\s*false/);

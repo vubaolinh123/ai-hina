@@ -298,7 +298,9 @@ class ConversationService:
             )
             record.prompt_version = context.prompt_version
             record.context_summary = context.as_json()
-            response = await self._collect_model_output(record, context)
+            response = _discard_orphan_thinking_prefix(
+                await self._collect_model_output(record, context)
+            )
             proposal = _parse_tool_proposal(response)
             if proposal is not None:
                 tool_decision = self.safety_policy.moderate(
@@ -468,6 +470,30 @@ def _parse_turn_request(raw: Any) -> dict[str, str]:
         "source": source,
         "text": text,
     }
+
+
+def _discard_orphan_thinking_prefix(text: str) -> str:
+    """Keep only a final answer after an orphan Qwen closing delimiter.
+
+    Ollama normally places hidden reasoning in a separate field. A thinking
+    checkpoint can nevertheless emit a lone closing tag after a pre-closed
+    fast-path prefix. Treat everything before the last orphan delimiter as
+    private and discard it before moderation, memory or TTS. Explicit opening
+    tags are deliberately left intact so outbound moderation still fails
+    closed rather than guessing where hidden reasoning ends.
+    """
+
+    lowered = text.casefold()
+    if "<think>" in lowered or "</think>" not in lowered:
+        return text
+    marker = "</think>"
+    final = text[lowered.rfind(marker) + len(marker) :].strip()
+    if not final:
+        raise TextBrainError(
+            "E_MODEL_EMPTY_RESPONSE",
+            "model returned no final text after hidden reasoning",
+        )
+    return final
 
 
 def _parse_tool_proposal(text: str) -> dict[str, Any] | None:

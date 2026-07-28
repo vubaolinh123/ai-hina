@@ -459,6 +459,32 @@ class ConversationTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("private chain", json.dumps(blocked))
         self.assertEqual((await hidden_service.replay(OTHER_SESSION_ID))["turnCount"], 0)
 
+        orphan = ScriptedGateway(
+            [["private prefix must disappear</think>\n\nCâu trả lời cuối."]]
+        )
+        orphan_service = self.service(orphan)
+        cleaned = await self.run_turn(
+            orphan_service,
+            "Thử orphan closing tag",
+            session_id=OTHER_SESSION_ID,
+        )
+        self.assertEqual("completed", cleaned["outcome"])
+        self.assertEqual("Câu trả lời cuối.", cleaned["assistant"])
+        orphan_replay = await orphan_service.replay(OTHER_SESSION_ID)
+        self.assertNotIn(
+            "private prefix",
+            json.dumps(orphan_replay, ensure_ascii=False),
+        )
+
+        empty_final = ScriptedGateway([["private only</think>"]])
+        empty_service = self.service(empty_final)
+        empty = await self.run_turn(
+            empty_service,
+            "Thử orphan không có final",
+            session_id="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        )
+        self.assertEqual("E_MODEL_EMPTY_RESPONSE", empty["errorCode"])
+
     async def test_cancel_interrupts_within_target_and_stores_no_partial_output(self) -> None:
         gateway = BlockingGateway()
         service = self.service(gateway)
