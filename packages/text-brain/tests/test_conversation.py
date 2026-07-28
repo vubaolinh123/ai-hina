@@ -143,26 +143,85 @@ class ConversationTests(unittest.IsolatedAsyncioTestCase):
             [entry["state"] for entry in result["stateHistory"]],
             ["idle", "listening", "thinking", "speaking", "idle"],
         )
-        self.assertEqual(result["promptVersion"], "hina.prompt.v3")
+        self.assertEqual(result["promptVersion"], "hina.prompt.v4")
         system_prompt = gateway.messages[0][0]["content"]
         self.assertIn("không có observation màn hình/camera/game còn hạn", system_prompt)
         self.assertIn("Không đưa hidden reasoning", system_prompt)
         self.assertIn("1–2 câu ngắn", system_prompt)
         self.assertIn("không quá 45 từ", system_prompt)
-        self.assertIn("không kết thúc bằng lời mời hỗ trợ thêm", system_prompt)
+        self.assertIn("lời mời hỗ trợ thêm khi câu trả lời đã đủ", system_prompt)
         self.assertIn("Vai trò tương tác do hệ thống xác thực: creator_owner", system_prompt)
         self.assertIn("Khán giả yêu cầu hát", system_prompt)
         self.assertIn("điều khiển nhân vật rơi xuống vực", system_prompt)
-        self.assertIn("Creator vừa cập nhật bộ nhớ", system_prompt)
+        self.assertIn("Creator vừa cập nhật lại bộ nhớ", system_prompt)
         self.assertIn("Khán giả chê model thiếu biểu cảm", system_prompt)
         self.assertIn("Khán giả vừa trải qua một ngày mệt mỏi", system_prompt)
         self.assertIn("plain text sạch để đưa thẳng vào TTS", system_prompt)
         self.assertIn("không phủ nhận bằng chứng", system_prompt)
+        self.assertIn("không phải technical tutor", system_prompt)
+        self.assertIn("Không gắn đoạn disclaimer/meta", system_prompt)
         self.assertIn("Hợp đồng đầu ra mặc định cho lượt này", system_prompt)
         self.assertIn("Không hỏi ngược kiểu", system_prompt)
+        context = result["context"]
+        self.assertEqual(context["contextWindowTokens"], 8_192)
+        self.assertEqual(context["budgetBytes"], 32_768)
+        self.assertEqual(context["measurement"], "utf8-byte-estimate")
+        self.assertEqual(context["estimateBytesPerToken"], 4)
+        self.assertGreater(context["estimatedInputTokens"], 0)
+        self.assertGreater(context["estimatedUsagePercent"], 0)
+        status = await service.status()
+        self.assertEqual(status["context"]["windowTokens"], 8_192)
+        self.assertFalse(status["context"]["promptTextExposed"])
+        self.assertNotIn("Khán giả yêu cầu hát", json.dumps(status, ensure_ascii=False))
         replay = await service.replay(SESSION_ID)
         self.assertEqual(replay["turnCount"], 1)
         self.assertEqual(replay["relationship"]["completedTurns"], 1)
+
+    async def test_companion_strips_meta_disclaimers_and_never_turns_into_code_tutor(self) -> None:
+        disclaimer_gateway = ScriptedGateway(
+            [[
+                "Nghe đau thật. Giữ vết thương sạch sẽ và đi khám sớm nhé.\n\n"
+                "(Chú ý: Đây chỉ là phản hồi giả định cho tình huống, thực tế cần xử lý y tế kịp thời.)"
+            ]]
+        )
+        disclaimer_service = self.service(disclaimer_gateway)
+        disclaimer = await self.run_turn(disclaimer_service, "Mình vừa bị chó cắn.")
+        self.assertEqual(disclaimer["outcome"], "completed")
+        self.assertEqual(
+            disclaimer["assistant"],
+            "Nghe đau thật. Giữ vết thương sạch sẽ và đi khám sớm nhé.",
+        )
+        disclaimer_replay = await disclaimer_service.replay(SESSION_ID)
+        self.assertNotIn("Chú ý", json.dumps(disclaimer_replay, ensure_ascii=False))
+
+        direct_code_gateway = ScriptedGateway([["must not be called"]])
+        direct_code_service = self.service(direct_code_gateway)
+        direct_code = await self.run_turn(
+            direct_code_service,
+            "Viết cho mình ví dụ thẻ <img> bằng HTML.",
+            session_id=OTHER_SESSION_ID,
+        )
+        self.assertEqual(direct_code_gateway.calls, 0)
+        self.assertEqual(
+            direct_code["assistant"],
+            "Em không làm phần đó đâu, anh kể em nghe chỗ nào đang làm anh bực đi. Em nghe cùng anh.",
+        )
+        self.assertNotIn("<img", direct_code["assistant"])
+
+        code_shaped_gateway = ScriptedGateway(
+            [["Dưới đây là ví dụ đơn giản: <img src=\"ảnh.jpg\" alt=\"Mô tả\">."]]
+        )
+        code_shaped_service = self.service(code_shaped_gateway)
+        code_shaped = await self.run_turn(
+            code_shaped_service,
+            "Hôm nay bạn thấy thế nào?",
+            session_id="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        )
+        self.assertEqual(code_shaped_gateway.calls, 1)
+        self.assertEqual(
+            code_shaped["assistant"],
+            "Em không làm phần đó đâu, anh kể em nghe chỗ nào đang làm anh bực đi. Em nghe cùng anh.",
+        )
 
     async def test_avatar_state_callback_tracks_turns_without_text(self) -> None:
         events: list[dict[str, str | None]] = []
@@ -415,7 +474,7 @@ class ConversationTests(unittest.IsolatedAsyncioTestCase):
             self.persona,
             memory,
             fresh_observations=fresh,
-            max_bytes=7_500,
+            max_bytes=10_240,
         )
         gateway = ScriptedGateway([["Không có context ảnh đủ chỗ."]])
         service = self.service(

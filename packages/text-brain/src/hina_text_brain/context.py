@@ -10,6 +10,7 @@ from .persona import PersonaSpec, render_system_prompt
 
 
 MAX_MODEL_CONTEXT_BYTES = 65_536
+CONTEXT_ESTIMATE_BYTES_PER_TOKEN = 4
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,16 +21,33 @@ class ComposedContext:
     included_long_term_memories: int
     included_fresh_observations: int
     total_bytes: int
+    budget_bytes: int
 
-    def as_json(self) -> dict[str, Any]:
-        return {
+    def as_json(self, *, context_window_tokens: int | None = None) -> dict[str, Any]:
+        estimated_tokens = max(
+            1,
+            (self.total_bytes + CONTEXT_ESTIMATE_BYTES_PER_TOKEN - 1)
+            // CONTEXT_ESTIMATE_BYTES_PER_TOKEN,
+        )
+        result: dict[str, Any] = {
             "promptVersion": self.prompt_version,
             "messageCount": len(self.messages),
             "includedMemoryTurns": self.included_memory_turns,
             "includedLongTermMemories": self.included_long_term_memories,
             "includedFreshObservations": self.included_fresh_observations,
             "totalBytes": self.total_bytes,
+            "budgetBytes": self.budget_bytes,
+            "estimatedInputTokens": estimated_tokens,
+            "estimatedUsagePercent": round(
+                min(100.0, (self.total_bytes / self.budget_bytes) * 100),
+                1,
+            ),
+            "measurement": "utf8-byte-estimate",
+            "estimateBytesPerToken": CONTEXT_ESTIMATE_BYTES_PER_TOKEN,
         }
+        if context_window_tokens is not None:
+            result["contextWindowTokens"] = context_window_tokens
+        return result
 
 
 class LongTermMemoryRetriever(Protocol):
@@ -165,6 +183,7 @@ class ContextComposer:
             included_long_term_memories=len(selected_long_term),
             included_fresh_observations=len(selected_fresh),
             total_bytes=total,
+            budget_bytes=self.max_bytes,
         )
 
 

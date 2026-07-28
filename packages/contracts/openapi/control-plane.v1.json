@@ -1757,6 +1757,7 @@
           "memory",
           "activeTurns",
           "trackedTurns",
+          "context",
           "outboundPartialStreaming",
           "toolExecution"
         ],
@@ -1775,6 +1776,36 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 256
+          },
+          "context": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "windowTokens",
+              "compositionBudgetBytes",
+              "measurement",
+              "estimateBytesPerToken",
+              "promptTextExposed"
+            ],
+            "properties": {
+              "windowTokens": {
+                "type": "integer",
+                "minimum": 1024
+              },
+              "compositionBudgetBytes": {
+                "type": "integer",
+                "minimum": 4096
+              },
+              "measurement": {
+                "const": "utf8-byte-estimate"
+              },
+              "estimateBytesPerToken": {
+                "const": 4
+              },
+              "promptTextExposed": {
+                "const": false
+              }
+            }
           },
           "outboundPartialStreaming": {
             "const": false

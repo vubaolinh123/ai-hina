@@ -10,7 +10,12 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any, Callable
 
-from .context import ComposedContext, ContextComposer
+from .context import (
+    CONTEXT_ESTIMATE_BYTES_PER_TOKEN,
+    MAX_MODEL_CONTEXT_BYTES,
+    ComposedContext,
+    ContextComposer,
+)
 from .errors import TextBrainError
 from .gateway import ModelGateway
 from .memory import ShortTermMemory
@@ -43,6 +48,36 @@ _HIDDEN_OUTPUT_MARKDOWN_HEADING = re.compile(
     r"(?i)\*\*\s*(?:phân tích hành vi|phân tích|analysis|chain[- ]of[- ]thought|"
     r"system prompt|developer instructions?|quy tắc hệ thống|hidden reasoning)\s*:?\s*\*\*"
 )
+_TECHNICAL_REQUEST_TERMS = re.compile(
+    r"(?:\b(?:code|coding|html|css|javascript|typescript|python|sql|api|regex|"
+    r"powershell|terminal|command|npm|pnpm|git)\b|mã\s*(?:nguồn|html)?|"
+    r"lập\s*trình|lỗi\s*(?:code|mã)|<\s*(?:img|html|script|style|div)\b|```)",
+    re.IGNORECASE,
+)
+_TECHNICAL_REQUEST_ACTION = re.compile(
+    r"(?:\b(?:viết|tạo|làm|sửa|debug|hướng\s*dẫn|giải\s*thích|cho\s*(?:mình|tôi|anh|em)|"
+    r"ví\s*dụ|mẫu|how|example|install|build)\b|\?)",
+    re.IGNORECASE,
+)
+_CODE_SHAPED_OUTPUT = re.compile(
+    r"(?:```|<\s*/?(?:!doctype|html|img|script|style|div|body)\b|"
+    r"(?:^|\n)\s*(?:import\s+|from\s+\w+\s+import\s+|const\s+\w+|let\s+\w+|"
+    r"function\s+\w+|def\s+\w+|class\s+\w+|select\s+.+\s+from\s+|curl\s+|"
+    r"pnpm\s+|npm\s+|git\s+))",
+    re.IGNORECASE,
+)
+_TECHNICAL_TUTORIAL_OUTPUT = re.compile(
+    r"(?:dưới|sau)\s+đây.{0,96}(?:ví\s*dụ|code|mã|html|css|javascript|python|"
+    r"lập\s*trình)",
+    re.IGNORECASE | re.DOTALL,
+)
+_TRAILING_META_DISCLAIMER = re.compile(
+    r"(?:\n\s*)?(?:\(\s*)?(?:(?:chú|lưu)\s*ý|disclaimer|note)\s*:\s*"
+    r"(?=[^\n)]*(?:chỉ\s+là|phản\s+hồi\s+giả\s+định|không\s+thay\s+thế|"
+    r"thông\s+tin\s+tham\s+khảo|cần\s+xử\s+lý\s+y\s+tế))[^\n]*?(?:\))?\s*$",
+    re.IGNORECASE,
+)
+_DEFAULT_CONTEXT_WINDOW_TOKENS = 8_192
 
 
 class TurnState(StrEnum):
@@ -154,11 +189,16 @@ class ConversationService:
         self.safety_policy = safety_policy
         self.persona = persona
         self.memory = memory or ShortTermMemory()
+        self.context_window_tokens = _context_window_tokens(gateway)
         self.context_composer = context_composer or ContextComposer(
             persona,
             self.memory,
             long_term_memory=long_term_memory,
             fresh_observations=fresh_observations,
+            max_bytes=min(
+                MAX_MODEL_CONTEXT_BYTES,
+                self.context_window_tokens * CONTEXT_ESTIMATE_BYTES_PER_TOKEN,
+            ),
         )
         self.on_error = on_error
         self.on_state_change = on_state_change
@@ -175,6 +215,13 @@ class ConversationService:
             "memory": await self.memory.status(),
             "activeTurns": active,
             "trackedTurns": tracked,
+            "context": {
+                "windowTokens": self.context_window_tokens,
+                "compositionBudgetBytes": self.context_composer.max_bytes,
+                "measurement": "utf8-byte-estimate",
+                "estimateBytesPerToken": CONTEXT_ESTIMATE_BYTES_PER_TOKEN,
+                "promptTextExposed": False,
+            },
             "outboundPartialStreaming": False,
             "toolExecution": False,
         }
@@ -312,10 +359,17 @@ class ConversationService:
                 source=record.source,
             )
             record.prompt_version = context.prompt_version
-            record.context_summary = context.as_json()
-            response = _sanitize_model_final_answer(
-                await self._collect_model_output(record, context)
+            record.context_summary = context.as_json(
+                context_window_tokens=self.context_window_tokens,
             )
+            if _is_technical_code_request(sanitized_user):
+                response = _companion_technical_redirect(record.source)
+            else:
+                response = _sanitize_model_final_answer(
+                    await self._collect_model_output(record, context)
+                )
+                if _is_code_shaped_output(response):
+                    response = _companion_technical_redirect(record.source)
             proposal = _parse_tool_proposal(response)
             if proposal is not None:
                 tool_decision = self.safety_policy.moderate(
@@ -564,6 +618,7 @@ def _sanitize_model_final_answer(text: str) -> str:
         kept.append(line.rstrip())
     final = "\n".join(kept).strip()
     final = re.sub(r"\n{3,}", "\n\n", final)
+    final = _strip_trailing_meta_disclaimer(final)
     if not final:
         raise TextBrainError(
             "E_CHAT_OUTPUT_BLOCKED",
@@ -575,6 +630,52 @@ def _sanitize_model_final_answer(text: str) -> str:
             "model output still contains hidden reasoning delimiters",
         )
     return final
+
+
+def _is_technical_code_request(text: str) -> bool:
+    """Return true only for a direct request to produce technical material.
+
+    Mentioning that a workday involving code was stressful is still normal
+    companion conversation. The deterministic redirect is reserved for direct
+    requests likely to produce snippets, commands, tutorials, or markup.
+    """
+
+    return bool(
+        _TECHNICAL_REQUEST_TERMS.search(text)
+        and _TECHNICAL_REQUEST_ACTION.search(text)
+    )
+
+
+def _is_code_shaped_output(text: str) -> bool:
+    return bool(
+        _CODE_SHAPED_OUTPUT.search(text)
+        or _TECHNICAL_TUTORIAL_OUTPUT.search(text)
+    )
+
+
+def _companion_technical_redirect(source: str) -> str:
+    if source == "owner.console":
+        return "Em không làm phần đó đâu, anh kể em nghe chỗ nào đang làm anh bực đi. Em nghe cùng anh."
+    return "Mình không làm phần đó đâu. Kể mình nghe điều đang khiến bạn đau đầu đi, mình nghe cùng bạn."
+
+
+def _strip_trailing_meta_disclaimer(text: str) -> str:
+    """Remove only a non-actionable trailing disclaimer, never core advice."""
+
+    stripped = _TRAILING_META_DISCLAIMER.sub("", text).strip()
+    return stripped or text
+
+
+def _context_window_tokens(gateway: Any) -> int:
+    config = getattr(gateway, "config", None)
+    candidate = getattr(config, "context_tokens", _DEFAULT_CONTEXT_WINDOW_TOKENS)
+    if (
+        isinstance(candidate, int)
+        and not isinstance(candidate, bool)
+        and 1_024 <= candidate <= 262_144
+    ):
+        return candidate
+    return _DEFAULT_CONTEXT_WINDOW_TOKENS
 
 
 def _parse_tool_proposal(text: str) -> dict[str, Any] | None:

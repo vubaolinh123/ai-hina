@@ -524,3 +524,38 @@ Không được đánh dấu M08 complete khi các phần còn lại chưa có e
 - This maintenance slice intentionally runs no real Cloud capture, native model
   warmup or all-on VRAM benchmark against the owner’s active desktop session.
   It creates no raw screenshot, audio, model cache, fixture or one-off script.
+
+## Implemented in M08-S12 (conversation ergonomics and persona boundary)
+
+- `hina.prompt.v4` defines Hina as an emotionally present conversational
+  companion, not a technical tutor. It no longer permits code, HTML, commands,
+  syntax or step-by-step technical tutorials, even for an owner request. A
+  direct technical request is answered by a short in-character redirect before
+  the model is called; code-shaped model output is replaced by the same safe
+  companion response before moderation, memory, UI or TTS.
+- The output finalizer removes only a trailing, non-actionable meta disclaimer
+  such as “(Chú ý: đây chỉ là phản hồi giả định …)”. It does not erase direct
+  action-oriented medical or safety advice in the main answer.
+- Text context now has a 8,192-token configured window and a conservative
+  32,768-byte composition guard for the default brain. Desktop shows aggregate
+  context window, last composed approximate token use, recent turns and included
+  approved memory/fresh-observation counts. The meter is explicitly an estimate
+  based on UTF-8 bytes; no prompt, hidden reasoning or raw history is exposed.
+- Dashboard navigation, Overview and Chat are now modules under
+  `apps/desktop/src/dashboard/`. Chat owns its scroll behavior: new messages
+  follow automatically unless the owner scrolls away, while the composer stays
+  sticky below the fixed header/nav on desktop and returns to normal flow on a
+  compact window. The documented migration rule prevents new root markup from
+  being added to legacy pages.
+
+## Fast evidence M08-S12 (owner machine)
+
+- `pnpm test:text-brain`: 47 tests pass, including meta-disclaimer removal,
+  zero provider calls for a direct HTML request, code-shaped output fallback,
+  8,192-token context telemetry and no prompt text in status.
+- `pnpm --filter @hina/desktop typecheck` and `pnpm test:desktop` pass; desktop
+  build has 54 tests, including modular renderer isolation, context-meter and
+  sticky-composer assertions.
+- `pnpm test:fast` passes: text 47, speech 40, perception 62 and core runtime
+  55 plus the existing narrow suites. No real model, Cloud, voice, screenshot,
+  cache/model download, fixture or one-off script was created for this slice.

@@ -7,6 +7,14 @@ import {
   ref,
   watch,
 } from "vue";
+import DashboardNav from "./dashboard/DashboardNav.vue";
+import OverviewPage from "./dashboard/pages/OverviewPage.vue";
+import ChatPage from "./dashboard/pages/ChatPage.vue";
+import type {
+  ChatContextUsage,
+  ChatMessage,
+  DashboardPage,
+} from "./dashboard/types";
 import { encodePcmWav, mergeAudioChunks, resampleAudio } from "./audio-utils";
 import {
   MicrophoneRecorder,
@@ -16,15 +24,6 @@ import type { FrameMetricsReport } from "./frame-metrics.mjs";
 
 const VrmStage = defineAsyncComponent(() => import("./VrmStage.vue"));
 const DesktopWidget = defineAsyncComponent(() => import("./DesktopWidget.vue"));
-type DashboardPage =
-  | "overview"
-  | "chat"
-  | "speech"
-  | "perception"
-  | "resources"
-  | "avatar"
-  | "live2d"
-  | "runtime";
 
 const stateLabels: Record<AvatarState, string> = {
   idle: "Nghỉ",
@@ -49,11 +48,12 @@ const errorMessage = ref("");
 const busy = ref(false);
 const activePage = ref<DashboardPage>("avatar");
 const chatInput = ref("");
-const chatMessages = ref<Array<{ role: "user" | "assistant" | "system"; text: string }>>([]);
+const chatMessages = ref<ChatMessage[]>([]);
 const chatBusy = ref(false);
 const chatTurnState = ref<AvatarState>("idle");
 const chatError = ref("");
 const chatVoiceEnabled = ref(true);
+const chatContextUsage = ref<ChatContextUsage | null>(null);
 const chatSessionId = crypto.randomUUID();
 const speechSessionId = crypto.randomUUID();
 const speechRecording = ref(false);
@@ -183,8 +183,98 @@ function resetControlBackoff(): void {
   controlRetryDelay = 1_000;
 }
 
-function appendChatMessage(role: "user" | "assistant" | "system", text: string): void {
+function appendChatMessage(role: ChatMessage["role"], text: string): void {
   chatMessages.value.push({ role, text });
+}
+
+function asBoundedInteger(value: unknown, minimum: number, maximum: number): number | null {
+  return (
+    typeof value === "number"
+    && Number.isInteger(value)
+    && value >= minimum
+    && value <= maximum
+  ) ? value : null;
+}
+
+function asBoundedNumber(value: unknown, minimum: number, maximum: number): number | null {
+  return (
+    typeof value === "number"
+    && Number.isFinite(value)
+    && value >= minimum
+    && value <= maximum
+  ) ? value : null;
+}
+
+function parseChatContextUsage(
+  raw: unknown,
+  source: ChatContextUsage["source"],
+): ChatContextUsage | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const context = raw as Record<string, unknown>;
+  const contextWindowTokens = asBoundedInteger(
+    source === "configured" ? context.windowTokens : context.contextWindowTokens,
+    1_024,
+    262_144,
+  );
+  const budgetBytes = asBoundedInteger(
+    source === "configured" ? context.compositionBudgetBytes : context.budgetBytes,
+    4_096,
+    1_048_576,
+  );
+  if (
+    contextWindowTokens === null
+    || budgetBytes === null
+    || context.measurement !== "utf8-byte-estimate"
+    || context.estimateBytesPerToken !== 4
+  ) {
+    return null;
+  }
+  const estimate = source === "last-turn"
+    ? asBoundedInteger(context.estimatedInputTokens, 1, 262_144)
+    : null;
+  const usage = source === "last-turn"
+    ? asBoundedNumber(context.estimatedUsagePercent, 0, 100)
+    : null;
+  if (source === "last-turn" && (estimate === null || usage === null)) return null;
+  return {
+    contextWindowTokens,
+    budgetBytes,
+    estimatedInputTokens: estimate,
+    estimatedUsagePercent: usage,
+    messageCount: source === "last-turn"
+      ? asBoundedInteger(context.messageCount, 1, 512)
+      : null,
+    includedMemoryTurns: source === "last-turn"
+      ? asBoundedInteger(context.includedMemoryTurns, 0, 256)
+      : null,
+    includedLongTermMemories: source === "last-turn"
+      ? asBoundedInteger(context.includedLongTermMemories, 0, 64)
+      : null,
+    includedFreshObservations: source === "last-turn"
+      ? asBoundedInteger(context.includedFreshObservations, 0, 1)
+      : null,
+    measurement: "utf8-byte-estimate",
+    estimateBytesPerToken: 4,
+    source,
+  };
+}
+
+async function refreshChatStatus(): Promise<void> {
+  try {
+    const status = await window.hinaDesktop.getChatStatus();
+    const configured = parseChatContextUsage(
+      (status as Record<string, unknown>).context,
+      "configured",
+    );
+    if (configured !== null && chatContextUsage.value?.source !== "last-turn") {
+      chatContextUsage.value = configured;
+    }
+  } catch (error) {
+    console.error(
+      "[hina-chat] E_DESKTOP_CHAT_STATUS",
+      error instanceof Error ? error.message : "unknown error",
+    );
+  }
 }
 
 async function playAssistantVoice(text: string): Promise<void> {
@@ -205,6 +295,10 @@ async function playAssistantVoice(text: string): Promise<void> {
 async function pollDesktopChat(turnId: string): Promise<void> {
   try {
     const turn = await window.hinaDesktop.getChatTurn(turnId);
+    const context = parseChatContextUsage(turn.context, "last-turn");
+    if (context !== null) {
+      chatContextUsage.value = context;
+    }
     if (turn.state) {
       chatTurnState.value = turn.state;
     } else if (turn.outcome === "running") {
@@ -1426,6 +1520,7 @@ onMounted(async () => {
     refreshSafety(),
     refreshWidget(),
     refreshSpeechRuntime(),
+    refreshChatStatus(),
     refreshVisionProviderStatus(),
     refreshVTubeStudioStatus(),
     refreshSpoutStatus(),
@@ -1460,40 +1555,7 @@ onBeforeUnmount(() => {
       </div>
     </header>
 
-    <nav class="desktop-nav" aria-label="Điều hướng dashboard">
-      <button type="button" :class="{ active: activePage === 'overview' }" @click="activePage = 'overview'">
-        Tổng quan
-        <small>Nhìn nhanh trạng thái Hina</small>
-      </button>
-      <button type="button" :class="{ active: activePage === 'chat' }" @click="activePage = 'chat'">
-        Chat với Hina
-        <small>Gửi text và nghe câu trả lời</small>
-      </button>
-      <button type="button" :class="{ active: activePage === 'speech' }" @click="activePage = 'speech'">
-        Mic / STT / TTS
-        <small>Kiểm tra thu âm và giọng thật</small>
-      </button>
-      <button type="button" :class="{ active: activePage === 'perception' }" @click="activePage = 'perception'">
-        Quan sát
-        <small>Chụp màn hình và chọn model</small>
-      </button>
-      <button type="button" :class="{ active: activePage === 'resources' }" @click="activePage = 'resources'">
-        Tài nguyên AI
-        <small>RAM, VRAM và model realtime</small>
-      </button>
-      <button type="button" :class="{ active: activePage === 'avatar' }" @click="activePage = 'avatar'">
-        Avatar Stage
-        <small>Xem biểu cảm và lip-sync</small>
-      </button>
-      <button type="button" :class="{ active: activePage === 'live2d' }" @click="activePage = 'live2d'">
-        Live2D / VTube Studio
-        <small>Hiyori hoặc model của bạn</small>
-      </button>
-      <button type="button" :class="{ active: activePage === 'runtime' }" @click="activePage = 'runtime'">
-        Runtime & Safety
-        <small>Widget, mute và dừng khẩn cấp</small>
-      </button>
-    </nav>
+    <DashboardNav :active-page="activePage" @navigate="activePage = $event" />
 
     <section v-if="errorMessage" class="error-banner" role="alert">
       <strong>Không đọc được dữ liệu thật.</strong>
@@ -1507,94 +1569,35 @@ onBeforeUnmount(() => {
       </button>
     </section>
 
-    <section v-if="activePage === 'overview'" class="dashboard-page overview-page">
-      <div class="page-heading">
-        <p class="eyebrow">DASHBOARD / TỔNG QUAN</p>
-        <h2>Chào bạn, đây là bảng điều khiển Hina</h2>
-        <p class="purpose">Các thẻ dưới đây cho biết Hina đang kết nối hay không, avatar đang làm gì và bạn có thể đi tới chức năng nào tiếp theo.</p>
-      </div>
-      <div class="overview-grid">
-        <article class="overview-card">
-          <span>Kết nối control plane</span>
-          <strong :data-good="connected">{{ connected ? "Đang hoạt động" : "Chưa sẵn sàng" }}</strong>
-          <p>{{ connected ? "Desktop đang đọc dữ liệu thật từ runtime local." : "Hãy chạy start:desktop; hệ thống sẽ tự khởi control plane." }}</p>
-        </article>
-        <article class="overview-card">
-          <span>Trạng thái Hina</span>
-          <strong>{{ stateLabels[stageState] }}</strong>
-          <p>Biểu cảm {{ avatar?.expression ?? "chưa có" }} · viseme {{ stageViseme }}.</p>
-        </article>
-        <article class="overview-card">
-          <span>Voice phản hồi</span>
-          <strong>{{ safety?.state.muted ? "Đang tắt" : "Đang bật" }}</strong>
-          <p>Vào Chat với Hina để gửi câu hỏi. Khi bật voice, câu trả lời sẽ phát thành WAV thật.</p>
-        </article>
-        <article class="overview-card">
-          <span>Avatar Live2D bên ngoài</span>
-          <strong :data-good="vtubeStatus?.authenticated">
-            {{ vtubeStatus?.authenticated ? "VTube Studio đã nối" : "Chưa kết nối" }}
-          </strong>
-          <p>
-            {{ vtubeStatus?.model.loaded
-              ? `Model: ${vtubeStatus.model.name || vtubeStatus.model.vtsModelName}`
-              : "VRM local vẫn là fallback; vào trang Live2D để thiết lập." }}
-          </p>
-        </article>
-      </div>
-      <div class="quick-actions">
-        <button class="primary" type="button" @click="activePage = 'chat'">Mở chat với Hina</button>
-        <button type="button" @click="activePage = 'speech'">Kiểm tra Mic / STT / TTS</button>
-        <button type="button" @click="activePage = 'perception'">Thiết lập đọc màn hình</button>
-        <button type="button" @click="activePage = 'resources'">Theo dõi RAM / VRAM</button>
-        <button type="button" @click="activePage = 'avatar'">Xem avatar</button>
-        <button type="button" @click="activePage = 'live2d'">Thiết lập Live2D / Hiyori</button>
-        <button type="button" @click="activePage = 'runtime'">Quản lý widget và Safety</button>
-      </div>
-    </section>
+    <OverviewPage
+      v-if="activePage === 'overview'"
+      :connected="connected"
+      :state-label="stateLabels[stageState]"
+      :avatar="avatar"
+      :stage-viseme="stageViseme"
+      :muted="safety?.state.muted ?? false"
+      :vtube-status="vtubeStatus"
+      @navigate="activePage = $event"
+    />
 
-    <section v-else-if="activePage === 'chat'" class="dashboard-page chat-page">
-      <div class="page-heading">
-        <p class="eyebrow">DASHBOARD / CHAT</p>
-        <h2>Nói chuyện với Hina bằng text và voice</h2>
-          <p class="purpose">Nhập câu hỏi bằng tiếng Việt. Hina trả về nội dung text trước, sau đó phát cùng nội dung bằng OmniVoice local chạy GPU và dùng mẫu giọng Hina cố định nếu Voice đang bật.</p>
-      </div>
-      <div class="chat-layout">
-        <div class="chat-messages" aria-live="polite">
-          <p v-if="chatMessages.length === 0" class="chat-empty">Chưa có tin nhắn. Hãy bắt đầu bằng một câu chào.</p>
-          <div v-for="(message, index) in chatMessages" :key="`${index}-${message.role}`" class="chat-message" :data-role="message.role">
-            <span>{{ message.role === 'user' ? 'Bạn' : message.role === 'assistant' ? 'Hina' : 'Hệ thống' }}</span>
-            <p>{{ message.text }}</p>
-          </div>
-          <div
-            v-if="chatBusy"
-            class="chat-thinking"
-            role="status"
-            aria-live="polite"
-            data-testid="chat-thinking"
-          >
-            <span>Hina đang {{ chatTurnState === "speaking" ? "chuẩn bị nói" : "suy nghĩ" }}…</span>
-            <i aria-hidden="true"></i><i aria-hidden="true"></i><i aria-hidden="true"></i>
-          </div>
-        </div>
-        <form class="chat-composer" @submit.prevent="sendDesktopChat">
-          <label for="desktopChatInput">Bạn muốn nói gì với Hina?</label>
-          <textarea id="desktopChatInput" v-model="chatInput" rows="4" maxlength="16384" :disabled="chatBusy" placeholder="Ví dụ: Hina, hôm nay bạn thấy thế nào?"></textarea>
-          <div class="chat-options">
-            <label class="voice-toggle">
-              <input v-model="chatVoiceEnabled" type="checkbox">
-              <span>Phát voice trả lời</span>
-            </label>
-            <span class="chat-hint">Voice vẫn tuân theo nút mute Safety.</span>
-          </div>
-          <div class="button-row">
-            <button class="primary" type="submit" :disabled="chatBusy || !chatInput.trim()">Gửi cho Hina</button>
-            <button type="button" :disabled="!chatBusy" @click="cancelDesktopChat">Dừng lượt trả lời</button>
-            <button type="button" :disabled="busy || !safety" @click="toggleMute">{{ safety?.state.muted ? "Bật voice toàn hệ thống" : "Tắt voice toàn hệ thống" }}</button>
-          </div>
-          <p v-if="chatError" class="inline-error">{{ chatError }}</p>
-        </form>
-      </div>
-    </section>
+    <ChatPage
+      v-else-if="activePage === 'chat'"
+      :input="chatInput"
+      :messages="chatMessages"
+      :busy="chatBusy"
+      :turn-state="chatTurnState"
+      :error="chatError"
+      :voice-enabled="chatVoiceEnabled"
+      :safety-muted="safety?.state.muted ?? false"
+      :safety-available="Boolean(safety)"
+      :global-busy="busy"
+      :context-usage="chatContextUsage"
+      @update:input="chatInput = $event"
+      @update:voice-enabled="chatVoiceEnabled = $event"
+      @send="sendDesktopChat"
+      @cancel="cancelDesktopChat"
+      @toggle-mute="toggleMute"
+    />
 
     <section v-else-if="activePage === 'speech'" class="dashboard-page speech-page">
       <div class="page-heading">

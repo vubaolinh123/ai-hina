@@ -6,15 +6,18 @@
 
 Module active hiện tại: **M08 — Perception: screen snapshot, OCR và optional
 VLM**. M01,
-M02 và M03 đã qua fast unit/contract/startup gate. M03-S5 maintenance dùng
-`hina.prompt.v3`: mặc định 1–2 câu/≤45 từ, normal ceiling 3 câu/80 từ,
-`max_tokens=192`, chỉ mở rộng khi owner yêu cầu. Năm few-shot do owner cung cấp
+M02 và M03 đã qua fast unit/contract/startup gate. Runtime persona hiện dùng
+`hina.prompt.v4`: mặc định 1–2 câu/≤45 từ, normal ceiling 3 câu/80 từ,
+`max_tokens=192`, chỉ mở rộng cho chuyện/ngữ cảnh đời thường hoặc safety. Năm few-shot do owner cung cấp
 đã được nhúng dưới dạng mẫu đã chỉnh để giữ sự thật, đồng cảm và roast hành
 vi/bình luận thay vì công kích con người; trusted source map cố định
 `creator_owner/known_user/viewer` và output mặc định sạch cho TTS. Ollama chat
 dùng `temperature=0.7` + `repeat_penalty=1.15`: A/B thật cho thấy 0.85 có lúc
 tràn 79 từ, còn profile 0.7 cho sáu tình huống live ở 9–34 từ, không
 markdown/emoji. Future M11 style data không copy Neuro-sama transcript/dataset.
+Hina là companion giao tiếp/cảm xúc: direct code/HTML/command/tutorial được
+redirect trước provider, code-shaped output bị thay trước memory/TTS, còn trailing
+meta disclaimer bị loại nhưng lời khuyên action an toàn vẫn giữ.
 Repeat/soak/deep release verification được hoãn tới khi owner yêu cầu.
 M04-S1/S2 đã qua fast gate,
 real-provider smoke và independent review; P1 native inference timeout đã đóng
@@ -218,6 +221,18 @@ startup smoke qua launcher. Slice không tạo raw test artifact mới; legacy M
 smoke files trong `var/tmp` đã được audit nhưng còn chờ owner cleanup vì môi
 trường chặn thao tác xóa đã xác minh. M08 vẫn active; không có deep/release
 promotion.
+Ngày 2026-07-29 M08-S12 thay runtime persona bằng `hina.prompt.v4`: Hina là
+companion giao tiếp/cảm xúc, không phải technical tutor. Direct request cho
+code/HTML/command/tutorial được redirect trước provider; output có hình dạng
+code bị thay bằng redirect trước moderation, memory, desktop và TTS. Finalizer
+chỉ cắt trailing meta disclaimer “Chú ý/Lưu ý: phản hồi giả định”, không bỏ lời
+khuyên action an toàn. Context status/turn chỉ public window 8.192 token,
+estimate UTF-8 byte và counters aggregate, không prompt/reasoning/raw history.
+Desktop tách `DashboardNav`, `OverviewPage`, `ChatPage`; Chat tự follow message
+trừ khi owner scroll away và composer sticky desktop. Mọi UI mới phải đi vào
+page/component, không thêm markup vào legacy `App.vue` root; migration còn lại
+Speech/Perception/Resources/Live2D/Avatar làm theo bounded slice. Fast gate:
+text 47, speech 40, perception 62, core 55, desktop typecheck/build+54.
 Ngày 2026-07-29 M08-S11 hotfix capture/runtime capacity: owner phê duyệt trần
 admission Hina **15.872 MiB (15,5 GiB)**. `nvidia-smi memory.free` đã phản ánh
 VRAM Windows/compositor/app khác, vì vậy scheduler không trừ thêm 2.048 MiB;

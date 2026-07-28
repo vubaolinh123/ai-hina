@@ -1056,7 +1056,7 @@ Hoàn thành vertical slice text-only có persona Hina, interruption/cancellatio
 - Prompt/persona versioning.
 - Real local resource scheduler: inventory, NVML telemetry, lease admission, priority, timeout, preemption/unload policy.
 
-### Trạng thái local hiện tại (M03-S5)
+### Trạng thái local hiện tại (M03-S5 + M08-S12 maintenance)
 
 - Persona `hina.prompt.v3` mặc định trả lời trực tiếp trong 1–2 câu, thường
   không quá 45 từ; chỉ dùng tối đa 3 câu/khoảng 80 từ khi thật sự cần ngữ cảnh.
@@ -1092,6 +1092,13 @@ Hoàn thành vertical slice text-only có persona Hina, interruption/cancellatio
   simple/complex đều dưới 10 giây và peak total physical VRAM 9.975 MiB.
   Explicit image đã tách sang provider vision Cloud/local nhẹ của M08, không
   còn đi qua text-brain gateway.
+- M08-S12 (2026-07-29) nâng persona runtime lên `hina.prompt.v4`: Hina là
+  companion hội thoại có cảm xúc, không là technical tutor. Direct request cho
+  code/HTML/command/tutorial được redirect in-character không gọi model; output
+  có hình dạng code cũng bị thay trước moderation/memory/TTS. Meta disclaimer
+  cuối câu kiểu “Chú ý: đây chỉ là phản hồi giả định” bị bỏ, còn lời khuyên hành
+  động an toàn vẫn giữ. Conversation status/turn context chỉ trả aggregate
+  8.192-token window + byte-based token estimate, không lộ prompt/reasoning.
 
 ### Eval
 
@@ -1635,10 +1642,16 @@ nhanh, không bắt chước câu chữ hoặc identity của Neuro-sama:
 - lane `direct`: câu hỏi đơn giản → 1–2 câu, thường ≤45 từ;
 - lane `playful`: một punchline/tinh nghịch nhẹ nhưng vẫn trả lời đúng trọng tâm;
 - lane `clarify`: thiếu dữ kiện → đúng một câu hỏi làm rõ;
-- lane `expand-on-request`: yêu cầu code/chi tiết/từng bước → trả lời đủ, không
-  bị ép ngắn máy móc;
-- negative pairs: lặp lại câu hỏi, tự giới thiệu, disclaimer thừa, kết thúc bằng
-  “cần gì cứ hỏi”, nhiều đoạn văn không cần thiết;
+- lane `expand-on-request`: khi owner yêu cầu rõ câu chuyện, cảm xúc hoặc ngữ
+  cảnh đời thường → có thể trả lời đủ nhưng không bị ép ngắn máy móc; yêu cầu
+  code/tutorial/technical syntax vẫn redirect về companion lane;
+- negative pairs: lặp lại câu hỏi, tự giới thiệu, disclaimer thừa, code block,
+  technical tutorial, kết thúc bằng “cần gì cứ hỏi”, nhiều đoạn văn không cần
+  thiết;
+- future style learning: dùng SFT từ hội thoại repository-authored/consented,
+  preference pairs hoặc DPO/ORPO cho lựa chọn “tự nhiên, có cảm xúc” so với
+  “giáo trình/disclaimer”, rồi giữ deterministic output boundary như defence in
+  depth. Không dùng raw public chat hoặc transcript/dataset của Neuro-sama.
 - safety pairs: câu ngắn không được làm mất refusal, uncertainty hoặc capability
   boundary cần thiết.
 

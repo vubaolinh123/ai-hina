@@ -1,0 +1,74 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M08-S12-conversation-ergonomics-persona",
+  "module_id": "M08",
+  "objective": "Make the owner-facing Hina chat behave as a conversational, emotionally present companion rather than a technical tutor; remove model boilerplate disclaimers and code snippets from ordinary chat, expose bounded context usage without leaking prompts, and extract the dashboard navigation, overview and chat UI into focused Vue modules with a sticky, auto-following chat composer.",
+  "non_goals": [
+    "Do not train or fine-tune model weights, add a new model/provider, collect conversation data for training, or claim that prompt changes are personality training.",
+    "Do not suppress concise, action-oriented safety advice for urgent health or safety situations; only remove meta/disclaimer boilerplate that does not help the user act.",
+    "Do not expose system prompts, hidden reasoning, raw model messages, API keys, source IDs, pixels, or exact private conversation history in the context meter.",
+    "Do not run real model, TTS, Cloud, VRAM soak, or desktop restart tests against the owner's active session."
+  ],
+  "base_sha": "cf7eb24",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "packages/text-brain/personas/hina.v1.json",
+    "packages/text-brain/src/hina_text_brain/persona.py",
+    "packages/text-brain/src/hina_text_brain/context.py",
+    "packages/text-brain/src/hina_text_brain/conversation.py",
+    "packages/text-brain/tests/test_conversation.py",
+    "packages/contracts/openapi/control-plane.v1.json",
+    "apps/desktop/src/App.vue",
+    "apps/desktop/src/env.d.ts",
+    "apps/desktop/src/style.css",
+    "apps/desktop/src/dashboard/",
+    "apps/desktop/test/security.test.mjs",
+    "docs/modules/M08-S12-conversation-ergonomics-persona-module-brief.json",
+    "docs/modules/M08-perception.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "voice_demo/",
+    "var/perception-sessions/",
+    "apps/desktop/dist/",
+    "apps/desktop/dist-electron/",
+    "var/test-artifacts/"
+  ],
+  "contracts": [
+    "Normal Hina companion chat never emits markdown/code fences, code snippets, command lines, HTML examples, or step-by-step technical tutorials. Direct technical-code requests receive a concise in-character conversational redirect without calling the model.",
+    "A trailing meta disclaimer such as a parenthesized 'Chú ý: đây chỉ là phản hồi giả định' is removed before moderation, memory, desktop UI and TTS. Useful, direct safety action in the main response remains intact.",
+    "Context telemetry exposes only aggregate window capacity, approximate composed input usage, message/turn counts and included memory/observation counts. It is explicitly labelled as an estimate and never contains prompt text or hidden reasoning.",
+    "The Chat page owns chat scrolling and input ergonomics. Its composer remains reachable while the page scrolls, and message history auto-follows new messages unless the owner intentionally scrolls away.",
+    "App.vue remains the operator shell and lifecycle owner. This slice moves dashboard navigation, overview and chat markup into focused components; new dashboard work must extend a page/component rather than grow legacy root markup."
+  ],
+  "allowed_dependencies": [
+    "Existing Python standard library, current Vue 3/TypeScript, Electron typed IPC and repository test tooling; no new dependency."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "Regression tests prove boilerplate disclaimer removal, technical-code request redirect without a provider call, code-shaped provider output fallback, and aggregate context metrics with no prompt text.",
+    "Chat status and completed turn context report the configured 8,192-token window plus bounded approximate usage without changing secret or prompt boundaries.",
+    "The desktop Chat page shows current/last context usage, uses an accessible sticky composer and auto-follows new messages; its CSS has a small-screen non-sticky fallback.",
+    "Navigation, overview and chat pages are extracted out of App.vue into named dashboard components; the architecture document records the remaining legacy-page migration rule and the desktop security test covers the new renderer files.",
+    "Focused text-brain tests, desktop typecheck/build/security test and the repository fast gate pass."
+  ],
+  "required_test_commands": [
+    "$env:PYTHONPATH='apps/core-runtime/src;packages/contracts/src;packages/safety-policy/src;packages/text-brain/src;workers/speech/src;workers/perception/src'; uv run --frozen python -m unittest discover -s packages/text-brain/tests -p 'test_*.py'",
+    "pnpm --filter @hina/desktop typecheck",
+    "pnpm test:desktop",
+    "pnpm test:fast",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "direct_technical_redirect_model_calls": 0,
+    "default_companion_answer_sentences": 2,
+    "default_companion_answer_words": 45,
+    "model_context_window_tokens": 8192,
+    "context_estimate_bytes_per_token": 4
+  },
+  "output_artifact_dir": "artifacts/verification/M08/"
+}

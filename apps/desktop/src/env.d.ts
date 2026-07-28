@@ -162,6 +162,17 @@ type ChatTurn = {
   errorCode?: string;
   errorMessage?: string;
   correlationId?: string;
+  context?: Record<string, unknown> | null;
+};
+
+type ChatRuntimeStatus = {
+  persona: Record<string, unknown>;
+  memory: Record<string, unknown>;
+  activeTurns: number;
+  trackedTurns: number;
+  context: Record<string, unknown>;
+  outboundPartialStreaming: false;
+  toolExecution: false;
 };
 
 type SpeechTranscription = {
@@ -424,7 +435,7 @@ type HinaDesktopApi = {
     message: string;
     resources: ResourceStatus;
   }>;
-  getChatStatus(): Promise<Record<string, unknown>>;
+  getChatStatus(): Promise<ChatRuntimeStatus>;
   startChatTurn(payload: {
     sessionId: string;
     source: "owner.console";

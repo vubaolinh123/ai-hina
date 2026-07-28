@@ -6,6 +6,12 @@ import test from "node:test";
 
 const ROOT = new URL("..", import.meta.url);
 const read = (path) => readFileSync(new URL(path, ROOT), "utf8");
+const readOperatorRenderer = () => [
+  read("src/App.vue"),
+  read("src/dashboard/DashboardNav.vue"),
+  read("src/dashboard/pages/OverviewPage.vue"),
+  read("src/dashboard/pages/ChatPage.vue"),
+].join("\n");
 const require = createRequire(import.meta.url);
 const control = require("../dist-electron/control-client.js");
 
@@ -116,7 +122,7 @@ test("Ollama Cloud vision key stays behind OS-encrypted operator IPC", () => {
 
 test("Vue renderer has no direct network, Electron, Node or storage access", () => {
   const renderer = [
-    read("src/App.vue"),
+    readOperatorRenderer(),
     read("src/DesktopWidget.vue"),
     read("src/audio-utils.ts"),
     read("src/main.ts"),
@@ -130,12 +136,33 @@ test("Vue renderer has no direct network, Electron, Node or storage access", () 
   assert.doesNotMatch(renderer, /sqlite|qdrant|modelPath|process\.env/i);
 });
 
+test("operator dashboard keeps page markup modular and chat input reachable", () => {
+  const app = read("src/App.vue");
+  const nav = read("src/dashboard/DashboardNav.vue");
+  const overview = read("src/dashboard/pages/OverviewPage.vue");
+  const chat = read("src/dashboard/pages/ChatPage.vue");
+  const style = read("src/style.css");
+
+  assert.match(app, /import DashboardNav from "\.\/dashboard\/DashboardNav\.vue"/);
+  assert.match(app, /import OverviewPage from "\.\/dashboard\/pages\/OverviewPage\.vue"/);
+  assert.match(app, /import ChatPage from "\.\/dashboard\/pages\/ChatPage\.vue"/);
+  assert.doesNotMatch(app, /<nav class="desktop-nav"/);
+  assert.match(nav, /Live2D \/ VTube Studio/);
+  assert.match(overview, /Mở chat với Hina/);
+  assert.match(chat, /Context hội thoại của Hina/);
+  assert.match(chat, /ref="messageList"/);
+  assert.match(chat, /followLatestMessage/);
+  assert.match(chat, /Bạn muốn nói gì với Hina\?/);
+  assert.match(style, /\.chat-composer[\s\S]*position:\s*sticky/);
+  assert.match(style, /\.chat-layout[\s\S]*grid-template-columns:\s*1fr/);
+});
+
 test("resource telemetry and owner controls stay behind typed operator IPC", () => {
   const main = read("electron/main.ts");
   const preload = read("electron/preload.ts");
   const client = read("electron/control-client.ts");
   const monitor = read("electron/resource-monitor.ts");
-  const renderer = read("src/App.vue");
+  const renderer = readOperatorRenderer();
 
   assert.match(main, /CHANNELS\.resourcesStatus/);
   assert.match(main, /E_DESKTOP_RESOURCE_AUTHORITY: operator window required/);
@@ -193,7 +220,7 @@ test("VTube Studio stays in the main process behind operator-only typed IPC", ()
   const main = read("electron/main.ts");
   const preload = read("electron/preload.ts");
   const client = read("electron/vtube-studio-client.ts");
-  const app = read("src/App.vue");
+  const app = readOperatorRenderer();
   assert.match(main, /E_VTS_AUTHORITY: operator window required/);
   assert.match(main, /VTS_TOKEN_STATE_MAX_BYTES/);
   assert.match(main, /hina-vtube-studio-token\.v1\.json/);
@@ -291,7 +318,7 @@ test("transparent widget keeps hover Voice/Mic controls and a native drag surfac
   assert.match(widget, /await new Promise<void>/);
   assert.doesNotMatch(widget, /ScriptProcessorNode|createScriptProcessor/);
   assert.match(widget, /encodePcmWav/);
-  const app = read("src/App.vue");
+  const app = readOperatorRenderer();
   assert.match(app, /Mic \/ STT \/ TTS/);
   assert.match(app, /speechStartMic/);
   assert.match(app, /speechTestTts/);
