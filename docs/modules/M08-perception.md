@@ -7,6 +7,7 @@
   M08-S6 desktop full-frame low-resolution capture is a runnable candidate;
   M08-S7 vision result + persisted configuration hotfix is a runnable candidate;
   M08-S8 bounded empty/truncated vision recovery is a runnable candidate;
+  M08-S9 fresh same-session observation context is a runnable candidate;
   M08 remains active
 - Branch: `main` (fast-development mode)
 - Active slices: M08-S1 perception spine (owner-consented snapshot ingestion,
@@ -19,7 +20,9 @@
   M08-S6 moves the primary capture authority into Electron main and sends the
   complete selected source at a bounded owner-selected resolution; M08-S7
   makes final analysis/error state and persisted Cloud configuration explicit;
-  M08-S8 retries only empty or output-budget-truncated VLM completions once
+  M08-S8 retries only empty or output-budget-truncated VLM completions once;
+  M08-S9 lets one fresh same-session semantic observation inform owner chat
+  without turning the snapshot into system instructions, memory or a tool
 
 ## Runnable target
 
@@ -41,8 +44,11 @@ Khi owner chủ động đánh dấu **Nhờ provider vision đã chọn phân t
 ảnh**, cùng PNG đó được đưa qua Ollama Cloud hoặc model Ollama local nhẹ đã cấu
 hình trong Dashboard desktop. Observation chỉ nhận một mô tả text
 tối đa 2.000 ký tự, luôn mang `trustLevel=untrusted`,
-`decisionSupportEligible=false` và hết hạn cùng TTL. Mô tả không tự đi vào
-memory, chat prompt, tool hay bộ điều khiển game.
+`decisionSupportEligible=false` và hết hạn cùng TTL. Trong tối đa 15 giây,
+owner có thể hỏi Hina về ảnh vừa chụp trong đúng phiên chat đó. Runtime đưa
+tối đa một mô tả semantic vào user-role block bị giới hạn và gắn nhãn
+untrusted; không đưa raw pixel/hash/box vào prompt, không ghi vào memory,
+không cấp quyền tool và không cho Hina tuyên bố đang nhìn màn hình trực tiếp.
 
 ## Implemented in M08-S1
 
@@ -269,6 +275,29 @@ is retained only for audit/rollback comparison.
 - Local-provider recovery giữ đúng một scheduler lease cho cả hai lượt, assert
   lease sau từng response rồi release đúng một lần.
 
+## Implemented in M08-S9 (fresh same-session observation context)
+
+- `PerceptionService.fresh_context_for_turn` đọc lại freshness từ monotonic
+  ledger đúng lúc compose turn. Chỉ `owner.console`, đúng session UUID và đúng
+  một observation semantic mới nhất được chọn; metadata-only, archived,
+  expired, khác session hoặc khác lane đều bị loại.
+- `ContextComposer` đặt dữ liệu vào user-role block
+  `[UNTRUSTED_FRESH_OBSERVATION_DATA]`, escape delimiter giả do ảnh/OCR chứa và
+  chỉ cho qua label, kích thước, TTL còn lại, vision summary cùng OCR text đã
+  bound. System prompt chỉ nhận trusted availability metadata. Nếu block không
+  vừa byte budget, turn quay về trạng thái không có ảnh thay vì cắt dở hoặc lỗi.
+- Desktop capture dùng cùng UUID với phiên chat. Sau khi phân tích thành công,
+  nút **Hỏi Hina ngay về ảnh vừa chụp** chuyển sang trang Chat và gửi câu hỏi
+  trong đúng session; sau 15 giây nút không thể hồi sinh context đã hết hạn.
+- Observation không được thêm vào short-term replay, long-term memory, tool
+  proposal hoặc game controller. Model được nhắc nói “ảnh vừa chụp”, không nói
+  “mình đang nhìn màn hình”.
+- Launcher chạy bounded fast-path check trên đúng checkpoint Thinking/GPU trước
+  khi mở operator rồi unload bằng `keep_alive=0`, tránh first-turn timeout do
+  cold load mà không giữ thêm model. Parser cũng bỏ toàn bộ prefix trước orphan
+  `</think>`; block có `<think>` thật vẫn fail closed và hidden text không đi
+  vào replay/TTS.
+
 ## Deferred M08 deliverables
 
 Chất lượng OCR tiếng Việt (benchmark corpus UI rõ/game UI khó và thay/tinh chỉnh
@@ -388,3 +417,21 @@ Không được đánh dấu M08 complete khi các phần còn lại chưa có e
   `lastErrorCode=null`.
 - Snapshot test không được archive; `pixelDataRetained=false`. Không tạo raw
   screenshot, fixture, script one-off hoặc debug dump mới.
+
+## Fast evidence M08-S9 (owner machine)
+
+- `pnpm test:text-brain`: 41 tests pass; `pnpm test:perception`: 59 tests pass;
+  `uv run --frozen python apps/core-runtime/tests/test_dev_console.py`: 9 tests
+  pass với `PYTHONPATH` workspace; `pnpm --filter @hina/desktop test`: 53 tests
+  pass; `pnpm smoke:dev-console`: pass.
+- Startup fast-path trên cùng Qwen3-VL 8B Thinking hoàn tất trong 2,76 giây,
+  full GPU và unload sau check. Không load checkpoint thứ hai.
+- Real in-memory capture 960×286/211.545 byte qua persisted MiniMax M3 trả
+  `vision.state=ready`. Fresh chat correlation
+  `529261da-3298-4a7b-8781-cf17d083b50d` báo
+  `includedFreshObservations=1` và mô tả đúng nội dung hai màn hình. Sau 16 giây,
+  correlation `7aa1fbbb-4b04-4086-9578-79458bb38fad` báo
+  `includedFreshObservations=0`.
+- Smoke giữ PNG trong `MemoryStream`, không ghi ảnh ra đĩa; archive tắt,
+  `pixelDataRetained=false`, feature perception được trả về tắt. Script
+  one-off và artifact latency đã được xóa sau khi lấy số đo.

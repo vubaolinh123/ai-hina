@@ -1433,6 +1433,15 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
   bị cắt và hidden thinking không bao giờ trở thành observation; lỗi provider
   khác không retry. Real smoke ảnh UI 2.082×1.167 trả summary Việt hoàn chỉnh
   trong 16,703 giây, archive/pixel persistence đều tắt.
+- M08-S9 fresh observation chat context (2026-07-29): đúng một semantic
+  observation mới nhất chỉ được compose cho `owner.console` khi cùng session
+  UUID và còn hạn theo monotonic ledger. Dữ liệu nằm trong bounded user-role
+  block gắn nhãn untrusted; raw pixel/hash/box, ảnh lịch sử, session/lane khác,
+  memory và tool đều bị loại. Desktop dùng cùng chat session cho capture và có
+  nút hỏi ngay; prompt nói “ảnh vừa chụp”, không tuyên bố live view. Real
+  capture-to-chat báo `includedFreshObservations=1`, còn lượt sau 16 giây báo
+  `0`. Startup dùng đúng same-weight GPU fast-path rồi `keep_alive=0` để tránh
+  cold first-turn timeout mà không giữ checkpoint thứ hai.
 
 ### Test matrix
 

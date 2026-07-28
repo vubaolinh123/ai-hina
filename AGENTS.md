@@ -192,6 +192,18 @@ trả lời trực tiếp và ceiling phục hồi 768 token. Partial bị cắt
 hidden thinking không được đọc/log/trả về; lỗi auth/network/timeout/protocol
 không retry. Real smoke ảnh UI 2.082×1.167 trả summary Việt hoàn chỉnh trong
 16,703 giây, không persist pixel; 58 perception tests xanh.
+Ngày 2026-07-29 M08-S9 nối một observation semantic vừa chụp vào đúng phiên
+chat `owner.console` trong TTL tối đa 15 giây. Runtime chọn tối đa một observation
+mới nhất bằng monotonic ledger, cùng session UUID; đưa nó vào bounded user-role
+block untrusted và loại raw pixel/hash/box, ảnh lịch sử, session/lane khác,
+memory cùng tool. Desktop capture dùng chính chat session và có nút hỏi ngay;
+system prompt chỉ nói “ảnh vừa chụp”, không tuyên bố live view. Real
+capture-to-chat 960×286 báo `includedFreshObservations=1`; sau 16 giây báo `0`,
+không persist pixel. Text-brain 41, perception 59, core integration 9, desktop
+53 tests và Dev Console smoke xanh. Launcher warm đúng checkpoint Thinking trên
+GPU trong 2,76 giây rồi `keep_alive=0`, đóng cold first-turn timeout mà không
+giữ model thứ hai. Prefix trước orphan `</think>` cũng bị loại trước
+moderation/replay/TTS; explicit `<think>` vẫn fail closed.
 
 Legacy AIRI skill paths dưới `D:\ProjectAiri` mặc định ánh xạ sang repository
 hiện tại `D:\ProjectHinaAI`, trừ khi owner chỉ định workspace khác.

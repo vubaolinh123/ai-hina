@@ -212,6 +212,8 @@ memory hoặc tự kích hoạt công cụ.
    chọn source và giữ preset 960 px nếu không cần chữ rất nhỏ.
 2. Chọn OCR GPU hoặc model vision nếu cần, rồi bấm
    **Chụp toàn bộ nguồn đã chọn và gửi Hina**.
+   Khi có kết quả, bấm **Hỏi Hina ngay về ảnh vừa chụp** để chuyển sang Chat và
+   hỏi trong cùng phiên trước khi TTL 15 giây kết thúc.
 3. Để cấu hình model vision, chọn `Ollama Cloud` hoặc `Ollama local`.
 4. Với Cloud ở lần đầu, dán API key rồi bấm **Đọc danh sách model**. Dashboard
    chỉ liệt kê model khai báo capability vision; chọn model và bấm lưu.
@@ -243,8 +245,12 @@ Capture mặc định tắt: nút bật/tắt quyền nằm ngay trên trang **Q
 safety policy (`perception.observe`, decision `ask`) yêu cầu đúng hành động xác
 nhận của owner cho từng snapshot; policy lỗi thì capture fail closed. Widget
 không có quyền list/chụp source và không có capture tự động.
-Quan sát ở slice này chỉ hiển thị cho owner — chưa được đưa vào chat context,
-memory hay tool nào.
+Trong đúng phiên `owner.console`, Hina có thể dùng tối đa một vision/OCR summary
+của ảnh vừa chụp khi nó còn hạn. Summary được đặt trong user-role block có nhãn
+untrusted; ảnh thô, hash, OCR box, key và provider payload không đi vào prompt.
+Hina được yêu cầu nói “ảnh vừa chụp”, không giả vờ đang nhìn live. Sau TTL,
+khác session hoặc khác lane, context bị loại 100%; nó không đi vào memory, tool
+hay bộ điều khiển game.
 
 ```powershell
 pnpm test:perception
