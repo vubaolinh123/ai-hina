@@ -1364,6 +1364,11 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
 - GPU resource lease/fallback.
 - M08-S2 unified multimodal baseline: Qwen3.5-4B Q4_K_M dùng chung cho chat và
   explicit image snapshot qua Ollama, `keep_alive=0`, không load VLM thứ hai.
+- M08-S3 GPU OCR candidate (2026-07-28): RapidOCR 3.9.1 + PP-OCRv6 small Torch
+  chạy `cuda:0` qua scheduler lease 1.024 MiB, chỉ owner-opt-in, không CPU
+  fallback và không persist pixel/text. Smoke RTX 5070 Ti xác nhận peak 814 MiB
+  reserved; mẫu UI tiếng Việt dài đo CER 23,611%, nên chưa đạt gate OCR UI rõ
+  ≤5%, không quality-promote và không dùng cho autonomous decision support.
 
 ### Test matrix
 

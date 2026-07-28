@@ -1,0 +1,89 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M08-S3-gpu-vietnamese-ocr",
+  "module_id": "M08",
+  "objective": "Add an explicit owner-triggered Vietnamese OCR path to the existing M08 snapshot flow using pinned RapidOCR 3.9.1 with PP-OCRv6 small detection and recognition models on the shared Torch CUDA runtime, while retaining only bounded untrusted text inside the existing maximum-15-second observation.",
+  "non_goals": [
+    "Do not capture continuously, bypass the browser display picker, or enable perception by default.",
+    "Do not persist screenshot pixels, PNG bytes, OCR crops, recognized text, or OCR prompts outside the in-memory TTL observation.",
+    "Do not fall back to CPU, ONNX Runtime CPU, DirectML, PaddlePaddle, a remote OCR API, or a second OCR model when CUDA is unavailable.",
+    "Do not feed OCR output into memory, chat context, tools, game controls, or autonomous decisions in this slice.",
+    "Do not complete M08 or start event-driven capture, OS window allowlists, privacy masks, or the full 200-case replay gate in this slice.",
+    "Do not claim Vietnamese OCR quality promotion when the recorded UI CER gate is not met; expose the measured limitation to the owner instead."
+  ],
+  "base_sha": "a52f4c710d1793e0784d3e6a7b8c7e03a1272bda",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "pyproject.toml",
+    "uv.lock",
+    "workers/perception/",
+    "apps/core-runtime/src/hina_core/runtime/application.py",
+    "apps/core-runtime/src/hina_core/runtime/transport.py",
+    "apps/core-runtime/tests/test_perception_routes.py",
+    "apps/dev-console/public/",
+    "tools/dev/",
+    "docs/modules/M08-S3-gpu-ocr-module-brief.json",
+    "docs/modules/M08-perception.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "docs/provenance/rapidocr-ppocrv6.yaml",
+    "ml/models/manifests/rapidocr-ppocrv6-small-torch.v1.json",
+    "third_party/code.lock.json",
+    "third_party/THIRD_PARTY_NOTICES.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "packages/contracts/",
+    "packages/safety-policy/",
+    "packages/memory/",
+    "workers/speech/",
+    "apps/desktop/",
+    "assets/avatars/"
+  ],
+  "contracts": [
+    "OCR runs only when the owner explicitly sets the OCR option on an already-authorized perception.observe snapshot request.",
+    "The provider is fixed to RapidOCR 3.9.1, PP-OCRv6 small detection and recognition, Torch CUDA device 0, batch one request at a time, and fails closed when CUDA is unavailable; no CPU fallback exists.",
+    "The shared local resource scheduler grants a bounded preemptible OCR lease and preserves at least 2048 MiB live VRAM headroom.",
+    "OCR text, confidence, and normalized boxes are bounded, marked trustLevel=untrusted and decisionSupportEligible=false, and expire with the parent observation after at most 15 seconds.",
+    "PNG bytes are passed to OCR only in memory and discarded after inference; no raw pixel, crop, model input, or OCR output is written to disk or logs.",
+    "An OCR failure produces a stable visible E_PERCEPTION_OCR state while preserving the base evidence and any separately requested VLM result."
+  ],
+  "allowed_dependencies": [
+    "rapidocr==3.9.1 (Apache-2.0 Python adapter)",
+    "Existing torch==2.11.0+cu128 CUDA runtime",
+    "RapidOCR transitive packages already resolved by uv, including OpenCV, Pillow, NumPy, Shapely and PyYAML",
+    "PP-OCRv6 small Torch detection and recognition weights with exact SHA-256 values from the RapidOCR 3.9.1 manifest"
+  ],
+  "oss_candidates": [
+    "https://github.com/RapidAI/RapidOCR/tree/7d1a4c29fc9b9dcbb631213494fbb9b7f96e4a70",
+    "https://github.com/PaddlePaddle/PaddleOCR",
+    "https://huggingface.co/PaddlePaddle/PP-OCRv6_small_det"
+  ],
+  "acceptance_criteria": [
+    "Perception unit tests prove explicit opt-in, no implicit OCR call, bounded/sanitized untrusted output, normalized boxes, provider error preservation, close/unload, and absence of pixel/base64 data in observations.",
+    "Control-plane route tests prove the X-Hina-OCR-Analyze header reaches the provider and the default route remains OCR-free.",
+    "The Quan sát dashboard has a plain-language GPU OCR option, shows recognized text/confidence/error, and explains when to use OCR instead of the heavier VLM.",
+    "A real owner-GPU smoke confirms Torch CUDA execution, reports measured VRAM and Vietnamese UI CER, and leaves at least 2048 MiB free headroom. A CER above 5 percent must be reported as qualityGatePassed=false and remains blocked from quality promotion.",
+    "Focused perception tests, core route tests, JavaScript syntax validation, and Dev Console startup smoke pass once."
+  ],
+  "required_test_commands": [
+    "pnpm test:perception",
+    "uv run --frozen python apps/core-runtime/tests/test_perception_routes.py",
+    "node --check apps/dev-console/public/app.js",
+    "pnpm smoke:dev-console",
+    "uv run --frozen python tools/dev/m08_gpu_ocr_smoke.py"
+  ],
+  "latency_or_quality_budget": {
+    "maximum_observation_ttl_seconds": 15,
+    "maximum_ocr_text_characters": 4000,
+    "maximum_ocr_lines": 100,
+    "maximum_box_coordinates": 8,
+    "clear_vietnamese_ui_cer_percent": 5,
+    "ocr_resource_reservation_vram_mib": 1024,
+    "minimum_live_vram_headroom_mib": 2048,
+    "cpu_fallback_allowed": false,
+    "retain_source_pixels": false
+  },
+  "output_artifact_dir": "artifacts/verification/M08/"
+}

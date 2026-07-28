@@ -1,6 +1,7 @@
 # M08 — Perception: screen snapshot, OCR và optional VLM
 
-- Status: M08-S1/S2 runnable candidate; M08 remains active
+- Status: M08-S1/S2 runnable candidate; M08-S3 functional GPU OCR candidate
+  pending Vietnamese quality promotion; M08 remains active
 - Branch: `main` (fast-development mode)
 - Active slices: M08-S1 perception spine (owner-consented snapshot ingestion,
   freshness/TTL ledger, safety gating, Dev Console page); M08-S2 explicit
@@ -75,10 +76,34 @@ memory, chat prompt, tool hay bộ điều khiển game.
   bằng GPU, trả mô tả tiếng Việt và không còn resident trong `ollama ps` sau
   request. Blob Ollama 3,4 GB; runtime đo khoảng 3,1 GiB GPU tại context 4K.
 
+## Implemented in M08-S3 (GPU OCR candidate)
+
+- `RapidOcrProvider` bọc `rapidocr==3.9.1` và PP-OCRv6 small Torch theo đúng
+  URL/SHA-256 đã ghi trong model manifest. Detector, recognizer và orientation
+  classifier đều bị ép sang `cuda:0`; nếu CUDA thiếu, device không khớp, model
+  lỗi hoặc lease bị từ chối thì trả lỗi `E_PERCEPTION_OCR_*`, không âm thầm chạy
+  CPU/ONNX/Paddle/remote API.
+- OCR chỉ chạy khi owner đã chụp snapshot được policy cho phép và bật checkbox
+  **Đọc chữ bằng OCR GPU**. Kết quả chỉ gồm text đã giới hạn, confidence và box
+  chuẩn hóa; luôn là `untrusted`, không được đưa vào memory/chat/tool/game và
+  hết hạn cùng observation tối đa 15 giây. PNG, crop, input tensor và text OCR
+  không được ghi vào file hoặc log.
+- Scheduler cấp một lease OCR preemptible 1.024 MiB (priority 50) và unload model
+  khi bị preempt/shutdown; policy all-on vẫn giữ headroom tối thiểu 2.048 MiB.
+- Dev Console hiển thị rõ đây là OCR GPU thử nghiệm, không có CPU fallback, và
+  khuyên owner đối chiếu chữ có dấu/chữ nhỏ quan trọng hoặc dùng VLM local cho
+  ngữ cảnh ảnh phức tạp. Checkbox không bật capture tự động.
+- Smoke thật trên RTX 5070 Ti xác nhận `cuda:0`, peak 644,3 MiB allocated /
+  814,0 MiB reserved, không lưu pixel/text. Mẫu UI ngắn CER 0,0%; mẫu tiếng Việt
+  dài CER 23,611%, nên candidate này **chưa qua** gate OCR UI rõ ≤5% và không
+  được quality-promote. Số đo và SHA của weights nằm tại
+  `ml/models/manifests/rapidocr-ppocrv6-small-torch.v1.json`.
+
 ## Deferred M08 deliverables
 
-OCR provider thật (PaddleOCR hoặc RapidOCR sau license/VRAM review), capture
-allowlist theo window/region ở tầng OS, privacy mask, event/intent-driven
+Chất lượng OCR tiếng Việt (benchmark UI rõ/game UI khó và thay/tinh chỉnh
+provider nếu vẫn không qua CER), capture allowlist theo window/region ở tầng OS,
+privacy mask, event/intent-driven
 capture, replay ≥200 historical/stopped capture cases và các gate OCR CER/VLM
 QA của master plan thuộc các slice M08 tiếp theo. Không được đánh dấu M08
 complete khi các phần này chưa có evidence.
@@ -106,3 +131,19 @@ complete khi các phần này chưa có evidence.
   perception 33 và core-runtime 45 tests đều pass; `node --check app.js` pass.
 - Real local image smoke trả mô tả tiếng Việt từ Qwen3.5-4B; model dùng GPU và
   `keep_alive=0` làm `ollama ps` trống sau request.
+
+## Fast evidence M08-S3 (owner machine)
+
+- `pnpm test:perception`: 41 tests pass.
+- `uv run --frozen python apps/core-runtime/tests/test_perception_routes.py`:
+  11 route tests pass, gồm header OCR tới provider giả và kiểm tra không thể
+  đưa raw PNG vào observation.
+- `node --check apps/dev-console/public/app.js` và `pnpm smoke:dev-console`
+  pass.
+- `uv run --frozen python tools/dev/m08_gpu_ocr_smoke.py` chạy provider thật
+  trên `cuda:0`, peak 644,3 MiB allocated / 814,0 MiB reserved, không persist
+  pixel/text. Script cố ý in CER và `clearUiQualityGatePassed=false` khi mẫu
+  tiếng Việt dài chưa đạt chuẩn, thay vì che giấu chất lượng.
+- Runtime route smoke thật đã bật feature flag qua safety API, gửi PNG có
+  `X-Hina-OCR-Analyze: true` và nhận `HTTP 200`, `ocr.state=ready`,
+  `effectiveDevice=cuda:0`, `decisionSupportEligible=false`.

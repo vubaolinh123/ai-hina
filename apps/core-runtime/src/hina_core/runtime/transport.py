@@ -965,6 +965,10 @@ class ControlPlaneServer:
             request.headers.get("x-hina-vision-analyze", "").strip().lower()
             in {"1", "true", "yes"}
         )
+        analyze_with_ocr = (
+            request.headers.get("x-hina-ocr-analyze", "").strip().lower()
+            in {"1", "true", "yes"}
+        )
         vision_question_raw = request.headers.get("x-hina-vision-question")
         vision_question = unquote(vision_question_raw) if vision_question_raw else None
         content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
@@ -1032,6 +1036,7 @@ class ControlPlaneServer:
                 owner_confirmed=owner_confirmed,
                 analyze_with_vlm=analyze_with_vlm,
                 vision_question=vision_question,
+                analyze_with_ocr=analyze_with_ocr,
             )
         except Exception as exc:
             code = getattr(exc, "code", "")

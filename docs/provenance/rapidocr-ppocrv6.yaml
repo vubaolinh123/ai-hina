@@ -1,0 +1,33 @@
+name: rapidocr-ppocrv6
+upstream_url: https://github.com/RapidAI/RapidOCR
+revision: 7d1a4c29fc9b9dcbb631213494fbb9b7f96e4a70
+distribution:
+  kind: pypi-wheel
+  name: rapidocr
+  version: 3.9.1
+  filename: rapidocr-3.9.1-py3-none-any.whl
+  sha256: 600885e4e94e0b427abad394fccb0ec1d3c9118a215ca435bf7680aeae0e292b
+license_spdx: Apache-2.0
+model_weight_license: Apache-2.0
+model_weight_source: https://huggingface.co/PaddlePaddle/PP-OCRv6_small_det
+model_conversion_source: https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.1/
+copyright: "RapidAI contributors; PaddlePaddle contributors"
+imported_at: 2026-07-28
+original_paths: []
+destination_paths:
+  - pyproject.toml
+  - uv.lock
+  - workers/perception/pyproject.toml
+  - workers/perception/src/hina_perception/config.py
+  - workers/perception/src/hina_perception/ocr.py
+  - workers/perception/src/hina_perception/service.py
+  - apps/core-runtime/src/hina_core/runtime/application.py
+modifications:
+  - "Pinned as a runtime dependency behind Hina's repository-owned OcrProvider; no upstream source file or snippet was copied."
+  - "Uses the reviewed RapidOCR 3.9.1 converted PP-OCRv6 small Torch artifacts by exact URL and SHA-256 in a physical repository-local cache."
+  - "Forces detector, recognizer and orientation classifier onto CUDA:0, validates every component device and fails closed when CUDA is unavailable; no CPU, ONNX, Paddle or remote fallback is implemented."
+  - "Passes a one-shot owner-consented PNG only in memory, returns bounded untrusted text/confidence/normalized boxes and retains neither pixels nor OCR output after the parent 15-second observation expires."
+  - "The 2026-07-28 synthetic Vietnamese long-line smoke measured 23.611% CER, so this integration is a functional GPU candidate only and is not quality-promoted."
+model_manifest: ml/models/manifests/rapidocr-ppocrv6-small-torch.v1.json
+reviewed_by: primary_orchestrator
+approved_by: primary_orchestrator_for_local_owner_testing_only

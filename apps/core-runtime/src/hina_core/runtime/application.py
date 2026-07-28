@@ -253,13 +253,46 @@ class HinaRuntimeApplication:
                 if tts_config.device == "cuda" and tts_config.warmup_on_start:
                     await tts_service.warmup()
             if perception_service is None and safety_policy is not None:
-                from hina_perception import PerceptionConfig, PerceptionService
+                from hina_perception import (
+                    OcrConfig,
+                    PerceptionConfig,
+                    PerceptionService,
+                    RapidOcrProvider,
+                    ScheduledOcrProvider,
+                )
 
                 vision_analyze = getattr(model_gateway, "analyze_image", None)
+                ocr_provider = None
+                scheduler = getattr(model_gateway, "scheduler", None)
+                if scheduler is not None:
+                    from hina_text_brain import LocalResourceRequest
+
+                    ocr_config = OcrConfig.from_env(root=ROOT)
+                    native_ocr_provider = RapidOcrProvider(ocr_config)
+
+                    async def acquire_ocr_lease(unload: Any) -> Any:
+                        return await scheduler.acquire(
+                            LocalResourceRequest(
+                                owner="perception.ocr",
+                                vram_mib=ocr_config.model_vram_mib,
+                                ram_mib=ocr_config.model_ram_mib,
+                                priority=50,
+                                ttl_seconds=ocr_config.request_timeout_seconds + 30,
+                                preemptible=True,
+                            ),
+                            wait_timeout_seconds=5,
+                            on_preempt=unload,
+                        )
+
+                    ocr_provider = ScheduledOcrProvider(
+                        native_ocr_provider,
+                        acquire_ocr_lease,
+                    )
                 perception_service = PerceptionService(
                     PerceptionConfig.from_env(),
                     safety_evaluate=safety_policy.evaluate,
                     vision_analyze=vision_analyze if callable(vision_analyze) else None,
+                    ocr_provider=ocr_provider,
                     on_error=self._log_perception_error,
                 )
             server = ControlPlaneServer(

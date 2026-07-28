@@ -1,0 +1,87 @@
+{
+  "schema_version": "1.0",
+  "manifest_id": "hina.perception.rapidocr-ppocrv6-small-torch.v1",
+  "artifact_kind": "converted_torch_ocr_models_and_vocabulary",
+  "model_id": "PaddlePaddle/PP-OCRv6 small via RapidOCR Torch conversion",
+  "source_url": "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.9.1/",
+  "official_model_card_url": "https://huggingface.co/PaddlePaddle/PP-OCRv6_small_det",
+  "revision": "RapidOCR v3.9.1",
+  "observed_at": "2026-07-28",
+  "files": [
+    {
+      "path": "PP-OCRv6_det_small.pth",
+      "size_bytes": 10248727,
+      "sha256": "fbdc74c97ea7b770ab22cbdc1bba01a52bdf1975efcf3442057356d622b05d54"
+    },
+    {
+      "path": "PP-OCRv6_rec_small.pth",
+      "size_bytes": 21326017,
+      "sha256": "0107b2ad694ccc9b1db7cf9ed3ffbc93d1795d9e08d9cf823127243a87bce516"
+    },
+    {
+      "path": "ch_ptocr_mobile_v2.0_cls_mobile.pth",
+      "size_bytes": 588638,
+      "sha256": "bfe13860824b3365c0c7f7ccfcddc8ff11645c60051739ff18bc9913f60c98e1"
+    },
+    {
+      "path": "ppocrv6_dict.txt",
+      "size_bytes": 74947,
+      "sha256": "b5f2bfe2bdd9448429e3e82b51c789775d9b42f2403d082b00662eb77e401c5d"
+    }
+  ],
+  "licenses": {
+    "runtime_code_spdx": "Apache-2.0",
+    "weights_license": "Apache-2.0",
+    "weights_spdx": "Apache-2.0",
+    "commercial_use_allowed_by_declared_license": true,
+    "redistribution_requires_separate_license_review": true
+  },
+  "lineage": {
+    "architecture": "PP-OCRv6 small detector and recognizer with PP-OCRv4 orientation classifier, converted for RapidOCR Torch inference.",
+    "declared_language_support": "PP-OCRv6 unified Latin-script model; Hina treats Vietnamese recognition quality as unpromoted until its own measured gate passes.",
+    "owner_data_included_in_weights": false,
+    "runtime_input": "One explicit owner-consented PNG is passed in memory only and is not used to train, fine-tune or cache the model."
+  },
+  "runtime": {
+    "provider": "rapidocr",
+    "provider_version": "3.9.1",
+    "provider_source_commit": "7d1a4c29fc9b9dcbb631213494fbb9b7f96e4a70",
+    "engine": "torch",
+    "tested_device": "cuda:0",
+    "cpu_fallback": false,
+    "batch_size": 1,
+    "cache_path": "var/models/rapidocr-ppocrv6-small",
+    "scheduler_reservation_vram_mib": 1024,
+    "scheduler_minimum_headroom_mib": 2048,
+    "maximum_lines": 100,
+    "maximum_text_characters": 4000,
+    "observation_ttl_seconds": 15,
+    "snapshot_pixels_persisted": false,
+    "ocr_text_persisted": false
+  },
+  "measured_on_owner_gpu": {
+    "gpu": "NVIDIA GeForce RTX 5070 Ti 16 GB",
+    "first_two_request_processing_milliseconds": 1133.85,
+    "peak_allocated_mib": 644.3,
+    "peak_reserved_mib": 814.0,
+    "effective_device": "cuda:0"
+  },
+  "quality_evaluation": {
+    "decision": "functional_gpu_candidate_pending_vietnamese_quality_work",
+    "short_vietnamese_ui_cer_percent": 0.0,
+    "long_vietnamese_ui_cer_percent": 23.611,
+    "clear_vietnamese_ui_gate_percent": 5.0,
+    "quality_gate_passed": false,
+    "notes": "The provider is usable for owner inspection but does not yet meet the plan's clear Vietnamese UI CER gate. It cannot provide autonomous decision support."
+  },
+  "status": {
+    "download_authorized_by_owner": true,
+    "download_on_first_use": true,
+    "local_owner_testing_ready": true,
+    "quality_promoted": false,
+    "commercial_ready": false,
+    "production_ready": false,
+    "requires_owner_screen_text_validation": true,
+    "promotion_blocked_by": "Vietnamese UI CER gate"
+  }
+}

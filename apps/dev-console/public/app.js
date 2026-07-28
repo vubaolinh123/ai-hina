@@ -173,6 +173,7 @@ const elements = Object.fromEntries(
     "capturePerceptionButton",
     "perceptionFileInput",
     "perceptionLabelInput",
+    "perceptionOcrCheck",
     "perceptionVisionCheck",
     "perceptionVisionQuestion",
     "perceptionCaptureResult",
@@ -410,7 +411,8 @@ function renderPerceptionStatus(status) {
     `TTL: ${status.configured.ttlSeconds}s (tối đa ${status.configured.maxTtlSeconds}s) · đồng hồ: ${status.observation.expiryClock}`,
     `Quan sát còn hạn: ${status.observation.freshCount} · đã hết hạn: ${status.observation.expiredTotal} · duplicate: ${status.observation.duplicateTotal}`,
     `Giới hạn: ${status.rate.limitPerMinute} ảnh/phút (còn ${status.rate.remainingThisMinute}) · ${Math.round(status.configured.maxSnapshotBytes / 1024)} KB/ảnh`,
-    `OCR: ${status.ocr.state} (${status.ocr.provider}) · lưu ảnh: ${status.retention.snapshotPersistence ? "có" : "không"}`,
+    `OCR GPU: ${status.ocr.state} (${status.ocr.provider}) · CPU fallback: ${status.ocr.cpuFallback ? "có" : "không"} · lưu ảnh: ${status.retention.snapshotPersistence ? "có" : "không"}`,
+    `Độ tin cậy OCR: ${status.ocr.qualityPromotion === "pending-vietnamese-screen-validation" ? "đang kiểm chứng tiếng Việt — hãy đối chiếu chữ có dấu/nhỏ" : "chưa áp dụng"}`,
     `Phân tích ảnh local: ${status.vision?.available ? "SẴN SÀNG" : "chưa sẵn sàng"} · tự động: không · được phép tự hành động: không`,
   ];
   elements.perceptionStatusBox.textContent = lines.join("\n");
@@ -459,6 +461,23 @@ function renderPerceptionObservations() {
       `sha256 ${entry.observation.evidence.sha256.slice(0, 12)}… · ` +
       `dhash ${entry.observation.evidence.dhash}`;
     item.append(meta, detail);
+    if (entry.observation.ocr?.state === "ready" || entry.observation.ocr?.state === "no-text") {
+      const ocr = document.createElement("p");
+      ocr.className = "entry-message perception-ocr-summary";
+      const confidence = entry.observation.ocr.meanConfidence;
+      const confidenceText = typeof confidence === "number"
+        ? ` · tin cậy trung bình ${(confidence * 100).toFixed(0)}%`
+        : "";
+      ocr.textContent = entry.observation.ocr.text
+        ? `Chữ đọc bằng GPU: ${entry.observation.ocr.text}${confidenceText}. Hãy đối chiếu lại nếu đây là chữ tiếng Việt có dấu hoặc thông tin quan trọng.`
+        : "OCR GPU không thấy dòng chữ đủ rõ trong ảnh này.";
+      item.append(ocr);
+    } else if (entry.observation.ocr?.state === "error") {
+      const ocr = document.createElement("p");
+      ocr.className = "entry-message perception-vision-error";
+      ocr.textContent = `OCR GPU lỗi: ${entry.observation.ocr.providerErrorCode || entry.observation.ocr.errorCode}. Evidence cơ bản vẫn chỉ tồn tại đến khi TTL hết hạn.`;
+      item.append(ocr);
+    }
     if (entry.observation.vision?.state === "ready") {
       const vision = document.createElement("p");
       vision.className = "entry-message perception-vision-summary";
@@ -527,6 +546,9 @@ async function submitPerceptionSnapshot(blob) {
   };
   if (label) {
     headers["X-Hina-Label"] = encodeURIComponent(label);
+  }
+  if (elements.perceptionOcrCheck.checked) {
+    headers["X-Hina-OCR-Analyze"] = "true";
   }
   if (elements.perceptionVisionCheck.checked) {
     headers["X-Hina-Vision-Analyze"] = "true";

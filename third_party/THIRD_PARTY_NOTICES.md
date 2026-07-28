@@ -77,6 +77,30 @@ is tracked in `assets/manifests`; upstream distribution exists, but independent
 speaker-consent evidence has not been published, so release promotion remains
 blocked pending owner review.
 
+## RapidOCR 3.9.1 and PP-OCRv6 small
+
+- Upstream: https://github.com/RapidAI/RapidOCR
+- Source commit: `7d1a4c29fc9b9dcbb631213494fbb9b7f96e4a70`
+- Distribution: `rapidocr==3.9.1`
+- PyPI wheel SHA-256:
+  `600885e4e94e0b427abad394fccb0ec1d3c9118a215ca435bf7680aeae0e292b`
+- Runtime license: Apache-2.0
+- Model source: PaddlePaddle PP-OCRv6 small model cards — Apache-2.0
+- Use: explicit owner-triggered local GPU OCR behind Hina's perception boundary
+
+No RapidOCR or PaddleOCR source file or snippet is copied into this repository.
+Hina downloads the four reviewed Torch artifacts only by fixed URL and SHA-256,
+runs detector, recognizer and classifier on CUDA:0, and refuses CPU, remote,
+ONNX Runtime or Paddle fallback. The source PNG exists only in memory for the
+single request; returned text is bounded, untrusted, and expires with its
+parent 15-second observation.
+
+The 2026-07-28 measured long Vietnamese UI smoke is above Hina's 5% CER
+promotion gate. Therefore this component is a functional local owner-testing
+candidate, not an accuracy-promoted or autonomous-decision provider. See
+`ml/models/manifests/rapidocr-ppocrv6-small-torch.v1.json` for the artifact
+hashes and evaluation record.
+
 ## qdrant-client 1.18.0
 
 - Upstream: https://github.com/qdrant/qdrant-client
