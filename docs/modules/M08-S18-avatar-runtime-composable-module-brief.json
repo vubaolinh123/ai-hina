@@ -1,0 +1,64 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M08-S18-avatar-runtime-composable",
+  "module_id": "M08",
+  "objective": "Move the trusted Avatar/Runtime renderer state, typed IPC orchestration, bounded retry/backoff and polling out of App.vue into one typed composable, leaving App.vue as page composition and top-level lifecycle while preserving every existing control contract.",
+  "non_goals": [
+    "Do not change the VRM/Live2D renderer, widget drag or persistence behavior, avatar state machine, Safety policy, control-plane routes, IPC contract, polling intervals or retry timings.",
+    "Do not add a dependency, direct Electron/Node/network/storage/process access, new model, new asset, auto-listener, arbitrary command surface or real desktop/model/Cloud/VTube Studio/Spout/microphone/TTS smoke against the owner's active session.",
+    "Do not move page presentation back into App.vue or grant page components a raw IPC/capability handle."
+  ],
+  "base_sha": "09cd54c",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "apps/desktop/src/App.vue",
+    "apps/desktop/src/composables/use-avatar-runtime.ts",
+    "apps/desktop/test/security.test.mjs",
+    "docs/architecture/desktop-dashboard-modularity.md",
+    "docs/modules/M08-S18-avatar-runtime-composable-module-brief.json",
+    "docs/modules/M08-perception.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    ".gitnexus/",
+    "voice_demo/",
+    "var/perception-sessions/",
+    "apps/desktop/dist/",
+    "apps/desktop/dist-electron/",
+    "var/test-artifacts/"
+  ],
+  "contracts": [
+    "useAvatarRuntime is the sole renderer composable owner of Avatar/Widget/VRM state and the Runtime & Safety mute/emergency workflow: fixed typed IPC calls, 250 ms avatar polling, one-second Safety/widget polling, bounded offline backoff and VRM renderer event handling. Perception's separate feature-flag control remains in its existing App-level workflow.",
+    "App.vue retains operator/window lifecycle, top-level page selection, global error banner composition and cleanup composition, but no longer implements Avatar/Runtime control logic inline.",
+    "The composable may call only the existing named window.hinaDesktop methods. It imports no Electron, Node, direct network API, persistence, process access, model runtime or arbitrary command mechanism.",
+    "AvatarPage and RuntimePage remain presentation-only, receive bounded values and emit only fixed intent/event payloads; they never import the composable or window.hinaDesktop directly.",
+    "Tests cover the migrated composable as part of the trusted renderer surface and retain the no-direct-capability plus lazy-VRM/widget/Safety contract checks."
+  ],
+  "allowed_dependencies": [
+    "Existing Vue 3/TypeScript, current Electron typed preload API and repository test tooling; no new dependency."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "App.vue composes useAvatarRuntime instead of owning Avatar/Runtime state, IPC handlers, polling/backoff and VRM recovery functions inline.",
+    "Avatar/Runtime pages keep the same typed props/emits and all fixed controls retain their existing behavior and disabled states.",
+    "The dashboard architecture documentation describes the composable as the trusted renderer boundary beneath App.vue/pages.",
+    "Desktop typecheck, desktop security/build test and repository fast gate pass without generated test artifacts retained."
+  ],
+  "required_test_commands": [
+    "pnpm --filter @hina/desktop typecheck",
+    "pnpm test:desktop",
+    "pnpm test:fast",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "avatar_runtime_behavior_change": false,
+    "new_local_vram_mib": 0,
+    "new_network_calls": 0,
+    "new_system_commands": 0
+  },
+  "output_artifact_dir": "artifacts/verification/M08/"
+}

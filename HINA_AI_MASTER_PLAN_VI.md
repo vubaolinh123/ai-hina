@@ -1513,6 +1513,15 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
   của toàn bộ dashboard page hiện có; UI mới không được thêm markup lớn vào
   `App.vue`. Desktop typecheck/build + 54 test xanh, không chạy desktop/model/
   VTube Studio/Spout/mic/TTS/Cloud thật.
+- M08-S18 Avatar/Runtime trusted composable (2026-07-29): state và logic của
+  hai page tiếp tục rời `App.vue` sang `use-avatar-runtime.ts`. Composable là
+  trusted renderer boundary duy nhất cho Avatar/Widget/VRM state, typed Avatar/
+  Widget + mute/emergency IPC, retry/backoff, poll 250 ms/1 giây và VRM recovery;
+  page vẫn chỉ presentation/intent. Perception feature flag độc lập vẫn ở
+  workflow cũ và dùng helper refresh Safety của composable. Không đổi renderer,
+  fallback, widget drag/persistence, Safety semantics, interval hay control-plane;
+  không thêm model/VRAM/network. Desktop typecheck/build + 54 test xanh, không
+  chạy desktop/model/VTube Studio/Spout/mic/TTS/Cloud thật.
 
 ### Test matrix
 

@@ -16,6 +16,7 @@
   M08-S15 Speech dashboard modularity is a runnable candidate;
   M08-S16 Live2D dashboard modularity is a runnable candidate;
   M08-S17 Avatar/Runtime dashboard modularity is a runnable candidate;
+  M08-S18 Avatar/Runtime trusted composable modularity is a runnable candidate;
   M08 remains active
 - Branch: `main` (fast-development mode)
 - Active slices: M08-S1 perception spine (owner-consented snapshot ingestion,
@@ -697,6 +698,33 @@ Không được đánh dấu M08 complete khi các phần còn lại chưa có e
 - `pnpm test:desktop`: production build + 54 tests pass, including both pages in
   renderer isolation and the preserved lazy-VRM/widget/Safety typed-boundary
   checks.
+- No real desktop/widget/avatar session, VTube Studio/Spout connection,
+  microphone, TTS, model, Cloud request, cache/model download, fixture or
+  one-off script was created for this UI-boundary slice.
+
+## Implemented in M08-S18 (Avatar/Runtime trusted composable)
+
+- `apps/desktop/src/composables/use-avatar-runtime.ts` now owns Avatar/Widget/
+  Runtime state, the fixed typed preload calls for Avatar/Widget and Runtime
+  mute/emergency controls, bounded control-plane retry/backoff, 250 ms Avatar
+  polling, one-second Safety/widget polling and all VRM event/recovery state.
+  It imports only Vue and local metrics typing; no Electron, Node, fetch,
+  persistence, process, model or arbitrary-command capability.
+- `App.vue` now composes this trusted renderer boundary with global lifecycle,
+  navigation and the remaining independent workflows. It no longer contains the
+  Avatar/Runtime state machine, inline typed IPC handlers, poll timers or VRM
+  recovery implementation. The existing Perception feature-flag action remains
+  in its separate workflow and refreshes Safety through the composable.
+- `AvatarPage.vue` and `RuntimePage.vue` remain pure typed presentation/intent
+  components. All existing fixed controls and disabled states keep their former
+  behavior; this slice adds no provider/model/VRAM/network work.
+
+## Fast evidence M08-S18 (owner machine)
+
+- `pnpm --filter @hina/desktop typecheck`: pass.
+- `pnpm test:desktop`: production build + 54 tests pass, including the composable
+  in the trusted-renderer isolation check and preserved lazy-VRM/Safety/widget
+  contracts.
 - No real desktop/widget/avatar session, VTube Studio/Spout connection,
   microphone, TTS, model, Cloud request, cache/model download, fixture or
   one-off script was created for this UI-boundary slice.

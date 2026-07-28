@@ -8,8 +8,9 @@ workflow, not merely a visual section.
 
 ## Boundary
 
-- `App.vue` owns Electron window-mode selection, trusted typed-IPC lifecycle,
-  shared polling, global error/backoff and page selection.
+- `App.vue` owns Electron window-mode selection, top-level lifecycle, page
+  selection and global composition. Trusted feature workflows may live in a
+  typed renderer composable rather than grow the shell.
 - `src/dashboard/DashboardNav.vue` owns navigation labels and navigation events.
 - Each `src/dashboard/pages/*.vue` file owns one page's markup, accessibility,
   local visual state and ergonomics. It must not import Electron, Node, direct
@@ -21,7 +22,7 @@ workflow, not merely a visual section.
 - Page-specific CSS stays under a stable page/class prefix in `style.css` until
   a page has enough local styles to justify a colocated stylesheet.
 
-## Current migration state (M08-S17)
+## Current migration state (M08-S18)
 
 - Extracted: `DashboardNav.vue`, `pages/OverviewPage.vue`,
   `pages/ChatPage.vue`, `pages/PerceptionPage.vue`,
@@ -46,12 +47,18 @@ workflow, not merely a visual section.
   it receives no token, WebSocket, raw frame or arbitrary command capability.
   `App.vue` retains typed IPC, token/transport lifecycle, polling and error state.
 - `AvatarPage.vue` owns the stage/VRM fallback, renderer telemetry, manual visual
-  preview and provenance guidance. `App.vue` retains VRM lazy-load/recovery,
-  performance event handling, avatar polling and every typed avatar IPC call.
-- `RuntimePage.vue` owns widget and Safety presentation. `App.vue` retains widget
-  position lifecycle, widget/Safety typed IPC, retry/backoff and global error
-  logging. The page emits only the fixed show/hide/reset, mute and emergency
-  intents.
+  preview and provenance guidance. The trusted Avatar/Runtime composable retains
+  VRM lazy-load/recovery, performance event handling, avatar polling and every
+  typed avatar IPC call.
+- `RuntimePage.vue` owns widget and Safety presentation. The trusted composable
+  retains widget position lifecycle, widget/Safety typed IPC, retry/backoff and
+  global error state. The page emits only the fixed show/hide/reset, mute and
+  emergency intents.
+- `composables/use-avatar-runtime.ts` is the trusted renderer boundary beneath
+  the Avatar/Runtime pages. It owns Avatar/Widget/VRM state, fixed typed IPC,
+  250 ms avatar and one-second Safety/widget polls, bounded offline backoff and
+  VRM recovery telemetry. `App.vue` only composes it with the operator lifecycle;
+  the separate Perception feature-flag workflow remains where it is.
 - New dashboard UI must be added to the relevant page component; `App.vue` is the
   shell/lifecycle boundary and must not regain page-sized markup.
 

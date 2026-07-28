@@ -17,6 +17,7 @@ const readOperatorRenderer = () => [
   read("src/dashboard/pages/Live2DPage.vue"),
   read("src/dashboard/pages/AvatarPage.vue"),
   read("src/dashboard/pages/RuntimePage.vue"),
+  read("src/composables/use-avatar-runtime.ts"),
 ].join("\n");
 const require = createRequire(import.meta.url);
 const control = require("../dist-electron/control-client.js");
@@ -153,6 +154,7 @@ test("operator dashboard keeps page markup modular and chat input reachable", ()
   const live2d = read("src/dashboard/pages/Live2DPage.vue");
   const avatar = read("src/dashboard/pages/AvatarPage.vue");
   const runtime = read("src/dashboard/pages/RuntimePage.vue");
+  const avatarRuntime = read("src/composables/use-avatar-runtime.ts");
   const style = read("src/style.css");
 
   assert.match(app, /import DashboardNav from "\.\/dashboard\/DashboardNav\.vue"/);
@@ -164,6 +166,16 @@ test("operator dashboard keeps page markup modular and chat input reachable", ()
   assert.match(app, /import Live2DPage from "\.\/dashboard\/pages\/Live2DPage\.vue"/);
   assert.match(app, /import AvatarPage from "\.\/dashboard\/pages\/AvatarPage\.vue"/);
   assert.match(app, /import RuntimePage from "\.\/dashboard\/pages\/RuntimePage\.vue"/);
+  assert.match(app, /import \{ useAvatarRuntime \} from "\.\/composables\/use-avatar-runtime"/);
+  assert.match(app, /\} = useAvatarRuntime\(\);/);
+  assert.doesNotMatch(
+    app,
+    /function (?:refreshAvatar|refreshSafety|refreshWidget|applyWidgetControl|preview|resetAvatar|toggleMute|toggleEmergency|retryVrm)\(/,
+  );
+  assert.doesNotMatch(
+    app,
+    /window\.hinaDesktop\.(?:getAvatarStatus|getWidgetStatus|applyWidgetControl|applyAvatarCue|resetAvatar)/,
+  );
   assert.doesNotMatch(app, /<nav class="desktop-nav"/);
   assert.doesNotMatch(app, /class="screen-capture-panel"/);
   assert.doesNotMatch(app, /class="resource-summary-grid"/);
@@ -198,6 +210,10 @@ test("operator dashboard keeps page markup modular and chat input reachable", ()
   assert.match(runtime, /Quản lý widget avatar/);
   assert.match(runtime, /emit\('widgetControl'/);
   assert.doesNotMatch(runtime, /window\.hinaDesktop|\bfetch\s*\(|\bWebSocket\b|from\s+["']electron["']/);
+  assert.match(avatarRuntime, /window\.hinaDesktop\.getAvatarStatus/);
+  assert.match(avatarRuntime, /window\.hinaDesktop\.applyWidgetControl/);
+  assert.match(avatarRuntime, /window\.hinaDesktop\.applySafetyControl/);
+  assert.doesNotMatch(avatarRuntime, /from\s+["']electron["']|\bfetch\s*\(|node:|localStorage|sessionStorage|indexedDB|process\.env/);
   assert.match(style, /\.chat-composer[\s\S]*position:\s*sticky/);
   assert.match(style, /\.chat-layout[\s\S]*grid-template-columns:\s*1fr/);
 });
@@ -422,6 +438,7 @@ test("VRM stage uses one fixed bundled asset and disposes graphics resources", (
 test("VRM is lazy-loaded and fixed-asset recovery exposes bounded real telemetry", () => {
   const app = read("src/App.vue");
   const avatar = read("src/dashboard/pages/AvatarPage.vue");
+  const avatarRuntime = read("src/composables/use-avatar-runtime.ts");
   const main = read("electron/main.ts");
   assert.match(
     app,
@@ -431,11 +448,11 @@ test("VRM is lazy-loaded and fixed-asset recovery exposes bounded real telemetry
   assert.match(avatar, /:key="props\.vrmStageKey"/);
   assert.match(avatar, /'vrm-stage-hidden': !props\.vrmReady/);
   assert.doesNotMatch(avatar, /v-show="props\.vrmReady"/);
-  assert.match(app, /function retryVrm\(\)/);
-  assert.match(app, /function retryConnection\(\)/);
+  assert.match(avatarRuntime, /function retryVrm\(\)/);
+  assert.match(avatarRuntime, /function retryConnection\(\)/);
   assert.match(avatar, /id="retryVrmButton"/);
-  assert.match(app, /setInterval\(refreshAvatar, 250\)/);
-  assert.match(app, /vrmStageKey\.value \+= 1/);
+  assert.match(avatarRuntime, /setInterval\(refreshAvatar, 250\)/);
+  assert.match(avatarRuntime, /vrmStageKey\.value \+= 1/);
   assert.match(avatar, /@performance="emit\('vrmPerformance', \$event\)"/);
   assert.match(avatar, /frameTimeP95Ms/);
   assert.match(avatar, /droppedFramePercent/);
