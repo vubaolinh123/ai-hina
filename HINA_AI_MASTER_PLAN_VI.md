@@ -1362,13 +1362,15 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
 
 ### Deliverables
 
-- Capture off mặc định, allowlist theo window/region.
+- Capture off mặc định, allowlist theo đúng screen/window owner chọn qua opaque
+  grant Electron main.
 - Event/intent-driven snapshot.
-- Crop, perceptual dedup và rate limit.
+- Full-frame downscale bounded, perceptual dedup và rate limit.
 - PaddleOCR provider.
 - Optional VLM snapshot provider.
 - `Observation` có timestamp, TTL, confidence, evidence reference.
-- Privacy mask và no-persist mode.
+- No-persist mode. Theo quyết định owner ngày 2026-07-28, không crop/privacy
+  mask: AI nhận toàn bộ source đã chọn ở độ phân giải thấp hơn.
 - GPU resource lease/fallback.
 - M08-S2 unified multimodal baseline (historical): Qwen3.5-4B Q4_K_M từng dùng
   chung cho chat và explicit image snapshot qua Ollama, `keep_alive=0`.
@@ -1410,6 +1412,13 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
   Ollama `/api/ps` là nguồn residency thật của text/local VLM; provider STT,
   TTS và OCR tự báo `modelLoaded`. Telemetry lỗi thì page degrade có mã lỗi,
   không đổi giá trị không rõ thành 0 và không cho renderer chạy lệnh hệ thống.
+- M08-S6 desktop full-frame capture (2026-07-28): `desktopCapturer` chỉ chạy
+  trong Electron main; renderer chỉ nhận preview bounded và opaque UUID token,
+  không nhận raw source ID. Grant 60 giây/single-use allowlist đúng source.
+  Owner chọn cạnh dài 640/960/1.280 px (mặc định 960), tùy chọn OCR/VLM rồi
+  bấm gửi một lần. Main encode PNG ≤1 MB và POST loopback bằng
+  `owner.desktop`; widget bị chặn, không auto-capture và không persist pixel.
+  Real smoke gửi full-frame 640×360/144.619 byte với `status=observed`.
 
 ### Test matrix
 

@@ -164,6 +164,14 @@ giả thành 0. Fast unit/build và Electron startup/page smoke hiện xanh; liv
 post-smoke snapshot báo 2.199 MiB VRAM used, 13.797 MiB free và core RSS
 563 MiB khi không có lease active. Đây không phải all-on benchmark; deep
 all-on/soak vẫn deferred theo owner.
+Ngày 2026-07-28 owner quyết định không crop/privacy-mask ảnh màn hình mà gửi
+toàn bộ source đã chọn ở độ phân giải thấp hơn. M08-S6 là runnable candidate:
+Electron main dùng `desktopCapturer`, giữ raw source ID sau opaque grant 60
+giây/single-use và chỉ trả preview/token bounded cho operator renderer. Owner
+chọn cạnh dài 640/960/1.280 px (mặc định 960), OCR/VLM opt-in rồi bấm gửi đúng
+một lần; widget bị chặn và không có auto-capture/persistence. Fast desktop
+build/typecheck + 52 tests xanh; Electron smoke thật tìm 9 source, không lộ ID
+và gửi full-frame 640×360/144.619 byte tới runtime với `status=observed`.
 
 Legacy AIRI skill paths dưới `D:\ProjectAiri` mặc định ánh xạ sang repository
 hiện tại `D:\ProjectHinaAI`, trừ khi owner chỉ định workspace khác.

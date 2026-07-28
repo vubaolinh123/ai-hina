@@ -4,6 +4,7 @@
   pending Vietnamese quality promotion; M08-S4 8B Thinking text brain +
   configurable vision provider + optional session archive is a runnable
   candidate; M08-S5 realtime resource dashboard is a runnable candidate;
+  M08-S6 desktop full-frame low-resolution capture is a runnable candidate;
   M08 remains active
 - Branch: `main` (fast-development mode)
 - Active slices: M08-S1 perception spine (owner-consented snapshot ingestion,
@@ -12,7 +13,9 @@
   M08-S4 keeps one Qwen3-VL 8B Thinking text-brain checkpoint, moves screen
   reading to a separate Ollama Cloud/lightweight-local provider and adds
   owner-started, bounded PNG retention for a game session; M08-S5 exposes the
-  all-on RAM/VRAM/model state needed to operate those providers safely
+  all-on RAM/VRAM/model state needed to operate those providers safely;
+  M08-S6 moves the primary capture authority into Electron main and sends the
+  complete selected source at a bounded owner-selected resolution
 
 ## Runnable target
 
@@ -23,6 +26,12 @@ loopback và xem quan sát còn hạn với đồng hồ đếm ngược TTL th�
 evidence (kích thước, SHA-256, dHash, độ sáng trung bình) trong RAM cho tới khi
 quan sát hết hạn. Owner có thể chủ động mở một phiên lưu PNG có quota; trạng
 thái này mặc định tắt và không thay đổi TTL/ngữ nghĩa “ảnh hiện tại”.
+
+Dashboard desktop hiện là capture path chính: owner bấm đọc danh sách nguồn,
+chọn một màn hình/cửa sổ từ preview tạm thời rồi bấm gửi. Electron main giữ
+source ID thật sau một opaque grant 60 giây dùng một lần; renderer chỉ nhận
+token. Toàn bộ khung hình được giữ nguyên bố cục và hạ cạnh dài xuống
+640/960/1.280 px (mặc định 960) trước khi gửi.
 
 Khi owner chủ động đánh dấu **Nhờ provider vision đã chọn phân tích nội dung
 ảnh**, cùng PNG đó được đưa qua Ollama Cloud hoặc model Ollama local nhẹ đã cấu
@@ -195,14 +204,36 @@ is retained only for audit/rollback comparison.
   reservation thế nào, loaded/unloaded nghĩa gì, Cloud ảnh hưởng VRAM ra sao,
   và cảnh báo đỏ khi vượt trần 14.336 MiB hoặc còn dưới 2.048 MiB VRAM.
 
+## Implemented in M08-S6 (desktop full-frame low-resolution capture)
+
+- Owner quyết định không dùng crop hoặc privacy mask: Hina nhận toàn bộ nội
+  dung của đúng màn hình/cửa sổ đã chọn. Để giảm payload/token/latency, owner
+  chọn cạnh dài 640, 960 hoặc 1.280 px; desktop mặc định 960 px và không phóng
+  to nguồn nhỏ.
+- `desktopCapturer.getSources` chỉ chạy trong Electron main. Renderer sandboxed
+  nhận preview PNG bounded, tên nguồn và UUID token; raw
+  `DesktopCapturerSource.id` không rời main process.
+- Mỗi source listing tạo grant in-memory tối đa 48 nguồn, hết hạn sau 60 giây
+  và bị tiêu thụ sau đúng một capture attempt. Widget không được list/capture;
+  chỉ operator window có typed IPC.
+- Main process lấy lại đúng source đã allowlist, encode PNG ≤1 MB rồi POST tới
+  route perception loopback với `owner.desktop` + owner confirmation. Không có
+  interval/auto-capture, không lưu source list/preview/snapshot xuống đĩa.
+- Trang **Quan sát** desktop cho bật/tắt đúng feature flag `perception`, chọn
+  nguồn, resolution, label, OCR GPU và provider vision đã cấu hình; mọi lỗi
+  được log ra console `pnpm start:desktop`.
+- Electron 43 API được dùng trực tiếp từ dependency đã pin; không thêm package
+  hoặc source copy mới.
+
 ## Deferred M08 deliverables
 
 Chất lượng OCR tiếng Việt (benchmark corpus UI rõ/game UI khó và thay/tinh chỉnh
-provider nếu vẫn không qua CER), capture allowlist theo window/region ở tầng OS,
-privacy mask, event/intent-driven
-capture, replay ≥200 historical/stopped capture cases và các gate OCR CER/VLM
-QA của master plan thuộc các slice M08 tiếp theo. Không được đánh dấu M08
-complete khi các phần này chưa có evidence.
+provider nếu vẫn không qua CER), event/intent-driven capture, replay ≥200
+historical/stopped capture cases và các gate OCR CER/VLM QA của master plan
+thuộc các slice M08 tiếp theo. Capture allowlist theo source ở Electron main đã
+có; yêu cầu region/crop/privacy-mask được owner chủ động supersede ngày
+2026-07-28 bằng full-frame downscale, nên không còn là blocker hoàn tất M08.
+Không được đánh dấu M08 complete khi các phần còn lại chưa có evidence.
 
 ## Fast evidence (sandbox, Python 3.11/3.13)
 
@@ -279,3 +310,16 @@ complete khi các phần này chưa có evidence.
   used và 563 MiB core RSS; không có lease active, text/STT/TTS/OCR đều
   `unloaded`, vision Cloud `cloud-ready`. Đây là snapshot quan sát, không phải
   all-on benchmark hoặc số cố định.
+
+## Fast evidence M08-S6 (owner machine)
+
+- `pnpm --filter @hina/desktop typecheck`: pass.
+- `pnpm --filter @hina/desktop test`: build + 52 tests pass, gồm grant
+  expiry/single-use, opaque source token, preset resolution, full-frame aspect,
+  PNG/header contract, operator authority và renderer isolation.
+- Electron smoke thật tìm thấy 9 source, không trả source ID, render đúng page
+  **Quan sát** với mặc định 960 px và chặn widget gọi capture.
+- Cùng smoke đã bật quyền perception tạm thời, chụp/gửi một full-frame
+  640×360/144.619-byte tới runtime với `status=observed`,
+  `persistedByDesktop=false`, không gọi OCR/VLM, rồi trả feature flag về trạng
+  thái ban đầu. Không tạo screenshot/audio/script test trên đĩa.

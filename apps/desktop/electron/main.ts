@@ -1,11 +1,13 @@
 import {
   app,
   BrowserWindow,
+  desktopCapturer,
   ipcMain,
   safeStorage,
   screen,
   session,
   type IpcMainInvokeEvent,
+  type NativeImage,
 } from "electron";
 import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -15,6 +17,7 @@ import {
   requestChatStart,
   requestChatStatus,
   requestChatTurn,
+  requestPerceptionSnapshot,
   requestSpeechSynthesis,
   requestSpeechTranscription,
   requestVisionConfigure,
@@ -57,6 +60,15 @@ import {
   ModelTransitionTracker,
   augmentResourceStatus,
 } from "./resource-monitor";
+import {
+  CaptureGrantStore,
+  MAX_CAPTURE_SOURCES,
+  fitWithinLongEdge,
+  validateFullFrameCaptureRequest,
+  type CaptureMaxSide,
+  type CaptureSourceCandidate,
+  type CaptureSourceKind,
+} from "./screen-capture";
 
 const CHANNELS = Object.freeze({
   windowMode: "hina:window:mode",
@@ -89,6 +101,8 @@ const CHANNELS = Object.freeze({
   visionConfigure: "hina:vision:configure",
   visionClearKey: "hina:vision:clear-key",
   resourcesStatus: "hina:resources:status",
+  captureSources: "hina:capture:sources",
+  captureSubmit: "hina:capture:submit",
 });
 
 const WIDGET_SIZE: Size = Object.freeze({ width: 440, height: 620 });
@@ -96,6 +110,7 @@ const WIDGET_STATE_FILENAME = "hina-widget-state.v1.json";
 const VTS_TOKEN_STATE_FILENAME = "hina-vtube-studio-token.v1.json";
 const VISION_PROVIDER_STATE_FILENAME = "hina-vision-provider.v1.json";
 const resourceTransitionTracker = new ModelTransitionTracker(100);
+const captureGrantStore = new CaptureGrantStore();
 
 let mainWindow: BrowserWindow | null = null;
 let widgetWindow: BrowserWindow | null = null;
@@ -110,6 +125,161 @@ let visionRestoreTimer: NodeJS.Timeout | null = null;
 
 type DesktopWindowMode = "operator" | "widget";
 type WidgetControlAction = "show" | "hide" | "reset_position";
+
+function captureSourceKind(sourceId: string): CaptureSourceKind | null {
+  if (sourceId.startsWith("screen:")) return "screen";
+  if (sourceId.startsWith("window:")) return "window";
+  return null;
+}
+
+function captureSourceName(raw: string, index: number): string {
+  const cleaned = raw
+    .replace(/[\u0000-\u001f\u007f]/gu, "")
+    .trim()
+    .slice(0, 160);
+  return cleaned || `Nguồn màn hình ${index + 1}`;
+}
+
+async function requirePerceptionFeatureEnabled(): Promise<void> {
+  const status = await requestControl("safety.status");
+  const state = (
+    status.state
+    && typeof status.state === "object"
+    && !Array.isArray(status.state)
+  )
+    ? status.state as Record<string, unknown>
+    : {};
+  const featureFlags = (
+    state.featureFlags
+    && typeof state.featureFlags === "object"
+    && !Array.isArray(state.featureFlags)
+  )
+    ? state.featureFlags as Record<string, unknown>
+    : {};
+  if (featureFlags.perception !== true) {
+    throw new Error(
+      "E_DESKTOP_CAPTURE_DISABLED: enable Quan sát màn hình before listing or capturing",
+    );
+  }
+}
+
+async function listDesktopCaptureSources(): Promise<ReturnType<CaptureGrantStore["issue"]>> {
+  await requirePerceptionFeatureEnabled();
+  let sources: Awaited<ReturnType<typeof desktopCapturer.getSources>>;
+  try {
+    sources = await desktopCapturer.getSources({
+      types: ["screen", "window"],
+      thumbnailSize: { width: 320, height: 180 },
+      fetchWindowIcons: false,
+    });
+  } catch {
+    throw new Error("E_DESKTOP_CAPTURE_SOURCES: cannot enumerate desktop sources");
+  }
+  const candidates: CaptureSourceCandidate[] = [];
+  for (const [index, source] of sources.entries()) {
+    if (candidates.length >= MAX_CAPTURE_SOURCES) break;
+    const kind = captureSourceKind(source.id);
+    if (!kind || source.thumbnail.isEmpty()) continue;
+    const size = source.thumbnail.getSize();
+    const previewDataUrl = source.thumbnail.toDataURL();
+    if (previewDataUrl.length > 384_000) continue;
+    candidates.push({
+      sourceId: source.id,
+      name: captureSourceName(source.name, index),
+      kind,
+      previewDataUrl,
+      previewWidth: size.width,
+      previewHeight: size.height,
+    });
+  }
+  return captureGrantStore.issue(candidates);
+}
+
+function encodeBoundedCapture(
+  source: NativeImage,
+  maxSide: CaptureMaxSide,
+): {
+  png: Uint8Array;
+  width: number;
+  height: number;
+} {
+  if (source.isEmpty()) {
+    throw new Error("E_DESKTOP_CAPTURE_IMAGE: selected source returned no image");
+  }
+  const sourceSize = source.getSize();
+  let size = fitWithinLongEdge(sourceSize.width, sourceSize.height, maxSide);
+  let image = (
+    size.width === sourceSize.width && size.height === sourceSize.height
+      ? source
+      : source.resize({ ...size, quality: "best" })
+  );
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const png = image.toPNG();
+    if (png.byteLength <= 1_000_000) {
+      return {
+        png: new Uint8Array(png),
+        width: size.width,
+        height: size.height,
+      };
+    }
+    size = {
+      width: Math.max(64, Math.round(size.width * 0.75)),
+      height: Math.max(64, Math.round(size.height * 0.75)),
+    };
+    image = source.resize({ ...size, quality: "best" });
+  }
+  throw new Error("E_DESKTOP_CAPTURE_IMAGE: cannot encode snapshot below 1 MB");
+}
+
+async function submitDesktopCapture(raw: unknown): Promise<Record<string, unknown>> {
+  await requirePerceptionFeatureEnabled();
+  const request = validateFullFrameCaptureRequest(raw);
+  const grant = captureGrantStore.consume(
+    request.grantSessionId,
+    request.sourceToken,
+  );
+  let sources: Awaited<ReturnType<typeof desktopCapturer.getSources>>;
+  try {
+    sources = await desktopCapturer.getSources({
+      types: [grant.kind],
+      thumbnailSize: {
+        width: request.maxSide,
+        height: request.maxSide,
+      },
+      fetchWindowIcons: false,
+    });
+  } catch {
+    throw new Error("E_DESKTOP_CAPTURE_IMAGE: selected source cannot be captured");
+  }
+  const selected = sources.find((source) => source.id === grant.sourceId);
+  if (!selected || selected.thumbnail.isEmpty()) {
+    throw new Error(
+      "E_DESKTOP_CAPTURE_SOURCE: selected source disappeared; refresh the source list",
+    );
+  }
+  const encoded = encodeBoundedCapture(selected.thumbnail, request.maxSide);
+  const result = await requestPerceptionSnapshot(encoded.png, {
+    sessionId: crypto.randomUUID(),
+    label: request.label,
+    analyzeOcr: request.analyzeOcr,
+    analyzeVision: request.analyzeVision,
+    visionQuestion: request.visionQuestion,
+  });
+  return {
+    ...result,
+    desktopCapture: {
+      sourceName: grant.name,
+      sourceKind: grant.kind,
+      fullFrame: true,
+      requestedMaxSide: request.maxSide,
+      width: encoded.width,
+      height: encoded.height,
+      bytes: encoded.png.byteLength,
+      automatic: false,
+      persistedByDesktop: false,
+    },
+  };
+}
 
 function availableWorkAreas(): WorkArea[] {
   return screen.getAllDisplays().map((display) => ({
@@ -556,9 +726,13 @@ function registerIpcHandlers(): void {
     return requestControl("safety.status");
   });
   ipcMain.handle(CHANNELS.safetyControl, (event, control: unknown) => {
-    assertTrustedSender(event);
+    const mode = assertTrustedSender(event);
+    const validated = validateSafetyControl(control);
+    if (validated.action === "set_feature" && mode !== "operator") {
+      throw new Error("E_DESKTOP_CAPTURE_AUTHORITY: operator window required");
+    }
     return requestControl("safety.control", {
-      ...validateSafetyControl(control),
+      ...validated,
       actorId: "owner.desktop",
       trustLevel: "owner",
       correlationId: crypto.randomUUID(),
@@ -574,6 +748,36 @@ function registerIpcHandlers(): void {
     }
     const status = await requestControl("resources.status");
     return augmentResourceStatus(status, resourceTransitionTracker);
+  });
+  ipcMain.handle(CHANNELS.captureSources, async (event) => {
+    if (assertTrustedSender(event) !== "operator") {
+      throw new Error("E_DESKTOP_CAPTURE_AUTHORITY: operator window required");
+    }
+    try {
+      return await listDesktopCaptureSources();
+    } catch (error) {
+      console.error(
+        `[hina-desktop:capture:ERROR] ${
+          error instanceof Error ? error.message.slice(0, 256) : "E_DESKTOP_CAPTURE_SOURCES"
+        }`,
+      );
+      throw error;
+    }
+  });
+  ipcMain.handle(CHANNELS.captureSubmit, async (event, input: unknown) => {
+    if (assertTrustedSender(event) !== "operator") {
+      throw new Error("E_DESKTOP_CAPTURE_AUTHORITY: operator window required");
+    }
+    try {
+      return await submitDesktopCapture(input);
+    } catch (error) {
+      console.error(
+        `[hina-desktop:capture:ERROR] ${
+          error instanceof Error ? error.message.slice(0, 256) : "E_DESKTOP_CAPTURE_IMAGE"
+        }`,
+      );
+      throw error;
+    }
   });
   ipcMain.handle(CHANNELS.chatStatus, (event) => {
     assertTrustedSender(event);
@@ -1631,6 +1835,7 @@ async function createWindows(): Promise<void> {
 
 app.on("before-quit", (event) => {
   stopWidgetHoverWatcher();
+  captureGrantStore.clear();
   if (visionRestoreTimer) {
     clearTimeout(visionRestoreTimer);
     visionRestoreTimer = null;

@@ -31,6 +31,8 @@ const CHANNELS = Object.freeze({
   visionConfigure: "hina:vision:configure",
   visionClearKey: "hina:vision:clear-key",
   resourcesStatus: "hina:resources:status",
+  captureSources: "hina:capture:sources",
+  captureSubmit: "hina:capture:submit",
 });
 
 const hinaDesktop = Object.freeze({
@@ -82,6 +84,9 @@ const hinaDesktop = Object.freeze({
     ipcRenderer.invoke(CHANNELS.visionConfigure, input),
   clearVisionApiKey: () => ipcRenderer.invoke(CHANNELS.visionClearKey),
   getResourceStatus: () => ipcRenderer.invoke(CHANNELS.resourcesStatus),
+  listScreenCaptureSources: () => ipcRenderer.invoke(CHANNELS.captureSources),
+  captureScreenSource: (input: unknown) =>
+    ipcRenderer.invoke(CHANNELS.captureSubmit, input),
 });
 
 contextBridge.exposeInMainWorld("hinaDesktop", hinaDesktop);

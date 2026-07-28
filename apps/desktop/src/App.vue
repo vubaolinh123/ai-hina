@@ -72,6 +72,16 @@ const visionModels = ref<VisionModelOption[]>([]);
 const visionModel = ref("");
 const visionBusy = ref(false);
 const visionMessage = ref("");
+const screenCaptureListing = ref<ScreenCaptureSourceListing | null>(null);
+const screenCaptureSourceToken = ref("");
+const screenCaptureMaxSide = ref<640 | 960 | 1280>(960);
+const screenCaptureLabel = ref("");
+const screenCaptureAnalyzeOcr = ref(false);
+const screenCaptureAnalyzeVision = ref(false);
+const screenCaptureVisionQuestion = ref("");
+const screenCaptureBusy = ref(false);
+const screenCaptureMessage = ref("");
+const screenCaptureResult = ref<DesktopPerceptionCaptureResult | null>(null);
 const resourceStatus = ref<ResourceStatus | null>(null);
 const resourceError = ref("");
 const resourcePending = ref(false);
@@ -107,6 +117,15 @@ let safetyRefreshPending = false;
 let lastResourceLoggedError = "";
 let controlRetryAt = 0;
 let controlRetryDelay = 1_000;
+
+const selectedScreenCaptureSource = computed(
+  () => screenCaptureListing.value?.sources.find(
+    (source) => source.sourceToken === screenCaptureSourceToken.value,
+  ) ?? null,
+);
+const perceptionFeatureEnabled = computed(
+  () => safety.value?.state.featureFlags?.perception === true,
+);
 
 function controlRequestAllowed(): boolean {
   return Date.now() >= controlRetryAt;
@@ -343,6 +362,101 @@ async function clearVisionProviderKey(): Promise<void> {
       : "E_DESKTOP_VISION_CLEAR";
   } finally {
     visionBusy.value = false;
+  }
+}
+
+async function listScreenCaptureSources(): Promise<void> {
+  if (screenCaptureBusy.value) return;
+  screenCaptureBusy.value = true;
+  screenCaptureMessage.value =
+    "Đang đọc ảnh xem trước của các màn hình và cửa sổ hiện có…";
+  screenCaptureResult.value = null;
+  try {
+    const listing = await window.hinaDesktop.listScreenCaptureSources();
+    screenCaptureListing.value = listing;
+    screenCaptureSourceToken.value = listing.sources[0]?.sourceToken ?? "";
+    screenCaptureMessage.value =
+      `Đã tìm thấy ${listing.sourceCount} nguồn. Grant chỉ dùng một lần và hết hạn sau 60 giây.`;
+  } catch (error) {
+    screenCaptureListing.value = null;
+    screenCaptureSourceToken.value = "";
+    screenCaptureMessage.value = error instanceof Error
+      ? error.message
+      : "E_DESKTOP_CAPTURE_SOURCES";
+    console.error(
+      "[hina-screen-capture] E_DESKTOP_CAPTURE_SOURCES",
+      screenCaptureMessage.value,
+    );
+  } finally {
+    screenCaptureBusy.value = false;
+  }
+}
+
+async function togglePerceptionFeature(): Promise<void> {
+  if (screenCaptureBusy.value || !safety.value) return;
+  screenCaptureBusy.value = true;
+  try {
+    await window.hinaDesktop.applySafetyControl({
+      action: "set_feature",
+      feature: "perception",
+      enabled: !perceptionFeatureEnabled.value,
+    });
+    await refreshSafety();
+    screenCaptureMessage.value = perceptionFeatureEnabled.value
+      ? "Đã bật quyền Quan sát màn hình. Hina vẫn chỉ chụp khi bạn bấm nút gửi."
+      : "Đã tắt quyền Quan sát màn hình. Mọi lượt chụp mới sẽ bị chặn.";
+  } catch (error) {
+    screenCaptureMessage.value = error instanceof Error
+      ? error.message
+      : "E_DESKTOP_CAPTURE_SAFETY";
+    console.error(
+      "[hina-screen-capture] E_DESKTOP_CAPTURE_SAFETY",
+      screenCaptureMessage.value,
+    );
+  } finally {
+    screenCaptureBusy.value = false;
+  }
+}
+
+async function captureSelectedScreenSource(): Promise<void> {
+  const listing = screenCaptureListing.value;
+  const source = selectedScreenCaptureSource.value;
+  if (screenCaptureBusy.value || !listing || !source) return;
+  screenCaptureBusy.value = true;
+  screenCaptureResult.value = null;
+  screenCaptureMessage.value =
+    `Đang chụp toàn bộ “${source.name}”, hạ cạnh dài xuống tối đa ${screenCaptureMaxSide.value} px…`;
+  try {
+    const result = await window.hinaDesktop.captureScreenSource({
+      grantSessionId: listing.grantSessionId,
+      sourceToken: source.sourceToken,
+      maxSide: screenCaptureMaxSide.value,
+      label: screenCaptureLabel.value.trim() || null,
+      analyzeOcr: screenCaptureAnalyzeOcr.value,
+      analyzeVision: screenCaptureAnalyzeVision.value,
+      visionQuestion: screenCaptureAnalyzeVision.value
+        ? screenCaptureVisionQuestion.value.trim() || null
+        : null,
+    });
+    screenCaptureResult.value = result;
+    screenCaptureMessage.value =
+      result.status === "duplicate"
+        ? "Ảnh trùng với quan sát còn hạn; Hina dùng lại evidence hiện tại."
+        : `Đã gửi ảnh ${result.desktopCapture.width}×${result.desktopCapture.height} (${Math.ceil(result.desktopCapture.bytes / 1024)} KB).`;
+  } catch (error) {
+    screenCaptureMessage.value = error instanceof Error
+      ? error.message
+      : "E_DESKTOP_CAPTURE_IMAGE";
+    console.error(
+      "[hina-screen-capture] E_DESKTOP_CAPTURE_IMAGE",
+      screenCaptureMessage.value,
+    );
+  } finally {
+    // A grant is deliberately single-use even when the source disappears or
+    // the downstream provider rejects the request.
+    screenCaptureListing.value = null;
+    screenCaptureSourceToken.value = "";
+    screenCaptureBusy.value = false;
   }
 }
 
@@ -1150,7 +1264,7 @@ onBeforeUnmount(() => {
       </button>
       <button type="button" :class="{ active: activePage === 'perception' }" @click="activePage = 'perception'">
         Quan sát
-        <small>Chọn model đọc màn hình</small>
+        <small>Chụp màn hình và chọn model</small>
       </button>
       <button type="button" :class="{ active: activePage === 'resources' }" @click="activePage = 'resources'">
         Tài nguyên AI
@@ -1373,14 +1487,188 @@ onBeforeUnmount(() => {
     <section v-else-if="activePage === 'perception'" class="dashboard-page perception-page">
       <div class="page-heading">
         <p class="eyebrow">M08 / SCREEN PERCEPTION</p>
-        <h2>Chọn riêng model đọc màn hình cho Hina</h2>
+        <h2>Cho Hina đọc toàn bộ màn hình hoặc cửa sổ bạn chọn</h2>
         <p class="purpose">
-          Bộ não Qwen3‑VL 8B Thinking chỉ xử lý hội thoại và suy luận. Ảnh màn hình
-          đi qua provider riêng ở trang này: Ollama Cloud không dùng thêm VRAM máy,
-          còn Ollama local chỉ cho chọn model vision nhẹ. Không có ảnh nào được chụp
-          tự động; mỗi lượt vẫn cần thao tác chủ động và quyền “Quan sát màn hình”.
+          Mỗi lần bạn bấm gửi, Electron chụp đúng một khung hình đầy đủ của nguồn đã
+          chọn rồi giảm cạnh dài xuống 640, 960 hoặc 1280 px. Mặc định 960 px giúp
+          giảm dung lượng, thời gian xử lý và lượng token hình ảnh mà vẫn đủ rõ cho
+          phần lớn game/UI. Không có ảnh nào được chụp tự động.
         </p>
       </div>
+
+      <section class="screen-capture-panel" aria-labelledby="screenCaptureTitle">
+        <div class="screen-capture-heading">
+          <div>
+            <p class="eyebrow">1 / CHỤP THẬT MỘT LẦN</p>
+            <h3 id="screenCaptureTitle">Chọn nguồn và gửi toàn bộ khung hình</h3>
+          </div>
+          <span
+            class="capture-permission-badge"
+            :data-enabled="String(perceptionFeatureEnabled)"
+          >
+            {{ perceptionFeatureEnabled ? "Quyền quan sát đang bật" : "Quyền quan sát đang tắt" }}
+          </span>
+        </div>
+
+        <div class="capture-safety-row">
+          <p>
+            Nút quyền chỉ mở/đóng cổng Safety. Dù đang bật, Hina vẫn không thể tự
+            chụp; source grant chỉ sống 60 giây, dùng đúng một lần và không được lưu.
+          </p>
+          <button
+            type="button"
+            :class="{ danger: perceptionFeatureEnabled }"
+            :disabled="screenCaptureBusy || !safety"
+            @click="togglePerceptionFeature"
+          >
+            {{ perceptionFeatureEnabled ? "Tắt quyền quan sát" : "Bật quyền quan sát" }}
+          </button>
+          <button
+            class="primary"
+            type="button"
+            :disabled="screenCaptureBusy || !perceptionFeatureEnabled"
+            @click="listScreenCaptureSources"
+          >
+            {{ screenCaptureBusy ? "Đang xử lý…" : "Đọc màn hình / cửa sổ hiện có" }}
+          </button>
+        </div>
+
+        <div v-if="screenCaptureListing" class="capture-source-gallery" role="list">
+          <button
+            v-for="source in screenCaptureListing.sources"
+            :key="source.sourceToken"
+            type="button"
+            class="capture-source-card"
+            :class="{ selected: source.sourceToken === screenCaptureSourceToken }"
+            :aria-pressed="source.sourceToken === screenCaptureSourceToken"
+            @click="screenCaptureSourceToken = source.sourceToken"
+          >
+            <img :src="source.previewDataUrl" alt="">
+            <span>
+              <strong>{{ source.name }}</strong>
+              <small>
+                {{ source.kind === "screen" ? "Toàn màn hình" : "Toàn cửa sổ" }}
+                · preview {{ source.previewWidth }}×{{ source.previewHeight }}
+              </small>
+            </span>
+          </button>
+        </div>
+        <div v-else class="capture-empty-state">
+          Bấm “Đọc màn hình / cửa sổ hiện có” để tạo danh sách xem trước tạm thời.
+        </div>
+
+        <div class="capture-config-grid">
+          <div class="capture-selected-preview">
+            <template v-if="selectedScreenCaptureSource">
+              <img :src="selectedScreenCaptureSource.previewDataUrl" alt="Xem trước nguồn đã chọn">
+              <strong>{{ selectedScreenCaptureSource.name }}</strong>
+              <p>
+                Hina nhận toàn bộ nội dung đang nằm trong khung này; không crop và
+                không che phần nào.
+              </p>
+            </template>
+            <p v-else>Chưa chọn nguồn để chụp.</p>
+          </div>
+
+          <div class="capture-options">
+            <label for="screenCaptureResolution">Độ phân giải gửi cho AI</label>
+            <select
+              id="screenCaptureResolution"
+              v-model.number="screenCaptureMaxSide"
+              :disabled="screenCaptureBusy"
+            >
+              <option :value="640">640 px — tiết kiệm token, chữ lớn/game đơn giản</option>
+              <option :value="960">960 px — cân bằng, khuyên dùng</option>
+              <option :value="1280">1280 px — chi tiết hơn, tốn xử lý hơn</option>
+            </select>
+
+            <label for="screenCaptureLabel">Tên gợi nhớ cho lượt này (không bắt buộc)</label>
+            <input
+              id="screenCaptureLabel"
+              v-model="screenCaptureLabel"
+              type="text"
+              maxlength="120"
+              autocomplete="off"
+              placeholder="Ví dụ: Minecraft — màn hình chính"
+            >
+
+            <label class="capture-checkbox">
+              <input v-model="screenCaptureAnalyzeOcr" type="checkbox">
+              <span>
+                <strong>Đọc chữ bằng OCR GPU</strong>
+                <small>Nhanh với menu/HUD; kết quả vẫn cần đối chiếu nếu chữ nhỏ.</small>
+              </span>
+            </label>
+            <label class="capture-checkbox">
+              <input
+                v-model="screenCaptureAnalyzeVision"
+                type="checkbox"
+                :disabled="!visionProviderStatus?.runtime.available"
+              >
+              <span>
+                <strong>Phân tích bằng model vision đang chọn</strong>
+                <small>
+                  {{
+                    visionProviderStatus?.runtime.available
+                      ? "Dùng provider bên dưới cho đúng ảnh này."
+                      : "Hãy cấu hình model vision ở phần dưới trước."
+                  }}
+                </small>
+              </span>
+            </label>
+
+            <template v-if="screenCaptureAnalyzeVision">
+              <label for="screenCaptureQuestion">Hina cần chú ý điều gì? (không bắt buộc)</label>
+              <textarea
+                id="screenCaptureQuestion"
+                v-model="screenCaptureVisionQuestion"
+                maxlength="500"
+                rows="3"
+                placeholder="Ví dụ: Mô tả tình huống game và nguy hiểm gần nhân vật."
+              ></textarea>
+            </template>
+
+            <button
+              id="captureFullFrameButton"
+              class="primary capture-submit"
+              type="button"
+              :disabled="
+                screenCaptureBusy
+                  || !perceptionFeatureEnabled
+                  || !screenCaptureListing
+                  || !selectedScreenCaptureSource
+              "
+              @click="captureSelectedScreenSource"
+            >
+              Chụp toàn bộ nguồn đã chọn và gửi Hina
+            </button>
+          </div>
+        </div>
+
+        <div class="capture-message" role="status">
+          {{ screenCaptureMessage || "Mặc định 960 px; ảnh thường không được lưu sau lượt đọc." }}
+        </div>
+        <div v-if="screenCaptureResult" class="capture-result">
+          <strong>
+            {{
+              screenCaptureResult.status === "duplicate"
+                ? "Đã dùng lại quan sát còn hạn"
+                : "Hina đã nhận ảnh"
+            }}
+          </strong>
+          <span>
+            {{ screenCaptureResult.desktopCapture.width }}×{{ screenCaptureResult.desktopCapture.height }}
+            · {{ Math.ceil(screenCaptureResult.desktopCapture.bytes / 1024) }} KB
+            · full frame · correlation {{ screenCaptureResult.correlationId }}
+          </span>
+          <p v-if="screenCaptureResult.observation?.vision?.summary">
+            <b>Model vision:</b> {{ screenCaptureResult.observation.vision.summary }}
+          </p>
+          <p v-if="screenCaptureResult.observation?.ocr?.text">
+            <b>OCR:</b> {{ screenCaptureResult.observation.ocr.text }}
+          </p>
+        </div>
+      </section>
 
       <div class="vision-status-grid">
         <article class="vision-status-card">
@@ -1406,7 +1694,7 @@ onBeforeUnmount(() => {
 
       <div class="vision-settings-grid">
         <article class="vision-settings-card">
-          <p class="eyebrow">1 / CHỌN NGUỒN MODEL</p>
+          <p class="eyebrow">2 / CHỌN NGUỒN MODEL</p>
           <h3>Provider đọc ảnh</h3>
           <label for="visionProvider">Nguồn xử lý ảnh</label>
           <select id="visionProvider" v-model="visionProvider" :disabled="visionBusy">
@@ -1450,7 +1738,7 @@ onBeforeUnmount(() => {
         </article>
 
         <article class="vision-settings-card">
-          <p class="eyebrow">2 / CHỌN MODEL</p>
+          <p class="eyebrow">3 / CHỌN MODEL</p>
           <h3>Model Hina sẽ dùng để nhìn</h3>
           <label for="visionModel">Model có capability vision</label>
           <select

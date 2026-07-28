@@ -4,8 +4,8 @@ Hina AI là dự án local-first xây dựng AI VTuber tiếng Việt theo kiế
 mô-đun. Hội thoại, speech, memory, avatar, perception, Minecraft và livestream
 được tách bằng contract rõ ràng để có thể phát triển và rollback độc lập.
 
-Trạng thái hiện tại: **M08 — perception đang mở với slice S1 chạy thật để
-owner test; M07 avatar/desktop giữ trạng thái runnable candidate**. M01
+Trạng thái hiện tại: **M08 — perception đang mở, các slice S1–S6 có candidate
+chạy thật để owner test; M07 avatar/desktop giữ trạng thái runnable candidate**. M01
 runtime spine, M02 safety, M03 text brain, M04 speech input, M05 speech
 output và M06 memory đã qua fast gate; M06 cũng đã qua independent review
 không có P0/P1. Hina Dev Console hiện là dashboard nhiều
@@ -194,19 +194,28 @@ khỏi model weights đã train.
 
 ## Cho Hina quan sát màn hình theo yêu cầu
 
-M08 thêm trang **Quan sát**: owner bấm chụp, trình duyệt mở hộp thoại chọn
-màn hình/cửa sổ (đây là consent cho từng lần chụp), một khung hình được thu
-nhỏ và gửi PNG tới control plane loopback. Evidence hiện tại chỉ sống tối đa
-15 giây trong RAM. Owner có thể chủ động bắt đầu một phiên lưu ảnh game có
-quota; ảnh lịch sử được giữ để phân tích lại nhưng không bao giờ làm mới TTL,
-đi vào memory hoặc tự kích hoạt công cụ.
+M08 thêm trang **Quan sát** trong Dashboard desktop. Owner bấm đọc danh sách,
+chọn một màn hình/cửa sổ từ preview rồi gửi đúng một khung hình đầy đủ.
+Electron main giữ source ID thật sau grant 60 giây dùng một lần; renderer chỉ
+nhận token. Ảnh giữ nguyên toàn bộ bố cục, không crop/che, nhưng cạnh dài được
+hạ xuống 640/960/1.280 px (mặc định 960) để giảm payload, thời gian xử lý và
+token ảnh. Evidence hiện tại chỉ sống tối đa 15 giây trong RAM.
+
+Dev Console trên trình duyệt vẫn giữ hộp thoại `getDisplayMedia` làm đường kiểm
+thử/fallback. Owner có thể chủ động bắt đầu một phiên lưu ảnh game có quota;
+ảnh lịch sử được giữ để phân tích lại nhưng không bao giờ làm mới TTL, đi vào
+memory hoặc tự kích hoạt công cụ.
 
 Đọc ảnh không dùng checkpoint 8B của bộ não text. Trong Dashboard desktop:
 
-1. Mở **Quan sát** và chọn `Ollama Cloud` hoặc `Ollama local`.
-2. Với Cloud, dán API key một lần rồi bấm **Đọc danh sách model**. Dashboard chỉ
+1. Mở **Quan sát**, bật quyền quan sát, bấm **Đọc màn hình / cửa sổ hiện có**,
+   chọn source và giữ preset 960 px nếu không cần chữ rất nhỏ.
+2. Chọn OCR GPU hoặc model vision nếu cần, rồi bấm
+   **Chụp toàn bộ nguồn đã chọn và gửi Hina**.
+3. Để cấu hình model vision, chọn `Ollama Cloud` hoặc `Ollama local`.
+4. Với Cloud, dán API key một lần rồi bấm **Đọc danh sách model**. Dashboard chỉ
    liệt kê model khai báo capability vision.
-3. Chọn model và bấm **Áp dụng & lưu**.
+5. Chọn model và bấm **Áp dụng & lưu**.
 
 Desktop lưu provider/model và ciphertext do Electron `safeStorage` mã hóa trong
 `userData`; khóa rõ chỉ tồn tại trong Electron main và bộ nhớ runtime loopback.
@@ -216,9 +225,10 @@ lưu. Ollama Cloud không chiếm VRAM model cục bộ nhưng ảnh được g�
 Cloud đã chọn; Ollama local giữ ảnh trên máy và Dashboard chỉ cho chọn model
 vision nhẹ trong profile tối đa khoảng 5 GB/5B.
 
-Capture mặc định tắt: cần bật cờ **Quan sát màn hình** ở trang An toàn trước,
-và safety policy (`perception.observe`, decision `ask`) yêu cầu đúng hành động
-xác nhận của owner cho từng snapshot; policy lỗi thì capture fail closed.
+Capture mặc định tắt: nút bật/tắt quyền nằm ngay trên trang **Quan sát**, và
+safety policy (`perception.observe`, decision `ask`) yêu cầu đúng hành động xác
+nhận của owner cho từng snapshot; policy lỗi thì capture fail closed. Widget
+không có quyền list/chụp source và không có capture tự động.
 Quan sát ở slice này chỉ hiển thị cho owner — chưa được đưa vào chat context,
 memory hay tool nào.
 

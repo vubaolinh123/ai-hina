@@ -1,0 +1,86 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M08-S6-desktop-full-frame-capture",
+  "module_id": "M08",
+  "objective": "Add an owner-triggered Electron desktop capture path that lists bounded screen/window previews through opaque short-lived grants, captures the complete selected source in the main process, downsizes it to an explicit 640/960/1280-pixel long-edge preset before submission, and optionally runs the existing GPU OCR or configured vision provider without automatic capture or default pixel persistence.",
+  "non_goals": [
+    "Do not crop, redact, mask or otherwise omit part of the owner-selected source.",
+    "Do not add continuous capture, background polling, game automation or model-triggered capture.",
+    "Do not persist source lists, previews, source identifiers or snapshot pixels in Electron.",
+    "Do not expose DesktopCapturerSource IDs, filesystem, process or network primitives to the sandboxed renderer.",
+    "Do not add a new image model, dependency, release benchmark, soak test or open another product module."
+  ],
+  "base_sha": "be14f0057dd15af3b366cb09c5f3b1de98d57e72",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "apps/desktop/electron/control-client.ts",
+    "apps/desktop/electron/main.ts",
+    "apps/desktop/electron/preload.ts",
+    "apps/desktop/electron/screen-capture.ts",
+    "apps/desktop/src/App.vue",
+    "apps/desktop/src/env.d.ts",
+    "apps/desktop/src/style.css",
+    "apps/desktop/test/",
+    "docs/modules/M08-S6-desktop-full-frame-capture-module-brief.json",
+    "docs/modules/M08-perception.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "README.md"
+  ],
+  "forbidden_paths": [
+    "packages/contracts/",
+    "workers/speech/",
+    "packages/memory/",
+    "packages/avatar/",
+    "adapters/",
+    "voice_demo/"
+  ],
+  "contracts": [
+    "Only the operator window may enumerate or capture desktop sources.",
+    "The renderer receives an opaque UUID source token and bounded preview, never the Electron source ID.",
+    "A capture grant expires after at most 60 seconds and is single-use.",
+    "Every snapshot requires an owner click, owner confirmation header and the existing perception.observe safety feature flag.",
+    "The full selected source is preserved compositionally while its long edge is reduced to exactly one allowlisted maximum: 640, 960 or 1280 pixels.",
+    "PNG submitted to the loopback control plane remains at or below 1 MiB and uses source owner.desktop.",
+    "OCR/VLM output remains untrusted, decisionSupportEligible=false and bounded by the existing observation TTL of at most 15 seconds.",
+    "Normal capture does not persist source metadata, preview pixels or snapshot pixels."
+  ],
+  "allowed_dependencies": [
+    "Electron 43 desktopCapturer and NativeImage APIs already pinned in the workspace",
+    "Node.js standard library",
+    "Vue 3 already pinned in the workspace"
+  ],
+  "oss_candidates": [
+    "No new dependency; use the pinned Electron desktopCapturer.getSources and NativeImage resize/toPNG APIs documented by Electron."
+  ],
+  "acceptance_criteria": [
+    "The desktop Quan sát page lists real screen/window previews after an explicit owner action and does not expose raw DesktopCapturerSource IDs.",
+    "The owner can select 640, 960 or 1280 pixels with 960 as the default, then submit one full-frame PNG through the existing perception route.",
+    "The page clearly states that the complete selected source is sent and that lower resolution reduces payload and image-processing cost.",
+    "Optional OCR and configured vision analysis flags reach the runtime only when selected.",
+    "The perception feature flag can be explicitly enabled or disabled from the operator page through the existing safety control plane.",
+    "Capture grants reject unknown, expired and reused tokens; malformed input and non-operator IPC fail closed.",
+    "Fast desktop build, typecheck, unit tests, workspace check and a real Electron startup/page smoke pass."
+  ],
+  "required_test_commands": [
+    "pnpm --filter @hina/desktop test",
+    "pnpm --filter @hina/desktop typecheck",
+    "node tools/dev/check-node-workspace.mjs",
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Start-HinaDesktop.ps1 with HINA_DESKTOP_SMOKE=1"
+  ],
+  "latency_or_quality_budget": {
+    "source_grant_ttl_seconds": 60,
+    "maximum_source_count": 48,
+    "default_long_edge_pixels": 960,
+    "allowed_long_edge_pixels": [
+      640,
+      960,
+      1280
+    ],
+    "maximum_png_bytes": 1000000,
+    "automatic_capture": false,
+    "normal_pixel_persistence": false
+  },
+  "output_artifact_dir": "artifacts/verification/M08/"
+}

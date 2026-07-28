@@ -38,6 +38,10 @@ type SafetyStatus = {
     emergencyStopped: boolean;
     muted: boolean;
     revision: number;
+    featureFlags: {
+      perception: boolean;
+      [feature: string]: boolean;
+    };
   };
 };
 
@@ -298,6 +302,66 @@ type VisionModelDiscovery = {
   localSelectionLimitBytes: number | null;
 };
 
+type ScreenCaptureSource = {
+  sourceToken: string;
+  name: string;
+  kind: "screen" | "window";
+  previewDataUrl: string;
+  previewWidth: number;
+  previewHeight: number;
+};
+
+type ScreenCaptureSourceListing = {
+  grantSessionId: string;
+  expiresAtUnixMilliseconds: number;
+  sourceCount: number;
+  sources: ScreenCaptureSource[];
+  persistence: false;
+};
+
+type DesktopPerceptionCaptureResult = {
+  status: "observed" | "duplicate";
+  correlationId: string;
+  observation?: {
+    observationId: string;
+    ttlSeconds: number;
+    expiresAt: string;
+    evidence: {
+      width: number;
+      height: number;
+      bytes: number;
+    };
+    ocr?: {
+      state: string;
+      text?: string;
+      errorCode?: string;
+    };
+    vision?: {
+      state: string;
+      summary?: string;
+      errorCode?: string;
+      providerErrorCode?: string;
+      modelErrorCode?: string;
+    };
+  };
+  dedup?: {
+    matchedObservationId: string;
+    hammingDistance: number;
+    threshold: number;
+  };
+  desktopCapture: {
+    sourceName: string;
+    sourceKind: "screen" | "window";
+    fullFrame: true;
+    requestedMaxSide: 640 | 960 | 1280;
+    width: number;
+    height: number;
+    bytes: number;
+    automatic: false;
+    persistedByDesktop: false;
+  };
+};
+
 type HinaDesktopApi = {
   getWindowMode(): Promise<DesktopWindowMode>;
   getWidgetStatus(): Promise<WidgetStatus>;
@@ -317,6 +381,7 @@ type HinaDesktopApi = {
   getSafetyStatus(): Promise<SafetyStatus>;
   applySafetyControl(control:
     | { action: "set_mute"; enabled: boolean }
+    | { action: "set_feature"; feature: "perception"; enabled: boolean }
     | { action: "emergency_stop" }
     | { action: "emergency_reset" }
   ): Promise<unknown>;
@@ -370,6 +435,16 @@ type HinaDesktopApi = {
     runtimeDisabled: boolean;
     runtimePreserved: boolean;
   }>;
+  listScreenCaptureSources(): Promise<ScreenCaptureSourceListing>;
+  captureScreenSource(input: {
+    grantSessionId: string;
+    sourceToken: string;
+    maxSide: 640 | 960 | 1280;
+    label: string | null;
+    analyzeOcr: boolean;
+    analyzeVision: boolean;
+    visionQuestion: string | null;
+  }): Promise<DesktopPerceptionCaptureResult>;
 };
 
 interface Window {

@@ -579,6 +579,223 @@ pre,
   justify-self: start;
 }
 
+.screen-capture-panel {
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+  border: 1px solid rgba(240, 142, 107, 0.5);
+  background:
+    linear-gradient(135deg, rgba(240, 142, 107, 0.09), transparent 42%),
+    var(--surface-raised);
+}
+
+.screen-capture-heading,
+.capture-safety-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.screen-capture-heading h3 {
+  margin: 3px 0 0;
+  font-size: 22px;
+}
+
+.capture-permission-badge {
+  flex: 0 0 auto;
+  padding: 7px 9px;
+  border: 1px solid rgba(255, 125, 133, 0.55);
+  color: var(--danger);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.capture-permission-badge[data-enabled="true"] {
+  border-color: rgba(95, 221, 161, 0.5);
+  color: var(--success);
+}
+
+.capture-safety-row {
+  align-items: center;
+  padding: 14px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.capture-safety-row p {
+  flex: 1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.capture-safety-row button {
+  flex: 0 0 auto;
+}
+
+.capture-source-gallery {
+  display: grid;
+  grid-auto-columns: minmax(220px, 280px);
+  grid-auto-flow: column;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 2px 2px 10px;
+}
+
+.capture-source-card {
+  display: grid;
+  grid-template-rows: 132px auto;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  background: #0d0c11;
+  text-align: left;
+}
+
+.capture-source-card.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(240, 142, 107, 0.18);
+}
+
+.capture-source-card img {
+  width: 100%;
+  height: 132px;
+  object-fit: contain;
+  background: #050507;
+}
+
+.capture-source-card > span {
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+}
+
+.capture-source-card strong,
+.capture-source-card small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.capture-source-card small,
+.capture-empty-state,
+.capture-selected-preview p,
+.capture-checkbox small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.capture-empty-state {
+  padding: 18px;
+  border: 1px dashed var(--border);
+  text-align: center;
+}
+
+.capture-config-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.85fr) minmax(340px, 1.15fr);
+  gap: 18px;
+}
+
+.capture-selected-preview,
+.capture-options {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  background: #0d0c11;
+}
+
+.capture-selected-preview img {
+  width: 100%;
+  max-height: 320px;
+  object-fit: contain;
+  background: #050507;
+}
+
+.capture-selected-preview p {
+  margin: 0;
+}
+
+.capture-options > label:not(.capture-checkbox) {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.capture-options input[type="text"],
+.capture-options select,
+.capture-options textarea {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  background: #121016;
+  color: var(--text);
+  font: inherit;
+}
+
+.capture-options textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.capture-checkbox {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  padding: 11px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.capture-checkbox input {
+  margin-top: 3px;
+}
+
+.capture-checkbox span,
+.capture-checkbox strong,
+.capture-checkbox small {
+  display: block;
+}
+
+.capture-submit {
+  margin-top: 4px;
+}
+
+.capture-message,
+.capture-result {
+  padding: 12px 14px;
+  border: 1px solid rgba(240, 142, 107, 0.4);
+  background: rgba(240, 142, 107, 0.06);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.capture-result {
+  display: grid;
+  gap: 5px;
+  border-color: rgba(95, 221, 161, 0.42);
+  background: rgba(95, 221, 161, 0.06);
+}
+
+.capture-result strong,
+.capture-result b {
+  color: var(--text);
+}
+
+.capture-result p {
+  margin: 5px 0 0;
+  white-space: pre-wrap;
+}
+
 .vision-status-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1838,6 +2055,19 @@ pre {
   }
 
   .speech-test-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .capture-safety-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .capture-safety-row p {
+    grid-column: 1 / -1;
+  }
+
+  .capture-config-grid {
     grid-template-columns: 1fr;
   }
 

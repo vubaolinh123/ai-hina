@@ -67,6 +67,9 @@ test("preload exposes named methods and never exposes raw ipcRenderer", () => {
     "discoverVisionModels",
     "configureVisionProvider",
     "clearVisionApiKey",
+    "getResourceStatus",
+    "listScreenCaptureSources",
+    "captureScreenSource",
   ]) {
     assert.match(preload, new RegExp(`${method}:`));
   }
@@ -123,6 +126,32 @@ test("resource telemetry stays behind read-only operator IPC", () => {
   assert.match(monitor, /ModelTransitionTracker/);
   assert.match(monitor, /historyPersistence|transitionHistory/);
   assert.doesNotMatch(renderer, /child_process|nvidia-smi|process\.memoryUsage|node:os/);
+});
+
+test("full-frame screen capture stays in Electron main behind one-use grants", () => {
+  const main = read("electron/main.ts");
+  const preload = read("electron/preload.ts");
+  const capture = read("electron/screen-capture.ts");
+  const client = read("electron/control-client.ts");
+  const renderer = read("src/App.vue");
+
+  assert.match(main, /desktopCapturer\.getSources/);
+  assert.match(main, /E_DESKTOP_CAPTURE_AUTHORITY: operator window required/);
+  assert.match(main, /E_DESKTOP_CAPTURE_DISABLED: enable Quan sát màn hình/);
+  assert.match(main, /requestControl\("safety\.status"\)/);
+  assert.match(main, /captureGrantStore\.consume/);
+  assert.match(main, /requestPerceptionSnapshot/);
+  assert.match(preload, /listScreenCaptureSources:/);
+  assert.match(preload, /captureScreenSource:/);
+  assert.doesNotMatch(preload, /desktopCapturer|sourceId/);
+  assert.match(capture, /CAPTURE_GRANT_TTL_MILLISECONDS\s*=\s*60_000/);
+  assert.match(capture, /CAPTURE_MAX_SIDES/);
+  assert.match(capture, /persistence:\s*false/);
+  assert.match(client, /"X-Hina-Source":\s*"owner\.desktop"/);
+  assert.match(client, /"X-Hina-Owner-Confirmed":\s*"true"/);
+  assert.match(renderer, /screenCaptureMaxSide\s*=\s*ref<640 \| 960 \| 1280>\(960\)/);
+  assert.match(renderer, /Chụp toàn bộ nguồn đã chọn và gửi Hina/);
+  assert.doesNotMatch(renderer, /getDisplayMedia|desktopCapturer|sourceId/);
 });
 
 test("VTube Studio stays in the main process behind operator-only typed IPC", () => {
@@ -385,6 +414,22 @@ test("control client accepts numeric loopback only and validates mutations", () 
     control.validateSafetyControl({ action: "set_mute", enabled: true }),
     { action: "set_mute", enabled: true },
   );
+  assert.deepEqual(
+    control.validateSafetyControl({
+      action: "set_feature",
+      feature: "perception",
+      enabled: true,
+    }),
+    { action: "set_feature", feature: "perception", enabled: true },
+  );
+  assert.throws(
+    () => control.validateSafetyControl({
+      action: "set_feature",
+      feature: "streamOutput",
+      enabled: true,
+    }),
+    /only the perception feature/,
+  );
   assert.throws(
     () => control.validateSafetyControl({ action: "execute", command: "whoami" }),
     /E_DESKTOP_SAFETY_CONTROL/,
@@ -471,6 +516,56 @@ test("control client sends bounded microphone WAV only to the fixed speech route
       { fetchImpl: async () => new Response("{}", { status: 200 }) },
     ),
     /E_DESKTOP_STT_REQUEST/,
+  );
+});
+
+test("control client sends bounded PNG only to the fixed perception route", async () => {
+  const png = new Uint8Array(33);
+  png.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  let request = null;
+  const result = await control.requestPerceptionSnapshot(
+    png,
+    {
+      sessionId: "55555555-5555-4555-8555-555555555555",
+      label: "Minecraft",
+      analyzeOcr: true,
+      analyzeVision: true,
+      visionQuestion: "Có nguy hiểm nào gần nhân vật?",
+    },
+    {
+      baseUrl: "http://127.0.0.1:8765",
+      fetchImpl: async (url, options) => {
+        request = { url, options };
+        return new Response(
+          JSON.stringify({ status: "observed", correlationId: "test" }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      },
+    },
+  );
+  assert.equal(result.status, "observed");
+  assert.equal(request.url, "http://127.0.0.1:8765/v1/perception/snapshots");
+  assert.equal(request.options.method, "POST");
+  assert.equal(request.options.headers["Content-Type"], "image/png");
+  assert.equal(request.options.headers["X-Hina-Source"], "owner.desktop");
+  assert.equal(request.options.headers["X-Hina-Owner-Confirmed"], "true");
+  assert.equal(request.options.headers["X-Hina-OCR-Analyze"], "true");
+  assert.equal(request.options.headers["X-Hina-Vision-Analyze"], "true");
+  await assert.rejects(
+    control.requestPerceptionSnapshot(
+      new Uint8Array(33),
+      {
+        sessionId: "55555555-5555-4555-8555-555555555555",
+        label: null,
+        analyzeOcr: false,
+        analyzeVision: false,
+        visionQuestion: null,
+      },
+    ),
+    /snapshot must be a PNG/,
   );
 });
 

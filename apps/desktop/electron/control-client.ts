@@ -44,7 +44,13 @@ const AVATAR_STATES = new Set([
   "error",
 ]);
 const AVATAR_CUE_FIELDS = new Set(["source", "state", "mode"]);
-const SAFETY_ACTIONS = new Set(["set_mute", "emergency_stop", "emergency_reset"]);
+const SAFETY_ACTIONS = new Set([
+  "set_mute",
+  "set_feature",
+  "emergency_stop",
+  "emergency_reset",
+]);
+const MAX_PERCEPTION_PNG_BYTES = 1_000_000;
 
 export function parseControlBaseUrl(raw = DEFAULT_CONTROL_BASE): string {
   let parsed: URL;
@@ -96,16 +102,34 @@ export function validateSafetyControl(raw: unknown): JsonObject {
   }
   const expectedKeys = raw.action === "set_mute"
     ? new Set(["action", "enabled"])
-    : new Set(["action"]);
+    : raw.action === "set_feature"
+      ? new Set(["action", "feature", "enabled"])
+      : new Set(["action"]);
   if (Object.keys(raw).some((key) => !expectedKeys.has(key))) {
     throw new Error("E_DESKTOP_SAFETY_CONTROL: safety control fields are invalid");
   }
   if (raw.action === "set_mute" && typeof raw.enabled !== "boolean") {
     throw new Error("E_DESKTOP_SAFETY_CONTROL: mute requires a boolean enabled field");
   }
-  return raw.action === "set_mute"
-    ? { action: raw.action, enabled: raw.enabled }
-    : { action: raw.action };
+  if (
+    raw.action === "set_feature"
+    && (raw.feature !== "perception" || typeof raw.enabled !== "boolean")
+  ) {
+    throw new Error(
+      "E_DESKTOP_SAFETY_CONTROL: only the perception feature may be changed here",
+    );
+  }
+  if (raw.action === "set_mute") {
+    return { action: raw.action, enabled: raw.enabled };
+  }
+  if (raw.action === "set_feature") {
+    return {
+      action: raw.action,
+      feature: "perception",
+      enabled: raw.enabled,
+    };
+  }
+  return { action: raw.action };
 }
 
 export async function requestControl(
@@ -231,6 +255,119 @@ export function validateVisionApiKey(value: unknown): string {
 
 export async function requestVisionStatus(): Promise<JsonObject> {
   return requestControl("perception.status");
+}
+
+export async function requestPerceptionSnapshot(
+  rawPng: unknown,
+  raw: unknown,
+  options: {
+    baseUrl?: string;
+    fetchImpl?: typeof fetch;
+  } = {},
+): Promise<JsonObject> {
+  const png = validatePngSnapshot(rawPng);
+  if (
+    !isObject(raw)
+    || Object.keys(raw).length !== 5
+    || ![
+      "sessionId",
+      "label",
+      "analyzeOcr",
+      "analyzeVision",
+      "visionQuestion",
+    ].every((key) => key in raw)
+  ) {
+    throw new Error("E_DESKTOP_CAPTURE_REQUEST: snapshot metadata is invalid");
+  }
+  const sessionId = validateUuid(raw.sessionId, "E_DESKTOP_CAPTURE_REQUEST");
+  if (typeof raw.analyzeOcr !== "boolean" || typeof raw.analyzeVision !== "boolean") {
+    throw new Error("E_DESKTOP_CAPTURE_REQUEST: analysis flags are invalid");
+  }
+  const label = validateOptionalHeaderText(
+    raw.label,
+    120,
+    "E_DESKTOP_CAPTURE_REQUEST",
+  );
+  const visionQuestion = validateOptionalHeaderText(
+    raw.visionQuestion,
+    500,
+    "E_DESKTOP_CAPTURE_REQUEST",
+  );
+  if (!raw.analyzeVision && visionQuestion !== null) {
+    throw new Error(
+      "E_DESKTOP_CAPTURE_REQUEST: vision question requires vision analysis",
+    );
+  }
+  const baseUrl = parseControlBaseUrl(
+    options.baseUrl
+      ?? process.env.HINA_CONTROL_BASE_URL
+      ?? DEFAULT_CONTROL_BASE,
+  );
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    "Content-Type": "image/png",
+    "X-Hina-Correlation-Id": crypto.randomUUID(),
+    "X-Hina-Session-Id": sessionId,
+    "X-Hina-Source": "owner.desktop",
+    "X-Hina-Owner-Confirmed": "true",
+  };
+  if (label !== null) {
+    headers["X-Hina-Label"] = encodeURIComponent(label);
+  }
+  if (raw.analyzeOcr) {
+    headers["X-Hina-OCR-Analyze"] = "true";
+  }
+  if (raw.analyzeVision) {
+    headers["X-Hina-Vision-Analyze"] = "true";
+  }
+  if (visionQuestion !== null) {
+    headers["X-Hina-Vision-Question"] = encodeURIComponent(visionQuestion);
+  }
+  let response: Response;
+  try {
+    response = await (options.fetchImpl ?? fetch)(
+      `${baseUrl}/v1/perception/snapshots`,
+      {
+        method: "POST",
+        cache: "no-store",
+        headers,
+        body: png.buffer.slice(
+          png.byteOffset,
+          png.byteOffset + png.byteLength,
+        ) as ArrayBuffer,
+        signal: AbortSignal.timeout(120_000),
+      },
+    );
+  } catch {
+    throw new Error("E_DESKTOP_CONTROL_OFFLINE: Hina control plane is unavailable");
+  }
+  const declaredLength = Number(response.headers.get("content-length") || 0);
+  if (declaredLength > MAX_RESPONSE_BYTES) {
+    throw new Error("E_DESKTOP_RESPONSE: perception response exceeds the desktop limit");
+  }
+  const text = await response.text();
+  if (new TextEncoder().encode(text).byteLength > MAX_RESPONSE_BYTES) {
+    throw new Error("E_DESKTOP_RESPONSE: perception response exceeds the desktop limit");
+  }
+  let result: unknown;
+  try {
+    result = JSON.parse(text);
+  } catch {
+    throw new Error("E_DESKTOP_RESPONSE: perception response is not valid JSON");
+  }
+  if (!isObject(result)) {
+    throw new Error("E_DESKTOP_RESPONSE: perception response must be an object");
+  }
+  if (!response.ok) {
+    const code = typeof result.errorCode === "string"
+      ? result.errorCode.slice(0, 64)
+      : `HTTP_${response.status}`;
+    const message = typeof result.message === "string"
+      ? result.message.slice(0, 192)
+      : "perception snapshot failed";
+    throw new Error(`${code}: ${message}`);
+  }
+  return result;
 }
 
 export async function requestVisionModelDiscovery(
@@ -470,6 +607,50 @@ function validateWavAudio(raw: unknown): Uint8Array {
     throw new Error("E_DESKTOP_STT_REQUEST: audio must be a RIFF/WAVE payload");
   }
   return audio;
+}
+
+function validatePngSnapshot(raw: unknown): Uint8Array {
+  const png = raw instanceof Uint8Array
+    ? raw
+    : raw instanceof ArrayBuffer
+      ? new Uint8Array(raw)
+      : null;
+  if (
+    !png
+    || png.byteLength < 33
+    || png.byteLength > MAX_PERCEPTION_PNG_BYTES
+    || png[0] !== 0x89
+    || png[1] !== 0x50
+    || png[2] !== 0x4e
+    || png[3] !== 0x47
+    || png[4] !== 0x0d
+    || png[5] !== 0x0a
+    || png[6] !== 0x1a
+    || png[7] !== 0x0a
+  ) {
+    throw new Error(
+      "E_DESKTOP_CAPTURE_IMAGE: snapshot must be a PNG no larger than 1 MB",
+    );
+  }
+  return png;
+}
+
+function validateOptionalHeaderText(
+  raw: unknown,
+  maximumCharacters: number,
+  code: string,
+): string | null {
+  if (raw === null) return null;
+  if (
+    typeof raw !== "string"
+    || raw !== raw.trim()
+    || raw.length < 1
+    || raw.length > maximumCharacters
+    || /[\u0000-\u001f\u007f]/u.test(raw)
+  ) {
+    throw new Error(`${code}: metadata text is invalid`);
+  }
+  return raw;
 }
 
 function isObject(value: unknown): value is JsonObject {
