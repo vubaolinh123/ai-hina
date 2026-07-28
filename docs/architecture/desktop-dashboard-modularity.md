@@ -21,17 +21,20 @@ workflow, not merely a visual section.
 - Page-specific CSS stays under a stable page/class prefix in `style.css` until
   a page has enough local styles to justify a colocated stylesheet.
 
-## Current migration state (M08-S12)
+## Current migration state (M08-S13)
 
-- Extracted: `DashboardNav.vue`, `pages/OverviewPage.vue`, and
-  `pages/ChatPage.vue`.
+- Extracted: `DashboardNav.vue`, `pages/OverviewPage.vue`,
+  `pages/ChatPage.vue`, and `pages/PerceptionPage.vue`.
 - `ChatPage.vue` owns message-list follow behavior, scroll intent, composer
   accessibility and aggregate context display. The composer is sticky on
   desktop and becomes normal flow at narrow widths.
-- Existing Speech, Perception, Resources, Live2D and Avatar/Runtime markup is
-  legacy root markup. New controls must not be appended to those root sections;
-  migrate the entire affected page into `src/dashboard/pages/` as the next
-  bounded UI slice.
+- `PerceptionPage.vue` owns the screen-capture and Vision configuration
+  presentation. It receives bounded display data and emits owner intent or
+  field updates; `App.vue` remains the only owner of capture grants, Safety,
+  session binding, typed IPC, stored-key lifecycle and error logging.
+- Existing Speech, Resources, Live2D and Avatar/Runtime markup is legacy root
+  markup. New controls must not be appended to those root sections; migrate the
+  entire affected page into `src/dashboard/pages/` as the next bounded UI slice.
 
 ## Conversation UI contract
 

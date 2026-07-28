@@ -231,8 +231,16 @@ estimate UTF-8 byte và counters aggregate, không prompt/reasoning/raw history.
 Desktop tách `DashboardNav`, `OverviewPage`, `ChatPage`; Chat tự follow message
 trừ khi owner scroll away và composer sticky desktop. Mọi UI mới phải đi vào
 page/component, không thêm markup vào legacy `App.vue` root; migration còn lại
-Speech/Perception/Resources/Live2D/Avatar làm theo bounded slice. Fast gate:
+Speech/Resources/Live2D/Avatar/Runtime làm theo bounded slice. Fast gate:
 text 47, speech 40, perception 62, core 55, desktop typecheck/build+54.
+Ngày 2026-07-29 M08-S13 chuyển toàn bộ trang **Quan sát** sang
+`dashboard/pages/PerceptionPage.vue`. Component chỉ là typed presentation và
+intent boundary: không import Electron/Node/network/storage/model runtime;
+`App.vue` vẫn sở hữu Safety, session chat, opaque source grant, Vision key/IPC
+và console error. Không thay capture explicit, grant 60 giây/single-use,
+source-ID boundary, key `safeStorage`, pixel persistence hay TTL. Dashboard
+migration còn lại chỉ gồm Speech/Resources/Live2D/Avatar/Runtime. Desktop
+typecheck và build + 54 tests xanh, không chạy model/Cloud/capture thật.
 Ngày 2026-07-29 M08-S11 hotfix capture/runtime capacity: owner phê duyệt trần
 admission Hina **15.872 MiB (15,5 GiB)**. `nvidia-smi memory.free` đã phản ánh
 VRAM Windows/compositor/app khác, vì vậy scheduler không trừ thêm 2.048 MiB;

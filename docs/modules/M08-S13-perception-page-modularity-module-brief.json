@@ -1,0 +1,64 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M08-S13-perception-page-modularity",
+  "module_id": "M08",
+  "objective": "Move the owner-facing Perception/Screen Capture dashboard workflow out of the legacy App.vue root into a dedicated typed Vue page while preserving the existing explicit-capture, opaque-grant, Vision-key and TTL boundaries.",
+  "non_goals": [
+    "Do not change capture authorization, source-grant lifetime, image persistence, OCR/VLM provider behavior, Cloud key storage, model selection rules, or scheduler/VRAM admission.",
+    "Do not add a dependency, new capture mode, automatic capture, background capture, raw source ID exposure, or real model/Cloud/runtime testing against the owner's active desktop.",
+    "Do not migrate unrelated Speech, Resources, Avatar, Live2D or Runtime pages in this slice."
+  ],
+  "base_sha": "bce205b",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "apps/desktop/src/App.vue",
+    "apps/desktop/src/dashboard/pages/PerceptionPage.vue",
+    "apps/desktop/src/dashboard/types.ts",
+    "apps/desktop/test/security.test.mjs",
+    "docs/architecture/desktop-dashboard-modularity.md",
+    "docs/modules/M08-S13-perception-page-modularity-module-brief.json",
+    "docs/modules/M08-perception.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "voice_demo/",
+    "var/perception-sessions/",
+    "apps/desktop/dist/",
+    "apps/desktop/dist-electron/",
+    "var/test-artifacts/"
+  ],
+  "contracts": [
+    "PerceptionPage is presentation and owner-interaction only: it receives bounded, typed view data and emits intent or v-model updates. It does not import Electron, Node, direct network APIs, persistence or model runtimes.",
+    "App.vue remains the sole owner of typed window.hinaDesktop calls, chat-session binding, opaque capture grants, Safety control, Vision configuration, error logging and state lifecycle.",
+    "The page never receives a raw desktop source ID, API key from persistence, hidden model text, raw pixel buffer or secret. Source tokens and preview data remain bounded renderer data supplied by existing typed IPC.",
+    "Capture stays explicit owner-click only; the feature flag, 60-second single-use grant, full-frame downscale choices, OCR/VLM opt-in and 15-second observation semantics remain unchanged.",
+    "Desktop renderer security tests include the extracted page and prove no direct renderer network/Electron/storage capability was introduced."
+  ],
+  "allowed_dependencies": [
+    "Existing Vue 3/TypeScript, current Electron typed IPC and repository test tooling; no new dependency."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "All Perception page markup is removed from App.vue and rendered through pages/PerceptionPage.vue.",
+    "The extracted page retains source selection, resolution/label/OCR/VLM option bindings, Vision provider/model controls, result/error/timing display and Ask-Hina intent without direct runtime access.",
+    "Dashboard module documentation records PerceptionPage as extracted and names the remaining legacy pages accurately.",
+    "Desktop typecheck, desktop security/build test and the repository fast gate pass without generated test artifacts retained."
+  ],
+  "required_test_commands": [
+    "pnpm --filter @hina/desktop typecheck",
+    "pnpm test:desktop",
+    "pnpm test:fast",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "capture_behavior_change": false,
+    "automatic_capture": false,
+    "new_local_vram_mib": 0,
+    "new_network_calls": 0
+  },
+  "output_artifact_dir": "artifacts/verification/M08/"
+}

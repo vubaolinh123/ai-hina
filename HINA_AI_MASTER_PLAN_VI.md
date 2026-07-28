@@ -1058,7 +1058,7 @@ Hoàn thành vertical slice text-only có persona Hina, interruption/cancellatio
 
 ### Trạng thái local hiện tại (M03-S5 + M08-S12 maintenance)
 
-- Persona `hina.prompt.v3` mặc định trả lời trực tiếp trong 1–2 câu, thường
+- Persona `hina.prompt.v4` mặc định trả lời trực tiếp trong 1–2 câu, thường
   không quá 45 từ; chỉ dùng tối đa 3 câu/khoảng 80 từ khi thật sự cần ngữ cảnh.
 - Không lặp lại câu hỏi, tự giới thiệu ngoài ngữ cảnh, thêm disclaimer chung
   chung hoặc kết thúc bằng lời mời hỗ trợ thừa.
@@ -1071,8 +1071,10 @@ Hoàn thành vertical slice text-only có persona Hina, interruption/cancellatio
   `viewer`; text không tin cậy không thể tự nhận vai creator. Output nói bình
   thường là plain text, không markdown/emoji/stage direction thô để đi thẳng
   vào TTS.
-- Khi owner yêu cầu rõ chi tiết, code, danh sách hoặc từng bước, Hina được quyền
-  mở rộng. Nếu thiếu dữ kiện, hỏi đúng một câu làm rõ ngắn.
+- Khi owner cần tâm sự hoặc ngữ cảnh đời thường, Hina có thể mở rộng vừa đủ;
+  còn yêu cầu code/HTML/command/tutorial được redirect ngắn, đúng nhân vật và
+  không gọi model. Nếu thiếu dữ kiện trong cuộc trò chuyện, hỏi đúng một câu
+  làm rõ ngắn.
 - Gateway mặc định `max_tokens=192` thay vì 512 để giới hạn runaway verbosity;
   đây là cấu hình có thể override, không phải cắt chuỗi sau sinh.
 - Ollama chat dùng `repeat_penalty=1.15`. A/B local với Qwen3.5-4B giữ
@@ -1473,6 +1475,12 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
   hiển thị pha capture/encode/analyze và số đo từng chặng, không lộ pixel/source
   ID/key. Fast unit/typecheck/desktop test được chạy; không chạy real Cloud/native
   model smoke hay all-on benchmark khi owner đang dùng desktop.
+- M08-S13 Perception page modularity (2026-07-29): toàn bộ owner workflow
+  **Quan sát** đã rời legacy `App.vue` sang `PerceptionPage.vue`. Component chỉ
+  nhận display state bounded và phát intent/field update; App vẫn là sole owner
+  của Safety, session UUID, opaque capture grant, Vision key/IPC và error log.
+  Không đổi auto-capture, source-ID, Cloud-key, image persistence hay TTL.
+  Desktop typecheck/build + 54 test xanh; không chạy provider/Cloud/capture thật.
 
 ### Test matrix
 

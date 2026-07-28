@@ -10,6 +10,8 @@
   M08-S9 fresh same-session observation context is a runnable candidate;
   M08-S10 resource controls + output-quality maintenance is a runnable candidate;
   M08-S11 capture/runtime-capacity hotfix is a runnable candidate;
+  M08-S12 conversation ergonomics/persona boundary is a runnable candidate;
+  M08-S13 Perception dashboard modularity is a runnable candidate;
   M08 remains active
 - Branch: `main` (fast-development mode)
 - Active slices: M08-S1 perception spine (owner-consented snapshot ingestion,
@@ -28,7 +30,10 @@
   M08-S10 adds owner-only scheduler-safe model controls and prevents hidden
   model text from reaching the chat or TTS output; M08-S11 removes double
   counting of Windows VRAM, makes Brain/STT manual warmup real, and exposes
-  capture-versus-vision timing without adding image persistence
+  capture-versus-vision timing without adding image persistence; M08-S12
+  keeps companion chat/prompt and dashboard boundaries explicit; M08-S13 moves
+  the complete owner-facing Perception workflow into a dedicated page component
+  while preserving the existing capture and secret boundaries
 
 ## Runnable target
 
@@ -559,3 +564,30 @@ Không được đánh dấu M08 complete khi các phần còn lại chưa có e
 - `pnpm test:fast` passes: text 47, speech 40, perception 62 and core runtime
   55 plus the existing narrow suites. No real model, Cloud, voice, screenshot,
   cache/model download, fixture or one-off script was created for this slice.
+
+## Implemented in M08-S13 (Perception page modularity)
+
+- `apps/desktop/src/dashboard/pages/PerceptionPage.vue` now owns all owner-facing
+  markup for the explicit screen/cửa sổ picker, bounded resolution and OCR/VLM
+  choices, result/error/timing explanation, and Cloud/local Vision provider
+  controls. It has no direct Electron, Node, fetch, storage or model-runtime
+  access.
+- `App.vue` stays the sole owner of `window.hinaDesktop`, Safety feature control,
+  opaque single-use source grants, the chat session UUID, Vision key lifecycle,
+  capture progress/error logging and actual capture/Vision IPC. The extracted
+  page receives only typed bounded display state and emits intent/field updates.
+- No capture behavior changed: capture remains explicit owner-click only,
+  source IDs remain in Electron main, the 60-second grant remains single-use,
+  Cloud keys remain encrypted behind `safeStorage`, and image/observation TTL
+  semantics are unchanged.
+- The dashboard architecture rule now records Perception as migrated. Speech,
+  Resources, Live2D and Avatar/Runtime are still legacy root pages and must be
+  moved one full page at a time rather than adding more `App.vue` markup.
+
+## Fast evidence M08-S13 (owner machine)
+
+- `pnpm --filter @hina/desktop typecheck`: pass.
+- `pnpm test:desktop`: build + 54 tests pass, including the extracted
+  Perception page in renderer-isolation, key-boundary and opaque-grant checks.
+- No model, Cloud request, capture, audio, cache/model download, fixture or
+  one-off script was created for this UI-boundary slice.
