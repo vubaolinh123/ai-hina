@@ -154,6 +154,53 @@ type SpoutBridgeStatus = {
   lastErrorCode: string | null;
 };
 
+type VisionProviderChoice = "ollama_local" | "ollama_cloud";
+
+type VisionModelOption = {
+  name: string;
+  sizeBytes: number | null;
+  parameterSize: string | null;
+  quantization: string | null;
+  capabilities: string[];
+  lightweight: boolean;
+  localGpuUsed: boolean;
+};
+
+type VisionProviderRuntimeStatus = {
+  provider: VisionProviderChoice | "none";
+  model: string | null;
+  state: "closed" | "ready" | "unconfigured" | "error";
+  available: boolean;
+  apiKeyConfigured: boolean;
+  apiKeyReadableByRenderer: false;
+  apiKeyStorage: "electron-safe-storage";
+  automatic: false;
+  decisionSupportEligible: false;
+  localGpuUsed: boolean;
+  cloudImageUpload: boolean;
+  lastErrorCode: string | null;
+};
+
+type VisionProviderDashboardStatus = {
+  runtime: VisionProviderRuntimeStatus;
+  persistence: {
+    provider: VisionProviderChoice | "disabled";
+    model: string | null;
+    apiKeyConfigured: boolean;
+    encryptedWithOsStorage: boolean;
+    rendererCanReadStoredKey: false;
+  };
+};
+
+type VisionModelDiscovery = {
+  provider: VisionProviderChoice;
+  count: number;
+  models: VisionModelOption[];
+  apiKeyConfigured: boolean;
+  onlyVisionModels: true;
+  localSelectionLimitBytes: number | null;
+};
+
 type HinaDesktopApi = {
   getWindowMode(): Promise<DesktopWindowMode>;
   getWidgetStatus(): Promise<WidgetStatus>;
@@ -206,6 +253,25 @@ type HinaDesktopApi = {
     preset: "chat" | "screen" | "react",
   ): Promise<VTubeStudioStatus>;
   getSpoutStatus(): Promise<SpoutBridgeStatus>;
+  getVisionProviderStatus(): Promise<VisionProviderDashboardStatus>;
+  discoverVisionModels(input: {
+    provider: VisionProviderChoice;
+    apiKey?: string;
+  }): Promise<VisionModelDiscovery>;
+  configureVisionProvider(input: {
+    provider: VisionProviderChoice;
+    model: string;
+    apiKey?: string;
+  }): Promise<{
+    runtime: VisionProviderRuntimeStatus;
+    persistence: VisionProviderDashboardStatus["persistence"];
+  }>;
+  clearVisionApiKey(): Promise<{
+    apiKeyConfigured: false;
+    persisted: false;
+    runtimeDisabled: boolean;
+    runtimePreserved: boolean;
+  }>;
 };
 
 interface Window {

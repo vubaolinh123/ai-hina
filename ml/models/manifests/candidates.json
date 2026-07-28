@@ -1,6 +1,6 @@
 {
   "schema_version": "0.1",
-  "status": "research_only",
+  "status": "mixed_research_and_local_candidate",
   "frozen": false,
   "observed_at": "2026-07-23",
   "policy": {
@@ -79,6 +79,46 @@
         "pin_ollama_digest_or_build_recipe",
         "benchmark_against_4b_under_same_context_and_workload",
         "prove_2gb_vram_headroom"
+      ]
+    },
+    {
+      "id": "qwen-qwen3-vl-8b-thinking-q4-k-m",
+      "model_id": "Qwen/Qwen3-VL-8B-Thinking",
+      "artifact_kind": "ollama_gguf_model_weights_configuration_tokenizer_and_vision_projector",
+      "source_url": "https://huggingface.co/Qwen/Qwen3-VL-8B-Thinking",
+      "revision": "92f3c4b4feadd3a016ef468d103bb5f58b2a2c6b",
+      "license": {
+        "spdx": "Apache-2.0",
+        "evidence_url": "https://github.com/QwenLM/Qwen3-VL/blob/main/LICENSE"
+      },
+      "intended_role": "default_text_brain_only",
+      "runtime_distribution_candidates": [
+        {
+          "kind": "ollama_tag",
+          "locator": "qwen3-vl:8b-thinking-q4_K_M",
+          "source_url": "https://ollama.com/library/qwen3-vl:8b-thinking-q4_K_M",
+          "digest": "sha256:901cae73216286ea8c5aba8b46d307ff7188f737285ec500c795a12f05225d28",
+          "status": "pinned_local_candidate"
+        }
+      ],
+      "constraints": {
+        "single_text_brain_weight": true,
+        "screen_vision_routed_to_separate_perception_provider": true,
+        "base_frozen_during_normal_conversation": true,
+        "hidden_reasoning_exposed": false,
+        "default_turn_deadline_seconds": 10,
+        "minimum_vram_headroom_mib": 2048,
+        "production_ready": false,
+        "training_labels_from_unreviewed_outputs_allowed": false
+      },
+      "evidence": {
+        "manifest": "ml/models/manifests/qwen3-vl-8b-thinking-q4-k-m.v1.json",
+        "maximum_measured_total_vram_mib": 9975,
+        "maximum_measured_latency_seconds": 6.16
+      },
+      "freeze_blockers": [
+        "owner_application_quality_acceptance",
+        "deep_vietnamese_safety_and_multimodal_eval_when_owner_requests_release_gate"
       ]
     }
   ]

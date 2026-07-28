@@ -1,24 +1,31 @@
 # M08 — Perception: screen snapshot, OCR và optional VLM
 
 - Status: M08-S1/S2 runnable candidate; M08-S3 functional GPU OCR candidate
-  pending Vietnamese quality promotion; M08 remains active
+  pending Vietnamese quality promotion; M08-S4 8B Thinking text brain +
+  configurable vision provider + optional session archive is a runnable
+  candidate; M08 remains active
 - Branch: `main` (fast-development mode)
 - Active slices: M08-S1 perception spine (owner-consented snapshot ingestion,
   freshness/TTL ledger, safety gating, Dev Console page); M08-S2 explicit
-  Qwen3.5 local image analysis through the shared model scheduler
+  local image analysis through the shared model scheduler (historical);
+  M08-S4 keeps one Qwen3-VL 8B Thinking text-brain checkpoint, moves screen
+  reading to a separate Ollama Cloud/lightweight-local provider and adds
+  owner-started, bounded PNG retention for a game session
 
 ## Runnable target
 
 Trang **Quan sát** trong Dev Console cho owner chụp đúng một khung hình màn
 hình/cửa sổ qua hộp thoại chia sẻ của trình duyệt, gửi PNG tới control plane
 loopback và xem quan sát còn hạn với đồng hồ đếm ngược TTL thật. Không có gì
-được chụp tự động và không có pixel nào được lưu: runtime chỉ giữ evidence
-(kích thước, SHA-256, dHash, độ sáng trung bình) trong RAM cho tới khi quan
-sát hết hạn.
+được chụp tự động. Mặc định không có pixel nào được lưu: runtime chỉ giữ
+evidence (kích thước, SHA-256, dHash, độ sáng trung bình) trong RAM cho tới khi
+quan sát hết hạn. Owner có thể chủ động mở một phiên lưu PNG có quota; trạng
+thái này mặc định tắt và không thay đổi TTL/ngữ nghĩa “ảnh hiện tại”.
 
-Khi owner chủ động đánh dấu **Nhờ Qwen3.5 local phân tích nội dung ảnh**, cùng
-PNG đó được đưa qua model local trước khi byte ảnh bị bỏ. Observation chỉ nhận
-một mô tả text tối đa 2.000 ký tự, luôn mang `trustLevel=untrusted`,
+Khi owner chủ động đánh dấu **Nhờ provider vision đã chọn phân tích nội dung
+ảnh**, cùng PNG đó được đưa qua Ollama Cloud hoặc model Ollama local nhẹ đã cấu
+hình trong Dashboard desktop. Observation chỉ nhận một mô tả text
+tối đa 2.000 ký tự, luôn mang `trustLevel=untrusted`,
 `decisionSupportEligible=false` và hết hạn cùng TTL. Mô tả không tự đi vào
 memory, chat prompt, tool hay bộ điều khiển game.
 
@@ -56,7 +63,7 @@ memory, chat prompt, tool hay bộ điều khiển game.
 - Capability `perception.observe` và feature flag `perception` đã tồn tại từ
   M02 với mặc định tắt; slice này không sửa manifest an toàn.
 
-## Implemented in M08-S2
+## Implemented in M08-S2 (historical 4B baseline)
 
 - `LocalHttpChatProvider.analyze_image` dùng Ollama `/api/chat` với PNG base64
   bounded, `stream=false`, `think=false`, context runtime 4.096,
@@ -75,6 +82,9 @@ memory, chat prompt, tool hay bộ điều khiển game.
 - Benchmark thật trên RTX 5070 Ti: `qwen3.5:4b` xử lý ảnh PNG 785.947 byte
   bằng GPU, trả mô tả tiếng Việt và không còn resident trong `ollama ps` sau
   request. Blob Ollama 3,4 GB; runtime đo khoảng 3,1 GiB GPU tại context 4K.
+
+M08-S4 supersedes model selection and runtime parameters above; this baseline
+is retained only for audit/rollback comparison.
 
 ## Implemented in M08-S3 (GPU OCR candidate)
 
@@ -109,6 +119,56 @@ memory, chat prompt, tool hay bộ điều khiển game.
 - Đây là quyết định không-promotion. Owner vẫn đối chiếu chữ có dấu/chữ nhỏ quan
   trọng bằng mắt hoặc VLM; output OCR vẫn `untrusted`, TTL ≤15 giây và không có
   quyền tự điều khiển bất cứ thứ gì.
+
+## Implemented in M08-S4 (8B Thinking brain + vision provider + session archive)
+
+- Default text brain uses exactly one pinned
+  `qwen3-vl:8b-thinking-q4_K_M` checkpoint. No Instruct checkpoint is loaded or
+  swapped. Simple chat uses the same-weight preclosed-thought fast path; complex
+  text uses bounded hidden thinking. Hidden reasoning never reaches UI/TTS/log.
+- Screen perception no longer calls `ModelGateway.analyze_image`. Runtime owns
+  a separate configurable `OllamaVisionProvider`: `ollama_cloud` uses the fixed
+  `https://ollama.com/api` boundary and zero local model VRAM;
+  `ollama_local` discovers `/api/tags`, verifies each candidate with `/api/show`
+  capability `vision`, keeps only the lightweight ≤5 GB/approximately ≤5B
+  profile, acquires a 5.120 MiB shared scheduler lease, bounds local context at
+  4.096 tokens, requests `num_gpu=999` and sends `keep_alive=0`.
+- Dashboard desktop has a dedicated **Quan sát** page. The owner can enter or
+  replace an Ollama Cloud key, discover the models the account can access,
+  inspect parameter/size/VRAM fields and apply a model. Electron main encrypts
+  the key through OS `safeStorage` under `userData`; renderer/status/logs/Git
+  never receive persisted plaintext. Provider/model/key survive restart and
+  are restored into runtime RAM automatically; **Xóa API key đã lưu** is the
+  explicit removal action.
+- Runtime uses context 8.192, text-fast/thinking budgets 192/768, full GPU
+  offload request, `keep_alive=0`, a text-brain scheduler reservation of
+  8.192 MiB and a default end-to-end brain deadline of ten seconds
+  (one-second admission + nine-second provider deadline).
+- Real RTX 5070 Ti text-brain smoke passed for simple chat (2,939 s) and
+  arithmetic reasoning (6,160 s). Peak total physical VRAM was 9.975 MiB of
+  16.303 MiB, leaving 6.328 MiB free. The earlier 4,363-second image number is
+  retained only as pre-separation evidence; Ollama Cloud adds no local model
+  VRAM. A Cloud call is intentionally not spent until the owner applies a model
+  through the new encrypted Dashboard setting.
+- Optional archive remains default-off and can start only after a current
+  owner action plus the existing `perception.observe` policy decision. The
+  service generates every UUID/path, writes only revalidated PNG with exclusive
+  create + fsync, and caps each session at 300 images or 256 MiB under
+  `var/perception-sessions/<uuid>`.
+- Dashboard displays the exact root/session/file path and provides **Bắt đầu lưu
+  phiên**, **Dừng lưu**, and **Đọc lại ảnh cuối**. Stopping or shutting down
+  prevents new writes but deliberately leaves PNGs for the owner to remove
+  after the game session.
+- Historical reanalysis revalidates the stored PNG and calls the currently
+  configured vision provider, but never creates a `FreshnessLedger`
+  observation. Its response is explicitly `historical=true`,
+  `currentObservation=false`, `decisionSupportEligible=false`.
+- Normal capture remains RAM-only. Archive files contain no OCR/model output,
+  prompt, metadata sidecar or conversation data. In-memory archive indices are
+  bounded and cannot accept caller-provided paths.
+- Exact upstream revision, Ollama digest/blob SHA, license and measurements are
+  recorded in
+  `ml/models/manifests/qwen3-vl-8b-thinking-q4-k-m.v1.json`.
 
 ## Deferred M08 deliverables
 
@@ -157,3 +217,24 @@ complete khi các phần này chưa có evidence.
 - Runtime route smoke thật đã bật feature flag qua safety API, gửi PNG có
   `X-Hina-OCR-Analyze: true` và nhận `HTTP 200`, `ocr.state=ready`,
   `effectiveDevice=cuda:0`, `decisionSupportEligible=false`.
+
+## Fast evidence M08-S4 (owner machine)
+
+- `pnpm test:text-brain`: 33 tests pass.
+- `pnpm test:perception`: 50 tests pass, including Cloud-secret redaction,
+  capability-filtered discovery, Cloud auth failure propagation, local
+  byte/parameter capacity rejection, bounded context/full-GPU request and
+  scheduler lease.
+- `python -m unittest discover ... test_perception_routes.py`: 13 route tests
+  pass, including start → archived PNG → clear current observations →
+  historical reanalysis → stop while the PNG remains outside the TTL ledger,
+  plus vision discover/configure/disable without secret reflection.
+- `pnpm test:desktop`: 42 tests pass, including OS-encrypted provider state,
+  strict IPC and a renderer that cannot read the stored key.
+- `node --check apps/dev-console/public/app.js` and the Node workspace check
+  pass.
+- Two real text requests used the pinned Thinking checkpoint with
+  `keep_alive=0`; simple/complex latency and VRAM stayed inside the
+  ten-second/14-GiB gates listed above. Real local model discovery returned only
+  capability-verified candidates and excluded the 8B brain from the
+  lightweight vision selection.

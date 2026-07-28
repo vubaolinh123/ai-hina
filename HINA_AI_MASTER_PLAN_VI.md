@@ -1084,6 +1084,14 @@ Hoàn thành vertical slice text-only có persona Hina, interruption/cancellatio
   Neuro-sama.
 - Live Ollama `qwen3.5:4b` smoke cuối cho câu “Bạn là ai?” hoàn tất bằng đúng
   một câu/9 từ; owner manual conversation test vẫn là authority.
+- M08-S4 (2026-07-28) supersede runtime model mặc định bằng đúng một checkpoint
+  `qwen3-vl:8b-thinking-q4_K_M` pinned cho cả text và explicit image. Câu đơn
+  giản và routine image description dùng same-weight preclosed-thought/prefill;
+  câu text/ảnh phức tạp dùng hidden thinking bounded. Không load/swap bản
+  Instruct thứ hai. Context 8.192, budget 192/256/768, admission 1 giây +
+  provider 9 giây; real owner-GPU smoke
+  simple/complex/routine-vision đều dưới 10 giây và peak total physical VRAM
+  9.975 MiB.
 
 ### Eval
 
@@ -1362,8 +1370,8 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
 - `Observation` có timestamp, TTL, confidence, evidence reference.
 - Privacy mask và no-persist mode.
 - GPU resource lease/fallback.
-- M08-S2 unified multimodal baseline: Qwen3.5-4B Q4_K_M dùng chung cho chat và
-  explicit image snapshot qua Ollama, `keep_alive=0`, không load VLM thứ hai.
+- M08-S2 unified multimodal baseline (historical): Qwen3.5-4B Q4_K_M từng dùng
+  chung cho chat và explicit image snapshot qua Ollama, `keep_alive=0`.
 - M08-S3 GPU OCR candidate (2026-07-28): RapidOCR 3.9.1 + PP-OCRv6 small Torch
   chạy `cuda:0` qua scheduler lease 1.024 MiB, chỉ owner-opt-in, không CPU
   fallback và không persist pixel/text. Corpus smoke đã được sửa để không crop
@@ -1374,6 +1382,26 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
   CER dài (cùng 6,944%) nhưng tăng peak reserved lên 2.220 MiB; tăng detector
   small từ 960 lên 1.280 còn xấu hơn (12,5%). Vì vậy runtime giữ small/960 hiện
   có; không tự thêm model medium vào product profile.
+- M08-S4 Thinking brain + configurable vision (2026-07-28): một checkpoint
+  pinned `qwen3-vl:8b-thinking-q4_K_M` chỉ làm text brain, không load/swap
+  Instruct. Simple text dùng same-weight preclosed-thought; complex text dùng
+  hidden thinking bounded, reasoning không lộ ra UI. Context 8.192, output
+  192/768, deadline mặc định 10 giây, full GPU request, `keep_alive=0`,
+  scheduler lease 8.192 MiB. Real RTX 5070 Ti smoke simple/complex
+  2,939/6,160 giây, peak total physical VRAM tối đa 9.975/16.303 MiB; chưa cần
+  quant thấp hơn Q4_K_M.
+- Explicit screen VLM được tách khỏi text brain: Dashboard desktop chọn
+  Ollama Cloud hoặc Ollama local vision nhẹ. Cloud dùng endpoint cố định
+  `https://ollama.com/api`, không chiếm model VRAM máy; API key được Electron
+  `safeStorage` mã hóa dưới `userData`, tự restore qua restart và không trả về
+  renderer/status/log. Local quét `/api/tags` + `/api/show`, chỉ nhận capability
+  `vision` trong profile ≤5 GB/approximately ≤5B, dùng scheduler lease
+  5.120 MiB, context 4.096 token, yêu cầu full GPU và `keep_alive=0`.
+- M08-S4 owner session archive: persistence vẫn mặc định tắt; owner có thể chủ
+  động mở phiên bounded 300 PNG/256 MiB dưới `var/perception-sessions`. UI hiện
+  exact path và start/stop/reanalyze. Stop/shutdown không tự xóa PNG theo quyết
+  định owner; historical reanalysis không tạo current observation, không làm
+  mới TTL và không được autonomous decision support.
 
 ### Test matrix
 
@@ -1394,11 +1422,15 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
 - VLM scene QA ≥85% trước khi dùng cho decision support.
 - VLM có abstain state; dưới confidence threshold không được dùng cho decision support.
 - Observation chỉ là evidence/untrusted context; không tự kích hoạt action nguy hiểm.
-- Snapshot không persist nếu chưa consent.
+- Snapshot không persist nếu owner chưa chủ động mở session archive; mỗi capture
+  vẫn cần explicit owner action và policy hiện hành.
 - All-on workload vẫn giữ 2 GB VRAM headroom.
-- Budget owner machine: desktop ambient 4,875 MiB + Qwen3.5-4B 3,200 MiB +
-  OmniVoice 2,400 MiB + Moonshine 2,000 MiB + 1,861 MiB margin = 14,336 MiB
-  ceiling; Qwen3.5-9B chỉ benchmark tuần tự, không all-on mặc định.
+- Budget owner machine: hard ceiling 14.336 MiB và headroom tối thiểu 2.048 MiB.
+  Shared scheduler serialize heavy local providers và unload sau lease.
+  Measurement trực tiếp Qwen3-VL 8B Thinking text brain gồm ambient đạt peak
+  total 9.975 MiB, còn 6.328 MiB physical free; Ollama Cloud vision thêm 0 MiB
+  model VRAM local. Workload OCR/STT/TTS toàn chuỗi phải được đo lại khi
+  provider/profile của các module đó thay đổi.
 
 ### Companion Gate B
 

@@ -60,22 +60,27 @@ chat turn trả lỗi thật và ghi vào `var/logs/hina-runtime.jsonl`.
 ## Bật local model cho chat
 
 Gateway mặc định dùng Ollama tại `127.0.0.1:11434` với model
-[`qwen3.5:4b`](https://ollama.com/library/qwen3.5). Sau khi cài Ollama:
+[`qwen3-vl:8b-thinking-q4_K_M`](https://ollama.com/library/qwen3-vl:8b-thinking-q4_K_M).
+Đây là checkpoint Thinking duy nhất của **bộ não text**; Hina không nạp thêm
+bản Instruct. Đọc ảnh màn hình được tách sang provider vision cấu hình trong
+Dashboard desktop nên không buộc bộ não 8B phải đổi vai trò hoặc reload. Sau
+khi cài Ollama:
 
 ```powershell
-ollama pull qwen3.5:4b
+ollama pull qwen3-vl:8b-thinking-q4_K_M
 ollama serve
 pnpm start:dev-console
 ```
 
 `pnpm start:desktop` tự tìm Ollama ở PATH hoặc thư mục cài Windows, khởi động
 server loopback ẩn nếu cần và kiểm tra model trước khi mở Electron. Nếu thiếu
-model, launcher tự chạy `ollama pull qwen3.5:4b`; log provider nằm ở
-`var/logs/ollama.*.log`. Qwen 3.5 mặc định tắt thinking nội bộ trên chat UI để
-stream trả nội dung trong giới hạn token, tránh lỗi do reasoning chiếm hết
-`num_predict`.
+model, launcher tự chạy `ollama pull qwen3-vl:8b-thinking-q4_K_M`; log provider
+nằm ở `var/logs/ollama.*.log`. Câu text đơn giản dùng đường nhanh trên chính
+weight Thinking; câu text thật sự cần phân tích dùng reasoning ẩn có giới hạn.
+Reasoning không được gửi ra UI. Admission tối đa 1 giây cộng inference
+tối đa 9 giây tạo deadline mặc định 10 giây.
 
-Persona `hina.prompt.v2` mặc định đi thẳng vào câu trả lời trong 1–2 câu,
+Persona `hina.prompt.v3` mặc định đi thẳng vào câu trả lời trong 1–2 câu,
 thường không quá 45 từ; chỉ mở rộng khi bạn yêu cầu rõ chi tiết, code, danh sách
 hoặc từng bước. Gateway dùng trần 192 output token để chặn câu trả lời lan man,
 nhưng có thể đổi bằng `HINA_MODEL_MAX_TOKENS` cho tác vụ dài.
@@ -189,14 +194,27 @@ khỏi model weights đã train.
 
 ## Cho Hina quan sát màn hình theo yêu cầu
 
-M08-S1 thêm trang **Quan sát**: owner bấm chụp, trình duyệt mở hộp thoại chọn
+M08 thêm trang **Quan sát**: owner bấm chụp, trình duyệt mở hộp thoại chọn
 màn hình/cửa sổ (đây là consent cho từng lần chụp), một khung hình được thu
-nhỏ và gửi PNG tới control plane loopback. Runtime chỉ giữ evidence trong RAM
-— kích thước, SHA-256, perceptual hash và độ sáng — không lưu ảnh và chưa có
-OCR/VLM; OCR provider mới ở trạng thái contract-ready cho tới khi dependency
-qua review license. Mỗi quan sát có `trustLevel=untrusted` và TTL tối đa
-15 giây theo monotonic clock; hết hạn là biến mất khỏi danh sách và không thể
-được coi là ngữ cảnh hiện tại.
+nhỏ và gửi PNG tới control plane loopback. Evidence hiện tại chỉ sống tối đa
+15 giây trong RAM. Owner có thể chủ động bắt đầu một phiên lưu ảnh game có
+quota; ảnh lịch sử được giữ để phân tích lại nhưng không bao giờ làm mới TTL,
+đi vào memory hoặc tự kích hoạt công cụ.
+
+Đọc ảnh không dùng checkpoint 8B của bộ não text. Trong Dashboard desktop:
+
+1. Mở **Quan sát** và chọn `Ollama Cloud` hoặc `Ollama local`.
+2. Với Cloud, dán API key một lần rồi bấm **Đọc danh sách model**. Dashboard chỉ
+   liệt kê model khai báo capability vision.
+3. Chọn model và bấm **Áp dụng & lưu**.
+
+Desktop lưu provider/model và ciphertext do Electron `safeStorage` mã hóa trong
+`userData`; khóa rõ chỉ tồn tại trong Electron main và bộ nhớ runtime loopback.
+Khóa tự được khôi phục sau restart và giữ nguyên cho tới khi owner thay hoặc
+bấm **Xóa khóa đã lưu**. Renderer, status, log và Git không đọc được khóa đã
+lưu. Ollama Cloud không chiếm VRAM model cục bộ nhưng ảnh được gửi tới provider
+Cloud đã chọn; Ollama local giữ ảnh trên máy và Dashboard chỉ cho chọn model
+vision nhẹ trong profile tối đa khoảng 5 GB/5B.
 
 Capture mặc định tắt: cần bật cờ **Quan sát màn hình** ở trang An toàn trước,
 và safety policy (`perception.observe`, decision `ask`) yêu cầu đúng hành động

@@ -101,6 +101,28 @@ local owner-testing candidate, not an accuracy-promoted or autonomous-decision
 provider. See `ml/models/manifests/rapidocr-ppocrv6-small-torch.v1.json` for
 the runtime artifact hashes and evaluation record.
 
+## Qwen3-VL 8B Thinking
+
+- Upstream: https://github.com/QwenLM/Qwen3-VL
+- Model: https://huggingface.co/Qwen/Qwen3-VL-8B-Thinking
+- Pinned model revision:
+  `92f3c4b4feadd3a016ef468d103bb5f58b2a2c6b`
+- Ollama tag: `qwen3-vl:8b-thinking-q4_K_M`
+- Ollama manifest digest:
+  `901cae73216286ea8c5aba8b46d307ff7188f737285ec500c795a12f05225d28`
+- Quantized weight blob SHA-256:
+  `ed12a4674d727a74ac4816c906094ea9d3119fbea46ca93288c3ce4ffbe38c55`
+- Code and weight license: Apache-2.0
+- Use: one shared local GPU checkpoint for Hina text chat and explicit
+  owner-consented screenshot analysis
+
+No Qwen source file, prompt corpus or model weight is copied into this
+repository. Hina calls the pinned local Ollama distribution through its HTTP
+API. Simple chat and bounded hidden thinking use the same Thinking weight; no
+second Instruct model is loaded. Exact runtime settings and owner-GPU latency/
+VRAM measurements are recorded in
+`ml/models/manifests/qwen3-vl-8b-thinking-q4-k-m.v1.json`.
+
 ## qdrant-client 1.18.0
 
 - Upstream: https://github.com/qdrant/qdrant-client

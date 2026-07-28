@@ -31,6 +31,7 @@ const state = {
   avatarPublishedIntensity: 0,
   avatarLastVisemeCueAt: 0,
   perceptionObservations: [],
+  perceptionArchiveStatus: null,
   perceptionCountdownTimer: null,
   perceptionBusy: false,
   sessionId: localStorage.getItem("hina.console.session") || crypto.randomUUID(),
@@ -170,6 +171,10 @@ const elements = Object.fromEntries(
     "refreshPerceptionButton",
     "clearPerceptionButton",
     "perceptionStatusBox",
+    "perceptionArchiveStatusBox",
+    "startPerceptionArchiveButton",
+    "stopPerceptionArchiveButton",
+    "reanalyzePerceptionArchiveButton",
     "capturePerceptionButton",
     "perceptionFileInput",
     "perceptionLabelInput",
@@ -225,7 +230,7 @@ const dashboardPages = {
   perception: {
     eyebrow: "M08 / OWNER-CONSENTED PERCEPTION",
     title: "Quan sát màn hình",
-    description: "Chụp một khung hình có sự đồng ý và tùy chọn nhờ Qwen3.5 local mô tả; không lưu ảnh, kết quả tự hết hạn sau tối đa 15 giây.",
+    description: "Chụp một khung hình có sự đồng ý, nhờ provider vision đã chọn mô tả và tùy chọn lưu PNG theo phiên; ngữ cảnh hiện tại vẫn hết hạn sau tối đa 15 giây.",
   },
   safety: {
     eyebrow: "M02 / POLICY AUTHORITY",
@@ -405,6 +410,8 @@ function renderAvatarStatus(status) {
 
 function renderPerceptionStatus(status) {
   const flagEnabled = state.safetyStatus?.state.featureFlags?.perception === true;
+  const archive = status.retention?.archive || null;
+  state.perceptionArchiveStatus = archive;
   const lines = [
     `Cờ an toàn “Quan sát màn hình”: ${flagEnabled ? "ĐANG BẬT" : "đang tắt (bật ở trang An toàn)"}`,
     `Chế độ: ${status.capture.mode} · tự động chụp: ${status.capture.autoCapture ? "có" : "không"}`,
@@ -413,10 +420,44 @@ function renderPerceptionStatus(status) {
     `Giới hạn: ${status.rate.limitPerMinute} ảnh/phút (còn ${status.rate.remainingThisMinute}) · ${Math.round(status.configured.maxSnapshotBytes / 1024)} KB/ảnh`,
     `OCR GPU: ${status.ocr.state} (${status.ocr.provider}) · CPU fallback: ${status.ocr.cpuFallback ? "có" : "không"} · lưu ảnh: ${status.retention.snapshotPersistence ? "có" : "không"}`,
     `Độ tin cậy OCR: ${status.ocr.qualityPromotion === "pending-vietnamese-screen-validation" ? "đang kiểm chứng tiếng Việt — hãy đối chiếu chữ có dấu/nhỏ" : "chưa áp dụng"}`,
-    `Phân tích ảnh local: ${status.vision?.available ? "SẴN SÀNG" : "chưa sẵn sàng"} · tự động: không · được phép tự hành động: không`,
+    `Phân tích ảnh: ${status.vision?.available ? "SẴN SÀNG" : "chưa cấu hình"} · provider: ${status.vision?.provider || "none"} · model: ${status.vision?.model || "—"} · tự động: không`,
   ];
   elements.perceptionStatusBox.textContent = lines.join("\n");
   elements.perceptionStatusBox.classList.remove("empty");
+
+  const current = archive?.current || null;
+  const latest = archive?.latest || null;
+  const shown = current || latest;
+  const archiveLines = archive?.available
+    ? [
+        `Trạng thái: ${archive.active ? "ĐANG LƯU" : "đang tắt (mặc định)"}`,
+        `Thư mục gốc: ${archive.root}`,
+        shown
+          ? `Phiên ${shown.archiveSessionId} · ${shown.snapshotCount}/${shown.maxSnapshots} ảnh · ${formatPerceptionBytes(shown.bytes)}/${formatPerceptionBytes(shown.maxSessionBytes)}`
+          : "Chưa có phiên lưu ảnh nào trong lần chạy này.",
+        shown?.path ? `Thư mục phiên: ${shown.path}` : "Thư mục phiên sẽ hiện sau khi bạn bấm bắt đầu.",
+        shown?.lastSnapshot
+          ? `Ảnh cuối: ${shown.lastSnapshot.fileName} · ${shown.lastSnapshot.path}`
+          : "Chưa có ảnh đã lưu trong phiên.",
+        "Sau buổi chơi: dừng lưu rồi tự xóa thư mục phiên nếu không còn cần.",
+      ]
+    : [
+        "Lưu ảnh theo phiên không khả dụng trong runtime này.",
+        "Ảnh chụp bình thường vẫn chỉ được xử lý trong RAM.",
+      ];
+  elements.perceptionArchiveStatusBox.textContent = archiveLines.join("\n");
+  elements.perceptionArchiveStatusBox.classList.remove("empty");
+  elements.startPerceptionArchiveButton.disabled = !archive?.available || archive.active;
+  elements.stopPerceptionArchiveButton.disabled = !archive?.active || !current;
+  elements.reanalyzePerceptionArchiveButton.disabled =
+    !archive?.available || !shown?.lastSnapshot;
+}
+
+function formatPerceptionBytes(value) {
+  if (!Number.isFinite(value) || value < 0) return "không rõ";
+  if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  if (value >= 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${value} byte`;
 }
 
 function renderPerceptionObservations() {
@@ -487,7 +528,7 @@ function renderPerceptionObservations() {
       const vision = document.createElement("p");
       vision.className = "entry-message perception-vision-error";
       vision.textContent =
-        `Phân tích ảnh lỗi: ${entry.observation.vision.modelErrorCode || entry.observation.vision.errorCode}. ` +
+        `Phân tích ảnh lỗi: ${entry.observation.vision.providerErrorCode || entry.observation.vision.modelErrorCode || entry.observation.vision.errorCode}. ` +
         "Evidence cơ bản vẫn được giữ đến khi TTL hết hạn.";
       item.append(vision);
     }
@@ -557,6 +598,10 @@ async function submitPerceptionSnapshot(blob) {
       headers["X-Hina-Vision-Question"] = encodeURIComponent(question);
     }
   }
+  const archiveSessionId = state.perceptionArchiveStatus?.current?.archiveSessionId;
+  if (state.perceptionArchiveStatus?.active && archiveSessionId) {
+    headers["X-Hina-Archive-Session-Id"] = archiveSessionId;
+  }
   const response = await fetch("/v1/perception/snapshots", {
     method: "POST",
     cache: "no-store",
@@ -571,7 +616,7 @@ async function submitPerceptionSnapshot(blob) {
 }
 
 async function encodeSnapshotPng(bitmap) {
-  const maxSide = 1280;
+  const maxSide = state.perceptionArchiveStatus?.active ? 1920 : 1280;
   let scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
   for (let attempt = 0; attempt < 4; attempt += 1) {
     const width = Math.max(16, Math.round(bitmap.width * scale));
@@ -666,11 +711,19 @@ function renderPerceptionCaptureResult(result) {
     `Correlation: ${result.correlationId}`,
   ];
   if (observation.vision?.state === "ready") {
-    lines.push(`Hina nhìn thấy (Qwen3.5 local): ${observation.vision.summary}`);
+    lines.push(`Hina nhìn thấy (${observation.vision.provider || "vision provider"}): ${observation.vision.summary}`);
   } else if (observation.vision?.requested) {
     lines.push(
       `Phân tích ảnh: ${observation.vision.state} · ` +
-      `${observation.vision.modelErrorCode || observation.vision.errorCode || "không có kết quả"}`,
+      `${observation.vision.providerErrorCode || observation.vision.modelErrorCode || observation.vision.errorCode || "không có kết quả"}`,
+    );
+  }
+  if (result.archive?.status === "archived") {
+    lines.push(
+      `Đã lưu PNG ${result.archive.fileName}`,
+      `Đường dẫn: ${result.archive.path}`,
+      `Phiên đã có ${result.archive.sessionSnapshotCount} ảnh · ${formatPerceptionBytes(result.archive.sessionBytes)}`,
+      "Bạn cần tự xóa thư mục phiên sau buổi chơi.",
     );
   }
   box.textContent = lines.join("\n");
@@ -708,6 +761,84 @@ async function clearPerceptionObservations() {
     await refreshPerception();
   } catch (error) {
     addActivity(`Perception clear lỗi: ${error.message}`, "error");
+  }
+}
+
+async function startPerceptionArchive() {
+  elements.startPerceptionArchiveButton.disabled = true;
+  try {
+    const result = await postJson("/v1/perception/archive/start", {
+      action: "start",
+      correlationId: crypto.randomUUID(),
+      sessionId: state.sessionId,
+      source: "owner.console",
+      ownerConfirmed: true,
+    });
+    addActivity(
+      `Perception: bắt đầu lưu PNG tại ${result.archive.path}. Owner tự dọn sau buổi chơi.`,
+      "success",
+    );
+    await refreshPerception();
+  } catch (error) {
+    addActivity(`Không bắt đầu được phiên lưu ảnh: ${error.message}`, "error");
+    await refreshPerception();
+  }
+}
+
+async function stopPerceptionArchive() {
+  const archiveSessionId = state.perceptionArchiveStatus?.current?.archiveSessionId;
+  if (!archiveSessionId) return;
+  elements.stopPerceptionArchiveButton.disabled = true;
+  try {
+    const result = await postJson("/v1/perception/archive/stop", {
+      action: "stop",
+      sessionId: state.sessionId,
+      archiveSessionId,
+      source: "owner.console",
+    });
+    addActivity(
+      `Perception: đã dừng lưu. ${result.archive.snapshotCount} PNG vẫn nằm tại ${result.archive.path}; owner tự dọn khi xong.`,
+      "success",
+    );
+    await refreshPerception();
+  } catch (error) {
+    addActivity(`Không dừng được phiên lưu ảnh: ${error.message}`, "error");
+    await refreshPerception();
+  }
+}
+
+async function reanalyzeLatestPerceptionArchive() {
+  const archive = state.perceptionArchiveStatus?.current || state.perceptionArchiveStatus?.latest;
+  const snapshot = archive?.lastSnapshot;
+  if (!archive || !snapshot) return;
+  elements.reanalyzePerceptionArchiveButton.disabled = true;
+  try {
+    const result = await postJson("/v1/perception/archive/reanalyze", {
+      action: "reanalyze",
+      correlationId: crypto.randomUUID(),
+      sessionId: state.sessionId,
+      archiveSessionId: archive.archiveSessionId,
+      snapshotId: snapshot.snapshotId,
+      source: "owner.console",
+      ownerConfirmed: true,
+      visionQuestion: elements.perceptionVisionQuestion.value.trim() || null,
+    });
+    const lines = [
+      "Đã đọc lại ảnh lịch sử bằng provider vision đã cấu hình.",
+      `Ảnh: ${result.archive.path}`,
+      `Kết quả: ${result.vision?.summary || "model không trả về mô tả"}`,
+      "Đây là ảnh lịch sử: không làm mới TTL và không được coi là màn hình hiện tại.",
+      `Correlation: ${result.correlationId}`,
+    ];
+    elements.perceptionCaptureResult.textContent = lines.join("\n");
+    elements.perceptionCaptureResult.classList.remove("empty");
+    addActivity("Perception: đã đọc lại ảnh lịch sử; không tạo observation hiện tại.", "success");
+  } catch (error) {
+    elements.perceptionCaptureResult.textContent = `Đọc lại ảnh lịch sử thất bại: ${error.message}`;
+    elements.perceptionCaptureResult.classList.remove("empty");
+    addActivity(`Đọc lại ảnh lịch sử lỗi: ${error.message}`, "error");
+  } finally {
+    await refreshPerception();
   }
 }
 
@@ -2523,6 +2654,12 @@ elements.refreshPerceptionButton.addEventListener("click", () =>
 elements.capturePerceptionButton.addEventListener("click", capturePerceptionSnapshot);
 elements.perceptionFileInput.addEventListener("change", submitPerceptionFile);
 elements.clearPerceptionButton.addEventListener("click", clearPerceptionObservations);
+elements.startPerceptionArchiveButton.addEventListener("click", startPerceptionArchive);
+elements.stopPerceptionArchiveButton.addEventListener("click", stopPerceptionArchive);
+elements.reanalyzePerceptionArchiveButton.addEventListener(
+  "click",
+  reanalyzeLatestPerceptionArchive,
+);
 elements.previewAvatarButton.addEventListener("click", previewAvatarState);
 elements.resetAvatarButton.addEventListener("click", resetAvatarState);
 elements.avatarMuteButton.addEventListener("click", () => {

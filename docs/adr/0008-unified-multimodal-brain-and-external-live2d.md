@@ -1,6 +1,7 @@
 # ADR-0008: Unified multimodal brain and external Live2D renderer
 
-- Status: accepted
+- Status: superseded for the model boundary by ADR-0009; Live2D decisions remain
+  accepted
 - Date: 2026-07-27
 - Owners: primary orchestrator
 - Scope: M08-S2 and M07-S16
@@ -19,6 +20,11 @@ least 2 GiB for the machine, retain short-lived/untrusted perception semantics,
 and avoid presenting a third-party sample avatar as an owned Hina asset.
 
 ## Decision
+
+> Historical note (2026-07-28): the shared text/vision model decision below was
+> replaced by ADR-0009 after the owner chose a separately configurable Ollama
+> Cloud/local screen-reading provider. The Live2D renderer decision remains
+> current.
 
 - Qwen3.5-4B Q4_K_M is the default shared text and explicit-snapshot vision
   model through Ollama. The same resource scheduler serializes both workloads;
@@ -63,4 +69,3 @@ authorization and is responsible for the selected model's terms.
   operator preload, tokens are never returned to the renderer, and disconnects
   do not break the offline VRM widget.
 - The all-on VRAM manifest records a ceiling no greater than 14,336 MiB.
-

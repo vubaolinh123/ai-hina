@@ -9,7 +9,7 @@ $repoRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
 $logDirectory = [System.IO.Path]::GetFullPath((Join-Path $repoRoot "var\logs"))
 $provider = if ($env:HINA_MODEL_PROVIDER) { $env:HINA_MODEL_PROVIDER.Trim().ToLowerInvariant() } else { "ollama" }
 $baseUrl = if ($env:HINA_MODEL_BASE_URL) { $env:HINA_MODEL_BASE_URL.TrimEnd("/") } else { "http://127.0.0.1:11434" }
-$model = if ($env:HINA_MODEL_NAME) { $env:HINA_MODEL_NAME.Trim() } else { "qwen3.5:4b" }
+$model = if ($env:HINA_MODEL_NAME) { $env:HINA_MODEL_NAME.Trim() } else { "qwen3-vl:8b-thinking-q4_K_M" }
 
 if ($provider -ne "ollama") {
     Write-Host "[hina-model] Skipping Ollama bootstrap because provider is '$provider'."
@@ -104,26 +104,33 @@ if ($StartupCheck) {
     $body = @{
         model = $model
         stream = $false
-        think = $false
-        messages = @(
-            @{
-                role = "user"
-                content = "Reply with exactly one word: OK"
-            }
-        )
+        raw = $true
+        keep_alive = 0
+        prompt = "<|im_start|>user`nReply with exactly one word: OK<|im_end|>`n<|im_start|>assistant`n<think>`n`n</think>`n`n"
         options = @{
             num_predict = 8
             temperature = 0
+            num_ctx = 8192
+            num_gpu = 999
+            stop = @("<|im_end|>", "<think>")
         }
     } | ConvertTo-Json -Depth 5
+    $stopwatch = [Diagnostics.Stopwatch]::StartNew()
     $response = Invoke-RestMethod `
         -Method Post `
-        -Uri "$baseUrl/api/chat" `
+        -Uri "$baseUrl/api/generate" `
         -ContentType "application/json" `
         -Body $body `
-        -TimeoutSec 120
-    if (-not $response.message.content) {
-        throw "Ollama chat smoke returned no content."
+        -TimeoutSec 10
+    $stopwatch.Stop()
+    if (-not $response.response) {
+        throw "Ollama same-weight fast-path smoke returned no content."
     }
-    Write-Host "[hina-model] Chat smoke PASS."
+    if ($stopwatch.Elapsed.TotalSeconds -ge 10) {
+        throw "Ollama startup smoke exceeded the 10-second model deadline."
+    }
+    Write-Host (
+        "[hina-model] Fast-path smoke PASS in {0:N2}s (Qwen3-VL Thinking, GPU-only request)." `
+            -f $stopwatch.Elapsed.TotalSeconds
+    )
 }

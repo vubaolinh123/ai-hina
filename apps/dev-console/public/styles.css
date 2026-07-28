@@ -1107,13 +1107,23 @@ main.dashboard-main {
 }
 
 .perception-ocr-controls,
-.perception-vision-controls {
+.perception-vision-controls,
+.perception-archive-controls {
   display: grid;
   gap: 10px;
   margin-top: 16px;
   padding: 14px;
   border: 1px solid var(--border);
   background: color-mix(in srgb, var(--panel) 88%, var(--accent) 12%);
+}
+
+.perception-archive-controls .data-box {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.perception-archive-controls .button-row {
+  margin-top: 2px;
 }
 
 .perception-ocr-summary,

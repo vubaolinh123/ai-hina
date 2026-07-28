@@ -140,6 +140,26 @@
       ]
     },
     {
+      "name": "qwen3-vl-8b-thinking",
+      "source_url": "https://github.com/QwenLM/Qwen3-VL",
+      "model_url": "https://huggingface.co/Qwen/Qwen3-VL-8B-Thinking",
+      "revision": "92f3c4b4feadd3a016ef468d103bb5f58b2a2c6b",
+      "license_spdx": "Apache-2.0",
+      "model_license": "Apache-2.0",
+      "source_hash": "sha256:ed12a4674d727a74ac4816c906094ea9d3119fbea46ca93288c3ce4ffbe38c55",
+      "runtime_distribution": "ollama:qwen3-vl:8b-thinking-q4_K_M@sha256:901cae73216286ea8c5aba8b46d307ff7188f737285ec500c795a12f05225d28",
+      "destination_paths": [
+        "packages/text-brain/src/hina_text_brain/config.py",
+        "packages/text-brain/src/hina_text_brain/providers.py",
+        "tools/dev/Start-HinaModelProvider.ps1"
+      ],
+      "modifications": [
+        "No upstream source file, prompt corpus or model weight is copied into Git; Hina calls the pinned local Ollama distribution through its HTTP API.",
+        "One Thinking checkpoint serves text and explicit image analysis. Simple text and routine image description use same-weight pre-closed-thought paths; complex text/visual questions use bounded hidden thinking.",
+        "Hina requests full GPU offload, bounds context/output and deadline, sets keep_alive=0, and admits the model through the shared local resource scheduler."
+      ]
+    },
+    {
       "name": "electron",
       "source_url": "https://github.com/electron/electron",
       "revision": "npm:electron@43.2.0",

@@ -62,9 +62,11 @@ Sources:
 
 | Candidate | Useful capability | Local footprint / issue | Decision |
 | --- | --- | --- | --- |
-| Qwen3.5-4B Q4_K_M | Unified Vietnamese text + image, 262K model context, Apache-2.0 | Ollama blob 3.4 GB; measured 3.1 GiB GPU allocation at 4K runtime context | Default shared brain and explicit snapshot VLM |
-| Qwen3.5-9B Q4_K_M | Better reasoning while retaining image input | Ollama blob 6.6 GB; unsafe with TTS + STT + desktop ambient load under the 14 GiB all-on ceiling | Optional sequential benchmark profile only |
-| Qwen3-VL 4B/8B | Strong dedicated OCR/vision | Adds a second resident model and duplicates the current brain's vision capability | Do not add by default |
+| Ollama Cloud vision models | Model list and vision inference can evolve independently of the local text brain | Zero local model VRAM; each selected screenshot leaves the machine and requires an owner-supplied bearer key | **M08-S4 preferred configurable screen-reading provider when owner accepts Cloud privacy** |
+| Qwen3.5-4B Q4_K_M | Lightweight local Vietnamese text + image, 262K model context, Apache-2.0 | Ollama blob 3.4 GB; measured 3.1 GiB GPU allocation at 4K runtime context | Local screen-reading fallback discovered through `/api/tags` + `/api/show` |
+| Qwen3.5-9B Q4_K_M | Better reasoning while retaining image input | Ollama blob 6.6 GB; not measured/promoted under the current Hina workload | Do not auto-download or auto-route |
+| Qwen3-VL 8B Thinking Q4_K_M | Strong Vietnamese text/reasoning plus latent vision capability; Apache-2.0 | One 6.14 GB Ollama distribution; measured peak total physical VRAM 9.975 MiB at 8K context | **M03 text brain only; M08 does not send screenshots to this gateway** |
+| Qwen3-VL 8B Instruct Q4_K_M | Avoids thinking latency for simple chat | A second 6.1 GB weight would add cache/residency swaps and duplicate most capability | Rejected by owner; not retained locally |
 | MiniCPM-o 4.5 | 9B any-to-any streaming vision/speech | Official BF16 footprint is about 19 GB; quantized variants are about 10-11 GB and official limitations include unstable speech/language mixing | Future larger-GPU research profile |
 | Qwen-VLA | Vision-language-action with a 1.15B action decoder | Robotics action domain does not match Minecraft and would weaken deterministic verification | Do not use as the game controller |
 
@@ -73,46 +75,63 @@ Primary sources:
 - https://huggingface.co/Qwen/Qwen3.5-4B
 - https://ollama.com/library/qwen3.5/tags
 - https://github.com/QwenLM/Qwen3-VL
+- https://huggingface.co/Qwen/Qwen3-VL-8B-Thinking
+- https://ollama.com/library/qwen3-vl:8b-thinking-q4_K_M
+- https://docs.ollama.com/api/authentication
+- https://docs.ollama.com/api/tags
+- https://docs.ollama.com/api-reference/show-model-details
+- https://docs.ollama.com/capabilities/vision
 - https://github.com/OpenBMB/MiniCPM-o
 - https://huggingface.co/openbmb/MiniCPM-o-4_5
 - https://github.com/QwenLM/Qwen-VLA
 
 ## Local measurements and VRAM decision
 
-Hardware on the owner machine is an RTX 5070 Ti with 16,303 MiB total VRAM.
-During research the desktop baseline used about 4,875 MiB. A real Ollama
-Qwen3.5-4B image request loaded 3.1 GiB entirely on GPU at a 4,096-token runtime
-context, completed cold in 3.8 seconds and unloaded successfully with
-`keep_alive=0`. The current optimized OmniVoice peak is about 2.27 GiB.
+Hardware on the owner machine is an RTX 5070 Ti with 16.303 MiB total VRAM.
+On 2026-07-28 the ambient baseline was 2.597–2.628 MiB. Three real requests
+against the pinned Qwen3-VL 8B Thinking Q4_K_M distribution all requested full
+GPU offload at an 8.192-token runtime context and unloaded with `keep_alive=0`:
 
-The conservative all-on budget is:
+| Request | Cold latency | Peak total physical VRAM |
+| --- | ---: | ---: |
+| Simple text, same-weight fast path | 2,939 s | 9.975 MiB |
+| Arithmetic, hidden thinking | 6,160 s | 9.869 MiB |
+| Routine PNG description, pre-provider-split experiment | 4,363 s | 9.805 MiB |
 
-| Consumer | Budget |
-| --- | ---: |
-| Desktop / display / ambient GPU processes | 4,875 MiB observed |
-| Qwen3.5-4B | 3,200 MiB measured rounded up |
-| OmniVoice | 2,400 MiB measured rounded up |
-| Moonshine STT reservation | 2,000 MiB |
-| Runtime margin inside the 14 GiB ceiling | 1,861 MiB |
-| Total ceiling | 14,336 MiB |
+The highest result remains 4.361 MiB below Hina's 14.336-MiB all-on ceiling and
+leaves 6.328 MiB physically free on the 16.303-MiB GPU. Hina therefore keeps
+Q4_K_M for text: Q3/Q2 could save memory but would trade away Vietnamese and
+reasoning quality without a current headroom need. The PNG result is retained
+only as historical evidence; active screen reading no longer enters this
+gateway.
 
-Heavy inference is still serialized by Hina's admission scheduler and each
-Ollama VLM call uses `keep_alive=0`. Qwen3.5-9B is not an all-on default because
-its 6.6 GB quantized blob plus the same consumers would exceed the ceiling.
-Promotion of any larger profile requires a measured peak, not a model-file-size
-estimate.
+Heavy providers are serialized by the shared admission scheduler rather than
+kept resident simultaneously. `keep_alive=0` is required because the scheduler
+cannot truthfully reserve VRAM that Ollama retains after releasing its lease.
+The model lease is conservatively 8.192 MiB and the scheduler still rejects any
+request that would violate 2.048 MiB headroom.
 
 ## Resulting architecture
 
-1. Chat and explicit screenshots share Qwen3.5-4B through the existing Ollama
-   gateway and resource scheduler.
-2. M08 sends event-driven PNG snapshots only; there is no continuous video.
-3. Pixels are discarded after inference. Only a bounded, untrusted text summary
-   and existing hash/luminance evidence enter the short-lived observation.
-4. VLM output has TTL at most 15 seconds, is never memorized automatically, and
+1. Chat uses one pinned Qwen3-VL 8B Thinking Q4_K_M checkpoint. Simple text uses
+   the same-weight pre-closed-thought path and complex text uses bounded hidden
+   thinking. There is no second Instruct text checkpoint.
+2. Explicit screenshots use a separate provider selected in the desktop
+   Dashboard: fixed-endpoint Ollama Cloud with an owner key, or a lightweight
+   local Ollama model that advertises `vision`. Cloud adds zero local model
+   VRAM; local inference is serialized by the shared scheduler with
+   `keep_alive=0`.
+3. The Cloud key is stored only as Electron `safeStorage` ciphertext under
+   `userData`, restored after restart, and never returned to the renderer,
+   runtime status, logs or Git. It remains configured until the owner replaces
+   or explicitly clears it.
+4. M08 sends event-driven PNG snapshots only; there is no continuous video.
+5. Pixels are discarded after inference by default. An owner may explicitly
+   start a bounded PNG archive for a game session; retained images remain
+   historical and never refresh current-observation TTL.
+6. VLM output has TTL at most 15 seconds, is never memorized automatically, and
    remains ineligible to trigger tools without a later verified controller.
-5. Minecraft uses the model only as a low-frequency planner; a deterministic
+7. Minecraft uses the model only as a low-frequency planner; a deterministic
    allowlisted controller and state verifier remain authoritative.
-6. VTube Studio is a separately installed renderer on loopback. Hina's
+8. VTube Studio is a separately installed renderer on loopback. Hina's
    dashboard owns permission, connection state, hotkeys and movement presets.
-

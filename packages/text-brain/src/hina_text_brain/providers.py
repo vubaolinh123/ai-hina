@@ -4,8 +4,10 @@ import asyncio
 import base64
 import http.client
 import json
+import re
 import ssl
 import threading
+import time
 from dataclasses import dataclass
 from typing import Any, AsyncIterator
 from urllib.parse import urlsplit
@@ -19,6 +21,29 @@ MAX_CONTEXT_BYTES = 131_072
 MAX_VISION_IMAGE_BYTES = 1_000_000
 MAX_VISION_PROMPT_BYTES = 8_192
 _DONE = object()
+_QWEN_CONTROL_TOKENS = (
+    "<|im_start|>",
+    "<|im_end|>",
+    "<think>",
+    "</think>",
+)
+_REASONING_TERMS = re.compile(
+    r"\b(?:"
+    r"analy[sz]e|compare|debug|evaluate|explain why|plan|prove|reason|strategy|"
+    r"chứng minh|debug|đánh giá|giả sử|giải bài|giải thích|lập kế hoạch|"
+    r"nếu.+thì|nguyên nhân|phân tích|so sánh|suy luận|tại sao|tính|tối ưu|vì sao"
+    r")\b",
+    re.IGNORECASE | re.DOTALL,
+)
+_REASONING_MATH = re.compile(r"(?:\d[\d., ]*)\s*(?:%|[+\-*/=<>])")
+_VISION_REASONING_TERMS = re.compile(
+    r"\b(?:"
+    r"analy[sz]e|compare|debug|evaluate|explain why|plan|prove|reason|strategy|"
+    r"chứng minh|debug|đánh giá|giải thích|lập kế hoạch|nguyên nhân|phân tích|"
+    r"so sánh|suy luận|tại sao|tối ưu|vì sao|chiến lược"
+    r")\b",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -215,15 +240,31 @@ class LocalHttpChatProvider:
     ) -> None:
         connection = self._connection(self.config.request_timeout_seconds)
         connection_holder["connection"] = connection
-        body = self._chat_body(messages)
+        deadline = time.monotonic() + self.config.request_timeout_seconds
+        if (
+            self.config.provider is ProviderKind.OLLAMA
+            and not _requires_hidden_thinking(messages)
+        ):
+            endpoint = self.config.endpoint_path("generate")
+            body = self._fast_generate_body(messages)
+            stream_kind = "ollama-generate"
+        else:
+            endpoint = self.config.endpoint_path("chat")
+            body = self._chat_body(messages)
+            stream_kind = (
+                "ollama-chat"
+                if self.config.provider is ProviderKind.OLLAMA
+                else "openai-chat"
+            )
         try:
             connection.request(
                 "POST",
-                self.config.endpoint_path("chat"),
+                endpoint,
                 body=body,
                 headers=self._headers(content_length=len(body)),
             )
             response = connection.getresponse()
+            _assert_before_deadline(deadline)
             if response.status != 200:
                 response.read(4_096)
                 raise TextBrainError(
@@ -233,12 +274,14 @@ class LocalHttpChatProvider:
                 )
             total_bytes = 0
             while not stop.is_set():
+                _set_remaining_socket_timeout(connection, deadline)
                 line = response.readline(65_537)
+                _assert_before_deadline(deadline)
                 if not line:
                     break
                 if len(line) > 65_536:
                     raise TextBrainError("E_MODEL_STREAM_INVALID", "provider stream line is too large")
-                token, done = self._parse_stream_line(line)
+                token, done = self._parse_stream_line(line, stream_kind=stream_kind)
                 if token:
                     token_bytes = len(token.encode("utf-8"))
                     total_bytes += token_bytes
@@ -249,7 +292,13 @@ class LocalHttpChatProvider:
                     break
         except TextBrainError:
             raise
-        except (OSError, TimeoutError, http.client.HTTPException) as exc:
+        except TimeoutError as exc:
+            raise TextBrainError(
+                "E_MODEL_TIMEOUT",
+                "local model exceeded the configured response deadline",
+                retryable=True,
+            ) from exc
+        except (OSError, http.client.HTTPException) as exc:
             raise TextBrainError(
                 "E_MODEL_UNAVAILABLE",
                 "local model provider stream is unavailable",
@@ -259,12 +308,25 @@ class LocalHttpChatProvider:
             connection_holder.pop("connection", None)
             connection.close()
 
-    def _parse_stream_line(self, line: bytes) -> tuple[str, bool]:
+    def _parse_stream_line(
+        self,
+        line: bytes,
+        *,
+        stream_kind: str,
+    ) -> tuple[str, bool]:
         try:
             decoded = line.decode("utf-8").strip()
             if not decoded:
                 return "", False
-            if self.config.provider is ProviderKind.OLLAMA:
+            if stream_kind == "ollama-generate":
+                payload = json.loads(decoded)
+                if not isinstance(payload, dict) or payload.get("error") is not None:
+                    raise ValueError
+                token = payload.get("response", "")
+                if not isinstance(token, str):
+                    raise ValueError
+                return token, payload.get("done") is True
+            if stream_kind == "ollama-chat":
                 payload = json.loads(decoded)
                 if not isinstance(payload, dict) or payload.get("error") is not None:
                     raise ValueError
@@ -321,6 +383,7 @@ class LocalHttpChatProvider:
     def _analyze_image_sync(self, image_png: bytes, prompt: str) -> str:
         connection = self._connection(self.config.request_timeout_seconds)
         body = self._vision_body(image_png, prompt)
+        deadline = time.monotonic() + self.config.request_timeout_seconds
         try:
             connection.request(
                 "POST",
@@ -329,6 +392,7 @@ class LocalHttpChatProvider:
                 headers=self._headers(content_length=len(body)),
             )
             response = connection.getresponse()
+            _assert_before_deadline(deadline)
             if response.status != 200:
                 response.read(4_096)
                 raise TextBrainError(
@@ -336,7 +400,9 @@ class LocalHttpChatProvider:
                     f"local vision provider returned HTTP {response.status}",
                     retryable=response.status >= 500 or response.status in {408, 429},
                 )
+            _set_remaining_socket_timeout(connection, deadline)
             raw = response.read(self.config.max_output_bytes + 1)
+            _assert_before_deadline(deadline)
             if len(raw) > self.config.max_output_bytes:
                 raise TextBrainError(
                     "E_MODEL_STREAM_INVALID",
@@ -364,7 +430,13 @@ class LocalHttpChatProvider:
             return result
         except TextBrainError:
             raise
-        except (OSError, TimeoutError, http.client.HTTPException) as exc:
+        except TimeoutError as exc:
+            raise TextBrainError(
+                "E_MODEL_TIMEOUT",
+                "local vision model exceeded the configured response deadline",
+                retryable=True,
+            ) from exc
+        except (OSError, http.client.HTTPException) as exc:
             raise TextBrainError(
                 "E_MODEL_UNAVAILABLE",
                 "local vision provider is unavailable",
@@ -384,16 +456,18 @@ class LocalHttpChatProvider:
                 "model": self.config.model,
                 "messages": messages,
                 "stream": True,
-                # Hina alternates a 4B chat model with GPU-only STT/TTS on a
+                # Hina alternates one 8B multimodal model with GPU-only STT/TTS on a
                 # 16 GiB card. Keeping Ollama resident after the stream leaves
                 # no truthful way for the shared scheduler to preserve its
                 # mandatory 2 GiB headroom.
                 "keep_alive": 0,
-                "think": False,
+                "think": True,
                 "options": {
                     "temperature": self.config.temperature,
                     "repeat_penalty": self.config.repeat_penalty,
-                    "num_predict": self.config.max_tokens,
+                    "num_predict": self.config.thinking_max_tokens,
+                    "num_ctx": self.config.context_tokens,
+                    "num_gpu": self.config.ollama_gpu_layers,
                 },
             }
         else:
@@ -411,23 +485,76 @@ class LocalHttpChatProvider:
             separators=(",", ":"),
         ).encode("utf-8")
 
-    def _vision_body(self, image_png: bytes, prompt: str) -> bytes:
+    def _fast_generate_body(self, messages: list[dict[str, str]]) -> bytes:
+        if self.config.provider is not ProviderKind.OLLAMA:
+            raise TextBrainError(
+                "E_MODEL_REQUEST",
+                "the same-weight fast path requires the configured Ollama provider",
+            )
         payload = {
             "model": self.config.model,
-            "messages": [
+            "prompt": _qwen_no_think_prompt(messages),
+            "raw": True,
+            "stream": True,
+            "keep_alive": 0,
+            "options": {
+                "temperature": self.config.temperature,
+                "repeat_penalty": self.config.repeat_penalty,
+                "num_predict": self.config.max_tokens,
+                "num_ctx": self.config.context_tokens,
+                "num_gpu": self.config.ollama_gpu_layers,
+                # If the thinking checkpoint tries to open another thought
+                # block, stop instead of exposing hidden reasoning as text.
+                "stop": ["<|im_end|>", "<think>"],
+            },
+        }
+        return json.dumps(
+            payload,
+            ensure_ascii=False,
+            allow_nan=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+
+    def _vision_body(self, image_png: bytes, prompt: str) -> bytes:
+        requires_thinking = _requires_hidden_vision_thinking(prompt)
+        messages: list[dict[str, Any]] = [
+            {
+                "role": "user",
+                "content": prompt,
+                "images": [base64.b64encode(image_png).decode("ascii")],
+            }
+        ]
+        if not requires_thinking:
+            # Ollama's Qwen3-VL renderer inserts the correct image tokens before
+            # this assistant prefix. Closing the private block gives routine
+            # screenshot description a reliable same-weight path; no Instruct
+            # checkpoint or second model tag is loaded.
+            messages.append(
                 {
-                    "role": "user",
-                    "content": prompt,
-                    "images": [base64.b64encode(image_png).decode("ascii")],
+                    "role": "assistant",
+                    "content": "<think>\n\n</think>\n\n",
                 }
-            ],
+            )
+        payload = {
+            "model": self.config.model,
+            "messages": messages,
             "stream": False,
             "keep_alive": 0,
-            "think": False,
+            "think": True,
             "options": {
-                "temperature": min(self.config.temperature, 0.2),
-                "num_ctx": 4_096,
-                "num_predict": self.config.max_tokens,
+                "temperature": (
+                    self.config.temperature
+                    if requires_thinking
+                    else min(self.config.temperature, 0.3)
+                ),
+                "repeat_penalty": self.config.repeat_penalty,
+                "num_ctx": self.config.context_tokens,
+                "num_predict": (
+                    self.config.thinking_max_tokens
+                    if requires_thinking
+                    else self.config.vision_fast_max_tokens
+                ),
+                "num_gpu": self.config.ollama_gpu_layers,
             },
         }
         return json.dumps(
@@ -460,6 +587,75 @@ class LocalHttpChatProvider:
         if self.config.api_key is not None:
             headers["Authorization"] = f"Bearer {self.config.api_key}"
         return headers
+
+
+def _requires_hidden_thinking(messages: list[dict[str, str]]) -> bool:
+    latest_user = next(
+        (
+            item["content"]
+            for item in reversed(messages)
+            if item.get("role") == "user"
+        ),
+        "",
+    )
+    normalized = " ".join(latest_user.casefold().split())
+    if len(normalized) >= 220:
+        return True
+    if _REASONING_TERMS.search(normalized) is not None:
+        return True
+    if _REASONING_MATH.search(normalized) is not None:
+        return True
+    if "```" in latest_user or latest_user.count("\n") >= 3:
+        return True
+    return latest_user.count("?") + latest_user.count("？") >= 2
+
+
+def _requires_hidden_vision_thinking(prompt: str) -> bool:
+    normalized = " ".join(prompt.casefold().split())
+    if _VISION_REASONING_TERMS.search(normalized) is not None:
+        return True
+    if _REASONING_MATH.search(normalized) is not None:
+        return True
+    if "```" in prompt or prompt.count("?") + prompt.count("？") >= 2:
+        return True
+    return False
+
+
+def _qwen_no_think_prompt(messages: list[dict[str, str]]) -> str:
+    parts: list[str] = []
+    for item in messages:
+        role = item["role"]
+        content = _neutralize_qwen_control_tokens(item["content"])
+        parts.append(f"<|im_start|>{role}\n{content}<|im_end|>\n")
+    # Qwen3-VL Thinking is a separate checkpoint rather than a hybrid switch.
+    # Closing the private block in the raw prompt gives simple text requests a
+    # same-weight fast path without loading a second Instruct checkpoint.
+    parts.append("<|im_start|>assistant\n<think>\n\n</think>\n\n")
+    return "".join(parts)
+
+
+def _neutralize_qwen_control_tokens(value: str) -> str:
+    result = value
+    for token in _QWEN_CONTROL_TOKENS:
+        visible = token.replace("<", "‹").replace(">", "›")
+        result = re.sub(re.escape(token), visible, result, flags=re.IGNORECASE)
+    return result
+
+
+def _assert_before_deadline(deadline: float) -> None:
+    if time.monotonic() >= deadline:
+        raise TimeoutError("model request deadline exceeded")
+
+
+def _set_remaining_socket_timeout(
+    connection: http.client.HTTPConnection,
+    deadline: float,
+) -> None:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise TimeoutError("model request deadline exceeded")
+    if connection.sock is not None:
+        connection.sock.settimeout(max(0.05, remaining))
 
 
 def _validate_messages(raw: Any) -> list[dict[str, str]]:

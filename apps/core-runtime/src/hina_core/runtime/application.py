@@ -255,18 +255,36 @@ class HinaRuntimeApplication:
             if perception_service is None and safety_policy is not None:
                 from hina_perception import (
                     OcrConfig,
+                    OllamaVisionProvider,
                     PerceptionConfig,
                     PerceptionService,
                     RapidOcrProvider,
                     ScheduledOcrProvider,
+                    VisionConfig,
                 )
 
-                vision_analyze = getattr(model_gateway, "analyze_image", None)
                 ocr_provider = None
                 scheduler = getattr(model_gateway, "scheduler", None)
+                vision_config = VisionConfig.from_env()
+                acquire_vision_lease = None
                 if scheduler is not None:
                     from hina_text_brain import LocalResourceRequest
 
+                    async def acquire_perception_vision_lease(unload: Any) -> Any:
+                        return await scheduler.acquire(
+                            LocalResourceRequest(
+                                owner="perception.vision",
+                                vram_mib=vision_config.local_model_vram_mib,
+                                ram_mib=vision_config.local_model_ram_mib,
+                                priority=55,
+                                ttl_seconds=vision_config.request_timeout_seconds + 10,
+                                preemptible=True,
+                            ),
+                            wait_timeout_seconds=5,
+                            on_preempt=unload,
+                        )
+
+                    acquire_vision_lease = acquire_perception_vision_lease
                     ocr_config = OcrConfig.from_env(root=ROOT)
                     native_ocr_provider = RapidOcrProvider(ocr_config)
 
@@ -288,10 +306,14 @@ class HinaRuntimeApplication:
                         native_ocr_provider,
                         acquire_ocr_lease,
                     )
+                vision_provider = OllamaVisionProvider(
+                    vision_config,
+                    acquire_local_lease=acquire_vision_lease,
+                )
                 perception_service = PerceptionService(
-                    PerceptionConfig.from_env(),
+                    PerceptionConfig.from_env(root=ROOT),
                     safety_evaluate=safety_policy.evaluate,
-                    vision_analyze=vision_analyze if callable(vision_analyze) else None,
+                    vision_provider=vision_provider,
                     ocr_provider=ocr_provider,
                     on_error=self._log_perception_error,
                 )
@@ -422,8 +444,10 @@ class HinaRuntimeApplication:
             session_id=record["sessionId"] or None,
             context={
                 "snapshotBytes": record["snapshotBytes"],
-                "pixelDataRetained": False,
-                "snapshotPersisted": False,
+                "pixelRetentionState": record.get(
+                    "pixelRetentionState",
+                    "unknown-after-failure",
+                ),
             },
         )
 

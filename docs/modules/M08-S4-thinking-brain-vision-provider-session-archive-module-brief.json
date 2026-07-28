@@ -1,0 +1,111 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M08-S4-thinking-brain-pluggable-vision-session-archive",
+  "module_id": "M08",
+  "objective": "Promote one pinned Qwen3-VL 8B Thinking Q4_K_M Ollama checkpoint as Hina's text reasoning brain with a same-weight fast path for routine chat, move explicit screen reading behind a separately configurable Ollama Cloud or lightweight Ollama local vision provider, persist the Cloud key only through Electron OS-backed safeStorage, and add an explicit owner-controlled game-session snapshot archive for higher-quality historical re-analysis.",
+  "non_goals": [
+    "Do not load a second text-brain checkpoint, continuously record the screen, autonomously act on image output or automatically write image output to memory.",
+    "Do not treat an archived image as a current observation after the existing maximum-15-second TTL expires.",
+    "Do not persist OCR text, VLM output, prompts, chat content or raw public input beside archived PNG files.",
+    "Do not fine-tune, distill or change model weights in this slice.",
+    "Do not store an Ollama Cloud key in source, Git, logs, browser storage, plaintext files or renderer-readable status.",
+    "Do not permit a local screen-reading model above the lightweight 5 GB/approximately 5B boundary in this slice."
+  ],
+  "base_sha": "60dfbc400049825940e6d3ecda378eb10938ea5c",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "packages/text-brain/",
+    "workers/perception/",
+    "apps/core-runtime/src/hina_core/runtime/application.py",
+    "apps/core-runtime/src/hina_core/runtime/transport.py",
+    "apps/core-runtime/tests/",
+    "apps/dev-console/public/",
+    "apps/desktop/electron/",
+    "apps/desktop/src/",
+    "apps/desktop/test/",
+    "tools/dev/Start-HinaModelProvider.ps1",
+    "docs/modules/M08-S4-thinking-brain-vision-provider-session-archive-module-brief.json",
+    "docs/modules/M08-perception.md",
+    "docs/modules/M03-text-brain.md",
+    "docs/research/",
+    "ml/models/manifests/",
+    "docs/provenance/",
+    "docs/adr/",
+    "third_party/code.lock.json",
+    "third_party/THIRD_PARTY_NOTICES.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "packages/contracts/",
+    "packages/safety-policy/",
+    "packages/memory/",
+    "workers/speech/",
+    "voice_demo/"
+  ],
+  "contracts": [
+    "qwen3-vl:8b-thinking-q4_K_M is the only configured text-brain checkpoint; routine text uses a same-weight pre-closed-thought path, complex text uses bounded hidden thinking, and untrusted text cannot inject Qwen control tokens into the raw template.",
+    "Perception never routes screen images through the text-brain gateway. It uses a separate runtime-configurable Ollama Cloud or Ollama local vision boundary.",
+    "Ollama Cloud requests use only the fixed https://ollama.com API endpoint; the bearer key is decrypted by Electron main, passed to loopback runtime memory, and never returned in status, errors or renderer-readable persistence state.",
+    "Electron persists provider/model plus only an OS-encrypted safeStorage ciphertext under userData, restores it after restart and changes or clears it only after an explicit operator action.",
+    "Ollama local discovery uses /api/tags plus /api/show and returns only models advertising vision that satisfy the lightweight profile; inference uses the shared scheduler and keep_alive=0.",
+    "Complex text reasoning is never emitted to UI, logs or TTS and the complete brain request has a hard 10-second deadline.",
+    "The Ollama profile requests full GPU offload and every real acceptance smoke must observe 100% GPU execution; unavailable GPU capacity fails visibly rather than selecting another model or CPU fallback.",
+    "Snapshot archiving is available but inactive by default, starts only after an explicit owner action and stores only validated PNG bytes under a fixed physical repository-local root.",
+    "An archive session is bound to the owner console session, bounded by byte and snapshot quotas, and exposes no caller-controlled filesystem path.",
+    "Stopping an archive prevents future writes but deliberately leaves its PNG files for the owner to inspect and manually remove after the game session.",
+    "Historical re-analysis never enters the fresh observation ledger or memory and always returns historical=true plus decisionSupportEligible=false.",
+    "The shared scheduler serializes the text brain, optional local vision, STT, TTS and OCR GPU work and preserves at least 2048 MiB headroom; Ollama Cloud vision consumes zero local model VRAM."
+  ],
+  "allowed_dependencies": [
+    "Existing Python and Node standard libraries, Electron safeStorage, Hina resource scheduler, Ollama 0.32.5 local/cloud APIs and existing browser APIs; no new package dependency."
+  ],
+  "oss_candidates": [
+    "https://huggingface.co/Qwen/Qwen3-VL-8B-Thinking",
+    "https://github.com/QwenLM/Qwen3-VL",
+    "https://ollama.com/library/qwen3-vl:8b-thinking-q4_K_M",
+    "https://docs.ollama.com/api/authentication",
+    "https://docs.ollama.com/api/tags",
+    "https://docs.ollama.com/api-reference/show-model-details"
+  ],
+  "acceptance_criteria": [
+    "Model config/provider tests pin qwen3-vl:8b-thinking-q4_K_M, an 8192-token runtime context, Q4-oriented VRAM reservation, full GPU offload request, bounded fast/thinking budgets, a hard 10-second request deadline and deterministic keep_alive=0 unload.",
+    "Tests prove simple text uses the same-weight pre-closed-thought path, complex text uses native thinking, control tokens are neutralized and hidden reasoning is never yielded as assistant text.",
+    "A real simple text smoke and complex reasoning smoke return non-empty Vietnamese output within 10 seconds while Ollama reports 100% GPU execution.",
+    "Vision provider tests prove Cloud authentication never appears in status/errors, local discovery filters by the advertised vision capability, oversized local models are rejected and local inference owns a scheduler lease.",
+    "Desktop tests prove operator-only IPC, OS safeStorage encryption, bounded strict persistence and automatic provider restoration without exposing decrypted key material to the renderer.",
+    "Perception unit and route tests prove archive default-off behavior, owner-session binding, fixed-root containment, exclusive bounded writes, quota rejection, stop semantics and historical re-analysis isolation.",
+    "The desktop Quan sat dashboard lets a non-developer enter or replace an Ollama Cloud key, discover only vision-capable models, select Cloud or a lightweight local model and understand the privacy/VRAM tradeoff.",
+    "The Dev Console Quan sat page lets a non-developer start/stop an image-retention session, shows the exact local folder/count/bytes and clearly distinguishes current TTL observations from retained history.",
+    "A real serialized OCR, 8B text brain, Moonshine STT and OmniVoice TTS run records peak physical GPU use below 14336 MiB and at least 2048 MiB free VRAM; Cloud vision adds no local model VRAM.",
+    "One-off scripts, raw benchmark screenshots/audio and pull logs are removed after concise metrics and provenance are recorded."
+  ],
+  "required_test_commands": [
+    "pnpm test:text-brain",
+    "pnpm test:perception",
+    "$env:PYTHONPATH='apps/core-runtime/src;packages/contracts/src;packages/safety-policy/src;packages/text-brain/src;workers/perception/src'; uv run --frozen python -m unittest discover -s apps/core-runtime/tests -p \"test_perception_routes.py\"",
+    "pnpm test:desktop",
+    "node tools/dev/check-node-workspace.mjs",
+    "pnpm smoke:dev-console"
+  ],
+  "latency_or_quality_budget": {
+    "all_on_vram_ceiling_mib": 14336,
+    "minimum_free_vram_mib": 2048,
+    "model_runtime_context_tokens": 8192,
+    "model_fast_output_tokens": 192,
+    "model_thinking_output_tokens": 768,
+    "model_request_deadline_seconds": 10,
+    "archive_maximum_session_bytes": 268435456,
+    "archive_maximum_snapshots": 300,
+    "archive_capture_max_side_px": 1920,
+    "maximum_observation_ttl_seconds": 15,
+    "archive_default_enabled": false,
+    "historical_decision_support_eligible": false,
+    "local_vision_model_maximum_bytes": 5368709120,
+    "local_vision_scheduler_reservation_mib": 5120,
+    "cloud_vision_local_model_vram_mib": 0
+  },
+  "output_artifact_dir": "artifacts/verification/M08/"
+}

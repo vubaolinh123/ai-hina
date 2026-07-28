@@ -521,6 +521,123 @@ class ControlPlaneServer:
                     "perception clear request is invalid",
                 )
             return await self._perception_call("clear", source="owner.console")
+        if path == "/v1/perception/vision/models":
+            required = {"provider", "source"}
+            if (
+                not required.issubset(payload)
+                or set(payload) - (required | {"apiKey"})
+            ):
+                raise PrimitiveError(
+                    RuntimeErrorCode.HTTP_BAD_REQUEST,
+                    "vision model discovery request is invalid",
+                )
+            return await self._perception_call(
+                "discover_vision_models",
+                provider=payload.get("provider"),
+                api_key=payload.get("apiKey"),
+                source=payload.get("source"),
+            )
+        if path == "/v1/perception/vision/configure":
+            required = {
+                "provider",
+                "model",
+                "source",
+                "ownerConfirmed",
+            }
+            if (
+                not required.issubset(payload)
+                or set(payload) - (required | {"apiKey"})
+            ):
+                raise PrimitiveError(
+                    RuntimeErrorCode.HTTP_BAD_REQUEST,
+                    "vision provider configuration request is invalid",
+                )
+            return await self._perception_call(
+                "configure_vision_provider",
+                provider=payload.get("provider"),
+                model=payload.get("model"),
+                api_key=payload.get("apiKey"),
+                source=payload.get("source"),
+                owner_confirmed=payload.get("ownerConfirmed"),
+            )
+        if path == "/v1/perception/vision/disable":
+            if payload != {
+                "action": "disable",
+                "source": "owner.desktop",
+            }:
+                raise PrimitiveError(
+                    RuntimeErrorCode.HTTP_BAD_REQUEST,
+                    "vision provider disable request is invalid",
+                )
+            return await self._perception_call(
+                "disable_vision_provider",
+                source="owner.desktop",
+            )
+        if path == "/v1/perception/archive/start":
+            if set(payload) != {
+                "action",
+                "correlationId",
+                "sessionId",
+                "source",
+                "ownerConfirmed",
+            } or payload.get("action") != "start":
+                raise PrimitiveError(
+                    RuntimeErrorCode.HTTP_BAD_REQUEST,
+                    "snapshot archive start request is invalid",
+                )
+            return await self._perception_call(
+                "start_archive",
+                correlation_id=payload.get("correlationId"),
+                session_id=payload.get("sessionId"),
+                source=payload.get("source"),
+                owner_confirmed=payload.get("ownerConfirmed"),
+            )
+        if path == "/v1/perception/archive/stop":
+            if set(payload) != {
+                "action",
+                "sessionId",
+                "archiveSessionId",
+                "source",
+            } or payload.get("action") != "stop":
+                raise PrimitiveError(
+                    RuntimeErrorCode.HTTP_BAD_REQUEST,
+                    "snapshot archive stop request is invalid",
+                )
+            return await self._perception_call(
+                "stop_archive",
+                session_id=payload.get("sessionId"),
+                archive_session_id=payload.get("archiveSessionId"),
+                source=payload.get("source"),
+            )
+        if path == "/v1/perception/archive/reanalyze":
+            required = {
+                "action",
+                "correlationId",
+                "sessionId",
+                "archiveSessionId",
+                "snapshotId",
+                "source",
+                "ownerConfirmed",
+            }
+            if (
+                not required.issubset(payload)
+                or set(payload) - (required | {"visionQuestion"})
+                or payload.get("action") != "reanalyze"
+            ):
+                raise PrimitiveError(
+                    RuntimeErrorCode.HTTP_BAD_REQUEST,
+                    "historical snapshot analysis request is invalid",
+                )
+            return await self._perception_call(
+                "reanalyze_archive",
+                correlation_id=payload.get("correlationId"),
+                session_id=payload.get("sessionId"),
+                archive_session_id=payload.get("archiveSessionId"),
+                snapshot_id=payload.get("snapshotId"),
+                source=payload.get("source"),
+                owner_confirmed=payload.get("ownerConfirmed"),
+                vision_question=payload.get("visionQuestion"),
+            )
         if path == "/v1/memory/candidates":
             return await self._memory_call("propose", payload)
         candidate_id = _memory_item_route(path, "candidates", "decision")
@@ -971,6 +1088,7 @@ class ControlPlaneServer:
         )
         vision_question_raw = request.headers.get("x-hina-vision-question")
         vision_question = unquote(vision_question_raw) if vision_question_raw else None
+        archive_session_id = request.headers.get("x-hina-archive-session-id") or None
         content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
         if content_type != "image/png":
             self._log_perception_request_error(
@@ -978,6 +1096,7 @@ class ControlPlaneServer:
                 correlation_id,
                 session_id,
                 len(request.body),
+                archive_retention_requested=archive_session_id is not None,
             )
             await self._send_json_response(
                 writer,
@@ -996,6 +1115,7 @@ class ControlPlaneServer:
                 correlation_id,
                 session_id,
                 0,
+                archive_retention_requested=archive_session_id is not None,
             )
             await self._send_json_response(
                 writer,
@@ -1014,6 +1134,7 @@ class ControlPlaneServer:
                 correlation_id,
                 session_id,
                 len(request.body),
+                archive_retention_requested=archive_session_id is not None,
             )
             await self._send_json_response(
                 writer,
@@ -1037,6 +1158,7 @@ class ControlPlaneServer:
                 analyze_with_vlm=analyze_with_vlm,
                 vision_question=vision_question,
                 analyze_with_ocr=analyze_with_ocr,
+                archive_session_id=archive_session_id,
             )
         except Exception as exc:
             code = getattr(exc, "code", "")
@@ -1044,6 +1166,10 @@ class ControlPlaneServer:
                 raise
             if code == "E_PERCEPTION_RATE_LIMIT":
                 status = HTTPStatus.TOO_MANY_REQUESTS
+            elif code == "E_PERCEPTION_ARCHIVE_QUOTA":
+                status = HTTPStatus.REQUEST_ENTITY_TOO_LARGE
+            elif code == "E_PERCEPTION_ARCHIVE_ACTIVE":
+                status = HTTPStatus.CONFLICT
             elif code in {"E_PERCEPTION_DENIED", "E_PERCEPTION_CONFIRMATION"}:
                 status = HTTPStatus.FORBIDDEN
             elif code in {
@@ -1062,6 +1188,7 @@ class ControlPlaneServer:
                     correlation_id,
                     session_id,
                     len(request.body),
+                    archive_retention_requested=archive_session_id is not None,
                 )
             self._record_metric(
                 "hina_http_requests_total",
@@ -1120,6 +1247,8 @@ class ControlPlaneServer:
         correlation_id: str,
         session_id: str | None,
         snapshot_bytes: int,
+        *,
+        archive_retention_requested: bool = False,
     ) -> None:
         if self.error_logger is None:
             return
@@ -1131,7 +1260,12 @@ class ControlPlaneServer:
             session_id=session_id,
             context={
                 "snapshotBytes": snapshot_bytes,
-                "pixelDataRetained": False,
+                "archiveRetentionRequested": archive_retention_requested,
+                **(
+                    {"pixelDataRetentionState": "unknown-after-failure"}
+                    if archive_retention_requested
+                    else {"pixelDataRetained": False}
+                ),
             },
         )
 
@@ -1665,14 +1799,31 @@ class ControlPlaneServer:
             return HTTPStatus.TOO_MANY_REQUESTS
         if code_value == "E_PERCEPTION_EXPIRED":
             return HTTPStatus.GONE
-        if code_value == "E_PERCEPTION_SNAPSHOT_TOO_LARGE":
+        if code_value in {
+            "E_PERCEPTION_SNAPSHOT_TOO_LARGE",
+            "E_PERCEPTION_ARCHIVE_QUOTA",
+        }:
             return HTTPStatus.REQUEST_ENTITY_TOO_LARGE
+        if code_value == "E_PERCEPTION_ARCHIVE_ACTIVE":
+            return HTTPStatus.CONFLICT
+        if code_value == "E_PERCEPTION_ARCHIVE_NOT_FOUND":
+            return HTTPStatus.NOT_FOUND
         if code_value in {
             "E_PERCEPTION_UNAVAILABLE",
             "E_PERCEPTION_POLICY",
             "E_PERCEPTION_OPERATION",
+            "E_PERCEPTION_ARCHIVE_UNAVAILABLE",
+            "E_PERCEPTION_ARCHIVE_READ",
+            "E_PERCEPTION_ARCHIVE_WRITE",
+            "E_PERCEPTION_VISION_UNAVAILABLE",
+            "E_PERCEPTION_VISION_OFFLINE",
+            "E_PERCEPTION_VISION_TIMEOUT",
+            "E_PERCEPTION_VISION_PROVIDER",
+            "E_PERCEPTION_VISION_CAPACITY",
         }:
             return HTTPStatus.SERVICE_UNAVAILABLE
+        if code_value == "E_PERCEPTION_VISION_AUTH":
+            return HTTPStatus.UNAUTHORIZED
         if code is RuntimeErrorCode.FRAME_TOO_LARGE:
             return HTTPStatus.REQUEST_HEADER_FIELDS_TOO_LARGE
         if code is RuntimeErrorCode.CONNECTION_LIMIT:

@@ -97,3 +97,29 @@ checks remain explicitly deferred by the owner's fast-development policy.
   copied.
 - One live Ollama `qwen3.5:4b` check for “Bạn là ai?” completed with
   `hina.prompt.v2` in one sentence/22 words, with no trailing offer.
+
+## M03-S5 shared 8B Thinking maintenance (2026-07-28)
+
+- Default text model is now the pinned
+  `qwen3-vl:8b-thinking-q4_K_M`. Hina does not load or route to a second
+  Instruct checkpoint for text. M08 screen reading is deliberately outside
+  this gateway and uses its own Ollama Cloud or lightweight local provider.
+- A deterministic router uses a raw same-weight prompt with a pre-closed private
+  think block for simple text. Requests containing reasoning terms, arithmetic,
+  long/multi-question/code input use native hidden thinking.
+- Provider output reads only final `content`; Ollama's private `thinking` field
+  is never streamed to the renderer. Qwen control tokens inside untrusted
+  messages are neutralized before the raw fast path is constructed.
+- Runtime context is 8.192 tokens, normal text output is 192 tokens and
+  thinking is bounded at 768 tokens. Admission is capped at one
+  second and provider work at nine seconds, yielding a default turn deadline
+  of ten seconds. Retries are disabled to keep that deadline truthful.
+- Every Ollama request asks for full GPU offload and `keep_alive=0`; the shared
+  scheduler reserves 8.192 MiB VRAM while retaining at least 2.048 MiB
+  headroom for the machine.
+- Real RTX 5070 Ti smoke: simple text 2,939 s, arithmetic reasoning 6,160 s,
+  and, before the provider split, routine image description 4,363 s. The image
+  measurement is retained only as historical evidence and is not the active
+  M08 route. Highest observed total physical GPU use was 9.975 MiB of
+  16.303 MiB. Exact distribution hashes and settings are in
+  `ml/models/manifests/qwen3-vl-8b-thinking-q4-k-m.v1.json`.

@@ -128,8 +128,29 @@ Windows `pnpm test:fast` (bao gồm 30 perception tests và runtime route tests)
 cùng `pnpm smoke:dev-console` đã pass; M08-S1 fast gate được coi là xanh.
 M08-S2 sau đó tái sử dụng Qwen3.5-4B local làm VLM theo explicit capture,
 scheduler lease và `keep_alive=0`; không lưu pixel/base64, chỉ giữ summary
-untrusted trong TTL ≤15 giây. OCR chưa có dependency nào được thêm; OCR provider
-chỉ là contract-ready cho tới khi qua OSS/license review.
+untrusted trong TTL ≤15 giây. M08-S3 đã thêm RapidOCR 3.9.1 + PP-OCRv6 small
+Torch GPU-only; corrected Vietnamese UI CER dài 6,944% chưa qua gate ≤5% nên
+output vẫn untrusted/không được autonomous decision support.
+Ngày 2026-07-28 owner chọn chỉ dùng một bản Thinking thay vì swap Instruct/
+Thinking. M08-S4 chuyển default sang `qwen3-vl:8b-thinking-q4_K_M` pinned chỉ
+cho text brain: simple text dùng same-weight preclosed-thought; câu text phức
+tạp dùng hidden thinking bounded, context 8.192, budget 192/768, admission 1 s
++ provider 9 s, full GPU request, `keep_alive=0`, lease 8.192 MiB. Real RTX
+5070 Ti smoke simple/complex lần lượt 2,939/6,160 s; peak total physical VRAM
+tối đa 9.975/16.303 MiB.
+Theo điều chỉnh tiếp theo của owner, explicit screen VLM không còn đi qua
+text-brain 8B. Runtime dùng `OllamaVisionProvider` riêng: Ollama Cloud endpoint
+cố định hoặc Ollama local capability-verified trong profile nhẹ ≤5 GB/≈5B.
+Desktop có page Quan sát; Cloud key được Electron `safeStorage` mã hóa dưới
+userData, tự restore sau restart, chỉ đổi/xóa qua owner IPC và không lộ qua
+renderer/status/log/Git. Cloud vision thêm 0 model VRAM local; local vision dùng
+lease 5.120 MiB + context 4.096 + `num_gpu=999` + `keep_alive=0`.
+M08-S4 cũng thêm owner-started
+PNG session archive mặc định tắt, quota 300 ảnh/256 MiB dưới
+`var/perception-sessions`; dashboard hiện exact path và start/stop/reanalyze.
+Ảnh lịch sử không làm mới TTL, luôn `currentObservation=false` và
+`decisionSupportEligible=false`; stop/shutdown không tự xóa file vì owner sẽ
+tự dọn sau phiên chơi.
 
 Legacy AIRI skill paths dưới `D:\ProjectAiri` mặc định ánh xạ sang repository
 hiện tại `D:\ProjectHinaAI`, trừ khi owner chỉ định workspace khác.

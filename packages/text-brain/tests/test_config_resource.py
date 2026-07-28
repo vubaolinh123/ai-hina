@@ -36,6 +36,11 @@ class MutableTelemetry:
 
 class ConfigTests(unittest.TestCase):
     def test_config_accepts_loopback_and_never_exposes_api_key(self) -> None:
+        default = ModelGatewayConfig()
+        self.assertEqual(default.model, "qwen3-vl:8b-thinking-q4_K_M")
+        self.assertEqual(default.request_timeout_seconds, 9.0)
+        self.assertEqual(default.retry_attempts, 0)
+        self.assertEqual(default.model_vram_mib, 8_192)
         config = ModelGatewayConfig(
             provider=ProviderKind.OPENAI_COMPATIBLE,
             base_url="http://localhost:1234/v1",
@@ -47,10 +52,20 @@ class ConfigTests(unittest.TestCase):
         self.assertNotIn("owner-secret", str(status))
         self.assertEqual(config.max_tokens, 192)
         self.assertEqual(status["maxTokens"], 192)
+        self.assertEqual(config.vision_fast_max_tokens, 256)
+        self.assertEqual(status["visionFastMaxTokens"], 256)
+        self.assertEqual(config.thinking_max_tokens, 768)
+        self.assertEqual(status["thinkingMaxTokens"], 768)
+        self.assertEqual(config.context_tokens, 8_192)
+        self.assertEqual(status["contextTokens"], 8_192)
+        self.assertEqual(status["admissionTimeoutSeconds"], 1.0)
+        self.assertEqual(status["defaultTurnDeadlineSeconds"], 10.0)
         self.assertEqual(config.temperature, 0.7)
         self.assertEqual(status["temperature"], 0.7)
         self.assertEqual(config.repeat_penalty, 1.15)
         self.assertEqual(status["repeatPenalty"], 1.15)
+        self.assertEqual(status["reasoningPolicy"], "deterministic-auto")
+        self.assertFalse(status["hiddenReasoningExposed"])
         self.assertEqual(config.endpoint_path("chat"), "/v1/chat/completions")
 
     def test_config_rejects_remote_or_credentialed_endpoint(self) -> None:
@@ -69,6 +84,10 @@ class ConfigTests(unittest.TestCase):
             ("repeat_penalty", True),
             ("repeat_penalty", 0),
             ("repeat_penalty", 2.1),
+            ("context_tokens", 512),
+            ("ollama_gpu_layers", 0),
+            ("vision_fast_max_tokens", 0),
+            ("thinking_max_tokens", 191),
         ):
             with self.subTest(field=field, value=value), self.assertRaises(TextBrainError):
                 ModelGatewayConfig(**{field: value})

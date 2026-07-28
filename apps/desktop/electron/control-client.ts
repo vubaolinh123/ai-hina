@@ -12,7 +12,8 @@ type ControlOperation =
   | "runtime.health"
   | "chat.status"
   | "speech.status"
-  | "tts.status";
+  | "tts.status"
+  | "perception.status";
 
 type OperationSpec = {
   method: "GET" | "POST";
@@ -29,6 +30,7 @@ const OPERATIONS: Readonly<Record<ControlOperation, OperationSpec>> = Object.fre
   "chat.status": { method: "GET", path: "/v1/chat/status" },
   "speech.status": { method: "GET", path: "/v1/speech/status" },
   "tts.status": { method: "GET", path: "/v1/tts/status" },
+  "perception.status": { method: "GET", path: "/v1/perception/status" },
 });
 
 const AVATAR_STATES = new Set([
@@ -190,6 +192,94 @@ export async function requestChatStatus(): Promise<JsonObject> {
   return requestControl("chat.status" as ControlOperation);
 }
 
+const VISION_PROVIDERS = new Set(["ollama_local", "ollama_cloud"]);
+
+export function validateVisionProvider(value: unknown): "ollama_local" | "ollama_cloud" {
+  if (typeof value !== "string" || !VISION_PROVIDERS.has(value)) {
+    throw new Error("E_DESKTOP_VISION_CONFIG: provider is invalid");
+  }
+  return value as "ollama_local" | "ollama_cloud";
+}
+
+export function validateVisionModel(value: unknown): string {
+  if (
+    typeof value !== "string"
+    || value !== value.trim()
+    || value.length < 1
+    || value.length > 160
+    || /[\u0000-\u001f\u007f]/u.test(value)
+  ) {
+    throw new Error("E_DESKTOP_VISION_CONFIG: model is invalid");
+  }
+  return value;
+}
+
+export function validateVisionApiKey(value: unknown): string {
+  if (
+    typeof value !== "string"
+    || value !== value.trim()
+    || value.length < 8
+    || value.length > 4_096
+    || /[\u0000-\u0020\u007f]/u.test(value)
+  ) {
+    throw new Error("E_DESKTOP_VISION_AUTH: API key is invalid");
+  }
+  return value;
+}
+
+export async function requestVisionStatus(): Promise<JsonObject> {
+  return requestControl("perception.status");
+}
+
+export async function requestVisionModelDiscovery(
+  provider: unknown,
+  apiKey: string | null,
+): Promise<JsonObject> {
+  const selected = validateVisionProvider(provider);
+  return requestPath(
+    "POST",
+    "/v1/perception/vision/models",
+    {
+      provider: selected,
+      source: "owner.desktop",
+      ...(selected === "ollama_cloud"
+        ? { apiKey: validateVisionApiKey(apiKey) }
+        : {}),
+    },
+    60_000,
+  );
+}
+
+export async function requestVisionConfigure(
+  provider: unknown,
+  model: unknown,
+  apiKey: string | null,
+): Promise<JsonObject> {
+  const selected = validateVisionProvider(provider);
+  return requestPath(
+    "POST",
+    "/v1/perception/vision/configure",
+    {
+      provider: selected,
+      model: validateVisionModel(model),
+      source: "owner.desktop",
+      ownerConfirmed: true,
+      ...(selected === "ollama_cloud"
+        ? { apiKey: validateVisionApiKey(apiKey) }
+        : {}),
+    },
+    60_000,
+  );
+}
+
+export async function requestVisionDisable(): Promise<JsonObject> {
+  return requestPath(
+    "POST",
+    "/v1/perception/vision/disable",
+    { action: "disable", source: "owner.desktop" },
+  );
+}
+
 export async function requestChatStart(raw: unknown): Promise<JsonObject> {
   if (!isObject(raw) || Object.keys(raw).some((key) => !["sessionId", "source", "text"].includes(key))
     || Object.keys(raw).length !== 3
@@ -297,6 +387,7 @@ async function requestPath(
   method: "GET" | "POST",
   path: string,
   payload?: JsonObject,
+  timeoutMilliseconds = REQUEST_TIMEOUT_MILLISECONDS,
 ): Promise<JsonObject> {
   const baseUrl = parseControlBaseUrl(
     process.env.HINA_CONTROL_BASE_URL ?? DEFAULT_CONTROL_BASE,
@@ -308,12 +399,15 @@ async function requestPath(
       cache: "no-store",
       headers: { Accept: "application/json", ...(payload ? { "Content-Type": "application/json" } : {}) },
       body: payload ? JSON.stringify(payload) : undefined,
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MILLISECONDS),
+      signal: AbortSignal.timeout(timeoutMilliseconds),
     });
   } catch {
     throw new Error("E_DESKTOP_CONTROL_OFFLINE: Hina control plane is unavailable");
   }
   const text = await response.text();
+  if (new TextEncoder().encode(text).byteLength > MAX_RESPONSE_BYTES) {
+    throw new Error("E_DESKTOP_RESPONSE: control response exceeds the desktop limit");
+  }
   let result: unknown;
   try {
     result = JSON.parse(text);

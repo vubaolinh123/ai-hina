@@ -19,6 +19,7 @@ type DashboardPage =
   | "overview"
   | "chat"
   | "speech"
+  | "perception"
   | "avatar"
   | "live2d"
   | "runtime";
@@ -62,6 +63,13 @@ const ttsRuntime = ref<TtsRuntimeStatus | null>(null);
 const speechLiveEnabled = ref(true);
 const speechTtsText = ref("Xin chào, mình là Hina. Đây là phần kiểm tra giọng nói tiếng Việt.");
 const speechTtsAudioUrl = ref("");
+const visionProviderStatus = ref<VisionProviderDashboardStatus | null>(null);
+const visionProvider = ref<VisionProviderChoice>("ollama_cloud");
+const visionApiKey = ref("");
+const visionModels = ref<VisionModelOption[]>([]);
+const visionModel = ref("");
+const visionBusy = ref(false);
+const visionMessage = ref("");
 let speechTtsAudio: HTMLAudioElement | null = null;
 let speechRecorder: MicrophoneRecorder | null = null;
 let speechLivePending = false;
@@ -228,6 +236,100 @@ async function refreshSpeechRuntime(): Promise<void> {
       "[hina-speech-test] E_DESKTOP_STT_STATUS",
       error instanceof Error ? error.message : "unknown error",
     );
+  }
+}
+
+function formatVisionModelSize(bytes: number | null): string {
+  if (bytes === null) return "Cloud / không tải vào máy";
+  return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+}
+
+async function refreshVisionProviderStatus(): Promise<void> {
+  try {
+    visionProviderStatus.value = await window.hinaDesktop.getVisionProviderStatus();
+    const persisted = visionProviderStatus.value.persistence;
+    if (persisted.provider !== "disabled") {
+      visionProvider.value = persisted.provider;
+      visionModel.value = persisted.model ?? "";
+    }
+  } catch (error) {
+    visionMessage.value = error instanceof Error
+      ? error.message
+      : "E_DESKTOP_VISION_STATUS";
+    console.error("[hina-vision] E_DESKTOP_VISION_STATUS", visionMessage.value);
+  }
+}
+
+async function discoverVisionModels(): Promise<void> {
+  if (visionBusy.value) return;
+  visionBusy.value = true;
+  visionMessage.value = "Đang đọc danh sách model và kiểm tra capability vision…";
+  try {
+    const result = await window.hinaDesktop.discoverVisionModels({
+      provider: visionProvider.value,
+      ...(visionApiKey.value ? { apiKey: visionApiKey.value } : {}),
+    });
+    visionModels.value = result.models;
+    if (!result.models.some((item) => item.name === visionModel.value)) {
+      visionModel.value = result.models[0]?.name ?? "";
+    }
+    visionMessage.value = result.count
+      ? `Đã tìm thấy ${result.count} model đọc ảnh. Chỉ model khai báo capability vision mới được hiển thị.`
+      : "Không tìm thấy model đọc ảnh nào. Với Ollama local, hãy pull một model vision nhẹ trước.";
+  } catch (error) {
+    visionMessage.value = error instanceof Error
+      ? error.message
+      : "E_DESKTOP_VISION_DISCOVERY";
+    console.error("[hina-vision] E_DESKTOP_VISION_DISCOVERY", visionMessage.value);
+  } finally {
+    visionBusy.value = false;
+  }
+}
+
+async function applyVisionProvider(): Promise<void> {
+  if (visionBusy.value || !visionModel.value) return;
+  visionBusy.value = true;
+  visionMessage.value = "Đang xác minh model và lưu cấu hình bảo mật…";
+  try {
+    await window.hinaDesktop.configureVisionProvider({
+      provider: visionProvider.value,
+      model: visionModel.value,
+      ...(visionApiKey.value ? { apiKey: visionApiKey.value } : {}),
+    });
+    visionApiKey.value = "";
+    visionMessage.value = visionProvider.value === "ollama_cloud"
+      ? "Đã lưu. API key được mã hóa bởi Windows và ảnh sẽ gửi tới Ollama Cloud khi bạn chủ động yêu cầu phân tích."
+      : "Đã lưu model Ollama local. Model chỉ được chạy qua GPU scheduler và tự unload sau mỗi lượt.";
+    await refreshVisionProviderStatus();
+  } catch (error) {
+    visionMessage.value = error instanceof Error
+      ? error.message
+      : "E_DESKTOP_VISION_CONFIG";
+    console.error("[hina-vision] E_DESKTOP_VISION_CONFIG", visionMessage.value);
+  } finally {
+    visionBusy.value = false;
+  }
+}
+
+async function clearVisionProviderKey(): Promise<void> {
+  if (visionBusy.value) return;
+  visionBusy.value = true;
+  try {
+    const result = await window.hinaDesktop.clearVisionApiKey();
+    visionApiKey.value = "";
+    visionModels.value = [];
+    visionMessage.value = result.runtimePreserved
+      ? "Đã xóa key Cloud đã mã hóa. Model Ollama local hiện tại vẫn được giữ nguyên."
+      : result.runtimeDisabled
+        ? "Đã xóa key mã hóa và tắt provider Cloud trong runtime."
+        : "Đã xóa key mã hóa. Runtime đang offline nên sẽ giữ trạng thái tắt ở lần khởi động sau.";
+    await refreshVisionProviderStatus();
+  } catch (error) {
+    visionMessage.value = error instanceof Error
+      ? error.message
+      : "E_DESKTOP_VISION_CLEAR";
+  } finally {
+    visionBusy.value = false;
   }
 }
 
@@ -770,6 +872,7 @@ onMounted(async () => {
     refreshSafety(),
     refreshWidget(),
     refreshSpeechRuntime(),
+    refreshVisionProviderStatus(),
     refreshVTubeStudioStatus(),
     refreshSpoutStatus(),
   ]);
@@ -815,6 +918,10 @@ onBeforeUnmount(() => {
       <button type="button" :class="{ active: activePage === 'speech' }" @click="activePage = 'speech'">
         Mic / STT / TTS
         <small>Kiểm tra thu âm và giọng thật</small>
+      </button>
+      <button type="button" :class="{ active: activePage === 'perception' }" @click="activePage = 'perception'">
+        Quan sát
+        <small>Chọn model đọc màn hình</small>
       </button>
       <button type="button" :class="{ active: activePage === 'avatar' }" @click="activePage = 'avatar'">
         Avatar Stage
@@ -879,6 +986,7 @@ onBeforeUnmount(() => {
       <div class="quick-actions">
         <button class="primary" type="button" @click="activePage = 'chat'">Mở chat với Hina</button>
         <button type="button" @click="activePage = 'speech'">Kiểm tra Mic / STT / TTS</button>
+        <button type="button" @click="activePage = 'perception'">Thiết lập đọc màn hình</button>
         <button type="button" @click="activePage = 'avatar'">Xem avatar</button>
         <button type="button" @click="activePage = 'live2d'">Thiết lập Live2D / Hiyori</button>
         <button type="button" @click="activePage = 'runtime'">Quản lý widget và Safety</button>
@@ -1025,6 +1133,156 @@ onBeforeUnmount(() => {
         kiểm tra Windows đã cấp quyền microphone cho ứng dụng desktop, chọn đúng mic mặc định,
         nói gần mic rồi xem correlation ID hoặc dòng <code>[hina-error]</code> trong cửa sổ
         <code>pnpm start:desktop</code>.
+      </aside>
+    </section>
+
+    <section v-else-if="activePage === 'perception'" class="dashboard-page perception-page">
+      <div class="page-heading">
+        <p class="eyebrow">M08 / SCREEN PERCEPTION</p>
+        <h2>Chọn riêng model đọc màn hình cho Hina</h2>
+        <p class="purpose">
+          Bộ não Qwen3‑VL 8B Thinking chỉ xử lý hội thoại và suy luận. Ảnh màn hình
+          đi qua provider riêng ở trang này: Ollama Cloud không dùng thêm VRAM máy,
+          còn Ollama local chỉ cho chọn model vision nhẹ. Không có ảnh nào được chụp
+          tự động; mỗi lượt vẫn cần thao tác chủ động và quyền “Quan sát màn hình”.
+        </p>
+      </div>
+
+      <div class="vision-status-grid">
+        <article class="vision-status-card">
+          <span>Provider đang lưu</span>
+          <strong>{{ visionProviderStatus?.persistence.provider ?? "Chưa đọc được" }}</strong>
+          <p>{{ visionProviderStatus?.persistence.model || "Chưa chọn model" }}</p>
+        </article>
+        <article class="vision-status-card">
+          <span>API key</span>
+          <strong>
+            {{ visionProviderStatus?.persistence.apiKeyConfigured ? "Đã lưu mã hóa" : "Chưa lưu" }}
+          </strong>
+          <p>Renderer không thể đọc ngược key đã lưu.</p>
+        </article>
+        <article class="vision-status-card">
+          <span>Runtime</span>
+          <strong>
+            {{ visionProviderStatus?.runtime.available ? "Sẵn sàng" : "Chưa cấu hình" }}
+          </strong>
+          <p>{{ visionProviderStatus?.runtime.lastErrorCode || "Không có lỗi provider." }}</p>
+        </article>
+      </div>
+
+      <div class="vision-settings-grid">
+        <article class="vision-settings-card">
+          <p class="eyebrow">1 / CHỌN NGUỒN MODEL</p>
+          <h3>Provider đọc ảnh</h3>
+          <label for="visionProvider">Nguồn xử lý ảnh</label>
+          <select id="visionProvider" v-model="visionProvider" :disabled="visionBusy">
+            <option value="ollama_cloud">Ollama Cloud — không dùng VRAM máy</option>
+            <option value="ollama_local">Ollama local — riêng tư, dùng GPU máy</option>
+          </select>
+
+          <template v-if="visionProvider === 'ollama_cloud'">
+            <label for="visionApiKey">Ollama Cloud API key</label>
+            <input
+              id="visionApiKey"
+              v-model="visionApiKey"
+              type="password"
+              autocomplete="off"
+              maxlength="4096"
+              :disabled="visionBusy"
+              :placeholder="visionProviderStatus?.persistence.apiKeyConfigured
+                ? 'Để trống để tiếp tục dùng key đã mã hóa'
+                : 'Dán API key Ollama Cloud'"
+            >
+            <p class="vision-help">
+              Khi bấm Áp dụng, Electron mã hóa key bằng <code>safeStorage</code>
+              của Windows trong thư mục ứng dụng. Key không vào Git, log,
+              bộ nhớ web hay response trả về renderer.
+            </p>
+          </template>
+          <p v-else class="vision-help">
+            Hina quét Ollama tại <code>127.0.0.1:11434</code>, dùng
+            <code>/api/show</code> để xác nhận capability <code>vision</code> và
+            chỉ nhận model tối đa khoảng 4B/5 GB.
+          </p>
+
+          <button
+            class="primary"
+            type="button"
+            :disabled="visionBusy"
+            @click="discoverVisionModels"
+          >
+            {{ visionBusy ? "Đang kiểm tra…" : "Đọc danh sách model vision" }}
+          </button>
+        </article>
+
+        <article class="vision-settings-card">
+          <p class="eyebrow">2 / CHỌN MODEL</p>
+          <h3>Model Hina sẽ dùng để nhìn</h3>
+          <label for="visionModel">Model có capability vision</label>
+          <select
+            id="visionModel"
+            v-model="visionModel"
+            :disabled="visionBusy || visionModels.length === 0"
+          >
+            <option v-if="visionModels.length === 0" value="">
+              Hãy đọc danh sách model trước
+            </option>
+            <option
+              v-for="model in visionModels"
+              :key="model.name"
+              :value="model.name"
+            >
+              {{ model.name }} · {{ model.parameterSize || "Cloud" }} ·
+              {{ formatVisionModelSize(model.sizeBytes) }}
+            </option>
+          </select>
+
+          <div v-if="visionModel" class="vision-model-detail">
+            <template v-for="model in visionModels" :key="`detail-${model.name}`">
+              <div v-if="model.name === visionModel">
+                <span>Tham số</span><strong>{{ model.parameterSize || "Cloud" }}</strong>
+                <span>Dung lượng</span><strong>{{ formatVisionModelSize(model.sizeBytes) }}</strong>
+                <span>VRAM máy</span><strong>{{ model.localGpuUsed ? "Có" : "Không" }}</strong>
+                <span>Capability</span><strong>{{ model.capabilities.join(", ") }}</strong>
+              </div>
+            </template>
+          </div>
+
+          <div class="button-row">
+            <button
+              class="primary"
+              type="button"
+              :disabled="visionBusy || !visionModel"
+              @click="applyVisionProvider"
+            >
+              Áp dụng và lưu lâu dài
+            </button>
+            <button
+              type="button"
+              :disabled="visionBusy || !visionProviderStatus?.persistence.apiKeyConfigured"
+              @click="clearVisionProviderKey"
+            >
+              Xóa API key đã lưu
+            </button>
+            <button type="button" :disabled="visionBusy" @click="refreshVisionProviderStatus">
+              Làm mới trạng thái
+            </button>
+          </div>
+        </article>
+      </div>
+
+      <div class="vision-message" role="status">
+        <strong>Trạng thái cấu hình</strong>
+        <span>{{ visionMessage || "Hãy chọn provider, đọc danh sách model rồi bấm Áp dụng." }}</span>
+      </div>
+
+      <aside class="vision-privacy-note">
+        <strong>Khi nào nên chọn gì?</strong>
+        Chọn Cloud nếu cần chất lượng đọc ảnh tốt mà không tăng VRAM; ảnh được gửi
+        tới Ollama Cloud ở đúng lượt bạn yêu cầu. Chọn local nếu ảnh không được rời
+        máy; đổi lại model vision sẽ dùng GPU và được scheduler unload sau lượt đọc.
+        OCR local vẫn là lớp riêng và kết quả ảnh luôn bị coi là dữ liệu không đáng
+        tin, không tự điều khiển game.
       </aside>
     </section>
 

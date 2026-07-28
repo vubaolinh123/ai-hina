@@ -1,0 +1,92 @@
+{
+  "schema_version": "1.0",
+  "manifest_id": "hina.brain.qwen3-vl-8b-thinking-q4-k-m.v1",
+  "artifact_kind": "ollama_gguf_model_weights_configuration_tokenizer_and_vision_projector",
+  "model_id": "Qwen/Qwen3-VL-8B-Thinking",
+  "source_url": "https://huggingface.co/Qwen/Qwen3-VL-8B-Thinking",
+  "revision": "92f3c4b4feadd3a016ef468d103bb5f58b2a2c6b",
+  "ollama_source_url": "https://ollama.com/library/qwen3-vl:8b-thinking-q4_K_M",
+  "observed_at": "2026-07-28",
+  "distribution": {
+    "kind": "ollama_tag",
+    "locator": "qwen3-vl:8b-thinking-q4_K_M",
+    "manifest_digest": "sha256:901cae73216286ea8c5aba8b46d307ff7188f737285ec500c795a12f05225d28",
+    "reported_size_bytes": 6140415879,
+    "weight_blob": {
+      "size_bytes": 6140392576,
+      "sha256": "ed12a4674d727a74ac4816c906094ea9d3119fbea46ca93288c3ce4ffbe38c55"
+    },
+    "format": "gguf",
+    "family": "qwen3vl",
+    "parameter_size": "8.8B",
+    "quantization": "Q4_K_M",
+    "declared_context_length": 262144
+  },
+  "licenses": {
+    "code_spdx": "Apache-2.0",
+    "weights_spdx": "Apache-2.0",
+    "license_url": "https://github.com/QwenLM/Qwen3-VL/blob/main/LICENSE",
+    "commercial_use_allowed_by_declared_license": true,
+    "redistribution_requires_separate_license_review": true
+  },
+  "lineage": {
+    "edition": "Thinking",
+    "declared_modalities": [
+      "text",
+      "image"
+    ],
+    "owner_data_included_in_weights": false,
+    "runtime_input_training": false,
+    "note": "No Qwen source file, prompt corpus or model weight is copied into Git. Ollama owns the local cache outside the repository."
+  },
+  "runtime": {
+    "roles": [
+      "text_brain"
+    ],
+    "single_text_brain_weight_policy": true,
+    "screen_vision_provider": "separate_perception_provider",
+    "second_instruct_weight_loaded": false,
+    "simple_text_path": "raw ChatML prompt with a pre-closed private think block on the same Thinking checkpoint",
+    "complex_text_path": "bounded hidden thinking for classifier-selected complex questions; reasoning is never exposed to the renderer",
+    "reasoning_router": "deterministic request classifier",
+    "runtime_context_tokens": 8192,
+    "fast_output_tokens": 192,
+    "thinking_output_tokens": 768,
+    "provider_timeout_seconds": 9,
+    "admission_timeout_seconds": 1,
+    "default_turn_deadline_seconds": 10,
+    "requested_gpu_layers": 999,
+    "keep_alive": 0,
+    "scheduler_reservation_vram_mib": 8192,
+    "scheduler_minimum_headroom_mib": 2048
+  },
+  "measured_on_owner_gpu": {
+    "gpu": "NVIDIA GeForce RTX 5070 Ti 16 GB",
+    "physical_vram_total_mib": 16303,
+    "ambient_baseline_range_mib": [
+      2211,
+      2628
+    ],
+    "simple_text_seconds": 2.939,
+    "simple_text_peak_total_vram_mib": 9975,
+    "complex_text_seconds": 6.16,
+    "complex_text_peak_total_vram_mib": 9869,
+    "routine_vision_seconds": 4.363,
+    "routine_vision_peak_total_vram_mib": 9805,
+    "routine_vision_evidence_status": "historical_pre_provider_split_only",
+    "maximum_observed_total_vram_mib": 9975,
+    "minimum_observed_free_vram_mib": 6328,
+    "all_requests_full_gpu_offload_requested": true
+  },
+  "status": {
+    "download_authorized_by_owner": true,
+    "local_owner_testing_ready": true,
+    "default_text_brain": true,
+    "active_screen_vision_provider": false,
+    "latency_gate_under_10_seconds_passed": true,
+    "fourteen_gib_total_vram_ceiling_passed": true,
+    "quality_promoted": false,
+    "production_ready": false,
+    "requires_owner_application_testing": true
+  }
+}

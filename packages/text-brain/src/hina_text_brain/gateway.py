@@ -10,6 +10,9 @@ from .providers import LocalHttpChatProvider, ProviderHealth
 from .resource import LocalResourceRequest, LocalResourceScheduler
 
 
+_ADMISSION_TIMEOUT_SECONDS = 1.0
+
+
 class ChatProvider(Protocol):
     async def health(self) -> ProviderHealth: ...
 
@@ -85,7 +88,10 @@ class ModelGateway:
                         ttl_seconds=self.config.request_timeout_seconds + 10,
                         preemptible=True,
                     ),
-                    wait_timeout_seconds=min(5.0, self.config.health_timeout_seconds),
+                    wait_timeout_seconds=min(
+                        _ADMISSION_TIMEOUT_SECONDS,
+                        self.config.health_timeout_seconds,
+                    ),
                     on_preempt=self.provider.unload,
                 )
                 try:
@@ -133,7 +139,10 @@ class ModelGateway:
                         ttl_seconds=self.config.request_timeout_seconds + 10,
                         preemptible=True,
                     ),
-                    wait_timeout_seconds=min(5.0, self.config.health_timeout_seconds),
+                    wait_timeout_seconds=min(
+                        _ADMISSION_TIMEOUT_SECONDS,
+                        self.config.health_timeout_seconds,
+                    ),
                     on_preempt=self.provider.unload,
                 )
                 try:

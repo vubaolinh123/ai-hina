@@ -63,9 +63,33 @@ test("preload exposes named methods and never exposes raw ipcRenderer", () => {
     "triggerVTubeStudioHotkey",
     "moveVTubeStudioModel",
     "getSpoutStatus",
+    "getVisionProviderStatus",
+    "discoverVisionModels",
+    "configureVisionProvider",
+    "clearVisionApiKey",
   ]) {
     assert.match(preload, new RegExp(`${method}:`));
   }
+});
+
+test("Ollama Cloud vision key stays behind OS-encrypted operator IPC", () => {
+  const main = read("electron/main.ts");
+  const preload = read("electron/preload.ts");
+  const client = read("electron/control-client.ts");
+  const renderer = read("src/App.vue");
+
+  assert.match(main, /safeStorage\.isEncryptionAvailable\(\)/);
+  assert.match(main, /safeStorage\.encryptString/);
+  assert.match(main, /safeStorage\.decryptString/);
+  assert.match(main, /hina-vision-provider\.v1\.json/);
+  assert.match(main, /E_DESKTOP_VISION_AUTHORITY: operator window required/);
+  assert.match(main, /rendererCanReadStoredKey:\s*false/);
+  assert.doesNotMatch(preload, /decryptString|encryptedApiKey/);
+  assert.match(client, /https?:/);
+  assert.match(client, /\/v1\/perception\/vision\/configure/);
+  assert.match(renderer, /type="password"/);
+  assert.match(renderer, /autocomplete="off"/);
+  assert.doesNotMatch(renderer, /localStorage|sessionStorage/);
 });
 
 test("Vue renderer has no direct network, Electron, Node or storage access", () => {

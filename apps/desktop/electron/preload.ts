@@ -26,6 +26,10 @@ const CHANNELS = Object.freeze({
   vtubeHotkey: "hina:vtube:hotkey",
   vtubeMove: "hina:vtube:move",
   spoutStatus: "hina:spout:status",
+  visionStatus: "hina:vision:status",
+  visionDiscover: "hina:vision:discover",
+  visionConfigure: "hina:vision:configure",
+  visionClearKey: "hina:vision:clear-key",
 });
 
 const hinaDesktop = Object.freeze({
@@ -70,6 +74,12 @@ const hinaDesktop = Object.freeze({
   moveVTubeStudioModel: (preset: "chat" | "screen" | "react") =>
     ipcRenderer.invoke(CHANNELS.vtubeMove, preset),
   getSpoutStatus: () => ipcRenderer.invoke(CHANNELS.spoutStatus),
+  getVisionProviderStatus: () => ipcRenderer.invoke(CHANNELS.visionStatus),
+  discoverVisionModels: (input: unknown) =>
+    ipcRenderer.invoke(CHANNELS.visionDiscover, input),
+  configureVisionProvider: (input: unknown) =>
+    ipcRenderer.invoke(CHANNELS.visionConfigure, input),
+  clearVisionApiKey: () => ipcRenderer.invoke(CHANNELS.visionClearKey),
 });
 
 contextBridge.exposeInMainWorld("hinaDesktop", hinaDesktop);

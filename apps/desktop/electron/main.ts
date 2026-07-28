@@ -2,6 +2,7 @@ import {
   app,
   BrowserWindow,
   ipcMain,
+  safeStorage,
   screen,
   session,
   type IpcMainInvokeEvent,
@@ -16,6 +17,13 @@ import {
   requestChatTurn,
   requestSpeechSynthesis,
   requestSpeechTranscription,
+  requestVisionConfigure,
+  requestVisionDisable,
+  requestVisionModelDiscovery,
+  requestVisionStatus,
+  validateVisionApiKey,
+  validateVisionModel,
+  validateVisionProvider,
   validateAvatarCue,
   validateSafetyControl,
 } from "./control-client";
@@ -39,6 +47,12 @@ import {
   SpoutBridge,
   type SpoutBridgeStatus,
 } from "./spout-bridge";
+import {
+  VISION_PROVIDER_STATE_MAX_BYTES,
+  parseVisionProviderState,
+  serializeVisionProviderState,
+  type PersistedVisionProviderState,
+} from "./vision-provider-state";
 
 const CHANNELS = Object.freeze({
   windowMode: "hina:window:mode",
@@ -66,11 +80,16 @@ const CHANNELS = Object.freeze({
   vtubeHotkey: "hina:vtube:hotkey",
   vtubeMove: "hina:vtube:move",
   spoutStatus: "hina:spout:status",
+  visionStatus: "hina:vision:status",
+  visionDiscover: "hina:vision:discover",
+  visionConfigure: "hina:vision:configure",
+  visionClearKey: "hina:vision:clear-key",
 });
 
 const WIDGET_SIZE: Size = Object.freeze({ width: 440, height: 620 });
 const WIDGET_STATE_FILENAME = "hina-widget-state.v1.json";
 const VTS_TOKEN_STATE_FILENAME = "hina-vtube-studio-token.v1.json";
+const VISION_PROVIDER_STATE_FILENAME = "hina-vision-provider.v1.json";
 
 let mainWindow: BrowserWindow | null = null;
 let widgetWindow: BrowserWindow | null = null;
@@ -81,6 +100,7 @@ let widgetHoverInside = false;
 let vtubeStudioClient: VTubeStudioClient | null = null;
 let spoutBridge: SpoutBridge | null = null;
 let shutdownPending = false;
+let visionRestoreTimer: NodeJS.Timeout | null = null;
 
 type DesktopWindowMode = "operator" | "widget";
 type WidgetControlAction = "show" | "hide" | "reset_position";
@@ -107,6 +127,141 @@ function widgetStatePath(): string {
 
 function vtubeStudioTokenPath(): string {
   return join(app.getPath("userData"), VTS_TOKEN_STATE_FILENAME);
+}
+
+function visionProviderStatePath(): string {
+  return join(app.getPath("userData"), VISION_PROVIDER_STATE_FILENAME);
+}
+
+type LoadedVisionProviderState = {
+  persisted: PersistedVisionProviderState;
+  apiKey: string | null;
+};
+
+async function loadVisionProviderState(): Promise<LoadedVisionProviderState> {
+  let raw: string;
+  try {
+    const path = visionProviderStatePath();
+    const details = await stat(path);
+    if (details.size > VISION_PROVIDER_STATE_MAX_BYTES) {
+      throw new Error("E_DESKTOP_VISION_STATE: persisted state is oversized");
+    }
+    raw = await readFile(path, "utf8");
+  } catch (error) {
+    if (
+      error
+      && typeof error === "object"
+      && "code" in error
+      && error.code === "ENOENT"
+    ) {
+      return {
+        persisted: {
+          schemaVersion: 1,
+          provider: "disabled",
+          model: null,
+          encryptedApiKey: null,
+        },
+        apiKey: null,
+      };
+    }
+    throw new Error("E_DESKTOP_VISION_STATE: cannot read persisted provider state");
+  }
+  const persisted = parseVisionProviderState(raw);
+  if (!persisted) {
+    throw new Error("E_DESKTOP_VISION_STATE: persisted provider state is invalid");
+  }
+  let apiKey: string | null = null;
+  if (persisted.encryptedApiKey !== null) {
+    if (!safeStorage.isEncryptionAvailable()) {
+      throw new Error("E_DESKTOP_VISION_ENCRYPTION: OS secret storage is unavailable");
+    }
+    try {
+      apiKey = validateVisionApiKey(
+        safeStorage.decryptString(
+          Buffer.from(persisted.encryptedApiKey, "base64"),
+        ),
+      );
+    } catch {
+      throw new Error("E_DESKTOP_VISION_ENCRYPTION: stored API key cannot be decrypted");
+    }
+  }
+  return { persisted, apiKey };
+}
+
+async function saveVisionProviderState(
+  provider: "ollama_local" | "ollama_cloud",
+  model: string,
+  apiKey: string | null,
+  previousEncryptedKey: string | null,
+): Promise<void> {
+  let encryptedApiKey = previousEncryptedKey;
+  if (apiKey !== null) {
+    if (!safeStorage.isEncryptionAvailable()) {
+      throw new Error("E_DESKTOP_VISION_ENCRYPTION: OS secret storage is unavailable");
+    }
+    encryptedApiKey = safeStorage.encryptString(
+      validateVisionApiKey(apiKey),
+    ).toString("base64");
+  }
+  const state: PersistedVisionProviderState = {
+    schemaVersion: 1,
+    provider,
+    model: validateVisionModel(model),
+    encryptedApiKey,
+  };
+  const path = visionProviderStatePath();
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, serializeVisionProviderState(state), {
+    encoding: "utf8",
+    mode: 0o600,
+  });
+}
+
+async function clearPersistedVisionApiKey(): Promise<void> {
+  const current = await loadVisionProviderState();
+  const state: PersistedVisionProviderState = current.persisted.provider === "ollama_local"
+    ? {
+      ...current.persisted,
+      encryptedApiKey: null,
+    }
+    : {
+      schemaVersion: 1,
+      provider: "disabled",
+      model: null,
+      encryptedApiKey: null,
+    };
+  const path = visionProviderStatePath();
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, serializeVisionProviderState(state), {
+    encoding: "utf8",
+    mode: 0o600,
+  });
+}
+
+async function syncPersistedVisionProvider(): Promise<Record<string, unknown> | null> {
+  const state = await loadVisionProviderState();
+  if (state.persisted.provider === "disabled" || state.persisted.model === null) {
+    return null;
+  }
+  return requestVisionConfigure(
+    state.persisted.provider,
+    state.persisted.model,
+    state.apiKey,
+  );
+}
+
+function scheduleVisionProviderRestore(attempt = 0): void {
+  if (visionRestoreTimer || shutdownPending) return;
+  visionRestoreTimer = setTimeout(() => {
+    visionRestoreTimer = null;
+    void syncPersistedVisionProvider().catch((error) => {
+      const message = error instanceof Error ? error.message : "E_DESKTOP_VISION_RESTORE";
+      console.warn(`[hina-desktop] ${message.split(":")[0]}`);
+      if (attempt < 7 && message.includes("E_DESKTOP_CONTROL_OFFLINE")) {
+        scheduleVisionProviderRestore(attempt + 1);
+      }
+    });
+  }, attempt === 0 ? 0 : Math.min(1_000 * 2 ** (attempt - 1), 30_000));
 }
 
 function getVTubeStudioClient(): VTubeStudioClient {
@@ -442,6 +597,140 @@ function registerIpcHandlers(): void {
     assertTrustedSender(event);
     return requestSpeechSynthesis(payload);
   });
+  ipcMain.handle(CHANNELS.visionStatus, async (event) => {
+    if (assertTrustedSender(event) !== "operator") {
+      throw new Error("E_DESKTOP_VISION_AUTHORITY: operator window required");
+    }
+    const stored = await loadVisionProviderState();
+    let runtimeStatus = await requestVisionStatus();
+    const runtimeVision = runtimeStatus.vision;
+    if (
+      stored.persisted.provider !== "disabled"
+      && stored.persisted.model !== null
+      && (
+        !runtimeVision
+        || typeof runtimeVision !== "object"
+        || (runtimeVision as Record<string, unknown>).provider !== stored.persisted.provider
+        || (runtimeVision as Record<string, unknown>).model !== stored.persisted.model
+      )
+    ) {
+      await syncPersistedVisionProvider();
+      runtimeStatus = await requestVisionStatus();
+    }
+    return {
+      runtime: runtimeStatus.vision,
+      persistence: {
+        provider: stored.persisted.provider,
+        model: stored.persisted.model,
+        apiKeyConfigured: stored.apiKey !== null,
+        encryptedWithOsStorage: (
+          stored.persisted.encryptedApiKey !== null
+          && safeStorage.isEncryptionAvailable()
+        ),
+        rendererCanReadStoredKey: false,
+      },
+    };
+  });
+  ipcMain.handle(CHANNELS.visionDiscover, async (event, input: unknown) => {
+    if (assertTrustedSender(event) !== "operator") {
+      throw new Error("E_DESKTOP_VISION_AUTHORITY: operator window required");
+    }
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      throw new Error("E_DESKTOP_VISION_CONFIG: discovery input is invalid");
+    }
+    const record = input as Record<string, unknown>;
+    if (
+      Object.keys(record).some((key) => !["provider", "apiKey"].includes(key))
+      || !("provider" in record)
+    ) {
+      throw new Error("E_DESKTOP_VISION_CONFIG: discovery fields are invalid");
+    }
+    const provider = validateVisionProvider(record.provider);
+    const stored = await loadVisionProviderState();
+    const supplied = typeof record.apiKey === "string" && record.apiKey.length > 0
+      ? validateVisionApiKey(record.apiKey)
+      : null;
+    const apiKey = provider === "ollama_cloud"
+      ? supplied ?? stored.apiKey
+      : null;
+    return requestVisionModelDiscovery(provider, apiKey);
+  });
+  ipcMain.handle(CHANNELS.visionConfigure, async (event, input: unknown) => {
+    if (assertTrustedSender(event) !== "operator") {
+      throw new Error("E_DESKTOP_VISION_AUTHORITY: operator window required");
+    }
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      throw new Error("E_DESKTOP_VISION_CONFIG: configuration input is invalid");
+    }
+    const record = input as Record<string, unknown>;
+    if (
+      Object.keys(record).some((key) => !["provider", "model", "apiKey"].includes(key))
+      || !("provider" in record)
+      || !("model" in record)
+    ) {
+      throw new Error("E_DESKTOP_VISION_CONFIG: configuration fields are invalid");
+    }
+    const provider = validateVisionProvider(record.provider);
+    const model = validateVisionModel(record.model);
+    const stored = await loadVisionProviderState();
+    const supplied = typeof record.apiKey === "string" && record.apiKey.length > 0
+      ? validateVisionApiKey(record.apiKey)
+      : null;
+    const apiKey = provider === "ollama_cloud"
+      ? supplied ?? stored.apiKey
+      : null;
+    if (
+      provider === "ollama_cloud"
+      && !safeStorage.isEncryptionAvailable()
+    ) {
+      throw new Error("E_DESKTOP_VISION_ENCRYPTION: OS secret storage is unavailable");
+    }
+    const runtime = await requestVisionConfigure(provider, model, apiKey);
+    await saveVisionProviderState(
+      provider,
+      model,
+      provider === "ollama_cloud" ? supplied : null,
+      stored.persisted.encryptedApiKey,
+    );
+    return {
+      runtime,
+      persistence: {
+        provider,
+        model,
+        apiKeyConfigured: apiKey !== null,
+        encryptedWithOsStorage: apiKey !== null,
+        rendererCanReadStoredKey: false,
+      },
+    };
+  });
+  ipcMain.handle(CHANNELS.visionClearKey, async (event) => {
+    if (assertTrustedSender(event) !== "operator") {
+      throw new Error("E_DESKTOP_VISION_AUTHORITY: operator window required");
+    }
+    const stored = await loadVisionProviderState();
+    const runtimePreserved = stored.persisted.provider === "ollama_local";
+    let runtimeDisabled = false;
+    if (!runtimePreserved) {
+      try {
+        await requestVisionDisable();
+        runtimeDisabled = true;
+      } catch (error) {
+        if (
+          !(error instanceof Error)
+          || !error.message.includes("E_DESKTOP_CONTROL_OFFLINE")
+        ) {
+          throw error;
+        }
+      }
+    }
+    await clearPersistedVisionApiKey();
+    return {
+      apiKeyConfigured: false,
+      persisted: false,
+      runtimeDisabled,
+      runtimePreserved,
+    };
+  });
   ipcMain.handle(CHANNELS.vtubeStatus, (event) => {
     if (assertTrustedSender(event) !== "operator") {
       throw new Error("E_VTS_AUTHORITY: operator window required");
@@ -689,8 +978,16 @@ async function createWindows(): Promise<void> {
               window.hinaDesktop.getAvatarStatus(),
               window.hinaDesktop.getWidgetStatus(),
               vrmReady,
-              performance
-            ]).then(async ([health, avatar, widgetStatus, vrmLoaded, performance]) => {
+              performance,
+              window.hinaDesktop.getVisionProviderStatus()
+            ]).then(async ([
+              health,
+              avatar,
+              widgetStatus,
+              vrmLoaded,
+              performance,
+              visionProvider
+            ]) => {
               const presentation = document.documentElement.dataset.avatarPresentation;
               const loadedTextureCount = Number(
                 document.documentElement.dataset.avatarTextureCount
@@ -761,6 +1058,7 @@ async function createWindows(): Promise<void> {
                 loadedTextureCount,
                 styledMaterialCount,
                 performance,
+                visionProvider,
                 recovery: {
                   webglContextLost: true,
                   svgFallbackObserved: true,
@@ -828,6 +1126,19 @@ async function createWindows(): Promise<void> {
           || !Number.isFinite(snapshot.performance.sampleCount)
           || snapshot.performance.sampleCount < 30
           || snapshot.performance.sampleCount > 600
+          || !("visionProvider" in snapshot)
+          || !snapshot.visionProvider
+          || typeof snapshot.visionProvider !== "object"
+          || !("persistence" in snapshot.visionProvider)
+          || !snapshot.visionProvider.persistence
+          || typeof snapshot.visionProvider.persistence !== "object"
+          || !("provider" in snapshot.visionProvider.persistence)
+          || typeof snapshot.visionProvider.persistence.provider !== "string"
+          || !("rendererCanReadStoredKey" in snapshot.visionProvider.persistence)
+          || snapshot.visionProvider.persistence.rendererCanReadStoredKey !== false
+          || !("runtime" in snapshot.visionProvider)
+          || !snapshot.visionProvider.runtime
+          || typeof snapshot.visionProvider.runtime !== "object"
           || !("recovery" in snapshot)
           || !snapshot.recovery
           || typeof snapshot.recovery !== "object"
@@ -1186,6 +1497,11 @@ async function createWindows(): Promise<void> {
           loadedTextureCount: snapshot.loadedTextureCount,
           styledMaterialCount: snapshot.styledMaterialCount,
           performance: snapshot.performance,
+          visionProvider: {
+            provider: snapshot.visionProvider.persistence.provider,
+            apiKeyReadableByRenderer:
+              snapshot.visionProvider.persistence.rendererCanReadStoredKey,
+          },
           recovery: snapshot.recovery,
           widget: {
             mode: widgetSnapshot.mode,
@@ -1231,6 +1547,10 @@ async function createWindows(): Promise<void> {
 
 app.on("before-quit", (event) => {
   stopWidgetHoverWatcher();
+  if (visionRestoreTimer) {
+    clearTimeout(visionRestoreTimer);
+    visionRestoreTimer = null;
+  }
   if (vtubeStudioClient) {
     void vtubeStudioClient.disconnect();
   }
@@ -1255,6 +1575,7 @@ app.whenReady().then(async () => {
     );
   }
   await createWindows();
+  scheduleVisionProviderRestore();
 });
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) {

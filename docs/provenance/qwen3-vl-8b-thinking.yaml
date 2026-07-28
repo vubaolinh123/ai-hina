@@ -1,0 +1,27 @@
+name: qwen3-vl-8b-thinking
+upstream_url: https://github.com/QwenLM/Qwen3-VL
+model_url: https://huggingface.co/Qwen/Qwen3-VL-8B-Thinking
+revision: 92f3c4b4feadd3a016ef468d103bb5f58b2a2c6b
+distribution:
+  kind: ollama-tag
+  locator: qwen3-vl:8b-thinking-q4_K_M
+  source_url: https://ollama.com/library/qwen3-vl:8b-thinking-q4_K_M
+  manifest_digest: sha256:901cae73216286ea8c5aba8b46d307ff7188f737285ec500c795a12f05225d28
+  weight_blob_sha256: ed12a4674d727a74ac4816c906094ea9d3119fbea46ca93288c3ce4ffbe38c55
+  quantization: Q4_K_M
+license_spdx: Apache-2.0
+model_weight_license_spdx: Apache-2.0
+copyright: Copyright Qwen Team and Qwen3-VL contributors
+imported_at: 2026-07-28
+original_paths: []
+destination_paths:
+  - packages/text-brain/src/hina_text_brain/config.py
+  - packages/text-brain/src/hina_text_brain/providers.py
+  - tools/dev/Start-HinaModelProvider.ps1
+modifications:
+  - "No upstream source, prompts or model weights were copied into Git; Hina calls the pinned local Ollama distribution through its HTTP API."
+  - "One Thinking checkpoint serves text and explicit image analysis. Deterministic classifiers send simple text and routine image description through same-weight pre-closed-thought paths, while complex text/visual questions use bounded hidden thinking."
+  - "Hina requests full GPU offload, an 8,192-token runtime context, bounded output, a default 10-second admission-plus-inference deadline, keep_alive=0 and an 8,192 MiB scheduler reservation."
+model_manifest: ml/models/manifests/qwen3-vl-8b-thinking-q4-k-m.v1.json
+reviewed_by: primary_orchestrator
+approved_by: primary_orchestrator_for_local_owner_testing

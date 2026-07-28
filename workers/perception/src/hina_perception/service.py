@@ -7,12 +7,14 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 from uuid import UUID, uuid4
 
+from .archive import SessionSnapshotArchive
 from .config import PerceptionConfig
 from .dedup import SnapshotRateLimiter, dhash64, hamming_distance
 from .errors import PerceptionError
 from .observation import OBSERVATION_KIND, OBSERVATION_TRUST_LEVEL, FreshnessLedger
 from .ocr import OcrProvider, unconfigured_ocr_status
 from .png import summarize_png
+from .vision import OllamaVisionProvider
 
 
 _SOURCE = re.compile(r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$")
@@ -23,22 +25,21 @@ VisionAnalyzeCallback = Callable[[bytes, str], Awaitable[str]]
 _MAX_VISION_QUESTION_CHARS = 500
 _MAX_VISION_SUMMARY_CHARS = 2_000
 _VISION_PROMPT = (
-    "Bạn là bộ phận thị giác cục bộ của Hina. Hãy mô tả ngắn gọn bằng tiếng Việt "
-    "những gì thực sự nhìn thấy trong ảnh. Phân biệt rõ điều chắc chắn và điều "
-    "không đọc được; không suy đoán danh tính, dữ liệu ngoài ảnh hay hành động cần "
-    "thực thi. Ưu tiên chữ quan trọng, trạng thái giao diện và chi tiết hữu ích."
+    "Quan sát ảnh và trả lời bằng tiếng Việt trong tối đa 3 câu, 80 từ. Dùng "
+    "plain text, không markdown. Chỉ nêu nhân vật, chữ quan trọng và trạng thái "
+    "giao diện thực sự nhìn thấy; điều không chắc phải nói là không đọc rõ. "
+    "Không suy đoán danh tính, dữ liệu ngoài ảnh hay hành động cần thực thi."
 )
 
 
 class PerceptionService:
     """Owner-consented snapshot ingestion with TTL freshness and fail-closed policy.
 
-    Every snapshot is decoded in memory, reduced to renderer-safe evidence and
-    immediately discarded. M08-S2 can optionally ask the shared local model for
-    one bounded untrusted text summary before discarding the bytes. No pixel
-    data or file is retained or persisted, and nothing here can start a capture
-    on its own: each call needs an explicit owner action plus a live
-    safety-policy decision.
+    Every snapshot is decoded in memory and reduced to renderer-safe evidence.
+    M08-S4 retains a validated PNG only while an owner-started bounded archive
+    session is explicitly attached to that request. Normal capture still keeps
+    no pixels, and neither path can start capture on its own: each call needs an
+    explicit owner action plus a live safety-policy decision.
     """
 
     def __init__(
@@ -47,14 +48,24 @@ class PerceptionService:
         *,
         safety_evaluate: Callable[[dict[str, Any]], dict[str, Any]],
         vision_analyze: VisionAnalyzeCallback | None = None,
+        vision_provider: OllamaVisionProvider | None = None,
         ocr_provider: OcrProvider | None = None,
+        snapshot_archive: SessionSnapshotArchive | None = None,
         on_error: PerceptionErrorCallback | None = None,
         clock: Callable[[], float] | None = None,
     ) -> None:
         self.config = config
         self._evaluate = safety_evaluate
         self._vision_analyze = vision_analyze
+        self._vision_provider = vision_provider
         self._ocr_provider = ocr_provider
+        self._archive = snapshot_archive
+        if self._archive is None and config.archive_root is not None:
+            self._archive = SessionSnapshotArchive(
+                config.archive_root,
+                max_session_bytes=config.archive_max_session_bytes,
+                max_snapshots=config.archive_max_snapshots,
+            )
         self.on_error = on_error
         self._clock = clock or time.monotonic
         self._ledger = FreshnessLedger(
@@ -72,6 +83,8 @@ class PerceptionService:
 
     async def status(self) -> dict[str, Any]:
         counts = self._ledger.counts()
+        archive_status = await self._archive_status()
+        vision_status = await self._vision_status()
         return {
             "schemaVersion": "1.0",
             "available": not self._closed,
@@ -104,18 +117,18 @@ class PerceptionService:
             },
             "ocr": await self._ocr_status(),
             "vision": {
-                "available": self._vision_analyze is not None,
-                "state": "ready" if self._vision_analyze is not None else "unavailable",
-                "provider": "shared-local-model" if self._vision_analyze is not None else "none",
+                **vision_status,
                 "mode": "explicit-owner-request",
                 "automatic": False,
                 "decisionSupportEligible": False,
                 "maxSummaryCharacters": _MAX_VISION_SUMMARY_CHARS,
             },
             "retention": {
-                "snapshotPersistence": False,
-                "pixelDataRetained": False,
-                "rawImageRetained": False,
+                "snapshotPersistence": archive_status["active"],
+                "pixelDataRetained": archive_status["active"],
+                "rawImageRetained": archive_status["active"],
+                "normalCapturePersistsPixels": False,
+                "archive": archive_status,
             },
         }
 
@@ -131,16 +144,20 @@ class PerceptionService:
         analyze_with_vlm: bool = False,
         vision_question: str | None = None,
         analyze_with_ocr: bool = False,
+        archive_session_id: str | None = None,
     ) -> dict[str, Any]:
         started = time.monotonic()
         _validate_uuid(correlation_id, "correlation ID")
         if session_id is not None:
             _validate_uuid(session_id, "session ID")
-        if _SOURCE.fullmatch(source) is None or source not in _ALLOWED_SOURCES:
-            raise PerceptionError(
-                "E_PERCEPTION_REQUEST",
-                "snapshot source must be an owner-controlled surface",
-            )
+        _validate_owner_source(source)
+        if archive_session_id is not None:
+            _validate_uuid(archive_session_id, "archive session ID")
+            if session_id is None:
+                raise PerceptionError(
+                    "E_PERCEPTION_REQUEST",
+                    "archived snapshots require an owner session ID",
+                )
         normalized_label = _sanitize_label(label)
         if not isinstance(analyze_with_vlm, bool):
             raise PerceptionError(
@@ -207,18 +224,30 @@ class PerceptionService:
                     "snapshot rate limit reached; wait before capturing again",
                     retryable=True,
                 )
+            archive = await self._archive_snapshot(
+                encoded,
+                owner_session_id=session_id,
+                archive_session_id=archive_session_id,
+            )
+            pixel_retention_state = (
+                "retained-in-owner-archive"
+                if archive is not None
+                else "not-retained"
+            )
             vision = await self._analyze_vision(
                 encoded,
                 requested=analyze_with_vlm,
                 question=normalized_question,
                 correlation_id=correlation_id,
                 session_id=session_id,
+                pixel_retention_state=pixel_retention_state,
             )
             ocr = await self._analyze_ocr(
                 encoded,
                 requested=analyze_with_ocr,
                 correlation_id=correlation_id,
                 session_id=session_id,
+                pixel_retention_state=pixel_retention_state,
             )
             observation = self._ledger.add(
                 str(uuid4()),
@@ -238,6 +267,7 @@ class PerceptionService:
                     },
                     "ocr": ocr,
                     "vision": vision,
+                    "archive": archive,
                 },
                 snapshot_hash,
             )
@@ -247,10 +277,21 @@ class PerceptionService:
                 "sessionId": session_id,
                 "policy": decision,
                 "observation": observation,
+                "archive": archive,
                 "processingMilliseconds": _elapsed_ms(started),
             }
         except PerceptionError as exc:
-            self._report_error(exc, correlation_id, session_id, len(encoded))
+            self._report_error(
+                exc,
+                correlation_id,
+                session_id,
+                len(encoded),
+                pixel_retention_state=(
+                    "archive-requested-unknown-after-failure"
+                    if archive_session_id is not None
+                    else "not-retained"
+                ),
+            )
             raise
         except Exception as exc:
             wrapped = PerceptionError(
@@ -258,8 +299,162 @@ class PerceptionService:
                 "unexpected snapshot processing failure",
                 retryable=True,
             )
-            self._report_error(wrapped, correlation_id, session_id, len(encoded))
+            self._report_error(
+                wrapped,
+                correlation_id,
+                session_id,
+                len(encoded),
+                pixel_retention_state=(
+                    "archive-requested-unknown-after-failure"
+                    if archive_session_id is not None
+                    else "not-retained"
+                ),
+            )
             raise wrapped from exc
+
+    async def start_archive(
+        self,
+        *,
+        correlation_id: str,
+        session_id: str,
+        source: str,
+        owner_confirmed: bool,
+    ) -> dict[str, Any]:
+        _validate_uuid(correlation_id, "correlation ID")
+        _validate_uuid(session_id, "session ID")
+        _validate_owner_source(source)
+        if not owner_confirmed:
+            raise PerceptionError(
+                "E_PERCEPTION_CONFIRMATION",
+                "starting image retention requires explicit owner confirmation",
+            )
+        if self._closed:
+            raise PerceptionError(
+                "E_PERCEPTION_UNAVAILABLE",
+                "perception service is closed",
+                retryable=True,
+            )
+        if self._archive is None:
+            raise PerceptionError(
+                "E_PERCEPTION_ARCHIVE_UNAVAILABLE",
+                "snapshot archive is unavailable in this runtime",
+            )
+        decision = self._policy_decision(
+            correlation_id=correlation_id,
+            session_id=session_id,
+            source=source,
+            owner_confirmed=owner_confirmed,
+        )
+        result = await self._archive.start(owner_session_id=session_id)
+        return {
+            **result,
+            "correlationId": correlation_id,
+            "sessionId": session_id,
+            "policy": decision,
+        }
+
+    async def stop_archive(
+        self,
+        *,
+        session_id: str,
+        archive_session_id: str,
+        source: str,
+    ) -> dict[str, Any]:
+        _validate_uuid(session_id, "session ID")
+        _validate_uuid(archive_session_id, "archive session ID")
+        _validate_owner_source(source)
+        if self._archive is None:
+            raise PerceptionError(
+                "E_PERCEPTION_ARCHIVE_UNAVAILABLE",
+                "snapshot archive is unavailable in this runtime",
+            )
+        # Stopping retention is intentionally available even when the feature
+        # flag or emergency state changes; safety controls must never trap the
+        # owner in an active capture-retention mode.
+        return await self._archive.stop(
+            owner_session_id=session_id,
+            archive_session_id=archive_session_id,
+        )
+
+    async def reanalyze_archive(
+        self,
+        *,
+        correlation_id: str,
+        session_id: str,
+        archive_session_id: str,
+        snapshot_id: str,
+        source: str,
+        owner_confirmed: bool,
+        vision_question: str | None,
+    ) -> dict[str, Any]:
+        _validate_uuid(correlation_id, "correlation ID")
+        _validate_uuid(session_id, "session ID")
+        _validate_uuid(archive_session_id, "archive session ID")
+        _validate_uuid(snapshot_id, "snapshot ID")
+        _validate_owner_source(source)
+        if not owner_confirmed:
+            raise PerceptionError(
+                "E_PERCEPTION_CONFIRMATION",
+                "historical image analysis requires explicit owner confirmation",
+            )
+        if self._closed:
+            raise PerceptionError(
+                "E_PERCEPTION_UNAVAILABLE",
+                "perception service is closed",
+                retryable=True,
+            )
+        if self._archive is None:
+            raise PerceptionError(
+                "E_PERCEPTION_ARCHIVE_UNAVAILABLE",
+                "snapshot archive is unavailable in this runtime",
+            )
+        question = _sanitize_vision_question(vision_question)
+        decision = self._policy_decision(
+            correlation_id=correlation_id,
+            session_id=session_id,
+            source=source,
+            owner_confirmed=owner_confirmed,
+        )
+        encoded, record = await self._archive.read(
+            owner_session_id=session_id,
+            archive_session_id=archive_session_id,
+            snapshot_id=snapshot_id,
+        )
+        # Revalidate bytes in case the owner edited/replaced a PNG on disk.
+        summary = summarize_png(
+            encoded,
+            max_bytes=self.config.max_snapshot_bytes,
+            max_dimension=self.config.max_dimension_px,
+            min_dimension=self.config.min_dimension_px,
+        )
+        vision = await self._analyze_vision(
+            encoded,
+            requested=True,
+            question=question,
+            correlation_id=correlation_id,
+            session_id=session_id,
+            pixel_retention_state="historical-owner-archive",
+        )
+        return {
+            "status": "analyzed",
+            "historical": True,
+            "currentObservation": False,
+            "decisionSupportEligible": False,
+            "correlationId": correlation_id,
+            "sessionId": session_id,
+            "policy": decision,
+            "archive": {
+                "archiveSessionId": archive_session_id,
+                **record,
+            },
+            "evidence": {
+                "sha256": hashlib.sha256(encoded).hexdigest(),
+                "bytes": len(encoded),
+                "width": summary.width,
+                "height": summary.height,
+            },
+            "vision": vision,
+        }
 
     async def observations(self) -> dict[str, Any]:
         fresh = self._ledger.fresh()
@@ -282,11 +477,123 @@ class PerceptionService:
         removed = self._ledger.clear()
         return {"status": "cleared", "removed": removed}
 
+    async def discover_vision_models(
+        self,
+        *,
+        provider: str,
+        api_key: str | None,
+        source: str,
+    ) -> dict[str, Any]:
+        _validate_owner_source(source)
+        if self._closed or self._vision_provider is None:
+            raise PerceptionError(
+                "E_PERCEPTION_VISION_UNAVAILABLE",
+                "configurable screen-reading provider is unavailable",
+            )
+        return await self._vision_provider.discover_models(
+            provider=provider,
+            api_key=api_key,
+        )
+
+    async def configure_vision_provider(
+        self,
+        *,
+        provider: str,
+        model: str,
+        api_key: str | None,
+        source: str,
+        owner_confirmed: bool,
+    ) -> dict[str, Any]:
+        _validate_owner_source(source)
+        if not owner_confirmed:
+            raise PerceptionError(
+                "E_PERCEPTION_CONFIRMATION",
+                "changing the screen-reading provider requires owner confirmation",
+            )
+        if self._closed or self._vision_provider is None:
+            raise PerceptionError(
+                "E_PERCEPTION_VISION_UNAVAILABLE",
+                "configurable screen-reading provider is unavailable",
+            )
+        return await self._vision_provider.configure(
+            provider=provider,
+            model=model,
+            api_key=api_key,
+        )
+
+    async def disable_vision_provider(
+        self,
+        *,
+        source: str,
+    ) -> dict[str, Any]:
+        _validate_owner_source(source)
+        if self._vision_provider is None:
+            return await self._vision_status()
+        return await self._vision_provider.disable()
+
     async def close(self) -> None:
         self._closed = True
         self._ledger.clear()
+        if self._archive is not None:
+            await self._archive.close()
         if self._ocr_provider is not None:
             await self._ocr_provider.close()
+        if self._vision_provider is not None:
+            await self._vision_provider.close()
+
+    async def _archive_status(self) -> dict[str, Any]:
+        if self._archive is None:
+            return {
+                "available": False,
+                "defaultEnabled": False,
+                "active": False,
+                "root": None,
+                "current": None,
+                "latest": None,
+                "storesOnly": "none",
+                "storesTextOrPrompts": False,
+                "manualCleanupRequired": False,
+            }
+        try:
+            return await self._archive.status()
+        except Exception:
+            return {
+                "available": False,
+                "defaultEnabled": False,
+                "active": False,
+                "root": str(self.config.archive_root) if self.config.archive_root else None,
+                "current": None,
+                "latest": None,
+                "storesOnly": "validated image/png",
+                "storesTextOrPrompts": False,
+                "manualCleanupRequired": True,
+                "errorCode": "E_PERCEPTION_ARCHIVE_STATUS",
+            }
+
+    async def _archive_snapshot(
+        self,
+        encoded: bytes,
+        *,
+        owner_session_id: str | None,
+        archive_session_id: str | None,
+    ) -> dict[str, Any] | None:
+        if archive_session_id is None:
+            return None
+        if owner_session_id is None:
+            raise PerceptionError(
+                "E_PERCEPTION_REQUEST",
+                "archived snapshots require an owner session ID",
+            )
+        if self._archive is None:
+            raise PerceptionError(
+                "E_PERCEPTION_ARCHIVE_UNAVAILABLE",
+                "snapshot archive is unavailable in this runtime",
+            )
+        return await self._archive.store(
+            encoded,
+            owner_session_id=owner_session_id,
+            archive_session_id=archive_session_id,
+        )
 
     def _policy_decision(
         self,
@@ -352,6 +659,8 @@ class PerceptionService:
         correlation_id: str,
         session_id: str | None,
         snapshot_bytes: int,
+        *,
+        pixel_retention_state: str = "not-retained",
     ) -> None:
         if self.on_error is None:
             return
@@ -362,6 +671,7 @@ class PerceptionService:
                     "correlationId": correlation_id,
                     "sessionId": session_id or "",
                     "snapshotBytes": str(snapshot_bytes),
+                    "pixelRetentionState": pixel_retention_state,
                 }
             )
         except Exception:
@@ -376,9 +686,12 @@ class PerceptionService:
         question: str | None,
         correlation_id: str,
         session_id: str | None,
+        pixel_retention_state: str,
     ) -> dict[str, Any]:
+        vision_status = await self._vision_status()
         base = {
-            "provider": "shared-local-model",
+            "provider": vision_status.get("provider", "none"),
+            "model": vision_status.get("model"),
             "requested": requested,
             "automatic": False,
             "decisionSupportEligible": False,
@@ -387,7 +700,7 @@ class PerceptionService:
         }
         if not requested:
             return {**base, "state": "not-requested", "summary": None}
-        if self._vision_analyze is None:
+        if self._vision_provider is None and self._vision_analyze is None:
             return {
                 **base,
                 "state": "unavailable",
@@ -398,26 +711,79 @@ class PerceptionService:
         if question is not None:
             prompt = f"{prompt}\nCâu hỏi của chủ máy: {question}"
         try:
-            result = await self._vision_analyze(encoded, prompt)
+            if self._vision_provider is not None:
+                result = await self._vision_provider.analyze(encoded, prompt)
+            else:
+                assert self._vision_analyze is not None
+                result = await self._vision_analyze(encoded, prompt)
             summary = _sanitize_vision_summary(result)
             return {**base, "state": "ready", "summary": summary}
         except Exception as exc:
-            model_code = getattr(exc, "code", "E_MODEL_UNAVAILABLE")
-            if not isinstance(model_code, str) or not model_code.startswith("E_MODEL_"):
-                model_code = "E_MODEL_UNAVAILABLE"
+            provider_code = getattr(exc, "code", "E_PERCEPTION_VISION_PROVIDER")
+            if (
+                not isinstance(provider_code, str)
+                or not (
+                    provider_code.startswith("E_MODEL_")
+                    or provider_code.startswith("E_PERCEPTION_VISION_")
+                )
+            ):
+                provider_code = "E_PERCEPTION_VISION_PROVIDER"
             error = PerceptionError(
                 "E_PERCEPTION_VISION",
-                "local image analysis failed; base snapshot evidence was preserved",
+                "screen image analysis failed; base snapshot evidence was preserved",
                 retryable=True,
             )
-            self._report_error(error, correlation_id, session_id, len(encoded))
+            self._report_error(
+                error,
+                correlation_id,
+                session_id,
+                len(encoded),
+                pixel_retention_state=pixel_retention_state,
+            )
             return {
                 **base,
                 "state": "error",
                 "summary": None,
                 "errorCode": "E_PERCEPTION_VISION",
-                "modelErrorCode": model_code,
+                "providerErrorCode": provider_code,
+                "modelErrorCode": (
+                    provider_code
+                    if provider_code.startswith("E_MODEL_")
+                    else None
+                ),
             }
+
+    async def _vision_status(self) -> dict[str, Any]:
+        if self._vision_provider is not None:
+            try:
+                status = await self._vision_provider.status()
+                if isinstance(status, dict):
+                    return status
+            except Exception:
+                pass
+            return {
+                "provider": "none",
+                "model": None,
+                "state": "error",
+                "available": False,
+                "apiKeyConfigured": False,
+                "lastErrorCode": "E_PERCEPTION_VISION_STATUS",
+            }
+        if self._vision_analyze is not None:
+            return {
+                "provider": "shared-local-model",
+                "model": None,
+                "state": "ready",
+                "available": True,
+                "apiKeyConfigured": False,
+            }
+        return {
+            "provider": "none",
+            "model": None,
+            "state": "unconfigured",
+            "available": False,
+            "apiKeyConfigured": False,
+        }
 
     async def _ocr_status(self) -> dict[str, Any]:
         if self._ocr_provider is None:
@@ -451,6 +817,7 @@ class PerceptionService:
         requested: bool,
         correlation_id: str,
         session_id: str | None,
+        pixel_retention_state: str,
     ) -> dict[str, Any]:
         base = {
             "provider": "rapidocr" if self._ocr_provider is not None else "none",
@@ -496,7 +863,13 @@ class PerceptionService:
                 "local GPU OCR failed; base snapshot evidence was preserved",
                 retryable=True,
             )
-            self._report_error(error, correlation_id, session_id, len(encoded))
+            self._report_error(
+                error,
+                correlation_id,
+                session_id,
+                len(encoded),
+                pixel_retention_state=pixel_retention_state,
+            )
             return {
                 **base,
                 "state": "error",
@@ -520,6 +893,18 @@ def _sanitize_label(label: str | None) -> str | None:
     if not cleaned:
         return None
     return cleaned[:120]
+
+
+def _validate_owner_source(source: str) -> None:
+    if (
+        not isinstance(source, str)
+        or _SOURCE.fullmatch(source) is None
+        or source not in _ALLOWED_SOURCES
+    ):
+        raise PerceptionError(
+            "E_PERCEPTION_REQUEST",
+            "perception request must come from an owner-controlled surface",
+        )
 
 
 def _sanitize_vision_question(question: str | None) -> str | None:

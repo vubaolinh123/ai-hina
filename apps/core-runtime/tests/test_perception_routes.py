@@ -29,6 +29,7 @@ from hina_safety import AuditTrail, CapabilityManifest, SafetyPolicyService  # n
 
 MANIFEST_PATH = SAFETY_ROOT / "manifests" / "default.v1.json"
 CORRELATION = "4b825dc6-42b0-4c48-8f1a-9a54f1f9f6da"
+SESSION = "884d4374-7de9-4bea-8d0d-89db8718ea6f"
 
 
 def _chunk(chunk_type: bytes, payload: bytes) -> bytes:
@@ -108,6 +109,74 @@ class _RecordingOcrProvider:
         self.closed = True
 
 
+class _ConfigurableVisionProvider:
+    def __init__(self) -> None:
+        self.provider = "none"
+        self.model: str | None = None
+        self.key: str | None = None
+
+    async def status(self) -> dict[str, object]:
+        return {
+            "provider": self.provider,
+            "model": self.model,
+            "state": "ready" if self.model else "unconfigured",
+            "available": self.model is not None,
+            "apiKeyConfigured": self.key is not None,
+            "apiKeyReadableByRenderer": False,
+            "apiKeyStorage": "electron-safe-storage",
+        }
+
+    async def discover_models(
+        self,
+        *,
+        provider: str,
+        api_key: str | None,
+    ) -> dict[str, object]:
+        self.key = api_key
+        return {
+            "provider": provider,
+            "count": 1,
+            "models": [
+                {
+                    "name": "vision-cloud:test",
+                    "sizeBytes": None,
+                    "parameterSize": None,
+                    "quantization": None,
+                    "capabilities": ["completion", "vision"],
+                    "lightweight": True,
+                    "localGpuUsed": False,
+                }
+            ],
+            "apiKeyConfigured": api_key is not None,
+            "onlyVisionModels": True,
+            "localSelectionLimitBytes": None,
+        }
+
+    async def configure(
+        self,
+        *,
+        provider: str,
+        model: str,
+        api_key: str | None,
+    ) -> dict[str, object]:
+        self.provider = provider
+        self.model = model
+        self.key = api_key
+        return await self.status()
+
+    async def disable(self) -> dict[str, object]:
+        self.provider = "none"
+        self.model = None
+        self.key = None
+        return await self.status()
+
+    async def analyze(self, _image: bytes, _prompt: str) -> str:
+        return "Cloud vision result"
+
+    async def close(self) -> None:
+        self.key = None
+
+
 async def _post_snapshot(
     host: str,
     port: int,
@@ -119,6 +188,8 @@ async def _post_snapshot(
     analyze_with_vlm: bool = False,
     vision_question: str | None = None,
     analyze_with_ocr: bool = False,
+    session_id: str | None = None,
+    archive_session_id: str | None = None,
 ) -> tuple[int, dict[str, object]]:
     import json as json_module
 
@@ -131,6 +202,8 @@ async def _post_snapshot(
         f"X-Hina-Correlation-Id: {CORRELATION}",
         "X-Hina-Source: owner.console",
     ]
+    if session_id is not None:
+        headers.append(f"X-Hina-Session-Id: {session_id}")
     if owner_confirmed:
         headers.append("X-Hina-Owner-Confirmed: true")
     if label is not None:
@@ -141,6 +214,8 @@ async def _post_snapshot(
         headers.append(f"X-Hina-Vision-Question: {quote(vision_question)}")
     if analyze_with_ocr:
         headers.append("X-Hina-OCR-Analyze: true")
+    if archive_session_id is not None:
+        headers.append(f"X-Hina-Archive-Session-Id: {archive_session_id}")
     headers.append("Connection: close")
     writer.write(("\r\n".join(headers) + "\r\n\r\n").encode("ascii") + body)
     await writer.drain()
@@ -166,7 +241,7 @@ class PerceptionRouteTests(unittest.IsolatedAsyncioTestCase):
             return f"Phân tích local: {prompt[-40:]}"
 
         self.perception = PerceptionService(
-            PerceptionConfig(),
+            PerceptionConfig(archive_root=directory / "perception-sessions"),
             safety_evaluate=self.safety.evaluate,
             vision_analyze=analyze,
             clock=self.clock,
@@ -207,6 +282,8 @@ class PerceptionRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.body["policy"]["capability"], "perception.observe")
         self.assertEqual(response.body["ocr"]["state"], "unconfigured")
         self.assertTrue(response.body["vision"]["available"])
+        self.assertTrue(response.body["retention"]["archive"]["available"])
+        self.assertFalse(response.body["retention"]["archive"]["active"])
 
     async def test_snapshot_is_denied_while_feature_flag_is_off(self) -> None:
         status, body = await _post_snapshot(self.host, self.port, _png())
@@ -356,6 +433,145 @@ class PerceptionRouteTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(cleared.status, HTTPStatus.OK)
         self.assertEqual(cleared.body["removed"], 1)
+
+    async def test_vision_provider_routes_keep_api_key_out_of_responses(self) -> None:
+        provider = _ConfigurableVisionProvider()
+        service = PerceptionService(
+            PerceptionConfig(),
+            safety_evaluate=self.safety.evaluate,
+            vision_provider=provider,  # type: ignore[arg-type]
+            clock=self.clock,
+        )
+        server = ControlPlaneServer(
+            TransportConfig(port=0),
+            safety_policy=self.safety,
+            perception_service=service,
+        )
+        await server.start()
+        host, port = server.address
+        secret = "owner-ollama-cloud-secret"
+        try:
+            discovered = await post_json(
+                host,
+                port,
+                "/v1/perception/vision/models",
+                {
+                    "provider": "ollama_cloud",
+                    "source": "owner.desktop",
+                    "apiKey": secret,
+                },
+            )
+            self.assertEqual(discovered.status, HTTPStatus.OK)
+            self.assertEqual(discovered.body["count"], 1)
+            self.assertNotIn(secret, str(discovered.body))
+
+            configured = await post_json(
+                host,
+                port,
+                "/v1/perception/vision/configure",
+                {
+                    "provider": "ollama_cloud",
+                    "model": "vision-cloud:test",
+                    "source": "owner.desktop",
+                    "ownerConfirmed": True,
+                    "apiKey": secret,
+                },
+            )
+            self.assertEqual(configured.status, HTTPStatus.OK)
+            self.assertEqual(provider.key, secret)
+            self.assertNotIn(secret, str(configured.body))
+
+            status = await get_json(host, port, "/v1/perception/status")
+            self.assertEqual(status.body["vision"]["provider"], "ollama_cloud")
+            self.assertTrue(status.body["vision"]["apiKeyConfigured"])
+            self.assertNotIn(secret, str(status.body))
+
+            disabled = await post_json(
+                host,
+                port,
+                "/v1/perception/vision/disable",
+                {"action": "disable", "source": "owner.desktop"},
+            )
+            self.assertEqual(disabled.status, HTTPStatus.OK)
+            self.assertIsNone(provider.key)
+        finally:
+            await server.stop()
+            await service.close()
+
+    async def test_archive_routes_bind_owner_store_png_and_reanalyze_as_history(self) -> None:
+        await self._enable_perception_flag()
+        started = await post_json(
+            self.host,
+            self.port,
+            "/v1/perception/archive/start",
+            {
+                "action": "start",
+                "correlationId": CORRELATION,
+                "sessionId": SESSION,
+                "source": "owner.console",
+                "ownerConfirmed": True,
+            },
+        )
+        self.assertEqual(started.status, HTTPStatus.OK)
+        archive = started.body["archive"]
+        self.assertTrue(archive["active"])
+        archive_session_id = archive["archiveSessionId"]
+
+        status, observed = await _post_snapshot(
+            self.host,
+            self.port,
+            _png(seed=3),
+            session_id=SESSION,
+            archive_session_id=archive_session_id,
+        )
+        self.assertEqual(status, HTTPStatus.OK)
+        archived = observed["archive"]
+        self.assertTrue(archived["historical"])
+        self.assertTrue(Path(archived["path"]).is_file())
+
+        cleared = await post_json(
+            self.host,
+            self.port,
+            "/v1/perception/clear",
+            {"action": "clear"},
+        )
+        self.assertEqual(cleared.status, HTTPStatus.OK)
+        historical = await post_json(
+            self.host,
+            self.port,
+            "/v1/perception/archive/reanalyze",
+            {
+                "action": "reanalyze",
+                "correlationId": CORRELATION,
+                "sessionId": SESSION,
+                "archiveSessionId": archive_session_id,
+                "snapshotId": archived["snapshotId"],
+                "source": "owner.console",
+                "ownerConfirmed": True,
+                "visionQuestion": "Ảnh lịch sử này có gì?",
+            },
+        )
+        self.assertEqual(historical.status, HTTPStatus.OK)
+        self.assertTrue(historical.body["historical"])
+        self.assertFalse(historical.body["currentObservation"])
+        self.assertFalse(historical.body["decisionSupportEligible"])
+        listing = await get_json(self.host, self.port, "/v1/perception/observations")
+        self.assertEqual(listing.body["count"], 0)
+
+        stopped = await post_json(
+            self.host,
+            self.port,
+            "/v1/perception/archive/stop",
+            {
+                "action": "stop",
+                "sessionId": SESSION,
+                "archiveSessionId": archive_session_id,
+                "source": "owner.console",
+            },
+        )
+        self.assertEqual(stopped.status, HTTPStatus.OK)
+        self.assertFalse(stopped.body["archive"]["active"])
+        self.assertTrue(Path(archived["path"]).is_file())
 
     async def test_missing_service_fails_closed(self) -> None:
         bare = ControlPlaneServer(TransportConfig(port=0))

@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import struct
 import sys
+import tempfile
 import unittest
 import zlib
 from pathlib import Path
@@ -121,6 +122,8 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.ttl_seconds, 15.0)
         self.assertFalse(config.capture_default_enabled)
         self.assertFalse(config.snapshot_persistence)
+        self.assertFalse(config.archive_default_enabled)
+        self.assertIsNone(config.archive_root)
 
     def test_ttl_above_screen_maximum_is_rejected(self) -> None:
         with self.assertRaises(PerceptionError) as caught:
@@ -139,15 +142,29 @@ class ConfigTests(unittest.TestCase):
         with self.assertRaises(PerceptionError):
             PerceptionConfig(capture_default_enabled=True)
 
+    def test_archive_cannot_be_default_enabled(self) -> None:
+        with self.assertRaises(PerceptionError):
+            PerceptionConfig(archive_default_enabled=True)
+
     def test_from_env_reads_overrides(self) -> None:
-        config = PerceptionConfig.from_env(
-            {
-                "HINA_PERCEPTION_TTL_SECONDS": "5",
-                "HINA_PERCEPTION_RATE_PER_MINUTE": "3",
-            }
-        )
-        self.assertEqual(config.ttl_seconds, 5.0)
-        self.assertEqual(config.rate_limit_per_minute, 3)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            config = PerceptionConfig.from_env(
+                {
+                    "HINA_PERCEPTION_TTL_SECONDS": "5",
+                    "HINA_PERCEPTION_RATE_PER_MINUTE": "3",
+                    "HINA_PERCEPTION_ARCHIVE_MAX_SNAPSHOTS": "25",
+                },
+                root=root,
+            )
+            self.assertEqual(config.ttl_seconds, 5.0)
+            self.assertEqual(config.rate_limit_per_minute, 3)
+            self.assertEqual(config.archive_max_snapshots, 25)
+            self.assertEqual(
+                config.archive_root,
+                (root / "var" / "perception-sessions").resolve(),
+            )
+            self.assertTrue(config.public_status()["archiveAvailable"])
 
     def test_from_env_rejects_non_numeric(self) -> None:
         with self.assertRaises(PerceptionError):
@@ -338,6 +355,7 @@ class _FakeOcrProvider:
 
 
 CORRELATION = "5d1c0dd2-8a53-4a30-9c5a-6f9df5a3f6ba"
+SESSION = "91a7b739-909a-4868-8652-2f081d402135"
 
 
 def _service(
@@ -571,6 +589,176 @@ class ServiceTests(unittest.TestCase):
             )
         self.assertEqual(caught.exception.code, "E_PERCEPTION_REQUEST")
 
+    def test_owner_started_archive_writes_only_png_and_stop_keeps_files(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            archive_root = Path(directory).resolve() / "perception-sessions"
+            config = PerceptionConfig(
+                archive_root=archive_root,
+                archive_max_snapshots=2,
+            )
+            service = _service(_RecordingEvaluate("allow"), config=config)
+            started = asyncio.run(
+                service.start_archive(
+                    correlation_id=CORRELATION,
+                    session_id=SESSION,
+                    source="owner.console",
+                    owner_confirmed=True,
+                )
+            )
+            archive = started["archive"]
+            self.assertEqual(started["status"], "started")
+            self.assertTrue(archive["active"])
+            archive_session_id = archive["archiveSessionId"]
+            self.assertEqual(Path(archive["path"]).parent, archive_root)
+
+            encoded = encode_png(gradient())
+            observed = asyncio.run(
+                service.ingest_snapshot(
+                    encoded,
+                    correlation_id=CORRELATION,
+                    session_id=SESSION,
+                    source="owner.console",
+                    owner_confirmed=True,
+                    archive_session_id=archive_session_id,
+                )
+            )
+            archived = observed["archive"]
+            self.assertTrue(archived["historical"])
+            self.assertFalse(archived["decisionSupportEligible"])
+            self.assertEqual(Path(archived["path"]).read_bytes(), encoded)
+            files = list(Path(archive["path"]).iterdir())
+            self.assertEqual(len(files), 1)
+            self.assertEqual(files[0].suffix, ".png")
+
+            stopped = asyncio.run(
+                service.stop_archive(
+                    session_id=SESSION,
+                    archive_session_id=archive_session_id,
+                    source="owner.console",
+                )
+            )
+            self.assertEqual(stopped["status"], "stopped")
+            with self.assertRaises(PerceptionError) as caught:
+                asyncio.run(
+                    service.ingest_snapshot(
+                        encode_png(gradient(invert=True)),
+                        correlation_id=CORRELATION,
+                        session_id=SESSION,
+                        source="owner.console",
+                        owner_confirmed=True,
+                        archive_session_id=archive_session_id,
+                    )
+                )
+            self.assertEqual(caught.exception.code, "E_PERCEPTION_ARCHIVE_STOPPED")
+            asyncio.run(service.close())
+            self.assertTrue(files[0].exists())
+
+    def test_archive_is_owner_bound_and_quota_is_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            config = PerceptionConfig(
+                archive_root=Path(directory).resolve() / "perception-sessions",
+                archive_max_snapshots=1,
+            )
+            service = _service(_RecordingEvaluate("allow"), config=config)
+            started = asyncio.run(
+                service.start_archive(
+                    correlation_id=CORRELATION,
+                    session_id=SESSION,
+                    source="owner.console",
+                    owner_confirmed=True,
+                )
+            )
+            archive_session_id = started["archive"]["archiveSessionId"]
+            with self.assertRaises(PerceptionError) as owner_error:
+                asyncio.run(
+                    service.stop_archive(
+                        session_id="0f017fb7-2c23-43b2-ab27-12145234f1f9",
+                        archive_session_id=archive_session_id,
+                        source="owner.console",
+                    )
+                )
+            self.assertEqual(owner_error.exception.code, "E_PERCEPTION_ARCHIVE_OWNER")
+
+            asyncio.run(
+                service.ingest_snapshot(
+                    encode_png(gradient()),
+                    correlation_id=CORRELATION,
+                    session_id=SESSION,
+                    source="owner.console",
+                    owner_confirmed=True,
+                    archive_session_id=archive_session_id,
+                )
+            )
+            with self.assertRaises(PerceptionError) as quota_error:
+                asyncio.run(
+                    service.ingest_snapshot(
+                        encode_png(gradient(invert=True)),
+                        correlation_id=CORRELATION,
+                        session_id=SESSION,
+                        source="owner.console",
+                        owner_confirmed=True,
+                        archive_session_id=archive_session_id,
+                    )
+                )
+            self.assertEqual(quota_error.exception.code, "E_PERCEPTION_ARCHIVE_QUOTA")
+            asyncio.run(service.close())
+
+    def test_historical_reanalysis_never_becomes_a_fresh_observation(self) -> None:
+        calls: list[bytes] = []
+
+        async def analyze(image: bytes, _prompt: str) -> str:
+            calls.append(image)
+            return "Ảnh lịch sử có một giao diện trò chơi."
+
+        with tempfile.TemporaryDirectory() as directory:
+            config = PerceptionConfig(
+                archive_root=Path(directory).resolve() / "perception-sessions",
+            )
+            service = _service(
+                _RecordingEvaluate("allow"),
+                config=config,
+                vision_analyze=analyze,
+            )
+            started = asyncio.run(
+                service.start_archive(
+                    correlation_id=CORRELATION,
+                    session_id=SESSION,
+                    source="owner.console",
+                    owner_confirmed=True,
+                )
+            )
+            archive_session_id = started["archive"]["archiveSessionId"]
+            observed = asyncio.run(
+                service.ingest_snapshot(
+                    encode_png(gradient()),
+                    correlation_id=CORRELATION,
+                    session_id=SESSION,
+                    source="owner.console",
+                    owner_confirmed=True,
+                    archive_session_id=archive_session_id,
+                )
+            )
+            snapshot_id = observed["archive"]["snapshotId"]
+            asyncio.run(service.clear(source="owner.console"))
+            historical = asyncio.run(
+                service.reanalyze_archive(
+                    correlation_id=CORRELATION,
+                    session_id=SESSION,
+                    archive_session_id=archive_session_id,
+                    snapshot_id=snapshot_id,
+                    source="owner.console",
+                    owner_confirmed=True,
+                    vision_question="Đây là màn hình cũ hay hiện tại?",
+                )
+            )
+            self.assertTrue(historical["historical"])
+            self.assertFalse(historical["currentObservation"])
+            self.assertFalse(historical["decisionSupportEligible"])
+            self.assertEqual(historical["vision"]["state"], "ready")
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(asyncio.run(service.observations())["count"], 0)
+            asyncio.run(service.close())
+
     def test_ocr_is_explicit_bounded_untrusted_and_never_keeps_pixels(self) -> None:
         provider = _FakeOcrProvider()
         encoded = encode_png(gradient())
@@ -777,6 +965,8 @@ class ServiceTests(unittest.TestCase):
         self.assertFalse(status["vision"]["decisionSupportEligible"])
         self.assertFalse(status["retention"]["snapshotPersistence"])
         self.assertFalse(status["retention"]["pixelDataRetained"])
+        self.assertFalse(status["retention"]["archive"]["available"])
+        self.assertFalse(status["retention"]["archive"]["active"])
 
 
 if __name__ == "__main__":

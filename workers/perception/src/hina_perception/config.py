@@ -118,6 +118,10 @@ class PerceptionConfig:
     dedup_hamming_threshold: int = 4
     capture_default_enabled: bool = False
     snapshot_persistence: bool = False
+    archive_root: Path | None = None
+    archive_default_enabled: bool = False
+    archive_max_session_bytes: int = 268_435_456
+    archive_max_snapshots: int = 300
 
     def __post_init__(self) -> None:
         if (
@@ -136,6 +140,13 @@ class PerceptionConfig:
             (self.max_fresh_observations, "fresh observation limit", 1, 64),
             (self.rate_limit_per_minute, "rate limit", 1, 60),
             (self.dedup_hamming_threshold, "dedup hamming threshold", 0, 16),
+            (
+                self.archive_max_session_bytes,
+                "archive session byte limit",
+                1_000_000,
+                2_147_483_648,
+            ),
+            (self.archive_max_snapshots, "archive snapshot limit", 1, 10_000),
         ):
             if isinstance(value, bool) or not isinstance(value, int) or not lower <= value <= upper:
                 raise PerceptionError("E_PERCEPTION_CONFIG", f"perception {name} is invalid")
@@ -152,12 +163,37 @@ class PerceptionConfig:
         if self.snapshot_persistence:
             raise PerceptionError(
                 "E_PERCEPTION_CONFIG",
-                "snapshot persistence is unavailable in M08-S1",
+                "implicit snapshot persistence is unavailable; use an explicit archive session",
             )
+        if self.archive_default_enabled:
+            raise PerceptionError(
+                "E_PERCEPTION_CONFIG",
+                "snapshot archive must remain inactive until the owner starts a session",
+            )
+        if self.archive_root is not None:
+            if not isinstance(self.archive_root, Path) or not self.archive_root.is_absolute():
+                raise PerceptionError(
+                    "E_PERCEPTION_CONFIG",
+                    "snapshot archive root must be an absolute Path",
+                )
 
     @classmethod
-    def from_env(cls, env: Mapping[str, str] | None = None) -> PerceptionConfig:
+    def from_env(
+        cls,
+        env: Mapping[str, str] | None = None,
+        *,
+        root: Path | None = None,
+    ) -> PerceptionConfig:
         values = env if env is not None else os.environ
+        archive_root = None
+        if root is not None:
+            fixed_root = root.resolve()
+            archive_root = (fixed_root / "var" / "perception-sessions").resolve()
+            if not archive_root.is_relative_to(fixed_root):
+                raise PerceptionError(
+                    "E_PERCEPTION_CONFIG",
+                    "snapshot archive root escaped the repository",
+                )
         return cls(
             ttl_seconds=_env_float(values, "HINA_PERCEPTION_TTL_SECONDS", SCREEN_SNAPSHOT_MAX_TTL_SECONDS),
             max_snapshot_bytes=_env_int(values, "HINA_PERCEPTION_MAX_SNAPSHOT_BYTES", 1_000_000),
@@ -166,6 +202,17 @@ class PerceptionConfig:
             max_fresh_observations=_env_int(values, "HINA_PERCEPTION_MAX_FRESH", 16),
             rate_limit_per_minute=_env_int(values, "HINA_PERCEPTION_RATE_PER_MINUTE", 12),
             dedup_hamming_threshold=_env_int(values, "HINA_PERCEPTION_DEDUP_THRESHOLD", 4),
+            archive_root=archive_root,
+            archive_max_session_bytes=_env_int(
+                values,
+                "HINA_PERCEPTION_ARCHIVE_MAX_SESSION_BYTES",
+                268_435_456,
+            ),
+            archive_max_snapshots=_env_int(
+                values,
+                "HINA_PERCEPTION_ARCHIVE_MAX_SNAPSHOTS",
+                300,
+            ),
         )
 
     def public_status(self) -> dict[str, object]:
@@ -180,6 +227,11 @@ class PerceptionConfig:
             "dedupHammingThreshold": self.dedup_hamming_threshold,
             "captureDefaultEnabled": self.capture_default_enabled,
             "snapshotPersistence": self.snapshot_persistence,
+            "archiveAvailable": self.archive_root is not None,
+            "archiveDefaultEnabled": self.archive_default_enabled,
+            "archiveRoot": str(self.archive_root) if self.archive_root is not None else None,
+            "archiveMaxSessionBytes": self.archive_max_session_bytes,
+            "archiveMaxSnapshots": self.archive_max_snapshots,
         }
 
 

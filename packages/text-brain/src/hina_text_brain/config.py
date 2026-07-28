@@ -19,17 +19,21 @@ class ProviderKind(StrEnum):
 class ModelGatewayConfig:
     provider: ProviderKind = ProviderKind.OLLAMA
     base_url: str = "http://127.0.0.1:11434"
-    model: str = "qwen3.5:4b"
+    model: str = "qwen3-vl:8b-thinking-q4_K_M"
     api_key: str | None = None
     health_timeout_seconds: float = 3.0
-    request_timeout_seconds: float = 90.0
-    retry_attempts: int = 1
+    request_timeout_seconds: float = 9.0
+    retry_attempts: int = 0
     circuit_failure_threshold: int = 3
     circuit_reset_seconds: float = 30.0
     max_output_bytes: int = 1_048_576
-    model_vram_mib: int = 4_096
-    model_ram_mib: int = 1_024
+    model_vram_mib: int = 8_192
+    model_ram_mib: int = 2_048
+    context_tokens: int = 8_192
+    ollama_gpu_layers: int = 999
     max_tokens: int = 192
+    vision_fast_max_tokens: int = 256
+    thinking_max_tokens: int = 768
     temperature: float = 0.7
     repeat_penalty: float = 1.15
 
@@ -61,10 +65,22 @@ class ModelGatewayConfig:
             (self.max_output_bytes, "output byte limit", 1_024, 16_777_216),
             (self.model_vram_mib, "model VRAM request", 1, 65_536),
             (self.model_ram_mib, "model RAM request", 1, 262_144),
+            (self.context_tokens, "context token limit", 1_024, 262_144),
+            (self.ollama_gpu_layers, "Ollama GPU layer request", 1, 4_096),
             (self.max_tokens, "max tokens", 1, 32_768),
+            (self.vision_fast_max_tokens, "vision fast max tokens", 1, 32_768),
+            (self.thinking_max_tokens, "thinking max tokens", 1, 32_768),
         ):
             if isinstance(value, bool) or not isinstance(value, int) or not lower <= value <= upper:
                 raise TextBrainError("E_MODEL_CONFIG", f"{name} is invalid")
+        if self.thinking_max_tokens < max(
+            self.max_tokens,
+            self.vision_fast_max_tokens,
+        ):
+            raise TextBrainError(
+                "E_MODEL_CONFIG",
+                "thinking token budget must be at least the fast-path output budget",
+            )
         if (
             isinstance(self.temperature, bool)
             or not isinstance(self.temperature, (int, float))
@@ -88,16 +104,24 @@ class ModelGatewayConfig:
         return cls(
             provider=provider,
             base_url=values.get("HINA_MODEL_BASE_URL", "http://127.0.0.1:11434"),
-            model=values.get("HINA_MODEL_NAME", "qwen3.5:4b"),
+            model=values.get("HINA_MODEL_NAME", "qwen3-vl:8b-thinking-q4_K_M"),
             api_key=values.get("HINA_MODEL_API_KEY") or None,
             health_timeout_seconds=_env_float(values, "HINA_MODEL_HEALTH_TIMEOUT", 3.0),
-            request_timeout_seconds=_env_float(values, "HINA_MODEL_REQUEST_TIMEOUT", 90.0),
-            retry_attempts=_env_int(values, "HINA_MODEL_RETRY_ATTEMPTS", 1),
+            request_timeout_seconds=_env_float(values, "HINA_MODEL_REQUEST_TIMEOUT", 9.0),
+            retry_attempts=_env_int(values, "HINA_MODEL_RETRY_ATTEMPTS", 0),
             circuit_failure_threshold=_env_int(values, "HINA_MODEL_CIRCUIT_THRESHOLD", 3),
             circuit_reset_seconds=_env_float(values, "HINA_MODEL_CIRCUIT_RESET", 30.0),
-            model_vram_mib=_env_int(values, "HINA_MODEL_VRAM_MIB", 4_096),
-            model_ram_mib=_env_int(values, "HINA_MODEL_RAM_MIB", 1_024),
+            model_vram_mib=_env_int(values, "HINA_MODEL_VRAM_MIB", 8_192),
+            model_ram_mib=_env_int(values, "HINA_MODEL_RAM_MIB", 2_048),
+            context_tokens=_env_int(values, "HINA_MODEL_CONTEXT_TOKENS", 8_192),
+            ollama_gpu_layers=_env_int(values, "HINA_MODEL_OLLAMA_GPU_LAYERS", 999),
             max_tokens=_env_int(values, "HINA_MODEL_MAX_TOKENS", 192),
+            vision_fast_max_tokens=_env_int(
+                values,
+                "HINA_MODEL_VISION_FAST_MAX_TOKENS",
+                256,
+            ),
+            thinking_max_tokens=_env_int(values, "HINA_MODEL_THINKING_MAX_TOKENS", 768),
             temperature=_env_float(values, "HINA_MODEL_TEMPERATURE", 0.7),
             repeat_penalty=_env_float(values, "HINA_MODEL_REPEAT_PENALTY", 1.15),
         )
@@ -110,11 +134,23 @@ class ModelGatewayConfig:
             "apiKeyConfigured": self.api_key is not None,
             "healthTimeoutSeconds": self.health_timeout_seconds,
             "requestTimeoutSeconds": self.request_timeout_seconds,
+            "admissionTimeoutSeconds": 1.0,
+            "defaultTurnDeadlineSeconds": self.request_timeout_seconds + 1.0,
             "retryAttempts": self.retry_attempts,
             "maxTokens": self.max_tokens,
+            "visionFastMaxTokens": self.vision_fast_max_tokens,
+            "thinkingMaxTokens": self.thinking_max_tokens,
+            "contextTokens": self.context_tokens,
             "temperature": self.temperature,
             "repeatPenalty": self.repeat_penalty,
             "modelVramMiB": self.model_vram_mib,
+            "gpuOnly": self.provider is ProviderKind.OLLAMA,
+            "ollamaGpuLayers": self.ollama_gpu_layers,
+            "reasoningPolicy": "deterministic-auto",
+            "simpleTextPath": "same-weight-preclosed-thought",
+            "complexTextPath": "bounded-hidden-thinking",
+            "screenVisionPath": "separate-perception-provider",
+            "hiddenReasoningExposed": False,
             "reservedVramHeadroomMiB": 2_048,
         }
 
@@ -122,7 +158,11 @@ class ModelGatewayConfig:
         parsed = urlsplit(self.base_url)
         prefix = parsed.path.rstrip("/")
         if self.provider is ProviderKind.OLLAMA:
-            suffix = {"health": "/api/tags", "chat": "/api/chat"}[operation]
+            suffix = {
+                "health": "/api/tags",
+                "chat": "/api/chat",
+                "generate": "/api/generate",
+            }[operation]
         else:
             suffix = {"health": "/models", "chat": "/chat/completions"}[operation]
             if not prefix:
