@@ -517,7 +517,6 @@ class ControlPlaneServer:
                     "brain.text",
                     "speech.stt",
                     "speech.tts",
-                    "perception.ocr",
                     "perception.vision",
                 }
                 or payload.get("action") not in {"load", "unload"}
@@ -959,11 +958,6 @@ class ControlPlaneServer:
             service, operation = self.speech_service, "warmup" if action == "load" else "unload"
         elif model_id == "speech.tts":
             service, operation = self.tts_service, "warmup" if action == "load" else "unload"
-        elif model_id == "perception.ocr":
-            service, operation = (
-                self.perception_service,
-                "warmup_ocr" if action == "load" else "unload_ocr",
-            )
         else:
             service, operation = (
                 self.perception_service,
@@ -1252,10 +1246,6 @@ class ControlPlaneServer:
             request.headers.get("x-hina-vision-analyze", "").strip().lower()
             in {"1", "true", "yes"}
         )
-        analyze_with_ocr = (
-            request.headers.get("x-hina-ocr-analyze", "").strip().lower()
-            in {"1", "true", "yes"}
-        )
         vision_question_raw = request.headers.get("x-hina-vision-question")
         vision_question = unquote(vision_question_raw) if vision_question_raw else None
         archive_session_id = request.headers.get("x-hina-archive-session-id") or None
@@ -1327,7 +1317,6 @@ class ControlPlaneServer:
                 owner_confirmed=owner_confirmed,
                 analyze_with_vlm=analyze_with_vlm,
                 vision_question=vision_question,
-                analyze_with_ocr=analyze_with_ocr,
                 archive_session_id=archive_session_id,
             )
         except Exception as exc:
@@ -2334,8 +2323,6 @@ def _resource_model_rows(
     speech_provider = _mapping(speech_status.get("provider"))
     tts_config = _mapping(tts_status.get("configured"))
     tts_provider = _mapping(tts_status.get("provider"))
-    ocr = _mapping(perception_status.get("ocr"))
-    ocr_config = _mapping(ocr.get("configured"))
     vision = _mapping(perception_status.get("vision"))
     vision_name = _public_text(vision.get("model"))
     vision_provider = _public_text(vision.get("provider")) or "none"
@@ -2345,11 +2332,17 @@ def _resource_model_rows(
         _public_text(_mapping(tts_provider.get("resourceLease")).get("state"))
         == "active"
     )
-    ocr_operator_resident = (
-        _public_text(_mapping(ocr.get("resourceLease")).get("state"))
-        == "active"
-    )
     vision_operator_resident = bool(vision.get("operatorResident"))
+    tts_current_values = [
+        value
+        for key in ("modelBaselineAllocatedMiB", "lastPostAllocatedMiB")
+        if (value := _public_number(tts_provider.get(key))) is not None
+    ]
+    tts_current_vram_mib = (
+        max(tts_current_values)
+        if bool(tts_provider.get("modelLoaded")) and tts_current_values
+        else None
+    )
 
     return [
         _resource_model_row(
@@ -2369,6 +2362,12 @@ def _resource_model_rows(
                 if isinstance(brain_resident, dict)
                 else None
             ),
+            provider_peak_vram_mib=None,
+            measurement_source="ollama.api.ps.size_vram",
+            measurement_note=(
+                "Dung lượng model đang resident do Ollama báo; không phải đỉnh "
+                "CUDA thoáng qua trong lúc suy luận."
+            ),
             error_code=_public_text(model_provider.get("errorCode")),
             control_supported=True,
             operator_resident=brain_operator_resident,
@@ -2386,6 +2385,12 @@ def _resource_model_rows(
             active=any(owner.startswith("stt.") for owner in lease_owners) or speech_operator_resident,
             configured_vram_mib=_public_int(speech_config.get("modelVramMiB")),
             measured_vram_mib=None,
+            provider_peak_vram_mib=None,
+            measurement_source="unavailable",
+            measurement_note=(
+                "CTranslate2 chưa công bố số VRAM riêng của model trong process "
+                "worker dùng chung; dashboard không suy đoán từ ngân sách."
+            ),
             error_code=_public_text(speech_provider.get("lastErrorCode")),
             control_supported=True,
             operator_resident=speech_operator_resident,
@@ -2402,30 +2407,20 @@ def _resource_model_rows(
             loaded=bool(tts_provider.get("modelLoaded")) or tts_operator_resident,
             active=any(owner.startswith("tts.") for owner in lease_owners) or tts_operator_resident,
             configured_vram_mib=_public_int(tts_config.get("modelVramMiB")),
-            measured_vram_mib=(
-                _public_number(tts_provider.get("modelBaselineAllocatedMiB"))
+            measured_vram_mib=tts_current_vram_mib,
+            provider_peak_vram_mib=(
+                _public_number(tts_provider.get("lastPeakReservedMiB"))
                 if bool(tts_provider.get("modelLoaded"))
                 else None
+            ),
+            measurement_source="torch.cuda.memory",
+            measurement_note=(
+                "Hiện tại lấy allocated sau request; đỉnh lấy CUDA reserved cao "
+                "nhất mà OmniVoice đo trong request gần nhất."
             ),
             error_code=_public_text(tts_provider.get("lastErrorCode")),
             control_supported=True,
             operator_resident=tts_operator_resident,
-        ),
-        _resource_model_row(
-            model_id="perception.ocr",
-            role="Đọc chữ màn hình (OCR)",
-            name=_public_text(ocr.get("model")),
-            provider=_public_text(ocr.get("provider")),
-            location="local",
-            configured=bool(ocr),
-            available=bool(ocr.get("available")),
-            loaded=bool(ocr.get("modelLoaded")) or ocr_operator_resident,
-            active="perception.ocr" in lease_owners or ocr_operator_resident,
-            configured_vram_mib=_public_int(ocr_config.get("modelVramMiB")),
-            measured_vram_mib=None,
-            error_code=_public_text(ocr.get("lastErrorCode")),
-            control_supported=True,
-            operator_resident=ocr_operator_resident,
         ),
         _resource_model_row(
             model_id="perception.vision",
@@ -2452,6 +2447,20 @@ def _resource_model_rows(
                 vision_resident.get("sizeVramBytes")
                 if isinstance(vision_resident, dict)
                 else None
+            ) if vision_provider != "ollama_cloud" else 0,
+            provider_peak_vram_mib=0 if vision_provider == "ollama_cloud" else None,
+            measurement_source=(
+                "cloud.no-local-vram"
+                if vision_provider == "ollama_cloud"
+                else "ollama.api.ps.size_vram"
+            ),
+            measurement_note=(
+                "Cloud không load trọng số model lên GPU local."
+                if vision_provider == "ollama_cloud"
+                else (
+                    "Dung lượng model đang resident do Ollama báo; không phải "
+                    "đỉnh CUDA thoáng qua trong lúc suy luận."
+                )
             ),
             error_code=_public_text(vision.get("lastErrorCode")),
             control_supported=(
@@ -2476,6 +2485,9 @@ def _resource_model_row(
     active: bool,
     configured_vram_mib: int | None,
     measured_vram_mib: int | float | None,
+    provider_peak_vram_mib: int | float | None,
+    measurement_source: str,
+    measurement_note: str,
     error_code: str | None,
     control_supported: bool,
     operator_resident: bool,
@@ -2505,6 +2517,10 @@ def _resource_model_row(
         "active": active,
         "configuredVramMiB": configured_vram_mib,
         "measuredVramMiB": measured_vram_mib,
+        "providerPeakVramMiB": provider_peak_vram_mib,
+        "sampledPeakVramMiB": None,
+        "measurementSource": measurement_source,
+        "measurementNote": measurement_note,
         "errorCode": error_code,
         "controlSupported": control_supported,
         "operatorResident": operator_resident,

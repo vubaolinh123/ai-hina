@@ -165,6 +165,8 @@ class ResourceRouteTests(unittest.IsolatedAsyncioTestCase):
                     "provider": {
                         "modelLoaded": True,
                         "modelBaselineAllocatedMiB": 2_270.5,
+                        "lastPeakReservedMiB": 2_412.5,
+                        "lastPostAllocatedMiB": 2_275.0,
                         "lastErrorCode": None,
                     },
                 }
@@ -172,13 +174,6 @@ class ResourceRouteTests(unittest.IsolatedAsyncioTestCase):
             perception_service=_Service(
                 {
                     "available": True,
-                    "ocr": {
-                        "provider": "rapidocr",
-                        "model": "PP-OCRv6-small",
-                        "available": True,
-                        "modelLoaded": False,
-                        "configured": {"modelVramMiB": 1_024},
-                    },
                     "vision": {
                         "provider": "ollama_cloud",
                         "model": "gemma3:4b-cloud",
@@ -209,10 +204,21 @@ class ResourceRouteTests(unittest.IsolatedAsyncioTestCase):
         models = {item["id"]: item for item in body["models"]}
         self.assertEqual(models["brain.text"]["state"], "loaded")
         self.assertEqual(models["brain.text"]["measuredVramMiB"], 7_516)
+        self.assertEqual(
+            models["brain.text"]["measurementSource"],
+            "ollama.api.ps.size_vram",
+        )
+        self.assertIsNone(models["brain.text"]["providerPeakVramMiB"])
         self.assertEqual(models["speech.stt"]["state"], "unloaded")
+        self.assertEqual(models["speech.stt"]["measurementSource"], "unavailable")
         self.assertEqual(models["speech.tts"]["state"], "loaded")
+        self.assertEqual(models["speech.tts"]["measuredVramMiB"], 2_275.0)
+        self.assertEqual(models["speech.tts"]["providerPeakVramMiB"], 2_412.5)
+        self.assertNotIn("perception.ocr", models)
         self.assertEqual(models["perception.vision"]["state"], "cloud-ready")
         self.assertEqual(models["perception.vision"]["configuredVramMiB"], 0)
+        self.assertEqual(models["perception.vision"]["measuredVramMiB"], 0)
+        self.assertEqual(models["perception.vision"]["providerPeakVramMiB"], 0)
         if sys.platform == "win32":
             self.assertIsInstance(body["processes"]["coreRuntime"]["rssMiB"], int)
             self.assertGreater(body["processes"]["coreRuntime"]["rssMiB"], 0)

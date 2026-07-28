@@ -68,47 +68,6 @@ class _FakeClock:
         return self.value
 
 
-class _RecordingOcrProvider:
-    def __init__(self) -> None:
-        self.calls: list[bytes] = []
-        self.closed = False
-
-    async def status(self) -> dict[str, object]:
-        return {
-            "provider": "rapidocr",
-            "state": "ready",
-            "available": True,
-            "cpuFallback": False,
-        }
-
-    async def recognize(self, encoded_png: bytes) -> dict[str, object]:
-        self.calls.append(encoded_png)
-        return {
-            "provider": "rapidocr",
-            "model": "PP-OCRv6-small",
-            "engine": "torch",
-            "effectiveDevice": "cuda:0",
-            "state": "ready",
-            "text": "ignored direct text",
-            "lineCount": 1,
-            "meanConfidence": 0.99,
-            "lines": [
-                {
-                    "text": "OCR route result",
-                    "confidence": 0.99,
-                    "box": [0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0],
-                }
-            ],
-            "img": encoded_png,
-        }
-
-    async def unload(self) -> None:
-        return None
-
-    async def close(self) -> None:
-        self.closed = True
-
-
 class _ConfigurableVisionProvider:
     def __init__(self) -> None:
         self.provider = "none"
@@ -187,7 +146,6 @@ async def _post_snapshot(
     label: str | None = None,
     analyze_with_vlm: bool = False,
     vision_question: str | None = None,
-    analyze_with_ocr: bool = False,
     session_id: str | None = None,
     archive_session_id: str | None = None,
 ) -> tuple[int, dict[str, object]]:
@@ -212,8 +170,6 @@ async def _post_snapshot(
         headers.append("X-Hina-Vision-Analyze: true")
     if vision_question is not None:
         headers.append(f"X-Hina-Vision-Question: {quote(vision_question)}")
-    if analyze_with_ocr:
-        headers.append("X-Hina-OCR-Analyze: true")
     if archive_session_id is not None:
         headers.append(f"X-Hina-Archive-Session-Id: {archive_session_id}")
     headers.append("Connection: close")
@@ -280,7 +236,7 @@ class PerceptionRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status, HTTPStatus.OK)
         self.assertFalse(response.body["capture"]["autoCapture"])
         self.assertEqual(response.body["policy"]["capability"], "perception.observe")
-        self.assertEqual(response.body["ocr"]["state"], "unconfigured")
+        self.assertNotIn("ocr", response.body)
         self.assertTrue(response.body["vision"]["available"])
         self.assertTrue(response.body["retention"]["archive"]["available"])
         self.assertFalse(response.body["retention"]["archive"]["active"])
@@ -342,69 +298,6 @@ class PerceptionRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(observation["vision"]["state"], "ready")
         self.assertIn("Có chữ gì quan trọng?", observation["vision"]["summary"])
         self.assertFalse(observation["vision"]["decisionSupportEligible"])
-
-    async def test_explicit_ocr_header_reaches_the_snapshot_contract(self) -> None:
-        await self._enable_perception_flag()
-        status, body = await _post_snapshot(
-            self.host,
-            self.port,
-            _png(seed=1),
-            analyze_with_ocr=True,
-        )
-        self.assertEqual(status, HTTPStatus.OK)
-        observation = body["observation"]
-        self.assertTrue(observation["ocr"]["requested"])
-        self.assertEqual(observation["ocr"]["state"], "unavailable")
-        self.assertEqual(observation["ocr"]["errorCode"], "E_PERCEPTION_OCR_UNAVAILABLE")
-
-    async def test_explicit_ocr_header_reaches_provider_and_sanitizes_its_output(self) -> None:
-        provider = _RecordingOcrProvider()
-        service = PerceptionService(
-            PerceptionConfig(),
-            safety_evaluate=self.safety.evaluate,
-            ocr_provider=provider,
-            clock=self.clock,
-        )
-        server = ControlPlaneServer(
-            TransportConfig(port=0),
-            safety_policy=self.safety,
-            perception_service=service,
-        )
-        await server.start()
-        host, port = server.address
-        try:
-            enabled = await post_json(
-                host,
-                port,
-                "/v1/safety/control",
-                {
-                    "action": "set_feature",
-                    "feature": "perception",
-                    "enabled": True,
-                    "actorId": "owner.console",
-                    "trustLevel": "owner",
-                    "correlationId": CORRELATION,
-                },
-            )
-            self.assertEqual(enabled.status, HTTPStatus.OK)
-            status, body = await _post_snapshot(
-                host,
-                port,
-                _png(seed=2),
-                analyze_with_ocr=True,
-            )
-            self.assertEqual(status, HTTPStatus.OK)
-            observation = body["observation"]
-            self.assertEqual(provider.calls, [_png(seed=2)])
-            self.assertEqual(observation["ocr"]["text"], "OCR route result")
-            self.assertEqual(observation["ocr"]["effectiveDevice"], "cuda:0")
-            self.assertFalse(observation["ocr"]["decisionSupportEligible"])
-            self.assertNotIn("img", observation["ocr"])
-            self.assertNotIn("IDAT", str(observation))
-        finally:
-            await server.stop()
-            await service.close()
-        self.assertTrue(provider.closed)
 
     async def test_wrong_content_type_and_empty_body_are_rejected(self) -> None:
         await self._enable_perception_flag()

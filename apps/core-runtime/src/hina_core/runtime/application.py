@@ -241,16 +241,12 @@ class HinaRuntimeApplication:
                     await tts_service.warmup()
             if perception_service is None and safety_policy is not None:
                 from hina_perception import (
-                    OcrConfig,
                     OllamaVisionProvider,
                     PerceptionConfig,
                     PerceptionService,
-                    RapidOcrProvider,
-                    ScheduledOcrProvider,
                     VisionConfig,
                 )
 
-                ocr_provider = None
                 scheduler = getattr(model_gateway, "scheduler", None)
                 vision_config = VisionConfig.from_env()
                 acquire_vision_lease = None
@@ -272,27 +268,6 @@ class HinaRuntimeApplication:
                         )
 
                     acquire_vision_lease = acquire_perception_vision_lease
-                    ocr_config = OcrConfig.from_env(root=ROOT)
-                    native_ocr_provider = RapidOcrProvider(ocr_config)
-
-                    async def acquire_ocr_lease(unload: Any) -> Any:
-                        return await scheduler.acquire(
-                            LocalResourceRequest(
-                                owner="perception.ocr",
-                                vram_mib=ocr_config.model_vram_mib,
-                                ram_mib=ocr_config.model_ram_mib,
-                                priority=50,
-                                ttl_seconds=ocr_config.request_timeout_seconds + 30,
-                                preemptible=True,
-                            ),
-                            wait_timeout_seconds=5,
-                            on_preempt=unload,
-                        )
-
-                    ocr_provider = ScheduledOcrProvider(
-                        native_ocr_provider,
-                        acquire_ocr_lease,
-                    )
                 vision_provider = OllamaVisionProvider(
                     vision_config,
                     acquire_local_lease=acquire_vision_lease,
@@ -301,7 +276,6 @@ class HinaRuntimeApplication:
                     PerceptionConfig.from_env(root=ROOT),
                     safety_evaluate=safety_policy.evaluate,
                     vision_provider=vision_provider,
-                    ocr_provider=ocr_provider,
                     on_error=self._log_perception_error,
                 )
             if self.paths.persona_spec is not None:

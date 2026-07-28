@@ -224,7 +224,6 @@ const RESOURCE_MODEL_IDS = new Set([
   "brain.text",
   "speech.stt",
   "speech.tts",
-  "perception.ocr",
   "perception.vision",
 ]);
 
@@ -307,11 +306,10 @@ export async function requestPerceptionSnapshot(
   const png = validatePngSnapshot(rawPng);
   if (
     !isObject(raw)
-    || Object.keys(raw).length !== 5
+    || Object.keys(raw).length !== 4
     || ![
       "sessionId",
       "label",
-      "analyzeOcr",
       "analyzeVision",
       "visionQuestion",
     ].every((key) => key in raw)
@@ -319,8 +317,8 @@ export async function requestPerceptionSnapshot(
     throw new Error("E_DESKTOP_CAPTURE_REQUEST: snapshot metadata is invalid");
   }
   const sessionId = validateUuid(raw.sessionId, "E_DESKTOP_CAPTURE_REQUEST");
-  if (typeof raw.analyzeOcr !== "boolean" || typeof raw.analyzeVision !== "boolean") {
-    throw new Error("E_DESKTOP_CAPTURE_REQUEST: analysis flags are invalid");
+  if (typeof raw.analyzeVision !== "boolean") {
+    throw new Error("E_DESKTOP_CAPTURE_REQUEST: vision analysis flag is invalid");
   }
   const label = validateOptionalHeaderText(
     raw.label,
@@ -352,9 +350,6 @@ export async function requestPerceptionSnapshot(
   };
   if (label !== null) {
     headers["X-Hina-Label"] = encodeURIComponent(label);
-  }
-  if (raw.analyzeOcr) {
-    headers["X-Hina-OCR-Analyze"] = "true";
   }
   if (raw.analyzeVision) {
     headers["X-Hina-Vision-Analyze"] = "true";

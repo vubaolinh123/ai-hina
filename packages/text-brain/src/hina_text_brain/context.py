@@ -160,9 +160,18 @@ class ContextComposer:
             if long_term_message is not None:
                 base_size += _message_bytes(long_term_message)
 
+        eligible_turns = (
+            tuple(
+                turn
+                for turn in turns
+                if not getattr(turn, "used_fresh_observation", False)
+            )
+            if fresh_message is not None
+            else turns
+        )
         selected = []
         total = base_size
-        for turn in reversed(turns):
+        for turn in reversed(eligible_turns):
             pair_size = sum(_message_bytes(message) for message in turn.messages())
             if total + pair_size > self.max_bytes:
                 break
@@ -215,18 +224,12 @@ def _render_fresh_observation(record: Any, *, session_id: str) -> str | None:
     ):
         return None
     vision = record.get("vision")
-    ocr = record.get("ocr")
     vision_summary = (
         _bounded_external_text(vision.get("summary"), 3_500)
         if isinstance(vision, dict) and vision.get("state") == "ready"
         else None
     )
-    ocr_text = (
-        _bounded_external_text(ocr.get("text"), 4_000)
-        if isinstance(ocr, dict) and ocr.get("state") == "ready"
-        else None
-    )
-    if vision_summary is None and ocr_text is None:
+    if vision_summary is None:
         return None
 
     remaining = record.get("remainingSeconds")
@@ -265,8 +268,6 @@ def _render_fresh_observation(record: Any, *, session_id: str) -> str | None:
             lines.append(f"Kích thước ảnh: {width}×{height}")
     if vision_summary is not None:
         lines.append(f"Mô tả vision: {vision_summary}")
-    if ocr_text is not None:
-        lines.append(f"Chữ OCR thử nghiệm: {ocr_text}")
     lines.append("[/UNTRUSTED_FRESH_OBSERVATION_DATA]")
     return "\n".join(lines)
 

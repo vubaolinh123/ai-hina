@@ -1106,7 +1106,6 @@ main.dashboard-main {
   white-space: nowrap;
 }
 
-.perception-ocr-controls,
 .perception-vision-controls,
 .perception-archive-controls {
   display: grid;
@@ -1126,7 +1125,6 @@ main.dashboard-main {
   margin-top: 2px;
 }
 
-.perception-ocr-summary,
 .perception-vision-summary {
   margin-top: 8px;
   padding: 10px;

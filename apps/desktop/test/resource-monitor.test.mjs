@@ -8,12 +8,13 @@ const {
   augmentResourceStatus,
 } = require("../dist-electron/resource-monitor.js");
 
-function model(id, state, name = id) {
+function model(id, state, name = id, measuredVramMiB = null) {
   return {
     id,
     role: `Role ${id}`,
     name,
     state,
+    measuredVramMiB,
   };
 }
 
@@ -43,7 +44,7 @@ test("resource monitor adds only bounded desktop memory and in-memory history", 
     {
       schemaVersion: "1.0",
       sampledAtUnixMilliseconds: 1_000,
-      models: [model("tts", "loaded", "OmniVoice")],
+      models: [model("tts", "loaded", "OmniVoice", 1_900)],
       processes: {
         coreRuntime: { label: "Core", rssMiB: 2_048 },
       },
@@ -64,8 +65,19 @@ test("resource monitor adds only bounded desktop memory and in-memory history", 
     externalMiB: 4,
   });
   assert.equal(result.modelTransitions.length, 1);
+  assert.equal(result.models[0].sampledPeakVramMiB, 1_900);
   assert.equal(result.transitionHistory.persistence, false);
   assert.equal(result.transitionHistory.limit, 100);
+
+  const later = augmentResourceStatus(
+    {
+      schemaVersion: "1.0",
+      sampledAtUnixMilliseconds: 2_000,
+      models: [model("tts", "loaded", "OmniVoice", 1_850)],
+    },
+    tracker,
+  );
+  assert.equal(later.models[0].sampledPeakVramMiB, 1_900);
 });
 
 test("resource monitor rejects oversized or unknown model states", () => {
@@ -76,6 +88,10 @@ test("resource monitor rejects oversized or unknown model states", () => {
   );
   assert.throws(
     () => augmentResourceStatus({ schemaVersion: "2.0", models: [] }, tracker),
+    /E_DESKTOP_RESOURCE_RESPONSE/,
+  );
+  assert.throws(
+    () => tracker.observe([model("brain", "loaded", "brain", Number.NaN)]),
     /E_DESKTOP_RESOURCE_RESPONSE/,
   );
   assert.throws(

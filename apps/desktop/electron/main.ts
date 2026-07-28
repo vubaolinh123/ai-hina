@@ -304,7 +304,6 @@ async function submitDesktopCapture(
   const result = await requestPerceptionSnapshot(encoded.png, {
     sessionId: request.sessionId,
     label: request.label,
-    analyzeOcr: request.analyzeOcr,
     analyzeVision: request.analyzeVision,
     visionQuestion: request.visionQuestion,
   });

@@ -24,6 +24,7 @@ const LOADED_STATES = new Set(["loaded", "loading", "cloud-ready"]);
 export class ModelTransitionTracker {
   readonly limit: number;
   #previous = new Map<string, { state: string; role: string; name: string | null }>();
+  #sampledPeaks = new Map<string, number>();
   #transitions: ModelTransition[] = [];
   #sequence = 0;
 
@@ -38,6 +39,12 @@ export class ModelTransitionTracker {
     const models = parseModels(rawModels);
     const next = new Map<string, { state: string; role: string; name: string | null }>();
     for (const model of models) {
+      if (model.measuredVramMiB !== null) {
+        this.#sampledPeaks.set(
+          model.id,
+          Math.max(this.#sampledPeaks.get(model.id) ?? 0, model.measuredVramMiB),
+        );
+      }
       next.set(model.id, {
         state: model.state,
         role: model.role,
@@ -68,6 +75,10 @@ export class ModelTransitionTracker {
   snapshot(): ModelTransition[] {
     return this.#transitions.map((transition) => ({ ...transition }));
   }
+
+  sampledPeak(modelId: string): number | null {
+    return this.#sampledPeaks.get(modelId) ?? null;
+  }
 }
 
 export function augmentResourceStatus(
@@ -79,9 +90,20 @@ export function augmentResourceStatus(
     throw new Error("E_DESKTOP_RESOURCE_RESPONSE: resource status is invalid");
   }
   const transitions = tracker.observe(raw.models);
+  const models = raw.models.map((item) => {
+    if (!isObject(item)) {
+      throw new Error("E_DESKTOP_RESOURCE_RESPONSE: model record is invalid");
+    }
+    const id = boundedText(item.id, 64);
+    return {
+      ...item,
+      sampledPeakVramMiB: tracker.sampledPeak(id),
+    };
+  });
   const processes = isObject(raw.processes) ? raw.processes : {};
   return {
     ...raw,
+    models,
     processes: {
       ...processes,
       desktopMain: {
@@ -102,7 +124,13 @@ export function augmentResourceStatus(
 
 function parseModels(
   value: unknown,
-): Array<{ id: string; role: string; name: string | null; state: string }> {
+): Array<{
+  id: string;
+  role: string;
+  name: string | null;
+  state: string;
+  measuredVramMiB: number | null;
+}> {
   if (!Array.isArray(value) || value.length > 64) {
     throw new Error("E_DESKTOP_RESOURCE_RESPONSE: model list is invalid");
   }
@@ -117,7 +145,8 @@ function parseModels(
     if (!MODEL_STATES.has(state)) {
       throw new Error("E_DESKTOP_RESOURCE_RESPONSE: model state is invalid");
     }
-    return { id, role, name, state };
+    const measuredVramMiB = nullableNonNegativeNumber(item.measuredVramMiB);
+    return { id, role, name, state, measuredVramMiB };
   });
 }
 
@@ -145,6 +174,14 @@ function boundedText(value: unknown, maximum: number): string {
 
 function normalizeTimestamp(value: number): number {
   return Number.isFinite(value) && value >= 0 ? Math.round(value) : Date.now();
+}
+
+function nullableNonNegativeNumber(value: unknown): number | null {
+  if (value === null) return null;
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    throw new Error("E_DESKTOP_RESOURCE_RESPONSE: VRAM measurement is invalid");
+  }
+  return value;
 }
 
 function bytesToMiB(value: number): number {

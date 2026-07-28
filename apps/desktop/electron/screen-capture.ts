@@ -33,7 +33,6 @@ export type FullFrameCaptureRequest = {
   sourceToken: string;
   maxSide: CaptureMaxSide;
   label: string | null;
-  analyzeOcr: boolean;
   analyzeVision: boolean;
   visionQuestion: string | null;
 };
@@ -160,7 +159,6 @@ export function validateFullFrameCaptureRequest(
     "sourceToken",
     "maxSide",
     "label",
-    "analyzeOcr",
     "analyzeVision",
     "visionQuestion",
   ]);
@@ -179,8 +177,8 @@ export function validateFullFrameCaptureRequest(
   ) {
     throw new Error("E_DESKTOP_CAPTURE_REQUEST: maxSide must be 640, 960 or 1280");
   }
-  if (typeof raw.analyzeOcr !== "boolean" || typeof raw.analyzeVision !== "boolean") {
-    throw new Error("E_DESKTOP_CAPTURE_REQUEST: analysis flags must be boolean");
+  if (typeof raw.analyzeVision !== "boolean") {
+    throw new Error("E_DESKTOP_CAPTURE_REQUEST: vision analysis flag must be boolean");
   }
   const label = validateOptionalText(raw.label, 120, "label");
   const visionQuestion = validateOptionalText(
@@ -199,7 +197,6 @@ export function validateFullFrameCaptureRequest(
     sourceToken: raw.sourceToken,
     maxSide: raw.maxSide as CaptureMaxSide,
     label,
-    analyzeOcr: raw.analyzeOcr,
     analyzeVision: raw.analyzeVision,
     visionQuestion,
   };

@@ -105,25 +105,6 @@
       ]
     },
     {
-      "name": "rapidocr",
-      "source_url": "https://github.com/RapidAI/RapidOCR",
-      "revision": "pypi:rapidocr==3.9.1@7d1a4c29fc9b9dcbb631213494fbb9b7f96e4a70",
-      "license_spdx": "Apache-2.0",
-      "model_license": "Apache-2.0 (PaddlePaddle PP-OCRv6 small model cards)",
-      "source_hash": "sha256:600885e4e94e0b427abad394fccb0ec1d3c9118a215ca435bf7680aeae0e292b",
-      "destination_paths": [
-        "pyproject.toml",
-        "uv.lock",
-        "workers/perception/pyproject.toml",
-        "workers/perception/src/hina_perception/ocr.py"
-      ],
-      "modifications": [
-        "Used as a pinned PyPI dependency behind Hina's OcrProvider interface; no upstream source file or snippet was copied.",
-        "Hina pins RapidOCR 3.9.1 PP-OCRv6 small Torch artifacts by SHA-256, forces all inference stages to CUDA:0, verifies device placement and disables every CPU/remote fallback.",
-        "This is a local owner-testing candidate: the corrected uncropped Vietnamese long UI CER is 6.944%, above the promotion threshold, so it remains untrusted, TTL-bound and unavailable for autonomous decisions."
-      ]
-    },
-    {
       "name": "qdrant-client",
       "source_url": "https://github.com/qdrant/qdrant-client",
       "revision": "v1.18.0@961c21aa930e3e9a0e8b7402cec5dc46b82612c7",

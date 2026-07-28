@@ -19,6 +19,7 @@ class MemoryTurn:
     user_text: str
     assistant_text: str
     completed_at: str
+    used_fresh_observation: bool = False
 
     @property
     def byte_size(self) -> int:
@@ -65,12 +66,15 @@ class ShortTermMemory:
         turn_id: str,
         user_text: str,
         assistant_text: str,
+        *,
+        used_fresh_observation: bool = False,
     ) -> MemoryTurn:
         turn = MemoryTurn(
             turn_id=turn_id,
             user_text=user_text,
             assistant_text=assistant_text,
             completed_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+            used_fresh_observation=used_fresh_observation,
         )
         if turn.byte_size > self.max_bytes:
             raise TextBrainError("E_CONTEXT_OVERFLOW", "completed turn exceeds memory budget")

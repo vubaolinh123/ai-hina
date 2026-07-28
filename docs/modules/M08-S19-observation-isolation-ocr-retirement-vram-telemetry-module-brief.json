@@ -1,0 +1,100 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M08-S19-observation-isolation-ocr-retirement-vram-telemetry",
+  "module_id": "M08",
+  "objective": "Ensure each explicit screenshot chat turn uses only the latest fresh semantic observation, fail closed on leaked prompt/reasoning text, retire the unused local OCR product path, and report truthful current plus peak VRAM measurements with their source.",
+  "non_goals": [
+    "Do not increase Hina's runtime context beyond 8,192 tokens in this slice; document the measured 50K cost and keep a later benchmark/promotion gate.",
+    "Do not replace or fine-tune OmniVoice, download an unreviewed community checkpoint, run an all-on soak, persist model telemetry, retain screenshots, or expose prompts, hidden reasoning, API keys, raw model payloads or image pixels.",
+    "Do not make Cloud vision resident locally, invent per-model VRAM values when a provider cannot attribute shared-process memory, or bypass scheduler admission and the owner-approved 15,872 MiB ceiling."
+  ],
+  "base_sha": "a768902774d8c5afccf4ce8f105df51a0560cbc5",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "packages/text-brain/src/hina_text_brain/conversation.py",
+    "packages/text-brain/src/hina_text_brain/context.py",
+    "packages/text-brain/src/hina_text_brain/memory.py",
+    "packages/text-brain/tests/test_conversation.py",
+    "workers/perception/",
+    "apps/core-runtime/src/hina_core/runtime/application.py",
+    "apps/core-runtime/src/hina_core/runtime/transport.py",
+    "apps/core-runtime/tests/test_perception_routes.py",
+    "apps/core-runtime/tests/test_resource_routes.py",
+    "apps/desktop/electron/control-client.ts",
+    "apps/desktop/electron/main.ts",
+    "apps/desktop/electron/resource-monitor.ts",
+    "apps/desktop/electron/screen-capture.ts",
+    "apps/desktop/src/App.vue",
+    "apps/desktop/src/dashboard/pages/PerceptionPage.vue",
+    "apps/desktop/src/dashboard/pages/ResourcesPage.vue",
+    "apps/desktop/src/env.d.ts",
+    "apps/desktop/test/",
+    "apps/dev-console/",
+    "packages/contracts/openapi/control-plane.v1.json",
+    "pyproject.toml",
+    "uv.lock",
+    "third_party/code.lock.json",
+    "third_party/THIRD_PARTY_NOTICES.md",
+    "docs/provenance/rapidocr-ppocrv6.yaml",
+    "ml/models/manifests/rapidocr-ppocrv6-small-torch.v1.json",
+    "docs/modules/M08-S19-observation-isolation-ocr-retirement-vram-telemetry-module-brief.json",
+    "docs/modules/M08-perception.md",
+    "docs/architecture/desktop-dashboard-modularity.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    ".gitnexus/",
+    ".claude/",
+    "CLAUDE.md",
+    "voice_demo/",
+    "assets/voices/",
+    "assets/avatars/",
+    "var/perception-sessions/",
+    "var/test-artifacts/",
+    "apps/desktop/dist/",
+    "apps/desktop/dist-electron/"
+  ],
+  "contracts": [
+    "A fresh screenshot turn composes at most one newest same-session semantic observation and excludes prior short-term turns that were produced from another fresh screenshot; ordinary conversation turns remain available.",
+    "The final output boundary truncates a valid Vietnamese answer before any internal UNTRUSTED_* sentinel or bounded English meta-narration and rejects an output whose first content is internal-only; leaked material never reaches moderation replay memory UI or TTS.",
+    "Local OCR is no longer constructible, selectable, force-loadable, advertised or installed by the Hina product; explicit screen understanding uses the selected Vision provider.",
+    "Each resource row separates scheduler reservation from provider-reported current VRAM, provider peak and dashboard-session sampled peak, and names the measurement source or a bounded unavailable reason instead of substituting a configured estimate.",
+    "Cloud vision reports exact zero local model VRAM. Ollama brain current VRAM comes from /api/ps size_vram. OmniVoice current and peak come from its CUDA allocator telemetry. Faster-Whisper remains unknown per-model when its shared native process cannot provide exact attribution."
+  ],
+  "allowed_dependencies": [
+    "Existing Python standard library, Vue 3/TypeScript, Electron typed preload, Ollama local API and repository test tooling; no new runtime dependency."
+  ],
+  "oss_candidates": [
+    "https://github.com/k2-fsa/OmniVoice",
+    "https://docs.ollama.com/faq",
+    "https://github.com/ollama/ollama/blob/main/docs/api.md"
+  ],
+  "acceptance_criteria": [
+    "A two-capture regression proves the second model prompt contains the new observation and current question but not the previous screenshot-derived user/assistant pair.",
+    "A response shaped like the owner screenshot yields only the user-facing answer and contains no Wait/I need context narration, UNTRUSTED_FRESH_OBSERVATION_DATA, analysis heading or hidden reasoning in replay.",
+    "OCR controls, runtime construction, resource row, dependency, active provenance/model manifest and product tests are removed; Vision capture remains runnable.",
+    "The Resources page labels current and peak VRAM plus source accurately and preserves null with a clear reason when exact attribution is unavailable.",
+    "Documentation gives a formula-backed 50K KV-cache estimate for the installed Qwen3-VL 8B metadata, records that 8,192 remains the promoted runtime context, summarizes official OmniVoice successor status and records regular GitNexus use.",
+    "Narrow text-brain, perception, resource, desktop typecheck/build tests and one repository fast gate pass with no agent-created raw media or benchmark artifact retained."
+  ],
+  "required_test_commands": [
+    "uv run --frozen python -m unittest packages/text-brain/tests/test_conversation.py workers/perception/tests/test_perception.py apps/core-runtime/tests/test_perception_routes.py apps/core-runtime/tests/test_resource_routes.py",
+    "pnpm --filter @hina/desktop typecheck",
+    "pnpm test:desktop",
+    "pnpm test:fast",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "context_window_tokens_promoted": 8192,
+    "screen_observations_per_turn": 1,
+    "resource_poll_interval_milliseconds": 1500,
+    "new_local_vram_mib": 0,
+    "ocr_local_vram_removed_mib": 1024,
+    "raw_media_retained": false
+  },
+  "output_artifact_dir": "artifacts/verification/M08/"
+}

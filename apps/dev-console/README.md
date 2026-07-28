@@ -67,12 +67,10 @@ M08 ingests a single browser-picker-consented PNG snapshot per owner action,
 keeps only in-memory evidence (dimensions, SHA-256, dHash, mean luminance),
 enforces the `perception` feature flag plus `perception.observe` policy with
 fail-closed behavior, and expires every observation after at most 15 seconds
-of monotonic time. No pixels are persisted. M08-S3 adds an explicit **Đọc chữ
-bằng OCR GPU** choice using RapidOCR/PP-OCRv6 small on CUDA only; it still does
-not auto-capture or grant an action. The current Vietnamese long-line quality
-measurement is above the promotion gate, so the Console labels it as an
-owner-testing aid and asks the owner to verify accented/small critical text or
-compare it with local VLM.
+of monotonic time. No pixels are persisted. The failed local OCR candidate was
+retired in M08-S19; explicit screen understanding now uses the configured
+Cloud/local Vision provider only and still cannot auto-capture or grant an
+action.
 
 After updating the source, restart the running console so its Python process
 loads the new safety, text-brain, speech, memory and avatar modules.

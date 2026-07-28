@@ -1017,7 +1017,6 @@
               "brain.text",
               "speech.stt",
               "speech.tts",
-              "perception.ocr",
               "perception.vision"
             ]
           },

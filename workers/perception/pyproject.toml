@@ -1,12 +1,10 @@
 [project]
 name = "hina-perception"
 version = "0.1.0"
-description = "Owner-consented screen snapshot ingestion, freshness/TTL ledger and GPU OCR provider for Hina AI"
+description = "Owner-consented screen snapshot ingestion, freshness/TTL ledger and Vision provider for Hina AI"
 requires-python = ">=3.12,<3.15"
 license = "MIT"
-dependencies = [
-  "rapidocr==3.9.1",
-]
+dependencies = []
 
 [build-system]
 requires = ["hatchling"]

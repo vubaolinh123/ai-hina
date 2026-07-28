@@ -38,7 +38,10 @@ workflow, not merely a visual section.
   session binding, typed IPC, stored-key lifecycle and error logging.
 - `ResourcesPage.vue` owns telemetry/residency/lease presentation and emits only
   refresh or allowlisted control intent. `App.vue` keeps visibility-scoped
-  polling, samples, telemetry/error state and the actual typed IPC call.
+  polling, samples, telemetry/error state and the actual typed IPC call. Model
+  rows distinguish provider-reported current VRAM, provider-measured request
+  peak and the dashboard's 1.5-second sampled session peak; an unavailable
+  provider counter remains null with a source-specific explanation.
 - `SpeechPage.vue` owns the owner-facing mic/STT/TTS test presentation and emits
   only explicit start/stop/test or field updates. `App.vue` retains microphone
   streams, WAV conversion, audio object-URL cleanup, realtime throttling and

@@ -12,7 +12,6 @@ from .config import PerceptionConfig
 from .dedup import SnapshotRateLimiter, dhash64, hamming_distance
 from .errors import PerceptionError
 from .observation import OBSERVATION_KIND, OBSERVATION_TRUST_LEVEL, FreshnessLedger
-from .ocr import OcrProvider, unconfigured_ocr_status
 from .png import summarize_png
 from .vision import OllamaVisionProvider
 
@@ -53,7 +52,6 @@ class PerceptionService:
         safety_evaluate: Callable[[dict[str, Any]], dict[str, Any]],
         vision_analyze: VisionAnalyzeCallback | None = None,
         vision_provider: OllamaVisionProvider | None = None,
-        ocr_provider: OcrProvider | None = None,
         snapshot_archive: SessionSnapshotArchive | None = None,
         on_error: PerceptionErrorCallback | None = None,
         clock: Callable[[], float] | None = None,
@@ -62,7 +60,6 @@ class PerceptionService:
         self._evaluate = safety_evaluate
         self._vision_analyze = vision_analyze
         self._vision_provider = vision_provider
-        self._ocr_provider = ocr_provider
         self._archive = snapshot_archive
         if self._archive is None and config.archive_root is not None:
             self._archive = SessionSnapshotArchive(
@@ -119,7 +116,6 @@ class PerceptionService:
                 "limitPerMinute": self.config.rate_limit_per_minute,
                 "remainingThisMinute": self._rate.remaining,
             },
-            "ocr": await self._ocr_status(),
             "vision": {
                 **vision_status,
                 "mode": "explicit-owner-request",
@@ -147,7 +143,6 @@ class PerceptionService:
         owner_confirmed: bool = False,
         analyze_with_vlm: bool = False,
         vision_question: str | None = None,
-        analyze_with_ocr: bool = False,
         archive_session_id: str | None = None,
     ) -> dict[str, Any]:
         started = time.monotonic()
@@ -167,11 +162,6 @@ class PerceptionService:
             raise PerceptionError(
                 "E_PERCEPTION_REQUEST",
                 "vision analysis option must be a boolean",
-            )
-        if not isinstance(analyze_with_ocr, bool):
-            raise PerceptionError(
-                "E_PERCEPTION_REQUEST",
-                "OCR analysis option must be a boolean",
             )
         normalized_question = _sanitize_vision_question(vision_question)
         if normalized_question is not None and not analyze_with_vlm:
@@ -205,7 +195,6 @@ class PerceptionService:
                 distance = hamming_distance(snapshot_hash, existing_hash)
                 if (
                     not analyze_with_vlm
-                    and not analyze_with_ocr
                     and distance <= self.config.dedup_hamming_threshold
                 ):
                     self._duplicate_total += 1
@@ -246,13 +235,6 @@ class PerceptionService:
                 session_id=session_id,
                 pixel_retention_state=pixel_retention_state,
             )
-            ocr = await self._analyze_ocr(
-                encoded,
-                requested=analyze_with_ocr,
-                correlation_id=correlation_id,
-                session_id=session_id,
-                pixel_retention_state=pixel_retention_state,
-            )
             observation = self._ledger.add(
                 str(uuid4()),
                 {
@@ -269,7 +251,6 @@ class PerceptionService:
                         "height": summary.height,
                         "meanLuma": summary.mean_luma,
                     },
-                    "ocr": ocr,
                     "vision": vision,
                     "archive": archive,
                 },
@@ -493,20 +474,13 @@ class PerceptionService:
             if record.get("sessionId") != session_id:
                 continue
             vision = record.get("vision")
-            ocr = record.get("ocr")
             has_vision = (
                 isinstance(vision, dict)
                 and vision.get("state") == "ready"
                 and isinstance(vision.get("summary"), str)
                 and bool(vision["summary"].strip())
             )
-            has_ocr = (
-                isinstance(ocr, dict)
-                and ocr.get("state") == "ready"
-                and isinstance(ocr.get("text"), str)
-                and bool(ocr["text"].strip())
-            )
-            if has_vision or has_ocr:
+            if has_vision:
                 return (record,)
         return ()
 
@@ -573,28 +547,6 @@ class PerceptionService:
             return await self._vision_status()
         return await self._vision_provider.disable()
 
-    async def warmup_ocr(self) -> dict[str, Any]:
-        if self._ocr_provider is None:
-            raise PerceptionError(
-                "E_PERCEPTION_OCR_UNAVAILABLE",
-                "OCR provider is not configured",
-                retryable=True,
-            )
-        warmup = getattr(self._ocr_provider, "warmup", None)
-        if warmup is None:
-            raise PerceptionError(
-                "E_PERCEPTION_OCR_UNAVAILABLE",
-                "OCR provider does not support manual loading",
-                retryable=True,
-            )
-        await warmup()
-        return await self._ocr_status()
-
-    async def unload_ocr(self) -> dict[str, Any]:
-        if self._ocr_provider is not None:
-            await self._ocr_provider.unload()
-        return await self._ocr_status()
-
     async def warmup_vision(self) -> dict[str, Any]:
         status = await self._vision_status()
         if status.get("provider") == "ollama_cloud":
@@ -625,8 +577,6 @@ class PerceptionService:
         self._ledger.clear()
         if self._archive is not None:
             await self._archive.close()
-        if self._ocr_provider is not None:
-            await self._ocr_provider.close()
         if self._vision_provider is not None:
             await self._vision_provider.close()
 
@@ -881,103 +831,6 @@ class PerceptionService:
             "apiKeyConfigured": False,
         }
 
-    async def _ocr_status(self) -> dict[str, Any]:
-        if self._ocr_provider is None:
-            return unconfigured_ocr_status()
-        try:
-            status = await self._ocr_provider.status()
-        except Exception:
-            return {
-                "provider": "unknown",
-                "state": "error",
-                "available": False,
-                "automatic": False,
-                "cpuFallback": False,
-                "lastErrorCode": "E_PERCEPTION_OCR_STATUS",
-            }
-        if not isinstance(status, dict):
-            return {
-                "provider": "unknown",
-                "state": "error",
-                "available": False,
-                "automatic": False,
-                "cpuFallback": False,
-                "lastErrorCode": "E_PERCEPTION_OCR_STATUS",
-            }
-        return status
-
-    async def _analyze_ocr(
-        self,
-        encoded: bytes,
-        *,
-        requested: bool,
-        correlation_id: str,
-        session_id: str | None,
-        pixel_retention_state: str,
-    ) -> dict[str, Any]:
-        base = {
-            "provider": "rapidocr" if self._ocr_provider is not None else "none",
-            "requested": requested,
-            "automatic": False,
-            "decisionSupportEligible": False,
-            "trustLevel": "untrusted",
-        }
-        if not requested:
-            return {
-                **base,
-                "state": "not-requested",
-                "text": None,
-                "lineCount": 0,
-                "meanConfidence": None,
-                "lines": [],
-            }
-        if self._ocr_provider is None:
-            return {
-                **base,
-                "state": "unavailable",
-                "text": None,
-                "lineCount": 0,
-                "meanConfidence": None,
-                "lines": [],
-                "errorCode": "E_PERCEPTION_OCR_UNAVAILABLE",
-            }
-        try:
-            result = await self._ocr_provider.recognize(encoded)
-            if not isinstance(result, dict):
-                raise PerceptionError(
-                    "E_PERCEPTION_OCR",
-                    "local OCR provider returned an invalid result",
-                )
-            safe = _sanitize_ocr_result(result)
-            return {**safe, **base}
-        except Exception as exc:
-            provider_code = getattr(exc, "code", "E_PERCEPTION_OCR_INFERENCE")
-            if not isinstance(provider_code, str) or not provider_code.startswith("E_PERCEPTION_OCR"):
-                provider_code = "E_PERCEPTION_OCR_INFERENCE"
-            error = PerceptionError(
-                "E_PERCEPTION_OCR",
-                "local GPU OCR failed; base snapshot evidence was preserved",
-                retryable=True,
-            )
-            self._report_error(
-                error,
-                correlation_id,
-                session_id,
-                len(encoded),
-                pixel_retention_state=pixel_retention_state,
-            )
-            return {
-                **base,
-                "state": "error",
-                "text": None,
-                "lineCount": 0,
-                "meanConfidence": None,
-                "lines": [],
-                "errorCode": "E_PERCEPTION_OCR",
-                "providerErrorCode": provider_code,
-            }
-
-
 def _sanitize_label(label: str | None) -> str | None:
     if label is None:
         return None
@@ -1045,103 +898,6 @@ def _sanitize_vision_summary(summary: str) -> str:
             retryable=True,
         )
     return cleaned[:_MAX_VISION_SUMMARY_CHARS]
-
-
-def _sanitize_ocr_result(result: dict[str, Any]) -> dict[str, Any]:
-    """Defensively constrain an adapter result before it enters the TTL ledger.
-
-    The provider already normalizes this data, but the service owns the
-    persistence boundary.  In particular, no adapter can smuggle a raw image,
-    crop or arbitrary nested object into an observation by returning extras.
-    """
-
-    state = result.get("state")
-    if state not in {"ready", "no-text"}:
-        raise PerceptionError("E_PERCEPTION_OCR", "local OCR returned an invalid state")
-    lines_raw = result.get("lines", [])
-    if not isinstance(lines_raw, list):
-        raise PerceptionError("E_PERCEPTION_OCR", "local OCR returned invalid lines")
-    lines: list[dict[str, Any]] = []
-    character_budget = 4_000
-    for raw_line in lines_raw[:100]:
-        if not isinstance(raw_line, dict):
-            continue
-        text = raw_line.get("text")
-        if not isinstance(text, str):
-            continue
-        cleaned = " ".join(
-            "".join(
-                char for char in text if ord(char) >= 0x20 and ord(char) != 0x7F
-            ).split()
-        )
-        if not cleaned:
-            continue
-        cleaned = cleaned[:character_budget].rstrip()
-        if not cleaned:
-            break
-        confidence = _sanitize_ocr_confidence(raw_line.get("confidence"))
-        if confidence is None:
-            continue
-        lines.append(
-            {
-                "text": cleaned,
-                "confidence": confidence,
-                "box": _sanitize_ocr_box(raw_line.get("box")),
-            }
-        )
-        character_budget -= len(cleaned) + 1
-        if character_budget <= 0:
-            break
-    text = "\n".join(line["text"] for line in lines)
-    if state == "ready" and not text:
-        state = "no-text"
-    mean_confidence = (
-        round(sum(float(line["confidence"]) for line in lines) / len(lines), 4)
-        if lines
-        else None
-    )
-    provider = result.get("provider")
-    model = result.get("model")
-    engine = result.get("engine")
-    device = result.get("effectiveDevice")
-    output: dict[str, Any] = {
-        "provider": provider[:64] if isinstance(provider, str) else "rapidocr",
-        "model": model[:128] if isinstance(model, str) else "unknown",
-        "engine": engine[:64] if isinstance(engine, str) else "unknown",
-        "effectiveDevice": device[:64] if isinstance(device, str) else None,
-        "state": state,
-        "text": text or None,
-        "lineCount": len(lines),
-        "meanConfidence": mean_confidence,
-        "lines": lines,
-    }
-    milliseconds = result.get("processingMilliseconds")
-    if isinstance(milliseconds, (int, float)) and not isinstance(milliseconds, bool):
-        output["processingMilliseconds"] = round(max(0.0, min(float(milliseconds), 300_000.0)), 3)
-    return output
-
-
-def _sanitize_ocr_confidence(value: Any) -> float | None:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return None
-    if not 0.0 <= float(value) <= 1.0:
-        return None
-    return round(float(value), 4)
-
-
-def _sanitize_ocr_box(value: Any) -> list[float] | None:
-    if value is None:
-        return None
-    if not isinstance(value, list) or len(value) != 8:
-        return None
-    normalized: list[float] = []
-    for coordinate in value:
-        if isinstance(coordinate, bool) or not isinstance(coordinate, (int, float)):
-            return None
-        if not 0.0 <= float(coordinate) <= 1.0:
-            return None
-        normalized.append(round(float(coordinate), 4))
-    return normalized
 
 
 def _validate_uuid(value: str, name: str) -> None:

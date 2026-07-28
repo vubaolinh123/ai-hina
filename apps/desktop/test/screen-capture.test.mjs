@@ -92,7 +92,6 @@ test("full-frame request accepts only bounded explicit fields and presets", () =
     sourceToken: UUIDS[1],
     maxSide: 960,
     label: "Cửa sổ Minecraft",
-    analyzeOcr: true,
     analyzeVision: true,
     visionQuestion: "Nhân vật đang ở đâu?",
   });
@@ -102,7 +101,6 @@ test("full-frame request accepts only bounded explicit fields and presets", () =
     sourceToken: UUIDS[1],
     maxSide: 960,
     label: "Cửa sổ Minecraft",
-    analyzeOcr: true,
     analyzeVision: true,
     visionQuestion: "Nhân vật đang ở đâu?",
   });

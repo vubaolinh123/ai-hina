@@ -310,50 +310,6 @@ class _RecordingEvaluate:
         }
 
 
-class _FakeOcrProvider:
-    def __init__(self, *, result=None, error: Exception | None = None) -> None:
-        self.result = result or {
-            "provider": "rapidocr",
-            "model": "PP-OCRv6-small",
-            "engine": "torch",
-            "effectiveDevice": "cuda:0",
-            "state": "ready",
-            "text": "Hina đang quan sát",
-            "lineCount": 1,
-            "meanConfidence": 0.98,
-            "lines": [
-                {
-                    "text": "Hina đang quan sát",
-                    "confidence": 0.98,
-                    "box": [0.1, 0.2, 0.9, 0.2, 0.9, 0.3, 0.1, 0.3],
-                }
-            ],
-        }
-        self.error = error
-        self.calls: list[bytes] = []
-        self.closed = False
-
-    async def status(self) -> dict[str, object]:
-        return {
-            "provider": "rapidocr",
-            "state": "ready",
-            "available": True,
-            "cpuFallback": False,
-        }
-
-    async def recognize(self, encoded_png: bytes) -> dict[str, object]:
-        self.calls.append(encoded_png)
-        if self.error is not None:
-            raise self.error
-        return self.result
-
-    async def unload(self) -> None:
-        return None
-
-    async def close(self) -> None:
-        self.closed = True
-
-
 CORRELATION = "5d1c0dd2-8a53-4a30-9c5a-6f9df5a3f6ba"
 SESSION = "91a7b739-909a-4868-8652-2f081d402135"
 
@@ -365,13 +321,11 @@ def _service(
     config: PerceptionConfig | None = None,
     on_error=None,
     vision_analyze=None,
-    ocr_provider=None,
 ) -> PerceptionService:
     return PerceptionService(
         config or PerceptionConfig(),
         safety_evaluate=evaluate,
         vision_analyze=vision_analyze,
-        ocr_provider=ocr_provider,
         on_error=on_error,
         clock=clock or FakeClock(),
     )
@@ -400,9 +354,7 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(
             observation["evidence"]["sha256"], hashlib.sha256(encoded).hexdigest()
         )
-        self.assertEqual(observation["ocr"]["state"], "not-requested")
-        self.assertEqual(observation["ocr"]["provider"], "none")
-        self.assertFalse(observation["ocr"]["decisionSupportEligible"])
+        self.assertNotIn("ocr", observation)
         self.assertEqual(observation["vision"]["state"], "not-requested")
         flattened = str(observation)
         self.assertNotIn("IDAT", flattened)
@@ -833,78 +785,6 @@ class ServiceTests(unittest.TestCase):
             self.assertEqual(asyncio.run(service.observations())["count"], 0)
             asyncio.run(service.close())
 
-    def test_ocr_is_explicit_bounded_untrusted_and_never_keeps_pixels(self) -> None:
-        provider = _FakeOcrProvider()
-        encoded = encode_png(gradient())
-        service = _service(_RecordingEvaluate("allow"), ocr_provider=provider)
-
-        without_ocr = asyncio.run(
-            service.ingest_snapshot(
-                encoded,
-                correlation_id=CORRELATION,
-                session_id=None,
-                source="owner.console",
-            )
-        )
-        self.assertEqual(provider.calls, [])
-        self.assertEqual(without_ocr["observation"]["ocr"]["state"], "not-requested")
-
-        with_ocr = asyncio.run(
-            service.ingest_snapshot(
-                encode_png(gradient(invert=True)),
-                correlation_id=CORRELATION,
-                session_id=None,
-                source="owner.console",
-                analyze_with_ocr=True,
-            )
-        )
-        ocr = with_ocr["observation"]["ocr"]
-        self.assertEqual(len(provider.calls), 1)
-        self.assertEqual(ocr["state"], "ready")
-        self.assertEqual(ocr["text"], "Hina đang quan sát")
-        self.assertEqual(ocr["trustLevel"], "untrusted")
-        self.assertFalse(ocr["decisionSupportEligible"])
-        self.assertEqual(len(ocr["lines"][0]["box"]), 8)
-        flattened = str(with_ocr)
-        self.assertNotIn("IDAT", flattened)
-        self.assertNotIn(provider.calls[0].hex()[:32], flattened)
-
-    def test_ocr_failure_preserves_base_observation_and_is_reported(self) -> None:
-        reports: list[dict[str, str]] = []
-
-        class OcrFailure(Exception):
-            code = "E_PERCEPTION_OCR_CUDA"
-
-        service = _service(
-            _RecordingEvaluate("allow"),
-            ocr_provider=_FakeOcrProvider(error=OcrFailure("CUDA unavailable")),
-            on_error=reports.append,
-        )
-        result = asyncio.run(
-            service.ingest_snapshot(
-                encode_png(gradient()),
-                correlation_id=CORRELATION,
-                session_id=None,
-                source="owner.console",
-                analyze_with_ocr=True,
-            )
-        )
-        self.assertEqual(result["status"], "observed")
-        self.assertIn("sha256", result["observation"]["evidence"])
-        self.assertEqual(result["observation"]["ocr"]["state"], "error")
-        self.assertEqual(result["observation"]["ocr"]["errorCode"], "E_PERCEPTION_OCR")
-        self.assertEqual(result["observation"]["ocr"]["providerErrorCode"], "E_PERCEPTION_OCR_CUDA")
-        self.assertEqual(reports[0]["errorCode"], "E_PERCEPTION_OCR")
-
-    def test_ocr_status_and_close_delegate_to_provider(self) -> None:
-        provider = _FakeOcrProvider()
-        service = _service(_RecordingEvaluate("allow"), ocr_provider=provider)
-        status = asyncio.run(service.status())
-        self.assertTrue(status["ocr"]["available"])
-        self.assertFalse(status["ocr"]["cpuFallback"])
-        asyncio.run(service.close())
-        self.assertTrue(provider.closed)
-
     def test_rate_limit_rejects_after_budget(self) -> None:
         clock = FakeClock()
         config = PerceptionConfig(rate_limit_per_minute=2, dedup_hamming_threshold=0)
@@ -1033,8 +913,7 @@ class ServiceTests(unittest.TestCase):
         self.assertFalse(status["capture"]["defaultEnabled"])
         self.assertEqual(status["policy"]["capability"], "perception.observe")
         self.assertEqual(status["policy"]["featureFlag"], "perception")
-        self.assertFalse(status["ocr"]["available"])
-        self.assertEqual(status["ocr"]["state"], "unconfigured")
+        self.assertNotIn("ocr", status)
         self.assertFalse(status["vision"]["available"])
         self.assertFalse(status["vision"]["decisionSupportEligible"])
         self.assertFalse(status["retention"]["snapshotPersistence"])

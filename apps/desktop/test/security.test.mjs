@@ -654,7 +654,6 @@ test("control client sends bounded PNG only to the fixed perception route", asyn
     {
       sessionId: "55555555-5555-4555-8555-555555555555",
       label: "Minecraft",
-      analyzeOcr: true,
       analyzeVision: true,
       visionQuestion: "Có nguy hiểm nào gần nhân vật?",
     },
@@ -682,7 +681,6 @@ test("control client sends bounded PNG only to the fixed perception route", asyn
   );
   assert.equal(request.options.headers["X-Hina-Source"], "owner.desktop");
   assert.equal(request.options.headers["X-Hina-Owner-Confirmed"], "true");
-  assert.equal(request.options.headers["X-Hina-OCR-Analyze"], "true");
   assert.equal(request.options.headers["X-Hina-Vision-Analyze"], "true");
   await assert.rejects(
     control.requestPerceptionSnapshot(
@@ -690,7 +688,6 @@ test("control client sends bounded PNG only to the fixed perception route", asyn
       {
         sessionId: "55555555-5555-4555-8555-555555555555",
         label: null,
-        analyzeOcr: false,
         analyzeVision: false,
         visionQuestion: null,
       },

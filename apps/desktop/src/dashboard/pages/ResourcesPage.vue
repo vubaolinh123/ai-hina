@@ -67,6 +67,15 @@ function formatMetric(value: number | null | undefined, suffix: string): string 
   return `${value.toLocaleString("vi-VN", { maximumFractionDigits: 1 })}${suffix}`;
 }
 
+function measurementSourceLabel(source: string): string {
+  return {
+    "ollama.api.ps.size_vram": "Ollama đo model đang resident",
+    "torch.cuda.memory": "CUDA allocator của provider",
+    "cloud.no-local-vram": "Model chạy trên Cloud",
+    unavailable: "Provider chưa có bộ đếm riêng",
+  }[source] || source;
+}
+
 function resourceStateLabel(state: ResourceModelState): string {
   return {
     loaded: "Đã load",
@@ -271,7 +280,9 @@ function formatResourceTime(value: number): string {
                 <th>Nơi chạy</th>
                 <th>Trạng thái</th>
                 <th>Ngân sách VRAM</th>
-                <th>VRAM model đo được</th>
+                <th>VRAM hiện tại</th>
+                <th>Đỉnh provider</th>
+                <th>Đỉnh dashboard</th>
                 <th>Owner control</th>
               </tr>
             </thead>
@@ -294,7 +305,19 @@ function formatResourceTime(value: number): string {
                   <small v-else-if="model.errorCode">{{ model.errorCode }}</small>
                 </td>
                 <td>{{ formatMiB(model.configuredVramMiB) }}</td>
-                <td>{{ formatMiB(model.measuredVramMiB) }}</td>
+                <td>
+                  {{ formatMiB(model.measuredVramMiB) }}
+                  <small>{{ measurementSourceLabel(model.measurementSource) }}</small>
+                  <small>{{ model.measurementNote }}</small>
+                </td>
+                <td>
+                  {{ formatMiB(model.providerPeakVramMiB) }}
+                  <small>Đỉnh provider đo trong request gần nhất.</small>
+                </td>
+                <td>
+                  {{ formatMiB(model.sampledPeakVramMiB) }}
+                  <small>Giá trị cao nhất từ các lần poll 1,5 giây của phiên desktop.</small>
+                </td>
                 <td class="resource-model-actions">
                   <button
                     type="button"
@@ -416,7 +439,10 @@ function formatResourceTime(value: number): string {
           dùng Hina bình thường. Màu vàng nghĩa là sắp chật VRAM. Màu đỏ nghĩa
           là phải chờ scheduler unload model hoặc đóng tác vụ GPU khác.
           “Ngân sách VRAM” là mức Hina dùng để quyết định có cho model chạy hay
-          không; “VRAM model đo được” mới là số provider báo đang chiếm.
+          không. “VRAM hiện tại” là số provider báo tại lần poll mới nhất.
+          “Đỉnh provider” chỉ có khi runtime model tự đo CUDA; “Đỉnh dashboard”
+          là mức cao nhất dashboard đã bắt gặp trong phiên này, nên có thể bỏ lỡ
+          một spike ngắn hơn 1,5 giây.
         </p>
       </aside>
     </template>

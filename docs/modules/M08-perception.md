@@ -1,7 +1,7 @@
-# M08 — Perception: screen snapshot, OCR và optional VLM
+# M08 — Perception: screen snapshot và Vision
 
-- Status: M08-S1/S2 runnable candidate; M08-S3 functional GPU OCR candidate
-  pending Vietnamese quality promotion; M08-S4 8B Thinking text brain +
+- Status: M08-S1/S2 runnable candidate; M08-S3 GPU OCR is historical and retired
+  by M08-S19; M08-S4 8B Thinking text brain +
   configurable vision provider + optional session archive is a runnable
   candidate; M08-S5 realtime resource dashboard is a runnable candidate;
   M08-S6 desktop full-frame low-resolution capture is a runnable candidate;
@@ -17,6 +17,7 @@
   M08-S16 Live2D dashboard modularity is a runnable candidate;
   M08-S17 Avatar/Runtime dashboard modularity is a runnable candidate;
   M08-S18 Avatar/Runtime trusted composable modularity is a runnable candidate;
+  M08-S19 observation isolation/OCR retirement/truthful VRAM is a runnable candidate;
   M08 remains active
 - Branch: `main` (fast-development mode)
 - Active slices: M08-S1 perception spine (owner-consented snapshot ingestion,
@@ -38,7 +39,8 @@
   capture-versus-vision timing without adding image persistence; M08-S12
   keeps companion chat/prompt and dashboard boundaries explicit; M08-S13 moves
   the complete owner-facing Perception workflow into a dedicated page component
-  while preserving the existing capture and secret boundaries
+  while preserving the existing capture and secret boundaries; M08-S19 isolates
+  consecutive images, retires local OCR and makes model VRAM sources explicit
 
 ## Runnable target
 
@@ -83,8 +85,6 @@ không cấp quyền tool và không cho Hina tuyên bố đang nhìn màn hình
     safety policy (`consume=true`). `deny` → chặn; `ask` → cần header
     owner-confirmed; policy crash/kết quả lạ → fail closed. Nguồn hợp lệ chỉ
     là các surface owner; label được sanitize và cắt 120 ký tự.
-  - `OcrProvider` chỉ là contract: chưa có dependency OCR nào qua OSS/license
-    review nên status báo `contract-ready` thay vì giả vờ đọc được chữ.
 - Control plane: `GET /v1/perception/status`, `GET /v1/perception/observations`,
   `POST /v1/perception/snapshots` (binary `image/png`, header correlation/
   session/source/label percent-encoded/owner-confirmed) và
@@ -123,7 +123,7 @@ không cấp quyền tool và không cho Hina tuyên bố đang nhìn màn hình
 M08-S4 supersedes model selection and runtime parameters above; this baseline
 is retained only for audit/rollback comparison.
 
-## Implemented in M08-S3 (GPU OCR candidate)
+## Implemented in M08-S3 (historical GPU OCR candidate, retired in M08-S19)
 
 - `RapidOcrProvider` bọc `rapidocr==3.9.1` và PP-OCRv6 small Torch theo đúng
   URL/SHA-256 đã ghi trong model manifest. Detector, recognizer và orientation
@@ -144,8 +144,9 @@ is retained only for audit/rollback comparison.
   814,0 MiB reserved, không lưu pixel/text. Corpus đã sửa để không crop câu dài
   (câu được xuống dòng như UI, còn CER bỏ qua khác biệt whitespace của wrap): mẫu
   UI ngắn CER 0,0%; mẫu tiếng Việt dài CER 6,944%. Candidate này **chưa qua**
-  gate OCR UI rõ ≤5% và không được quality-promote. Số đo và SHA của weights nằm tại
-  `ml/models/manifests/rapidocr-ppocrv6-small-torch.v1.json`.
+  gate OCR UI rõ ≤5% và không được quality-promote. Active model manifest and
+  provenance were deleted when M08-S19 retired this product path; Git history
+  and the M08-S3 Module Brief retain the audit decision.
 
 ## Ghi chú calibration OCR (2026-07-28)
 
@@ -153,9 +154,8 @@ is retained only for audit/rollback comparison.
   PP-OCRv6 small/960 có CER dài 6,944%, peak reserved 778–814 MiB; medium cùng
   6,944% nhưng 2.184–2.220 MiB; small/1.280 tệ hơn ở 12,5%/1.430 MiB. Vì không
   có lợi ích, runtime giữ `PP-OCRv6-small`/960/lease 1.024 MiB.
-- Đây là quyết định không-promotion. Owner vẫn đối chiếu chữ có dấu/chữ nhỏ quan
-  trọng bằng mắt hoặc VLM; output OCR vẫn `untrusted`, TTL ≤15 giây và không có
-  quyền tự điều khiển bất cứ thứ gì.
+- Đây là quyết định không-promotion. M08-S19 sau đó xóa provider, dependency,
+  scheduler row và UI OCR; owner dùng Vision cho nội dung chữ/màn hình.
 
 ## Implemented in M08-S4 (8B Thinking brain + vision provider + session archive)
 
@@ -728,3 +728,105 @@ Không được đánh dấu M08 complete khi các phần còn lại chưa có e
 - No real desktop/widget/avatar session, VTube Studio/Spout connection,
   microphone, TTS, model, Cloud request, cache/model download, fixture or
   one-off script was created for this UI-boundary slice.
+
+## Implemented in M08-S19 (observation isolation, OCR retirement and truthful VRAM)
+
+- A chat turn that includes a fresh screenshot now excludes earlier
+  screenshot-derived user/assistant turns from short-term replay. The current
+  turn still receives exactly the newest same-session observation within the
+  15-second monotonic TTL. This prevents screenshot 2 from carrying screenshot
+  1's description back into the model.
+- The final-answer sanitizer now truncates or rejects provider output that
+  exposes internal observation delimiters or English control narration such as
+  `UNTRUSTED_FRESH_OBSERVATION_DATA`, “I need to check the context” or “Looking
+  back at the previous observation”. Rejected text never reaches memory, desktop
+  chat or TTS.
+- The failed local OCR candidate has been retired from runtime construction,
+  snapshot headers/contracts, desktop and Dev Console UI, scheduler controls,
+  Python dependencies, model manifest and active provenance. Screen reading now
+  uses the explicit owner-triggered Cloud/local Vision provider only. Historical
+  M08-S3 documentation remains an audit record and is not an active runtime
+  contract.
+- Resource rows now distinguish:
+  - `measuredVramMiB`: current provider-reported resident/allocated value;
+  - `providerPeakVramMiB`: peak measured inside the most recent provider
+    request when that provider exposes a CUDA allocator counter;
+  - `sampledPeakVramMiB`: the highest current value observed by the desktop's
+    1.5-second polling loop during this desktop session;
+  - `measurementSource` and `measurementNote`: the source and limitation of the
+    number.
+- Ollama rows use `/api/ps.size_vram`; OmniVoice uses its Torch CUDA allocated
+  and reserved counters; Cloud Vision is truthfully zero local model VRAM.
+  Faster-Whisper remains `null` with an explicit explanation because CTranslate2
+  does not expose exact per-model VRAM inside the shared native worker. A fixed
+  reservation is never displayed as a measured allocation.
+
+### Context-window budget for the current Qwen3-VL 8B brain
+
+The installed model reports 36 layers, 8 KV heads and 128 dimensions for both
+K and V. With an f16 KV cache, the theoretical cache cost is:
+
+`36 × 8 × (128 K + 128 V) × 2 bytes = 147,456 bytes/token`.
+
+| Context | f16 KV cache | Increase over 8,192 | q8_0 increase over 8,192 |
+| --- | ---: | ---: | ---: |
+| 8,192 | 1,152 MiB | — | — |
+| 16,384 | 2,304 MiB | 1,152 MiB | about 576 MiB |
+| 32,768 | 4,608 MiB | 3,456 MiB | about 1,728 MiB |
+| 50,000 | 7,031 MiB | 5,879 MiB | about 2,940 MiB |
+
+These are KV-cache estimates, not a promise of total process memory. Quantized
+weights, CUDA graphs/work buffers, allocator fragmentation and parallel requests
+are additional. The brain currently appears around 5 GiB resident at 8,192
+tokens, so a 50,000-token f16 profile is roughly 10.7 GiB before transient
+buffers; q8_0 KV is roughly 7.9 GiB before transient buffers. Loading STT and
+OmniVoice at the same time would leave unsafe headroom on a 16 GiB card.
+
+M08-S19 therefore keeps the runtime window at 8,192. A later benchmark may
+promote 16K first with Flash Attention and q8_0 KV, while long-lived continuity
+continues to use summaries and consented memory rather than replaying 50K raw
+tokens. A short question can drive GPU compute utilization high, but it cannot
+fill 50K of semantic history; configured context allocation and accumulated
+tokens, not “thinking power”, dominate KV-cache VRAM.
+
+Official references:
+
+- [Ollama FAQ: Flash Attention and KV-cache
+  quantization](https://docs.ollama.com/faq#how-can-i-enable-flash-attention)
+- [Ollama API: running models and
+  `size_vram`](https://github.com/ollama/ollama/blob/main/docs/api.md#list-running-models)
+- [OmniVoice official repository](https://github.com/k2-fsa/OmniVoice)
+- [OmniVoice generation parameters and long-form
+  chunking](https://github.com/k2-fsa/OmniVoice/blob/master/docs/generation-parameters.md)
+
+### OmniVoice research result
+
+As of 2026-07-29, the official end-user checkpoint is still
+`k2-fsa/OmniVoice`, 0.6B parameters. `k2-fsa/OmniVoice-Emilia` is also 0.6B,
+trained only on the Chinese/English Emilia subsets, and its own model card
+recommends the full checkpoint for superior regular use; it is not an upgrade
+for Vietnamese. No official larger OmniVoice checkpoint was found.
+
+The remaining swallowed/rushed words are therefore treated as a long-form
+conditioning and Vietnamese normalization problem, not solved by swapping to a
+non-existent larger official checkpoint. The official implementation already
+documents automatic sentence chunking and stable reuse of a generated/reference
+voice prompt. Future TTS work should A/B punctuation-aware Vietnamese chunks,
+number/abbreviation normalization and a fixed high-quality reference prompt;
+community Vietnamese fine-tunes require separate dataset, license and quality
+provenance before they may replace the pinned checkpoint.
+
+## Fast evidence M08-S19 (owner machine)
+
+- Text-brain conversation tests: 21 pass, including consecutive screenshot
+  isolation and internal-marker leakage.
+- Perception worker tests: 38 pass after OCR retirement.
+- Perception route tests: 11 pass after removal of the OCR header/status
+  contract.
+- Resource route tests: 5 pass with current/provider-peak/source assertions and
+  no OCR model row.
+- `pnpm test:fast`: pass — Safety 22, Text brain 49, Memory 11, Avatar 5,
+  Speech 40, Perception 54 and Core Runtime 53 tests.
+- `pnpm test:desktop`: production build + 54 tests pass; sampled peak is retained
+  only in memory for the current desktop session.
+- `pnpm smoke:dev-console`: loopback startup/health smoke pass.

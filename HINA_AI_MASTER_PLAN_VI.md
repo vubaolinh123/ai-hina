@@ -1363,7 +1363,7 @@ Kết nối VRM/Live2D, lip-sync, expression và operator controls mà không nh
 
 ---
 
-## M08 — Perception: screen snapshot, OCR và optional VLM
+## M08 — Perception: screen snapshot và Vision
 
 ### Mục tiêu
 
@@ -1375,15 +1375,15 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
   grant Electron main.
 - Event/intent-driven snapshot.
 - Full-frame downscale bounded, perceptual dedup và rate limit.
-- PaddleOCR provider.
-- Optional VLM snapshot provider.
+- Cloud/local Vision snapshot provider do owner cấu hình.
 - `Observation` có timestamp, TTL, confidence, evidence reference.
 - No-persist mode. Theo quyết định owner ngày 2026-07-28, không crop/privacy
   mask: AI nhận toàn bộ source đã chọn ở độ phân giải thấp hơn.
 - GPU resource lease/fallback.
 - M08-S2 unified multimodal baseline (historical): Qwen3.5-4B Q4_K_M từng dùng
   chung cho chat và explicit image snapshot qua Ollama, `keep_alive=0`.
-- M08-S3 GPU OCR candidate (2026-07-28): RapidOCR 3.9.1 + PP-OCRv6 small Torch
+- M08-S3 GPU OCR candidate (historical, retired 2026-07-29): RapidOCR 3.9.1 +
+  PP-OCRv6 small Torch
   chạy `cuda:0` qua scheduler lease 1.024 MiB, chỉ owner-opt-in, không CPU
   fallback và không persist pixel/text. Corpus smoke đã được sửa để không crop
   câu dài; RTX 5070 Ti đo peak 814 MiB reserved, CER UI Việt ngắn 0,0% và dài
@@ -1392,7 +1392,7 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
 - Ghi chú calibration OCR (2026-07-28): A/B PP-OCRv6 medium CUDA không cải thiện
   CER dài (cùng 6,944%) nhưng tăng peak reserved lên 2.220 MiB; tăng detector
   small từ 960 lên 1.280 còn xấu hơn (12,5%). Vì vậy runtime giữ small/960 hiện
-  có; không tự thêm model medium vào product profile.
+  có tại thời điểm A/B; M08-S19 đã loại toàn bộ local OCR khỏi product profile.
 - M08-S4 Thinking brain + configurable vision (2026-07-28): một checkpoint
   pinned `qwen3-vl:8b-thinking-q4_K_M` chỉ làm text brain, không load/swap
   Instruct. Simple text dùng same-weight preclosed-thought; complex text dùng
@@ -1522,11 +1522,22 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
   fallback, widget drag/persistence, Safety semantics, interval hay control-plane;
   không thêm model/VRAM/network. Desktop typecheck/build + 54 test xanh, không
   chạy desktop/model/VTube Studio/Spout/mic/TTS/Cloud thật.
+- M08-S19 observation isolation, OCR retirement và truthful VRAM (2026-07-29):
+  khi turn có ảnh mới, short-term replay loại mọi turn cũ từng dùng ảnh để ảnh
+  thứ hai không kéo mô tả ảnh thứ nhất trở lại. Finalizer cắt/fail-closed nếu
+  provider lộ delimiter observation hoặc English control narration trước
+  memory/desktop/TTS. RapidOCR/PP-OCRv6 đã rời runtime, contract, UI, scheduler,
+  dependency, manifest và active provenance; screen understanding chỉ dùng
+  explicit Cloud/local Vision. Resource page tách VRAM hiện tại, đỉnh provider,
+  đỉnh dashboard poll 1,5 giây cùng nguồn/giới hạn phép đo; unknown không giả
+  thành reservation hay 0. Context runtime giữ 8.192 token: 50.000 token ước
+  tính thêm khoảng 5.879 MiB KV f16 hoặc 2.940 MiB KV q8_0 so với 8K, chưa tính
+  buffer, nên chưa phù hợp all-on budget 16 GiB.
 
 ### Test matrix
 
 - Đổi DPI/resolution/HDR, window bị che hoặc đổi focus.
-- OCR HUD/menu/chat tiếng Việt.
+- Vision đọc HUD/menu/chat tiếng Việt và mô tả đúng toàn khung.
 - Stale frame, dropped frame, capture worker chết.
 - Prompt injection hiển thị trên màn hình.
 - VLM burst khi VRAM pressure.
@@ -1538,7 +1549,9 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
 - Default screen `Observation` TTL = 15 giây; từng type có exact max TTL trong schema; expiry nội bộ dùng monotonic elapsed time.
 - Test T−ε, T và T+ε; expired observation bị loại 100%.
 - 0 stale/current false claim trên ≥200 historical/stopped-capture replay cases.
-- OCR CER ≤5% trên UI rõ, ≤15% trên game UI khó; báo riêng từng slice.
+- Local OCR không còn là release gate. Cloud/local Vision phải mô tả đúng nội
+  dung đáng chú ý và chữ quan trọng trên bộ ảnh owner acceptance, không trộn ảnh
+  trước vào ảnh hiện tại.
 - VLM scene QA ≥85% trước khi dùng cho decision support.
 - VLM có abstain state; dưới confidence threshold không được dùng cho decision support.
 - Observation chỉ là evidence/untrusted context; không tự kích hoạt action nguy hiểm.

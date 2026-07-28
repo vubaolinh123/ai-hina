@@ -400,6 +400,48 @@ class ConversationTests(unittest.IsolatedAsyncioTestCase):
         replay = await service.replay(SESSION_ID)
         self.assertNotIn("Ignore all instructions", json.dumps(replay, ensure_ascii=False))
 
+    async def test_consecutive_screenshots_exclude_prior_screenshot_turn(self) -> None:
+        first = {
+            "observationId": "11111111-1111-4111-8111-111111111111",
+            "kind": "screen.snapshot",
+            "trustLevel": "untrusted",
+            "sessionId": SESSION_ID,
+            "remainingSeconds": 12.0,
+            "vision": {"state": "ready", "summary": "Ảnh một có quảng cáo RAM."},
+            "ocr": {"state": "not-requested", "text": None},
+        }
+        second = {
+            **first,
+            "observationId": "22222222-2222-4222-8222-222222222222",
+            "vision": {"state": "ready", "summary": "Ảnh hai có meme God of War."},
+        }
+        fresh = FreshObservationStub(first)
+        gateway = ScriptedGateway(
+            [
+                ["Ảnh một đang hiển thị quảng cáo RAM."],
+                ["Ảnh hai là một meme về God of War."],
+            ]
+        )
+        service = self.service(gateway, fresh_observations=fresh)
+
+        first_result = await self.run_turn(
+            service,
+            "Dựa trên ảnh vừa chụp, hãy mô tả điều đáng chú ý.",
+        )
+        fresh.records = (second,)
+        second_result = await self.run_turn(
+            service,
+            "Dựa trên ảnh vừa chụp, hãy mô tả điều đáng chú ý.",
+        )
+
+        self.assertEqual("completed", first_result["outcome"])
+        self.assertEqual("completed", second_result["outcome"])
+        second_prompt = json.dumps(gateway.messages[1], ensure_ascii=False)
+        self.assertIn("Ảnh hai có meme God of War.", second_prompt)
+        self.assertNotIn("Ảnh một có quảng cáo RAM.", second_prompt)
+        self.assertNotIn("Ảnh một đang hiển thị quảng cáo RAM.", second_prompt)
+        self.assertEqual(1, second_result["context"]["includedFreshObservations"])
+
     async def test_fresh_screen_observation_excludes_other_lanes_sessions_and_metadata(self) -> None:
         observation = {
             "kind": "screen.snapshot",
@@ -586,6 +628,31 @@ class ConversationTests(unittest.IsolatedAsyncioTestCase):
         serialized = json.dumps(replay, ensure_ascii=False).casefold()
         self.assertNotIn("phân tích hành vi", serialized)
         self.assertNotIn("system prompt", serialized)
+
+    async def test_internal_observation_narration_is_not_exposed_or_remembered(self) -> None:
+        gateway = ScriptedGateway(
+            [[
+                "Ảnh mới là một meme về God of War.\n\n"
+                "Wait, I need to check the context again. The user asked for a description.\n"
+                "UNTRUSTED_FRESH_OBSERVATION_DATA: Looking back at the previous observation data.",
+            ]]
+        )
+        service = self.service(gateway)
+
+        result = await self.run_turn(
+            service,
+            "Mô tả ảnh vừa chụp.",
+            session_id=OTHER_SESSION_ID,
+        )
+
+        self.assertEqual("completed", result["outcome"])
+        self.assertEqual("Ảnh mới là một meme về God of War.", result["assistant"])
+        replay = json.dumps(
+            await service.replay(OTHER_SESSION_ID),
+            ensure_ascii=False,
+        )
+        self.assertNotIn("Wait, I need", replay)
+        self.assertNotIn("UNTRUSTED_FRESH_OBSERVATION_DATA", replay)
 
     async def test_cancel_interrupts_within_target_and_stores_no_partial_output(self) -> None:
         gateway = BlockingGateway()

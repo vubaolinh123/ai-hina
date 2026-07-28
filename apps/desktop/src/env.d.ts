@@ -94,6 +94,10 @@ type ResourceModel = {
   active: boolean;
   configuredVramMiB: number | null;
   measuredVramMiB: number | null;
+  providerPeakVramMiB: number | null;
+  sampledPeakVramMiB: number | null;
+  measurementSource: string;
+  measurementNote: string;
   errorCode: string | null;
   controlSupported: boolean;
   operatorResident: boolean;
@@ -357,12 +361,6 @@ type DesktopPerceptionCaptureResult = {
       height: number;
       bytes: number;
     };
-    ocr?: {
-      state: string;
-      requested: boolean;
-      text?: string;
-      errorCode?: string;
-    };
     vision?: {
       state: string;
       requested: boolean;
@@ -490,7 +488,6 @@ type HinaDesktopApi = {
     sourceToken: string;
     maxSide: 640 | 960 | 1280;
     label: string | null;
-    analyzeOcr: boolean;
     analyzeVision: boolean;
     visionQuestion: string | null;
   }): Promise<DesktopPerceptionCaptureResult>;

@@ -48,6 +48,14 @@ _HIDDEN_OUTPUT_MARKDOWN_HEADING = re.compile(
     r"(?i)\*\*\s*(?:phân tích hành vi|phân tích|analysis|chain[- ]of[- ]thought|"
     r"system prompt|developer instructions?|quy tắc hệ thống|hidden reasoning)\s*:?\s*\*\*"
 )
+_INTERNAL_CONTEXT_SENTINEL = re.compile(
+    r"(?i)(?:\[/?\s*)?UNTRUSTED_(?:FRESH_OBSERVATION|LONG_TERM_MEMORY)_DATA(?:\s*\])?"
+)
+_HIDDEN_META_NARRATION = re.compile(
+    r"(?i)^\s*(?:wait[,!. ]+)?(?:i\s+need\s+to\s+(?:check|review)|"
+    r"the\s+user\s+(?:asked|is\s+asking)|looking\s+back\s+at\s+(?:the\s+)?"
+    r"(?:previous|prior)\s+(?:observation|context))\b"
+)
 _TECHNICAL_REQUEST_TERMS = re.compile(
     r"(?:\b(?:code|coding|html|css|javascript|typescript|python|sql|api|regex|"
     r"powershell|terminal|command|npm|pnpm|git)\b|mã\s*(?:nguồn|html)?|"
@@ -418,6 +426,9 @@ class ConversationService:
                 record.turn_id,
                 sanitized_user,
                 assistant,
+                used_fresh_observation=(
+                    context.included_fresh_observations > 0
+                ),
             )
             self._transition(record, TurnState.IDLE)
             record.outcome = "completed"
@@ -583,8 +594,11 @@ def _sanitize_model_final_answer(text: str) -> str:
         raise TextBrainError("E_MODEL_EMPTY_RESPONSE", "model returned no final text")
     lines = cleaned.split("\n")
     first_content = next((line.strip() for line in lines if line.strip()), "")
-    if _HIDDEN_OUTPUT_HEADING.fullmatch(first_content) or _HIDDEN_OUTPUT_INLINE.search(
-        first_content
+    if (
+        _HIDDEN_OUTPUT_HEADING.fullmatch(first_content)
+        or _HIDDEN_OUTPUT_INLINE.search(first_content)
+        or _INTERNAL_CONTEXT_SENTINEL.search(first_content)
+        or _HIDDEN_META_NARRATION.search(first_content)
     ):
         raise TextBrainError(
             "E_CHAT_OUTPUT_BLOCKED",
@@ -594,7 +608,11 @@ def _sanitize_model_final_answer(text: str) -> str:
     kept: list[str] = []
     for line in lines:
         stripped = line.strip()
-        if _HIDDEN_OUTPUT_HEADING.fullmatch(stripped):
+        if (
+            _HIDDEN_OUTPUT_HEADING.fullmatch(stripped)
+            or _INTERNAL_CONTEXT_SENTINEL.search(stripped)
+            or _HIDDEN_META_NARRATION.search(stripped)
+        ):
             break
         # A few local checkpoints concatenate the answer, a horizontal
         # separator and their self-critique onto one line. The final answer

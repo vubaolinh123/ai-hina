@@ -285,6 +285,21 @@ với budget ngắn hơn. Capture UI hiện báo ba pha capture/encode/analyze c
 milliseconds từng chặng, không lộ source ID/pixel/key. Fast tests xanh: text
 46, speech 40, perception 62, desktop build+53/typecheck; không chạy real
 Cloud/native warmup hoặc all-on benchmark khi desktop owner đang hoạt động.
+Ngày 2026-07-29 M08-S18 chuyển Avatar/Widget/Runtime state machine khỏi
+`App.vue` sang trusted renderer composable `use-avatar-runtime.ts`; pages giữ
+presentation/typed intent, không đổi VRM/widget/Safety semantics. Desktop
+typecheck/build + 54 tests xanh.
+Ngày 2026-07-29 M08-S19 khóa lỗi hai ảnh liên tiếp: turn có ảnh mới loại các
+turn cũ từng dùng fresh observation khỏi replay; finalizer chặn delimiter và
+English control narration trước memory/desktop/TTS. Local RapidOCR/PP-OCRv6 đã
+nghỉ hưu khỏi runtime/contract/UI/dependency/manifest/provenance; screen
+understanding chỉ dùng explicit Cloud/local Vision. Resource telemetry tách
+current/provider peak/dashboard sampled peak kèm measurement source; unknown
+không giả thành reservation. Runtime giữ context 8.192 token; 50K chỉ là
+research estimate vì KV f16 thêm khoảng 5.879 MiB (q8_0 khoảng 2.940 MiB) chưa
+tính buffer và không vừa all-on budget an toàn hiện tại. GitNexus `ai-hina`
+được dùng để query/context/impact trước edit và `detect_changes` trước commit;
+generated `.gitnexus` index không phải source artifact.
 
 Legacy AIRI skill paths dưới `D:\ProjectAiri` mặc định ánh xạ sang repository
 hiện tại `D:\ProjectHinaAI`, trừ khi owner chỉ định workspace khác.
@@ -410,3 +425,43 @@ uv run --frozen python tools/sbom/generate_sbom.py
 ## Required handoff
 
 Agent result phải theo `docs/schemas/agent-result.schema.json` và gồm effective model, reasoning, permission, cwd, worktree, branch, base/head SHA, changed files, commands, tests, provenance, risks và blockers.
+
+<!-- gitnexus:start -->
+# GitNexus — Code Intelligence
+
+This project is indexed by GitNexus as **ai-hina** (5811 symbols, 11190 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+
+> Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
+
+## Always Do
+
+- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
+- **MUST run `detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows. For regression review, compare against the default branch: `detect_changes({scope: "compare", base_ref: "module/M00-governance"})`.
+- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
+- When exploring unfamiliar code, use `query({search_query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
+- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `context({name: "symbolName"})`.
+- For security review, `explain({target: "fileOrSymbol"})` lists taint findings (source→sink flows; needs `analyze --pdg`).
+
+## Never Do
+
+- NEVER edit a function, class, or method without first running `impact` on it.
+- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
+- NEVER rename symbols with find-and-replace — use `rename` which understands the call graph.
+- NEVER commit changes without running `detect_changes()` to check affected scope.
+
+## Resources
+
+| Resource | Use for |
+|----------|---------|
+| `gitnexus://repo/ai-hina/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/ai-hina/clusters` | All functional areas |
+| `gitnexus://repo/ai-hina/processes` | All execution flows |
+| `gitnexus://repo/ai-hina/process/{name}` | Step-by-step execution trace |
+
+## Codex skills
+
+Use the installed `gitnexus:*` Codex skills for exploring, impact analysis,
+debugging, refactoring, review and CLI index maintenance. Do not copy generated
+GitNexus indexes or tool-specific skill caches into product source.
+
+<!-- gitnexus:end -->

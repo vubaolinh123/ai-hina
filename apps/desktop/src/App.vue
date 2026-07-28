@@ -117,7 +117,6 @@ const screenCaptureListing = ref<ScreenCaptureSourceListing | null>(null);
 const screenCaptureSourceToken = ref("");
 const screenCaptureMaxSide = ref<640 | 960 | 1280>(960);
 const screenCaptureLabel = ref("");
-const screenCaptureAnalyzeOcr = ref(false);
 const screenCaptureAnalyzeVision = ref(false);
 const screenCaptureVisionQuestion = ref("");
 const screenCaptureBusy = ref(false);
@@ -595,7 +594,6 @@ async function captureSelectedScreenSource(): Promise<void> {
       sourceToken: source.sourceToken,
       maxSide: screenCaptureMaxSide.value,
       label: screenCaptureLabel.value.trim() || null,
-      analyzeOcr: screenCaptureAnalyzeOcr.value,
       analyzeVision: screenCaptureAnalyzeVision.value,
       visionQuestion: screenCaptureAnalyzeVision.value
         ? screenCaptureVisionQuestion.value.trim() || null
@@ -1319,7 +1317,6 @@ onBeforeUnmount(() => {
       :selected-screen-capture-source="selectedScreenCaptureSource"
       :screen-capture-max-side="screenCaptureMaxSide"
       :screen-capture-label="screenCaptureLabel"
-      :screen-capture-analyze-ocr="screenCaptureAnalyzeOcr"
       :screen-capture-analyze-vision="screenCaptureAnalyzeVision"
       :screen-capture-vision-question="screenCaptureVisionQuestion"
       :screen-capture-message="screenCaptureMessage"
@@ -1336,7 +1333,6 @@ onBeforeUnmount(() => {
       @update:screen-capture-source-token="screenCaptureSourceToken = $event"
       @update:screen-capture-max-side="screenCaptureMaxSide = $event"
       @update:screen-capture-label="screenCaptureLabel = $event"
-      @update:screen-capture-analyze-ocr="screenCaptureAnalyzeOcr = $event"
       @update:screen-capture-analyze-vision="screenCaptureAnalyzeVision = $event"
       @update:screen-capture-vision-question="screenCaptureVisionQuestion = $event"
       @update:vision-provider="visionProvider = $event"

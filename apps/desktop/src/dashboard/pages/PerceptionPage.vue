@@ -10,7 +10,6 @@ const props = defineProps<{
   selectedScreenCaptureSource: ScreenCaptureSource | null;
   screenCaptureMaxSide: 640 | 960 | 1280;
   screenCaptureLabel: string;
-  screenCaptureAnalyzeOcr: boolean;
   screenCaptureAnalyzeVision: boolean;
   screenCaptureVisionQuestion: string;
   screenCaptureMessage: string;
@@ -30,7 +29,6 @@ const emit = defineEmits<{
   "update:screenCaptureSourceToken": [value: string];
   "update:screenCaptureMaxSide": [value: 640 | 960 | 1280];
   "update:screenCaptureLabel": [value: string];
-  "update:screenCaptureAnalyzeOcr": [value: boolean];
   "update:screenCaptureAnalyzeVision": [value: boolean];
   "update:screenCaptureVisionQuestion": [value: string];
   "update:visionProvider": [value: VisionProviderChoice];
@@ -74,10 +72,6 @@ const screenCaptureMaxSide = computed({
 const screenCaptureLabel = computed({
   get: () => props.screenCaptureLabel,
   set: (value: string) => emit("update:screenCaptureLabel", value),
-});
-const screenCaptureAnalyzeOcr = computed({
-  get: () => props.screenCaptureAnalyzeOcr,
-  set: (value: boolean) => emit("update:screenCaptureAnalyzeOcr", value),
 });
 const screenCaptureAnalyzeVision = computed({
   get: () => props.screenCaptureAnalyzeVision,
@@ -228,13 +222,6 @@ function formatVisionModelSize(bytes: number | null): string {
             placeholder="Ví dụ: Minecraft — màn hình chính"
           >
 
-          <label class="capture-checkbox">
-            <input v-model="screenCaptureAnalyzeOcr" type="checkbox">
-            <span>
-              <strong>Đọc chữ bằng OCR GPU</strong>
-              <small>Nhanh với menu/HUD; kết quả vẫn cần đối chiếu nếu chữ nhỏ.</small>
-            </span>
-          </label>
           <label class="capture-checkbox">
             <input
               v-model="screenCaptureAnalyzeVision"
