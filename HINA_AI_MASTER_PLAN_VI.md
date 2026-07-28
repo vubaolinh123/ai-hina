@@ -1426,6 +1426,13 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
   cho dùng lại hoặc ghi đè key mà không discovery/chọn model lại, và hiện rõ
   analysis `ready | not-requested | error` cùng provider code/correlation ID.
   Real MiniMax M3 Cloud smoke trả summary Việt 140 ký tự, không persist pixel.
+- M08-S8 empty/truncated recovery (2026-07-29): MiniMax M3 Cloud vẫn có thể
+  trả final rỗng hoặc bị cắt ở initial budget 256 dù `think=false`. Provider
+  chỉ retry đúng một lần khi content rỗng hoặc `done_reason/eval_count` chứng
+  minh hết budget, với prompt trả lời trực tiếp và ceiling 768 token. Partial
+  bị cắt và hidden thinking không bao giờ trở thành observation; lỗi provider
+  khác không retry. Real smoke ảnh UI 2.082×1.167 trả summary Việt hoàn chỉnh
+  trong 16,703 giây, archive/pixel persistence đều tắt.
 
 ### Test matrix
 

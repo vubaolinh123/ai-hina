@@ -233,7 +233,11 @@ không đồng nghĩa model đã phân tích. Dashboard hiện summary khi visio
 thành công; nếu chưa chọn phân tích hoặc provider lỗi, nó hiện đúng trạng thái,
 mã lỗi và correlation ID thay vì chỉ báo chung “Hina đã nhận ảnh”. Với model
 Ollama có thinking, screen analysis chủ động đặt `think=false` để giới hạn
-256 token được dùng cho câu mô tả cuối, không phát hidden reasoning.
+256 token được dùng cho câu mô tả cuối, không phát hidden reasoning. Nếu
+provider vẫn trả final rỗng hoặc báo đã hết output budget, Hina thử lại đúng
+một lần với chỉ thị trả lời trực tiếp và ceiling 768 token; partial text bị cắt
+không được hiển thị như kết quả hoàn chỉnh. Lỗi key, mạng, timeout hoặc protocol
+không bị gửi lặp.
 
 Capture mặc định tắt: nút bật/tắt quyền nằm ngay trên trang **Quan sát**, và
 safety policy (`perception.observe`, decision `ask`) yêu cầu đúng hành động xác

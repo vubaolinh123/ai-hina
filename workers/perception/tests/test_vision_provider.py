@@ -115,16 +115,61 @@ class _FakeOllama:
         raise AssertionError(url)
 
 
+class _SequencedChatOllama(_FakeOllama):
+    def __init__(self, responses: list[dict[str, Any] | PerceptionError]) -> None:
+        super().__init__()
+        self.responses = list(responses)
+
+    async def request(
+        self,
+        method: str,
+        url: str,
+        payload: dict[str, object] | None,
+        api_key: str | None,
+        timeout: float,
+        max_bytes: int,
+    ) -> dict[str, Any]:
+        if not url.endswith("/api/chat"):
+            return await super().request(
+                method,
+                url,
+                payload,
+                api_key,
+                timeout,
+                max_bytes,
+            )
+        self.calls.append(
+            {
+                "method": method,
+                "url": url,
+                "payload": payload,
+                "apiKey": api_key,
+                "timeout": timeout,
+                "maxBytes": max_bytes,
+            }
+        )
+        if not self.responses:
+            raise AssertionError("unexpected extra /api/chat request")
+        response = self.responses.pop(0)
+        if isinstance(response, PerceptionError):
+            raise response
+        return response
+
+
 class _Lease:
     def __init__(self) -> None:
         self.asserted = False
         self.released = False
+        self.assert_count = 0
+        self.release_count = 0
 
     def assert_active(self) -> None:
         self.asserted = True
+        self.assert_count += 1
 
     async def release(self) -> bool:
         self.released = True
+        self.release_count += 1
         return True
 
 
@@ -161,6 +206,11 @@ class OllamaVisionProviderTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["models"][0]["name"], "qwen3-vl:2b")
         self.assertTrue(result["models"][0]["lightweight"])
         self.assertTrue(result["onlyVisionModels"])
+        self.assertEqual(
+            provider.config.public_status()["recoveryOutputTokens"],
+            768,
+        )
+        self.assertEqual(provider.config.public_status()["maximumAttempts"], 2)
         self.assertTrue(
             all(call["apiKey"] is None for call in fake.calls),
         )
@@ -206,6 +256,203 @@ class OllamaVisionProviderTests(unittest.IsolatedAsyncioTestCase):
             b"\x89PNG\r\n\x1a\nowner-pixels",
         )
         self.assertNotIn("private", result)
+
+    async def test_empty_first_response_gets_one_bounded_recovery_attempt(self) -> None:
+        fake = _SequencedChatOllama(
+            [
+                {
+                    "message": {"thinking": "private-first", "content": ""},
+                    "done": True,
+                    "done_reason": "length",
+                    "eval_count": 256,
+                },
+                {
+                    "message": {
+                        "thinking": "private-second",
+                        "content": (
+                            "Ảnh hiển thị bảng điều khiển Hina với trang kiểm "
+                            "tra giọng nói."
+                        ),
+                    },
+                    "done": True,
+                    "done_reason": "stop",
+                    "eval_count": 72,
+                },
+            ]
+        )
+        provider = OllamaVisionProvider(
+            VisionConfig(),
+            request_json=fake.request,
+        )
+        await provider.configure(
+            provider="ollama_cloud",
+            model="qwen3-vl:2b",
+            api_key="owner-cloud-secret",
+        )
+        result = await provider.analyze(
+            b"\x89PNG\r\n\x1a\nowner-pixels",
+            "Mô tả ảnh.",
+        )
+        self.assertEqual(
+            result,
+            "Ảnh hiển thị bảng điều khiển Hina với trang kiểm tra giọng nói.",
+        )
+        self.assertNotIn("private", result)
+        chats = [call for call in fake.calls if call["url"].endswith("/api/chat")]
+        self.assertEqual(len(chats), 2)
+        first_payload = chats[0]["payload"]
+        second_payload = chats[1]["payload"]
+        assert first_payload is not None
+        assert second_payload is not None
+        self.assertIs(first_payload["think"], False)
+        self.assertIs(second_payload["think"], False)
+        self.assertEqual(first_payload["options"]["num_predict"], 256)  # type: ignore[index]
+        self.assertEqual(second_payload["options"]["num_predict"], 768)  # type: ignore[index]
+        recovery_prompt = second_payload["messages"][0]["content"]  # type: ignore[index]
+        self.assertIn("Yêu cầu phục hồi", recovery_prompt)
+        self.assertNotIn("private-first", recovery_prompt)
+
+    async def test_partial_length_response_is_not_accepted_as_complete(self) -> None:
+        fake = _SequencedChatOllama(
+            [
+                {
+                    "message": {"content": ": bên trái là giao diện với"},
+                    "done": True,
+                    "done_reason": "length",
+                    "eval_count": 256,
+                },
+                {
+                    "message": {
+                        "content": (
+                            "Ảnh có giao diện ElevenLabs, gồm danh sách bản thu "
+                            "và phần cài đặt giọng ở bên phải."
+                        ),
+                    },
+                    "done": True,
+                    "done_reason": "stop",
+                    "eval_count": 84,
+                },
+            ]
+        )
+        provider = OllamaVisionProvider(
+            VisionConfig(),
+            request_json=fake.request,
+        )
+        await provider.configure(
+            provider="ollama_cloud",
+            model="qwen3-vl:2b",
+            api_key="owner-cloud-secret",
+        )
+        result = await provider.analyze(
+            b"\x89PNG\r\n\x1a\nowner-pixels",
+            "Mô tả ảnh.",
+        )
+        self.assertNotIn(": bên trái là giao diện với", result)
+        self.assertIn("ElevenLabs", result)
+
+    async def test_two_empty_responses_fail_with_stable_code(self) -> None:
+        fake = _SequencedChatOllama(
+            [
+                {"message": {"thinking": "private", "content": ""}},
+                {"message": {"thinking": "private-again", "content": "  "}},
+            ]
+        )
+        provider = OllamaVisionProvider(
+            VisionConfig(),
+            request_json=fake.request,
+        )
+        await provider.configure(
+            provider="ollama_cloud",
+            model="qwen3-vl:2b",
+            api_key="owner-cloud-secret",
+        )
+        with self.assertRaises(PerceptionError) as raised:
+            await provider.analyze(
+                b"\x89PNG\r\n\x1a\nowner-pixels",
+                "Mô tả ảnh.",
+            )
+        self.assertEqual(raised.exception.code, "E_PERCEPTION_VISION_EMPTY")
+        self.assertNotIn("private", str(raised.exception))
+        chats = [call for call in fake.calls if call["url"].endswith("/api/chat")]
+        self.assertEqual(len(chats), 2)
+
+    async def test_two_exhausted_responses_fail_as_truncated(self) -> None:
+        fake = _SequencedChatOllama(
+            [
+                {
+                    "message": {"content": "Đoạn đầu"},
+                    "done_reason": "length",
+                    "eval_count": 256,
+                },
+                {
+                    "message": {"content": "Vẫn chưa hoàn tất"},
+                    "done_reason": "length",
+                    "eval_count": 768,
+                },
+            ]
+        )
+        provider = OllamaVisionProvider(
+            VisionConfig(),
+            request_json=fake.request,
+        )
+        await provider.configure(
+            provider="ollama_cloud",
+            model="qwen3-vl:2b",
+            api_key="owner-cloud-secret",
+        )
+        with self.assertRaises(PerceptionError) as raised:
+            await provider.analyze(
+                b"\x89PNG\r\n\x1a\nowner-pixels",
+                "Mô tả ảnh.",
+            )
+        self.assertEqual(raised.exception.code, "E_PERCEPTION_VISION_TRUNCATED")
+
+    async def test_provider_error_is_not_retried(self) -> None:
+        fake = _SequencedChatOllama(
+            [
+                PerceptionError(
+                    "E_PERCEPTION_VISION_AUTH",
+                    "Ollama Cloud rejected the API key",
+                )
+            ]
+        )
+        provider = OllamaVisionProvider(
+            VisionConfig(),
+            request_json=fake.request,
+        )
+        await provider.configure(
+            provider="ollama_cloud",
+            model="qwen3-vl:2b",
+            api_key="owner-cloud-secret",
+        )
+        with self.assertRaises(PerceptionError) as raised:
+            await provider.analyze(
+                b"\x89PNG\r\n\x1a\nowner-pixels",
+                "Mô tả ảnh.",
+            )
+        self.assertEqual(raised.exception.code, "E_PERCEPTION_VISION_AUTH")
+        chats = [call for call in fake.calls if call["url"].endswith("/api/chat")]
+        self.assertEqual(len(chats), 1)
+
+    async def test_invalid_chat_shape_is_protocol_error_without_retry(self) -> None:
+        fake = _SequencedChatOllama([{"done": True, "done_reason": "stop"}])
+        provider = OllamaVisionProvider(
+            VisionConfig(),
+            request_json=fake.request,
+        )
+        await provider.configure(
+            provider="ollama_cloud",
+            model="qwen3-vl:2b",
+            api_key="owner-cloud-secret",
+        )
+        with self.assertRaises(PerceptionError) as raised:
+            await provider.analyze(
+                b"\x89PNG\r\n\x1a\nowner-pixels",
+                "Mô tả ảnh.",
+            )
+        self.assertEqual(raised.exception.code, "E_PERCEPTION_VISION_PROTOCOL")
+        chats = [call for call in fake.calls if call["url"].endswith("/api/chat")]
+        self.assertEqual(len(chats), 1)
 
     async def test_local_model_must_fit_lightweight_profile_and_use_scheduler(self) -> None:
         fake = _FakeOllama()
@@ -268,6 +515,55 @@ class OllamaVisionProviderTests(unittest.IsolatedAsyncioTestCase):
             unknown_size.exception.code,
             "E_PERCEPTION_VISION_CAPACITY",
         )
+
+    async def test_local_recovery_uses_one_lease_for_both_attempts(self) -> None:
+        fake = _SequencedChatOllama(
+            [
+                {
+                    "message": {"content": ""},
+                    "done_reason": "length",
+                    "eval_count": 256,
+                },
+                {
+                    "message": {"content": "Ảnh hiển thị menu trò chơi."},
+                    "done_reason": "stop",
+                    "eval_count": 31,
+                },
+            ]
+        )
+        leases: list[_Lease] = []
+
+        async def acquire(_unload: Any) -> _Lease:
+            lease = _Lease()
+            leases.append(lease)
+            return lease
+
+        provider = OllamaVisionProvider(
+            VisionConfig(),
+            request_json=fake.request,
+            acquire_local_lease=acquire,
+        )
+        await provider.configure(
+            provider="ollama_local",
+            model="qwen3-vl:2b",
+            api_key=None,
+        )
+        result = await provider.analyze(
+            b"\x89PNG\r\n\x1a\nowner-pixels",
+            "Mô tả ảnh.",
+        )
+        self.assertEqual(result, "Ảnh hiển thị menu trò chơi.")
+        self.assertEqual(len(leases), 1)
+        self.assertEqual(leases[0].assert_count, 2)
+        self.assertEqual(leases[0].release_count, 1)
+
+    async def test_recovery_budget_cannot_be_lower_than_initial_budget(self) -> None:
+        with self.assertRaises(PerceptionError) as raised:
+            VisionConfig(
+                max_output_tokens=512,
+                recovery_output_tokens=256,
+            )
+        self.assertEqual(raised.exception.code, "E_PERCEPTION_VISION_CONFIG")
 
     async def test_unconfigured_provider_fails_closed(self) -> None:
         provider = OllamaVisionProvider(

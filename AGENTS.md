@@ -183,6 +183,15 @@ trống dùng key cũ, key mới chỉ ghi đè sau khi `/api/show` + configure 
 công. Real `minimax-m3` Cloud smoke trả summary Việt 140 ký tự,
 `vision.state=ready`, không persist pixel; feature flag được trả về trạng thái
 tắt sau smoke. Perception 50 tests và desktop 52 tests xanh.
+Ngày 2026-07-29 M08-S8 đóng hai correlation
+`64b371e7-80db-467d-ac6f-f59c8b6fbb2d` và
+`215e4ffc-d15e-4c42-a8d7-80f20d4c28d1`: MiniMax M3 vẫn có thể trả final rỗng
+hoặc bị cắt ở 256 token dù `think=false`. Provider nay chỉ retry đúng một lần
+khi final rỗng hoặc `done_reason/eval_count` chứng minh hết budget, với prompt
+trả lời trực tiếp và ceiling phục hồi 768 token. Partial bị cắt không được dùng;
+hidden thinking không được đọc/log/trả về; lỗi auth/network/timeout/protocol
+không retry. Real smoke ảnh UI 2.082×1.167 trả summary Việt hoàn chỉnh trong
+16,703 giây, không persist pixel; 58 perception tests xanh.
 
 Legacy AIRI skill paths dưới `D:\ProjectAiri` mặc định ánh xạ sang repository
 hiện tại `D:\ProjectHinaAI`, trừ khi owner chỉ định workspace khác.

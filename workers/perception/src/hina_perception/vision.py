@@ -27,6 +27,7 @@ class VisionConfig:
     request_timeout_seconds: float = 20.0
     max_response_bytes: int = 2_097_152
     max_output_tokens: int = 256
+    recovery_output_tokens: int = 768
     local_context_tokens: int = 4_096
     local_gpu_layers: int = 999
     local_model_vram_mib: int = 5_120
@@ -57,6 +58,7 @@ class VisionConfig:
         for value, name, lower, upper in (
             (self.max_response_bytes, "response byte limit", 16_384, 8_388_608),
             (self.max_output_tokens, "output token limit", 32, 2_048),
+            (self.recovery_output_tokens, "recovery output token limit", 32, 2_048),
             (self.local_context_tokens, "local context token limit", 1_024, 8_192),
             (self.local_gpu_layers, "local GPU layer request", 1, 9_999),
             (self.local_model_vram_mib, "local VRAM reservation", 512, 8_192),
@@ -69,6 +71,11 @@ class VisionConfig:
                     "E_PERCEPTION_VISION_CONFIG",
                     f"vision {name} is invalid",
                 )
+        if self.recovery_output_tokens < self.max_output_tokens:
+            raise PerceptionError(
+                "E_PERCEPTION_VISION_CONFIG",
+                "vision recovery output token limit must not be lower than the initial limit",
+            )
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> VisionConfig:
@@ -80,6 +87,11 @@ class VisionConfig:
                 20.0,
             ),
             max_output_tokens=_env_int(values, "HINA_VISION_MAX_TOKENS", 256),
+            recovery_output_tokens=_env_int(
+                values,
+                "HINA_VISION_RECOVERY_MAX_TOKENS",
+                768,
+            ),
             local_model_vram_mib=_env_int(
                 values,
                 "HINA_VISION_LOCAL_VRAM_MIB",
@@ -98,6 +110,8 @@ class VisionConfig:
             "cloudEndpoint": self.cloud_base_url,
             "requestTimeoutSeconds": float(self.request_timeout_seconds),
             "maxOutputTokens": self.max_output_tokens,
+            "recoveryOutputTokens": self.recovery_output_tokens,
+            "maximumAttempts": 2,
             "localContextTokens": self.local_context_tokens,
             "localGpuLayers": self.local_gpu_layers,
             "localModelVramMiB": self.local_model_vram_mib,
@@ -348,32 +362,12 @@ class OllamaVisionProvider:
                 "E_PERCEPTION_VISION_UNAVAILABLE",
                 "screen-reading provider has not been configured in the desktop dashboard",
             )
-        body: dict[str, object] = {
-            "model": model,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": prompt.strip(),
-                    "images": [base64.b64encode(image_png).decode("ascii")],
-                }
-            ],
-            "stream": False,
-            # Screen summaries need the bounded final answer, not a reasoning
-            # trace. Thinking-capable Cloud models can otherwise spend the
-            # entire num_predict budget in message.thinking and return an empty
-            # message.content even though image inference succeeded.
-            "think": False,
-            "options": {
-                "temperature": 0.2,
-                "num_predict": self.config.max_output_tokens,
-            },
-        }
-        if kind is VisionProviderKind.OLLAMA_LOCAL:
-            body["keep_alive"] = 0
-            options = body["options"]
-            assert isinstance(options, dict)
-            options["num_ctx"] = self.config.local_context_tokens
-            options["num_gpu"] = self.config.local_gpu_layers
+        clean_prompt = prompt.strip()
+        encoded_image = base64.b64encode(image_png).decode("ascii")
+        attempts = (
+            (clean_prompt, self.config.max_output_tokens),
+            (_recovery_prompt(clean_prompt), self.config.recovery_output_tokens),
+        )
         lease: VisionLease | None = None
         async with self._inference_lock:
             try:
@@ -384,25 +378,44 @@ class OllamaVisionProvider:
                             "local vision inference requires Hina's shared GPU scheduler",
                         )
                     lease = await self._acquire_local_lease(self.unload)
-                result = await self._request_json(
-                    "POST",
-                    f"{self._base_url(kind)}/api/chat",
-                    body,
-                    key,
-                    self.config.request_timeout_seconds,
-                    self.config.max_response_bytes,
-                )
-                if lease is not None:
-                    lease.assert_active()
-                message = result.get("message")
-                text = message.get("content") if isinstance(message, dict) else None
-                if not isinstance(text, str) or not text.strip():
+                for attempt_index, (attempt_prompt, token_limit) in enumerate(attempts):
+                    body = _chat_body(
+                        kind=kind,
+                        model=model,
+                        prompt=attempt_prompt,
+                        encoded_image=encoded_image,
+                        token_limit=token_limit,
+                        config=self.config,
+                    )
+                    result = await self._request_json(
+                        "POST",
+                        f"{self._base_url(kind)}/api/chat",
+                        body,
+                        key,
+                        self.config.request_timeout_seconds,
+                        self.config.max_response_bytes,
+                    )
+                    if lease is not None:
+                        lease.assert_active()
+                    text, exhausted = _final_content(result, token_limit)
+                    if text is not None and not exhausted:
+                        await self._remember_error(None)
+                        return text
+                    if attempt_index == 0:
+                        continue
+                    if exhausted:
+                        raise PerceptionError(
+                            "E_PERCEPTION_VISION_TRUNCATED",
+                            "Ollama vision model exhausted both bounded final-answer budgets",
+                            retryable=True,
+                        )
                     raise PerceptionError(
                         "E_PERCEPTION_VISION_EMPTY",
-                        "Ollama vision model returned no final text",
+                        "Ollama vision model returned no final text after one "
+                        "bounded recovery attempt",
+                        retryable=True,
                     )
-                await self._remember_error(None)
-                return text.strip()
+                raise AssertionError("vision attempts must return or raise")
             except PerceptionError as exc:
                 await self._remember_error(exc.code)
                 raise
@@ -503,6 +516,78 @@ class OllamaVisionProvider:
     async def _remember_error(self, code: str | None) -> None:
         async with self._state_lock:
             self._last_error_code = code
+
+
+def _chat_body(
+    *,
+    kind: VisionProviderKind,
+    model: str,
+    prompt: str,
+    encoded_image: str,
+    token_limit: int,
+    config: VisionConfig,
+) -> dict[str, object]:
+    body: dict[str, object] = {
+        "model": model,
+        "messages": [
+            {
+                "role": "user",
+                "content": prompt,
+                "images": [encoded_image],
+            }
+        ],
+        "stream": False,
+        # Screen summaries need the bounded final answer, not a reasoning
+        # trace. Some thinking-capable Cloud models still exhaust the first
+        # budget, so analyze() performs one explicit bounded recovery request.
+        "think": False,
+        "options": {
+            "temperature": 0.2,
+            "num_predict": token_limit,
+        },
+    }
+    if kind is VisionProviderKind.OLLAMA_LOCAL:
+        body["keep_alive"] = 0
+        options = body["options"]
+        assert isinstance(options, dict)
+        options["num_ctx"] = config.local_context_tokens
+        options["num_gpu"] = config.local_gpu_layers
+    return body
+
+
+def _recovery_prompt(prompt: str) -> str:
+    return (
+        f"{prompt}\n\n"
+        "Yêu cầu phục hồi: bắt đầu ngay bằng kết luận nhìn thấy trong ảnh, không "
+        "trình bày quá trình suy nghĩ. Chỉ trả lời 1 đến 3 câu tiếng Việt hoàn "
+        "chỉnh, tối đa 80 từ."
+    )
+
+
+def _final_content(
+    result: dict[str, Any],
+    token_limit: int,
+) -> tuple[str | None, bool]:
+    message = result.get("message")
+    if not isinstance(message, dict) or not isinstance(message.get("content"), str):
+        raise PerceptionError(
+            "E_PERCEPTION_VISION_PROTOCOL",
+            "Ollama chat response does not contain a text content field",
+        )
+    raw_text = message["content"]
+    text = raw_text.strip() or None
+    raw_reason = result.get("done_reason")
+    done_reason = raw_reason.strip().casefold() if isinstance(raw_reason, str) else ""
+    raw_eval_count = result.get("eval_count")
+    eval_count = (
+        raw_eval_count
+        if isinstance(raw_eval_count, int) and not isinstance(raw_eval_count, bool)
+        else None
+    )
+    exhausted = done_reason in {"length", "max_tokens", "token_limit"} or (
+        eval_count is not None and eval_count >= token_limit
+    )
+    return text, exhausted
 
 
 class _NoRedirect(HTTPRedirectHandler):

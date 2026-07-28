@@ -6,6 +6,7 @@
   candidate; M08-S5 realtime resource dashboard is a runnable candidate;
   M08-S6 desktop full-frame low-resolution capture is a runnable candidate;
   M08-S7 vision result + persisted configuration hotfix is a runnable candidate;
+  M08-S8 bounded empty/truncated vision recovery is a runnable candidate;
   M08 remains active
 - Branch: `main` (fast-development mode)
 - Active slices: M08-S1 perception spine (owner-consented snapshot ingestion,
@@ -17,7 +18,8 @@
   all-on RAM/VRAM/model state needed to operate those providers safely;
   M08-S6 moves the primary capture authority into Electron main and sends the
   complete selected source at a bounded owner-selected resolution; M08-S7
-  makes final analysis/error state and persisted Cloud configuration explicit
+  makes final analysis/error state and persisted Cloud configuration explicit;
+  M08-S8 retries only empty or output-budget-truncated VLM completions once
 
 ## Runnable target
 
@@ -249,6 +251,24 @@ is retained only for audit/rollback comparison.
   `vision.state=ready` và summary Việt 140 ký tự. Archive vẫn tắt, normal capture
   không persist pixel và feature perception được restore về tắt sau smoke.
 
+## Implemented in M08-S8 (bounded empty/truncated response recovery)
+
+- Hai correlation owner `64b371e7-80db-467d-ac6f-f59c8b6fbb2d` và
+  `215e4ffc-d15e-4c42-a8d7-80f20d4c28d1` trên build `317462e` xác nhận cùng
+  snapshot 144.950 byte vẫn trả `E_PERCEPTION_VISION_EMPTY` dù request đã đặt
+  `think=false`. Một ảnh UI phức tạp khác còn tạo final text cụt
+  `": bên trái là trình soạn thảo văn bản với"` ở budget 256.
+- Provider nay đọc `done_reason` và `eval_count` của Ollama. Final content rỗng
+  hoặc đã chạm output budget không được coi là summary hoàn chỉnh; đúng một
+  recovery request được phép dùng prompt bắt đầu ngay bằng kết luận và ceiling
+  768 token. Mọi lỗi auth/offline/timeout/protocol/capacity vẫn không retry.
+- Cả hai request giữ `stream=false`, `think=false`; `message.thinking` không
+  được dùng làm summary, không đưa vào recovery prompt và không ghi log. Nếu
+  lượt thứ hai vẫn rỗng hoặc bị cắt, provider trả mã ổn định tương ứng
+  `E_PERCEPTION_VISION_EMPTY` hoặc `E_PERCEPTION_VISION_TRUNCATED`.
+- Local-provider recovery giữ đúng một scheduler lease cho cả hai lượt, assert
+  lease sau từng response rồi release đúng một lần.
+
 ## Deferred M08 deliverables
 
 Chất lượng OCR tiếng Việt (benchmark corpus UI rõ/game UI khó và thay/tinh chỉnh
@@ -357,3 +377,14 @@ Không được đánh dấu M08 complete khi các phần còn lại chưa có e
   `vision.state=ready`, summary 140 ký tự, provider/model error `null`.
 - Không tạo raw screenshot, audio, fixture hoặc one-off script mới; archive và
   normal pixel persistence đều giữ tắt.
+
+## Fast evidence M08-S8 (owner machine)
+
+- `pnpm test:perception`: 58 tests pass, gồm empty recovery, truncated partial
+  rejection, double-failure code, no-retry provider error và one-lease local
+  recovery.
+- Real persisted MiniMax M3 Cloud request trên ảnh UI 2.082×1.167/280.451 byte:
+  `vision.state=ready`, summary Việt hoàn chỉnh 3 câu, 16.703 ms,
+  `lastErrorCode=null`.
+- Snapshot test không được archive; `pixelDataRetained=false`. Không tạo raw
+  screenshot, fixture, script one-off hoặc debug dump mới.

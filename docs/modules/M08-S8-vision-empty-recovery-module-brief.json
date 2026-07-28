@@ -1,0 +1,70 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M08-S8-vision-empty-recovery",
+  "module_id": "M08",
+  "objective": "Make explicit Ollama screen analysis recover from empty or token-budget-truncated final content with one bounded second attempt, while continuing to discard hidden reasoning and preserving the no-pixel-retention boundary.",
+  "non_goals": [
+    "Do not add or automatically switch to another vision provider or model.",
+    "Do not expose, log or return hidden reasoning, raw provider payloads, API keys or snapshot pixels.",
+    "Do not retry authentication, protocol, offline, timeout or capacity failures.",
+    "Do not add automatic/background capture, change observation TTL or enable autonomous decision support.",
+    "Do not open another product module or run repeat, soak or full release verification."
+  ],
+  "base_sha": "317462e02363f3ba7f270083e18fe21be977ade0",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "workers/perception/src/hina_perception/vision.py",
+    "workers/perception/tests/test_vision_provider.py",
+    "docs/modules/M08-S8-vision-empty-recovery-module-brief.json",
+    "docs/modules/M08-perception.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "README.md"
+  ],
+  "forbidden_paths": [
+    "packages/contracts/",
+    "packages/text-brain/",
+    "workers/speech/",
+    "packages/memory/",
+    "packages/avatar/",
+    "voice_demo/"
+  ],
+  "contracts": [
+    "The first explicit vision request remains stream=false, think=false and bounded to 256 output tokens by default.",
+    "Only an empty final message or a response proven exhausted by done_reason/eval_count receives exactly one recovery attempt with a stricter direct-answer prompt and a bounded 768-token default ceiling.",
+    "A non-empty response marked token-budget-truncated is never accepted as a complete screen summary.",
+    "Hidden message.thinking content is never used as the summary, copied into the retry prompt, returned to the caller or written to logs.",
+    "Provider/auth/offline/timeout/protocol/capacity errors are propagated without a retry.",
+    "A local GPU lease covers both bounded attempts and is asserted after each provider response, then released exactly once."
+  ],
+  "allowed_dependencies": [
+    "Existing Python standard library and pinned perception worker dependencies"
+  ],
+  "oss_candidates": [
+    "No new dependency; use the existing Ollama /api/chat response fields message.content, done_reason and eval_count."
+  ],
+  "acceptance_criteria": [
+    "A fake empty-first/complete-second Cloud response returns the second final content after exactly two requests.",
+    "A fake length-truncated first response is retried and its partial content is never returned.",
+    "Two empty responses fail with E_PERCEPTION_VISION_EMPTY and two exhausted responses fail with E_PERCEPTION_VISION_TRUNCATED.",
+    "Authentication and other provider errors execute exactly one request and retain their original stable code.",
+    "Local lease tests prove both attempts share one lease that is asserted after each response and released once.",
+    "Fast perception tests and one bounded real MiniMax M3 Cloud smoke using a complex UI image return a complete Vietnamese summary without persisting the image."
+  ],
+  "required_test_commands": [
+    "pnpm test:perception",
+    "uv run --frozen python -c \"import json,jsonschema,pathlib; root=pathlib.Path('.'); jsonschema.Draft202012Validator(json.loads((root/'docs/schemas/module-brief.schema.json').read_text(encoding='utf-8'))).validate(json.loads((root/'docs/modules/M08-S8-vision-empty-recovery-module-brief.json').read_text(encoding='utf-8')))\""
+  ],
+  "latency_or_quality_budget": {
+    "initial_output_tokens": 256,
+    "recovery_output_tokens": 768,
+    "maximum_attempts": 2,
+    "maximum_seconds_per_attempt": 20,
+    "maximum_summary_characters": 2000,
+    "hidden_reasoning_exposed": false,
+    "automatic_capture": false,
+    "normal_pixel_persistence": false
+  },
+  "output_artifact_dir": "artifacts/verification/M08/"
+}
