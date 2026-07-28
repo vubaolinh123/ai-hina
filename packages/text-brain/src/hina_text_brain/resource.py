@@ -14,7 +14,13 @@ from typing import Awaitable, Callable, Protocol
 from .errors import TextBrainError
 
 
-MIN_VRAM_HEADROOM_MIB = 2_048
+# The admission ceiling leaves a small static cushion on a nominal 16 GiB card
+# (15.5 GiB usable by Hina).  NVIDIA's live ``memory.free`` already excludes
+# Windows, the desktop compositor and other GPU applications, so those bytes
+# must not be subtracted a second time by the scheduler.
+DEFAULT_HINA_VRAM_ADMISSION_CEILING_MIB = 15_872
+DEFAULT_LIVE_FREE_RESERVE_MIB = 0
+MIN_VRAM_HEADROOM_MIB = 0
 MAX_TELEMETRY_OUTPUT_BYTES = 65_536
 _OWNER = re.compile(r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$")
 UnloadCallback = Callable[[], Awaitable[None] | None]
@@ -180,6 +186,8 @@ class SchedulerSnapshot:
     available_vram_mib: int
     available_ram_mib: int
     headroom_mib: int
+    admission_ceiling_mib: int
+    live_free_reserve_mib: int
 
     def as_json(self) -> dict[str, object]:
         return {
@@ -190,6 +198,8 @@ class SchedulerSnapshot:
             "availableVramMiB": self.available_vram_mib,
             "availableRamMiB": self.available_ram_mib,
             "headroomMiB": self.headroom_mib,
+            "admissionCeilingMiB": self.admission_ceiling_mib,
+            "liveFreeReserveMiB": self.live_free_reserve_mib,
         }
 
 
@@ -239,6 +249,8 @@ class LocalResourceScheduler:
         telemetry: TelemetryProvider,
         *,
         headroom_mib: int = MIN_VRAM_HEADROOM_MIB,
+        admission_ceiling_mib: int = DEFAULT_HINA_VRAM_ADMISSION_CEILING_MIB,
+        live_free_reserve_mib: int = DEFAULT_LIVE_FREE_RESERVE_MIB,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         if (
@@ -247,8 +259,21 @@ class LocalResourceScheduler:
             or headroom_mib < MIN_VRAM_HEADROOM_MIB
         ):
             raise TextBrainError("E_RESOURCE_REQUEST", "VRAM headroom is invalid")
+        for value, name in (
+            (admission_ceiling_mib, "VRAM admission ceiling"),
+            (live_free_reserve_mib, "live-free VRAM reserve"),
+        ):
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, int)
+                or value < 0
+                or value > 65_536
+            ):
+                raise TextBrainError("E_RESOURCE_REQUEST", f"{name} is invalid")
         self.telemetry = telemetry
         self.headroom_mib = headroom_mib
+        self.admission_ceiling_mib = admission_ceiling_mib
+        self.live_free_reserve_mib = live_free_reserve_mib
         self.clock = clock
         self._condition = asyncio.Condition()
         self._leases: dict[str, _LeaseRecord] = {}
@@ -366,6 +391,8 @@ class LocalResourceScheduler:
                     "availableVramMiB": None,
                     "availableRamMiB": None,
                     "headroomMiB": self.headroom_mib,
+                    "admissionCeilingMiB": self.admission_ceiling_mib,
+                    "liveFreeReserveMiB": self.live_free_reserve_mib,
                     "leases": leases,
                 }
             else:
@@ -393,11 +420,19 @@ class LocalResourceScheduler:
     def _snapshot_locked(self, telemetry: TelemetrySnapshot) -> SchedulerSnapshot:
         reserved_vram = sum(record.lease.request.vram_mib for record in self._leases.values())
         reserved_ram = sum(record.lease.request.ram_mib for record in self._leases.values())
-        allocatable_from_total = max(
-            0,
-            telemetry.total_vram_mib - self.headroom_mib - reserved_vram,
+        # The configured Hina ceiling protects a small static cushion even if
+        # the GPU is otherwise idle. ``free_vram_mib`` is already post-Windows
+        # and post-other-process usage, so subtract only the explicit live
+        # reserve (zero in the owner-approved 15.5 GiB profile).
+        effective_ceiling = min(
+            telemetry.total_vram_mib,
+            self.admission_ceiling_mib,
         )
-        allocatable_from_live_free = max(0, telemetry.free_vram_mib - self.headroom_mib)
+        allocatable_from_total = max(0, effective_ceiling - reserved_vram)
+        allocatable_from_live_free = max(
+            0,
+            telemetry.free_vram_mib - self.live_free_reserve_mib,
+        )
         available_vram = min(allocatable_from_total, allocatable_from_live_free)
         available_ram = max(
             0,
@@ -414,6 +449,8 @@ class LocalResourceScheduler:
             available_vram_mib=available_vram,
             available_ram_mib=available_ram,
             headroom_mib=self.headroom_mib,
+            admission_ceiling_mib=effective_ceiling,
+            live_free_reserve_mib=self.live_free_reserve_mib,
         )
 
     def _preempt_lower_priority_locked(

@@ -87,6 +87,7 @@ class TransportValueTests(unittest.TestCase):
                 "/v1/config",
                 "/v1/metrics",
                 "/v1/model/status",
+                "/v1/resources/models/control",
                 "/v1/chat/status",
                 "/v1/chat/turns",
                 "/v1/chat/turns/{turnId}",

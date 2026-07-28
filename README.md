@@ -290,10 +290,12 @@ bằng OmniVoice TTS; voice vẫn tuân theo global mute.
 Trang **Tài nguyên AI** cập nhật khoảng 1,5 giây một lần nhưng chỉ khi đang mở.
 Nó hiển thị RAM/VRAM vật lý, tải/nhiệt độ/công suất GPU, RSS của core và
 desktop, lease scheduler, model nào đang load/unload và timeline thay đổi trong
-RAM. Trần vận hành Hina là 14 GB VRAM với tối thiểu 2 GB còn trống; page cảnh
-báo khi vi phạm. “Reservation” là ngân sách scheduler dùng để cấp quyền chạy,
-không phải một phần VRAM phải cộng thêm lần nữa vào số đo vật lý. Model Cloud
-được ghi rõ là không giữ trọng số trong VRAM local.
+ RAM. Trần admission của Hina là 15,5 GiB VRAM; `nvidia-smi memory.free` đã
+ loại phần Windows và ứng dụng GPU khác nên là giới hạn vật lý cứng, không bị
+ trừ thêm một lần bởi scheduler. Page cảnh báo khi chạm trần hoặc VRAM trống
+ thực tế quá thấp. “Reservation” là ngân sách scheduler dùng để cấp quyền chạy,
+ không phải một phần VRAM phải cộng thêm lần nữa vào số đo vật lý. Model Cloud
+ được ghi rõ là không giữ trọng số trong VRAM local.
 
 Desktop tải real VRM 1.0 bằng Three.js/`@pixiv/three-vrm`. Base hiện tại là
 `VRM1_Constraint_Twist_Sample` chính thức của pixiv/VRM Consortium, được bundle

@@ -1,0 +1,87 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M08-S11-runtime-capacity-capture-hotfix",
+  "module_id": "M08",
+  "objective": "Fix owner-visible manual model warmup failures, make bounded Cloud vision analysis return a complete usable overview instead of falsely rejecting a punctuation-complete budget-bound answer, expose truthful desktop capture/analysis timing, and apply the owner's approved 15.5 GiB Hina GPU budget without double-reserving Windows' already-measured GPU use.",
+  "non_goals": [
+    "Do not add a model, dependency, background capture, automatic screen observation, image persistence, or remote control surface.",
+    "Do not ignore NVIDIA live-free telemetry, overcommit physical VRAM, force Cloud vision into local VRAM, or enable CPU fallback for the GPU desktop profile.",
+    "Do not run repeat, soak, full-release, or deep VRAM benchmark workflows unless the owner explicitly requests them."
+  ],
+  "base_sha": "32e7fac1cf52c1371c781b0dd6f31594c91f5176",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "packages/text-brain/src/hina_text_brain/config.py",
+    "packages/text-brain/src/hina_text_brain/resource.py",
+    "packages/text-brain/src/hina_text_brain/providers.py",
+    "packages/text-brain/tests/",
+    "workers/speech/src/hina_speech/config.py",
+    "workers/speech/src/hina_speech/provider.py",
+    "workers/speech/src/hina_speech/service.py",
+    "workers/speech/tests/",
+    "workers/perception/src/hina_perception/vision.py",
+    "workers/perception/src/hina_perception/service.py",
+    "workers/perception/tests/",
+    "apps/core-runtime/src/hina_core/runtime/application.py",
+    "apps/core-runtime/src/hina_core/runtime/transport.py",
+    "apps/core-runtime/tests/",
+    "apps/desktop/electron/main.ts",
+    "apps/desktop/electron/preload.ts",
+    "apps/desktop/src/App.vue",
+    "apps/desktop/src/env.d.ts",
+    "apps/desktop/test/",
+    "packages/contracts/openapi/control-plane.v1.json",
+    "tools/dev/Start-HinaControlPlane.ps1",
+    "docs/modules/M08-S11-runtime-capacity-capture-hotfix-module-brief.json",
+    "docs/modules/M08-perception.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    "voice_demo/",
+    "var/perception-sessions/",
+    "apps/desktop/dist/",
+    "apps/desktop/dist-electron/",
+    "var/test-artifacts/"
+  ],
+  "contracts": [
+    "The 15.5 GiB (15,872 MiB) Hina admission ceiling is capped by live NVIDIA free VRAM; Windows/other-process usage is already represented by that live value and is not subtracted a second time.",
+    "Manual brain/STT warmup uses only the existing shared GPU scheduler and pin/unload lifecycle; an owner action never silently falls back to CPU or bypasses admission.",
+    "A model warmup may use a separate bounded warmup deadline, never the short health probe deadline used for availability checks.",
+    "Vision performs no more than two Cloud/local requests per snapshot. A final answer at an output-token boundary is accepted only when it passes bounded completeness checks; otherwise recovery requests a shorter complete overview and still fails closed on incomplete content.",
+    "Desktop capture progress/timings expose only phase durations and capture dimensions/bytes, never source IDs, raw pixels, API keys, hidden model text, or additional persistence."
+  ],
+  "allowed_dependencies": [
+    "Existing Python standard library, current scheduler/provider interfaces, Electron typed IPC, and Vue/CSS; no new dependency."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "Force-load brain waits long enough for a real local Ollama cold load and reports a bounded provider error only after that deadline.",
+    "Force-load Systran/faster-whisper-large-v3 is supported through a GPU lease, remains resident until owner unload/preemption, and is never changed to CPU fallback.",
+    "Resource page reports a 15.5 GiB Hina ceiling and accurately explains that live-free VRAM remains the hard physical limit.",
+    "A budget-bound VLM final answer ending cleanly is accepted; incomplete first output receives at most one concise recovery request, and incomplete second output remains an explicit error.",
+    "The capture page changes from capture to analysis progress and shows bounded capture/runtime/total timing after completion without retaining pixels.",
+    "Focused unit/build/typecheck tests pass; one read-only NVIDIA/Ollama resource snapshot is recorded in docs rather than retaining raw test artifacts."
+  ],
+  "required_test_commands": [
+    "$env:PYTHONPATH='apps/core-runtime/src;packages/contracts/src;packages/safety-policy/src;packages/text-brain/src;workers/speech/src;workers/perception/src'; uv run --frozen python -m unittest discover -s packages/text-brain/tests -p 'test_*.py'",
+    "$env:PYTHONPATH='apps/core-runtime/src;packages/contracts/src;packages/safety-policy/src;packages/text-brain/src;workers/speech/src;workers/perception/src'; uv run --frozen python -m unittest discover -s workers/speech/tests -p 'test_*.py'",
+    "$env:PYTHONPATH='apps/core-runtime/src;packages/contracts/src;packages/safety-policy/src;packages/text-brain/src;workers/speech/src;workers/perception/src'; uv run --frozen python -m unittest discover -s workers/perception/tests -p 'test_*.py'",
+    "$env:PYTHONPATH='apps/core-runtime/src;packages/contracts/src;packages/safety-policy/src;packages/text-brain/src;workers/speech/src;workers/perception/src'; uv run --frozen python -m unittest discover -s apps/core-runtime/tests -p 'test_resource_routes.py'",
+    "pnpm --filter @hina/desktop test",
+    "pnpm --filter @hina/desktop typecheck",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "manual_warmup_deadline_seconds": 45,
+    "vision_maximum_requests": 2,
+    "vision_initial_output_tokens": 384,
+    "vision_recovery_output_tokens": 640,
+    "hina_vram_admission_ceiling_mib": 15872,
+    "live_free_vram_reserve_mib": 0
+  },
+  "output_artifact_dir": "artifacts/verification/M08/"
+}

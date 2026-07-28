@@ -135,6 +135,8 @@ type ResourceStatus = {
     availableVramMiB: number | null;
     availableRamMiB: number | null;
     headroomMiB: number;
+    admissionCeilingMiB?: number;
+    liveFreeReserveMiB?: number;
     leases: ResourceLease[];
   };
   processes: {
@@ -323,6 +325,15 @@ type ScreenCaptureSourceListing = {
   persistence: false;
 };
 
+type ScreenCaptureProgress = {
+  phase: "capturing" | "encoding" | "analyzing";
+  requestedMaxSide: 640 | 960 | 1280;
+  sourceName: string;
+  width?: number;
+  height?: number;
+  bytes?: number;
+};
+
 type DesktopPerceptionCaptureResult = {
   status: "observed" | "duplicate";
   correlationId: string;
@@ -350,6 +361,7 @@ type DesktopPerceptionCaptureResult = {
       errorCode?: string;
       providerErrorCode?: string;
       modelErrorCode?: string;
+      processingMilliseconds?: number;
     };
   };
   dedup?: {
@@ -367,6 +379,12 @@ type DesktopPerceptionCaptureResult = {
     bytes: number;
     automatic: false;
     persistedByDesktop: false;
+    timings?: {
+      sourceLookupMilliseconds: number;
+      encodingMilliseconds: number;
+      runtimeMilliseconds: number;
+      totalMilliseconds: number;
+    };
   };
 };
 
@@ -465,6 +483,9 @@ type HinaDesktopApi = {
     analyzeVision: boolean;
     visionQuestion: string | null;
   }): Promise<DesktopPerceptionCaptureResult>;
+  onScreenCaptureProgress(
+    listener: (progress: ScreenCaptureProgress) => void,
+  ): () => void;
 };
 
 interface Window {

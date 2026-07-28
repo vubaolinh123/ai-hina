@@ -84,6 +84,7 @@ test("preload exposes named methods and never exposes raw ipcRenderer", () => {
     "controlResourceModel",
     "listScreenCaptureSources",
     "captureScreenSource",
+    "onScreenCaptureProgress",
   ]) {
     assert.match(preload, new RegExp(`${method}:`));
   }
@@ -166,6 +167,9 @@ test("full-frame screen capture stays in Electron main behind one-use grants", (
   assert.match(main, /requestPerceptionSnapshot/);
   assert.match(preload, /listScreenCaptureSources:/);
   assert.match(preload, /captureScreenSource:/);
+  assert.match(preload, /onScreenCaptureProgress:/);
+  assert.match(main, /CHANNELS\.captureProgress/);
+  assert.match(renderer, /handleScreenCaptureProgress/);
   assert.doesNotMatch(preload, /desktopCapturer|sourceId/);
   assert.match(capture, /CAPTURE_GRANT_TTL_MILLISECONDS\s*=\s*60_000/);
   assert.match(capture, /CAPTURE_MAX_SIDES/);

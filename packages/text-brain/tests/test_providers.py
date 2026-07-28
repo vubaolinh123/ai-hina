@@ -196,6 +196,24 @@ class ProviderAdapterTests(unittest.IsolatedAsyncioTestCase):
             1.15,
         )
 
+    async def test_owner_warmup_uses_its_own_deadline_and_disables_thinking(self) -> None:
+        provider = LocalHttpChatProvider(
+            ModelGatewayConfig(
+                base_url=self.base_url,
+                model="hina-local:4b",
+                health_timeout_seconds=0.1,
+                warmup_timeout_seconds=45.0,
+            )
+        )
+        await provider.warmup()
+        body = _ProviderHandler.received_body
+        assert body is not None
+        self.assertEqual(body["model"], "hina-local:4b")
+        self.assertFalse(body["stream"])
+        self.assertFalse(body["think"])
+        self.assertEqual(body["keep_alive"], -1)
+        self.assertEqual(body["options"]["num_predict"], 1)
+
     async def test_ollama_residency_distinguishes_loaded_from_installed(self) -> None:
         provider = LocalHttpChatProvider(
             ModelGatewayConfig(base_url=self.base_url, model="hina-local:4b")

@@ -1453,8 +1453,19 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
   câu và dash nhưng giữ OmniVoice 1.0x/110-character chunk. Fast evidence:
   text 44, speech 22, perception 61, resource route 5, desktop 53/typecheck
   và launcher startup smoke xanh. Slice không tạo raw artifact mới; audit đã
-  xác định legacy M07 smoke files trong `var/tmp` còn chờ owner cleanup vì môi
-  trường chặn thao tác xóa đã xác minh.
+   xác định legacy M07 smoke files trong `var/tmp` còn chờ owner cleanup vì môi
+   trường chặn thao tác xóa đã xác minh.
+- M08-S11 capture/runtime-capacity hotfix (2026-07-29): owner phê duyệt trần
+  admission Hina 15.872 MiB (15,5 GiB). `nvidia-smi memory.free` đã loại phần
+  Windows/app GPU khác nên scheduler không trừ thêm 2.048 MiB; free thực tế vẫn
+  là hard cap. Brain manual warmup dùng deadline cold-load 45 giây độc lập probe
+  3 giây và không mở thinking. Faster-Whisper CUDA có Force load/unload thật,
+  giữ lease scheduler đến khi unload/preemption; không fallback CPU trên manual
+  load. Vision chấp nhận final có dấu câu hoàn chỉnh dù provider đánh `length`,
+  còn output chưa hoàn chỉnh chỉ recovery một lần với overview ngắn hơn. Electron
+  hiển thị pha capture/encode/analyze và số đo từng chặng, không lộ pixel/source
+  ID/key. Fast unit/typecheck/desktop test được chạy; không chạy real Cloud/native
+  model smoke hay all-on benchmark khi owner đang dùng desktop.
 
 ### Test matrix
 

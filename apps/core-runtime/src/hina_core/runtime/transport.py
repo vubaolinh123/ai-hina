@@ -34,6 +34,8 @@ _BINARY_VERSION = 1
 _END_OF_STREAM = 0x01
 _ZERO_CORRELATION_ID = "00000000-0000-0000-0000-000000000000"
 _MAX_ERROR_LOG_SCAN_BYTES = 4 * 1024 * 1024
+_DEFAULT_HINA_VRAM_ADMISSION_CEILING_MIB = 15_872
+_DEFAULT_LIVE_FREE_VRAM_RESERVE_MIB = 0
 _STATIC_FILES = {
     "/": ("index.html", "text/html; charset=utf-8"),
     "/index.html": ("index.html", "text/html; charset=utf-8"),
@@ -880,12 +882,20 @@ class ControlPlaneServer:
         )
         leases = scheduler_status.get("leases")
         lease_rows = leases if isinstance(leases, list) else []
+        admission_ceiling = _public_int(
+            getattr(scheduler, "admission_ceiling_mib", None)
+        ) or _DEFAULT_HINA_VRAM_ADMISSION_CEILING_MIB
+        live_free_reserve = _public_int(
+            getattr(scheduler, "live_free_reserve_mib", None)
+        )
+        if live_free_reserve is None:
+            live_free_reserve = _DEFAULT_LIVE_FREE_VRAM_RESERVE_MIB
         return {
             "schemaVersion": "1.0",
             "sampledAtUnixMilliseconds": int(time.time() * 1_000),
             "limits": {
-                "allOnVramCeilingMiB": 14_336,
-                "minimumFreeVramMiB": 2_048,
+                "allOnVramCeilingMiB": admission_ceiling,
+                "minimumFreeVramMiB": live_free_reserve,
             },
             "physical": scheduler_status,
             "processes": {
@@ -905,6 +915,7 @@ class ControlPlaneServer:
             "semantics": {
                 "physical": "Measured system use reported by NVIDIA and the operating system.",
                 "reservation": "Admission budget held by Hina; it is not an additional physical allocation.",
+                "liveFree": "NVIDIA free VRAM already excludes Windows and other GPU processes; it remains the hard admission limit.",
                 "modelState": "Loaded means weights are resident now; unloaded means configured but not resident.",
                 "perProcessVram": "Provider-reported when available; unknown values are never converted to zero.",
                 "historyPersistence": False,
@@ -2253,7 +2264,9 @@ async def _safe_scheduler_status(scheduler: Any | None) -> dict[str, Any]:
             "reservedRamMiB": 0,
             "availableVramMiB": None,
             "availableRamMiB": None,
-            "headroomMiB": 2_048,
+            "headroomMiB": 0,
+            "admissionCeilingMiB": _DEFAULT_HINA_VRAM_ADMISSION_CEILING_MIB,
+            "liveFreeReserveMiB": _DEFAULT_LIVE_FREE_VRAM_RESERVE_MIB,
             "leases": [],
         }
     try:
@@ -2268,7 +2281,9 @@ async def _safe_scheduler_status(scheduler: Any | None) -> dict[str, Any]:
             "reservedRamMiB": 0,
             "availableVramMiB": None,
             "availableRamMiB": None,
-            "headroomMiB": 2_048,
+            "headroomMiB": 0,
+            "admissionCeilingMiB": _DEFAULT_HINA_VRAM_ADMISSION_CEILING_MIB,
+            "liveFreeReserveMiB": _DEFAULT_LIVE_FREE_VRAM_RESERVE_MIB,
             "leases": [],
         }
     return result if isinstance(result, dict) else {
@@ -2280,7 +2295,9 @@ async def _safe_scheduler_status(scheduler: Any | None) -> dict[str, Any]:
         "reservedRamMiB": 0,
         "availableVramMiB": None,
         "availableRamMiB": None,
-        "headroomMiB": 2_048,
+        "headroomMiB": 0,
+        "admissionCeilingMiB": _DEFAULT_HINA_VRAM_ADMISSION_CEILING_MIB,
+        "liveFreeReserveMiB": _DEFAULT_LIVE_FREE_VRAM_RESERVE_MIB,
         "leases": [],
     }
 

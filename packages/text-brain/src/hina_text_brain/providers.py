@@ -474,13 +474,17 @@ class LocalHttpChatProvider:
             connection.close()
 
     def _warmup_sync(self) -> None:
-        connection = self._connection(self.config.health_timeout_seconds)
+        # A cold 8B checkpoint can legitimately take longer than the small
+        # availability probe.  Owner-triggered warmup has its own bounded
+        # deadline, while health checks remain fast.
+        connection = self._connection(self.config.warmup_timeout_seconds)
         body = json.dumps(
             {
                 "model": self.config.model,
                 "prompt": " ",
                 "stream": False,
                 "keep_alive": -1,
+                "think": False,
                 "options": {
                     "num_predict": 1,
                     "num_ctx": min(self.config.context_tokens, 2_048),
@@ -501,15 +505,21 @@ class LocalHttpChatProvider:
             if response.status != 200:
                 raise TextBrainError(
                     "E_MODEL_UNAVAILABLE",
-                    "provider warmup failed",
+                    f"provider warmup returned HTTP {response.status}",
                     retryable=True,
                 )
         except TextBrainError:
             raise
-        except (OSError, TimeoutError, http.client.HTTPException) as exc:
+        except TimeoutError as exc:
             raise TextBrainError(
                 "E_MODEL_UNAVAILABLE",
-                "provider warmup failed",
+                "provider warmup timed out",
+                retryable=True,
+            ) from exc
+        except (OSError, http.client.HTTPException) as exc:
+            raise TextBrainError(
+                "E_MODEL_UNAVAILABLE",
+                "provider warmup connection failed",
                 retryable=True,
             ) from exc
         finally:

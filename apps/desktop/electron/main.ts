@@ -105,6 +105,7 @@ const CHANNELS = Object.freeze({
   resourcesControl: "hina:resources:control",
   captureSources: "hina:capture:sources",
   captureSubmit: "hina:capture:submit",
+  captureProgress: "hina:capture:progress",
 });
 
 const WIDGET_SIZE: Size = Object.freeze({ width: 440, height: 620 });
@@ -127,6 +128,19 @@ let visionRestoreTimer: NodeJS.Timeout | null = null;
 
 type DesktopWindowMode = "operator" | "widget";
 type WidgetControlAction = "show" | "hide" | "reset_position";
+type CaptureProgressPhase = "capturing" | "encoding" | "analyzing";
+type CaptureProgress = {
+  phase: CaptureProgressPhase;
+  requestedMaxSide: CaptureMaxSide;
+  sourceName: string;
+  width?: number;
+  height?: number;
+  bytes?: number;
+};
+
+function captureElapsedMilliseconds(startedAt: number): number {
+  return Math.max(0, Math.round((performance.now() - startedAt) * 10) / 10);
+}
 
 function captureSourceKind(sourceId: string): CaptureSourceKind | null {
   if (sourceId.startsWith("screen:")) return "screen";
@@ -233,13 +247,23 @@ function encodeBoundedCapture(
   throw new Error("E_DESKTOP_CAPTURE_IMAGE: cannot encode snapshot below 1 MB");
 }
 
-async function submitDesktopCapture(raw: unknown): Promise<Record<string, unknown>> {
+async function submitDesktopCapture(
+  raw: unknown,
+  onProgress?: (progress: CaptureProgress) => void,
+): Promise<Record<string, unknown>> {
   await requirePerceptionFeatureEnabled();
   const request = validateFullFrameCaptureRequest(raw);
   const grant = captureGrantStore.consume(
     request.grantSessionId,
     request.sourceToken,
   );
+  const totalStartedAt = performance.now();
+  onProgress?.({
+    phase: "capturing",
+    requestedMaxSide: request.maxSide,
+    sourceName: grant.name,
+  });
+  const sourceLookupStartedAt = performance.now();
   let sources: Awaited<ReturnType<typeof desktopCapturer.getSources>>;
   try {
     sources = await desktopCapturer.getSources({
@@ -259,7 +283,24 @@ async function submitDesktopCapture(raw: unknown): Promise<Record<string, unknow
       "E_DESKTOP_CAPTURE_SOURCE: selected source disappeared; refresh the source list",
     );
   }
+  const sourceLookupMilliseconds = captureElapsedMilliseconds(sourceLookupStartedAt);
+  onProgress?.({
+    phase: "encoding",
+    requestedMaxSide: request.maxSide,
+    sourceName: grant.name,
+  });
+  const encodingStartedAt = performance.now();
   const encoded = encodeBoundedCapture(selected.thumbnail, request.maxSide);
+  const encodingMilliseconds = captureElapsedMilliseconds(encodingStartedAt);
+  onProgress?.({
+    phase: "analyzing",
+    requestedMaxSide: request.maxSide,
+    sourceName: grant.name,
+    width: encoded.width,
+    height: encoded.height,
+    bytes: encoded.png.byteLength,
+  });
+  const runtimeStartedAt = performance.now();
   const result = await requestPerceptionSnapshot(encoded.png, {
     sessionId: request.sessionId,
     label: request.label,
@@ -267,6 +308,7 @@ async function submitDesktopCapture(raw: unknown): Promise<Record<string, unknow
     analyzeVision: request.analyzeVision,
     visionQuestion: request.visionQuestion,
   });
+  const runtimeMilliseconds = captureElapsedMilliseconds(runtimeStartedAt);
   return {
     ...result,
     desktopCapture: {
@@ -279,6 +321,12 @@ async function submitDesktopCapture(raw: unknown): Promise<Record<string, unknow
       bytes: encoded.png.byteLength,
       automatic: false,
       persistedByDesktop: false,
+      timings: {
+        sourceLookupMilliseconds,
+        encodingMilliseconds,
+        runtimeMilliseconds,
+        totalMilliseconds: captureElapsedMilliseconds(totalStartedAt),
+      },
     },
   };
 }
@@ -799,7 +847,9 @@ function registerIpcHandlers(): void {
       throw new Error("E_DESKTOP_CAPTURE_AUTHORITY: operator window required");
     }
     try {
-      return await submitDesktopCapture(input);
+      return await submitDesktopCapture(input, (progress) => {
+        event.sender.send(CHANNELS.captureProgress, progress);
+      });
     } catch (error) {
       console.error(
         `[hina-desktop:capture:ERROR] ${

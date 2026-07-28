@@ -218,6 +218,18 @@ startup smoke qua launcher. Slice không tạo raw test artifact mới; legacy M
 smoke files trong `var/tmp` đã được audit nhưng còn chờ owner cleanup vì môi
 trường chặn thao tác xóa đã xác minh. M08 vẫn active; không có deep/release
 promotion.
+Ngày 2026-07-29 M08-S11 hotfix capture/runtime capacity: owner phê duyệt trần
+admission Hina **15.872 MiB (15,5 GiB)**. `nvidia-smi memory.free` đã phản ánh
+VRAM Windows/compositor/app khác, vì vậy scheduler không trừ thêm 2.048 MiB;
+free thực tế vẫn là hard cap vật lý. Brain Force load dùng cold-load deadline
+45 giây và một-token `think=false` thay vì health probe 3 giây. Faster-Whisper
+large-v3 CUDA nay hỗ trợ Force load/unload thật bằng scheduler lease pin cho
+tới unload/preemption, không CPU fallback. Vision chấp nhận final có dấu câu
+hoàn chỉnh dù provider gắn `length`; final chưa hoàn chỉnh chỉ recovery một lần
+với budget ngắn hơn. Capture UI hiện báo ba pha capture/encode/analyze cùng
+milliseconds từng chặng, không lộ source ID/pixel/key. Fast tests xanh: text
+46, speech 40, perception 62, desktop build+53/typecheck; không chạy real
+Cloud/native warmup hoặc all-on benchmark khi desktop owner đang hoạt động.
 
 Legacy AIRI skill paths dưới `D:\ProjectAiri` mặc định ánh xạ sang repository
 hiện tại `D:\ProjectHinaAI`, trừ khi owner chỉ định workspace khác.
@@ -325,7 +337,9 @@ Không mở write phase module kế tiếp trước Gate 6.
 - Minecraft dùng deterministic controller, allowlist và state verification.
 - Screen observation có TTL và evidence; hết TTL không được coi là hiện tại.
 - Local services bind `127.0.0.1` trừ khi owner duyệt threat model mới.
-- Giữ tối thiểu 2048 MiB VRAM headroom trong workload all-on.
+- Owner override 2026-07-29: trần admission Hina là 15.872 MiB; `memory.free`
+  NVIDIA là hard cap đã phản ánh Windows/app GPU khác, không trừ headroom cố
+  định lần thứ hai.
 
 ## Commands for M00
 

@@ -40,6 +40,7 @@ class ConfigTests(unittest.TestCase):
         default = ModelGatewayConfig()
         self.assertEqual(default.model, "qwen3-vl:8b-thinking-q4_K_M")
         self.assertEqual(default.request_timeout_seconds, 9.0)
+        self.assertEqual(default.warmup_timeout_seconds, 45.0)
         self.assertEqual(default.retry_attempts, 0)
         self.assertEqual(default.model_vram_mib, 8_192)
         config = ModelGatewayConfig(
@@ -61,6 +62,9 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(status["contextTokens"], 8_192)
         self.assertEqual(status["admissionTimeoutSeconds"], 1.0)
         self.assertEqual(status["defaultTurnDeadlineSeconds"], 10.0)
+        self.assertEqual(status["warmupTimeoutSeconds"], 45.0)
+        self.assertEqual(status["admissionCeilingMiB"], 15_872)
+        self.assertEqual(status["reservedVramHeadroomMiB"], 0)
         self.assertEqual(config.temperature, 0.7)
         self.assertEqual(status["temperature"], 0.7)
         self.assertEqual(config.repeat_penalty, 1.15)
@@ -83,6 +87,8 @@ class ConfigTests(unittest.TestCase):
         for field, value in (
             ("temperature", True),
             ("temperature", 2.1),
+            ("warmup_timeout_seconds", 2.9),
+            ("warmup_timeout_seconds", 120.1),
             ("repeat_penalty", True),
             ("repeat_penalty", 0),
             ("repeat_penalty", 2.1),
@@ -132,7 +138,7 @@ class ResourceSchedulerTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertNotIn("leaseId", str(status))
 
-    async def test_live_admission_preserves_headroom_and_release_is_idempotent(self) -> None:
+    async def test_live_admission_uses_actual_free_vram_without_double_reserve(self) -> None:
         telemetry = MutableTelemetry(free_vram=10_000)
         scheduler = LocalResourceScheduler(telemetry)
         lease = await scheduler.acquire(
@@ -140,16 +146,25 @@ class ResourceSchedulerTests(unittest.IsolatedAsyncioTestCase):
         )
         snapshot = await scheduler.snapshot()
         self.assertEqual(snapshot.active_leases, 1)
-        self.assertGreaterEqual(
-            snapshot.telemetry.free_vram_mib - lease.request.vram_mib,
-            2_048,
-        )
+        self.assertEqual(snapshot.admission_ceiling_mib, 15_872)
+        self.assertEqual(snapshot.live_free_reserve_mib, 0)
+        self.assertEqual(snapshot.available_vram_mib, 10_000)
         self.assertTrue(await lease.release())
         self.assertFalse(await lease.release())
 
         with self.assertRaises(TextBrainError) as raised:
             await scheduler.acquire(
-                LocalResourceRequest(owner="model.large", vram_mib=8_000, ram_mib=1_024)
+                LocalResourceRequest(owner="model.large", vram_mib=10_001, ram_mib=1_024)
+            )
+        self.assertEqual(raised.exception.code, "E_RESOURCE_CAPACITY")
+
+    async def test_static_15_point_5_gib_ceiling_still_applies_when_gpu_is_idle(self) -> None:
+        scheduler = LocalResourceScheduler(MutableTelemetry(free_vram=16_000))
+        snapshot = await scheduler.snapshot()
+        self.assertEqual(snapshot.available_vram_mib, 15_872)
+        with self.assertRaises(TextBrainError) as raised:
+            await scheduler.acquire(
+                LocalResourceRequest(owner="model.too-large", vram_mib=15_873, ram_mib=1_024)
             )
         self.assertEqual(raised.exception.code, "E_RESOURCE_CAPACITY")
 
@@ -158,7 +173,7 @@ class ResourceSchedulerTests(unittest.IsolatedAsyncioTestCase):
         started = asyncio.get_running_loop().time()
         with self.assertRaises(TextBrainError) as raised:
             await scheduler.acquire(
-                LocalResourceRequest(owner="model.waiting", vram_mib=2_000, ram_mib=512),
+                LocalResourceRequest(owner="model.waiting", vram_mib=3_001, ram_mib=512),
                 wait_timeout_seconds=0.03,
             )
         self.assertEqual(raised.exception.code, "E_RESOURCE_CAPACITY")
@@ -186,7 +201,7 @@ class ResourceSchedulerTests(unittest.IsolatedAsyncioTestCase):
         high = await scheduler.acquire(
             LocalResourceRequest(
                 owner="model.text",
-                vram_mib=5_000,
+                vram_mib=8_000,
                 ram_mib=512,
                 priority=90,
             ),

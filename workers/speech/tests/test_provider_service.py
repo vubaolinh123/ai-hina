@@ -265,6 +265,43 @@ class ProviderTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(lease.release_calls, 1)
         await provider.close()
 
+    async def test_owner_warmup_pins_cuda_model_until_explicit_unload(self) -> None:
+        lease = _FakeLease()
+        created: list[_FakeWhisperModel] = []
+
+        async def acquire_lease(_unload):
+            return lease
+
+        def factory(*_args, **_kwargs):
+            model = _FakeWhisperModel()
+            created.append(model)
+            return model
+
+        provider = FasterWhisperProvider(
+            SpeechConfig(device="cuda", compute_type="float16", fallback_to_cpu=False),
+            gpu_lease_factory=acquire_lease,
+            model_factory=factory,
+        )
+        await provider.warmup()
+        warmed = await provider.status()
+        self.assertTrue(warmed["modelLoaded"])
+        self.assertTrue(warmed["operatorResident"])
+        self.assertEqual(warmed["effectiveDevice"], "cuda")
+        self.assertEqual(lease.release_calls, 0)
+
+        result = await provider.transcribe(
+            decode_and_normalize_wav(wav_bytes(duration_seconds=0.25))
+        )
+        self.assertEqual(result.language, "vi")
+        self.assertEqual(len(created), 1)
+        self.assertEqual(lease.release_calls, 0)
+
+        await provider.unload()
+        self.assertFalse((await provider.status())["modelLoaded"])
+        self.assertFalse((await provider.status())["operatorResident"])
+        self.assertEqual(lease.release_calls, 1)
+        await provider.close()
+
     async def test_cpu_fallback_does_not_mask_cuda_retry_on_next_request(self) -> None:
         devices: list[str] = []
         leases: list[_FakeLease] = []

@@ -540,6 +540,7 @@ class ServiceTests(unittest.TestCase):
         )
         self.assertEqual(vision["trustLevel"], "untrusted")
         self.assertFalse(vision["decisionSupportEligible"])
+        self.assertGreaterEqual(vision["processingMilliseconds"], 0)
         self.assertNotIn("Nhân vật đang đứng", str(result["observation"]))
         self.assertNotIn(encoded.hex()[:32], str(result))
 
@@ -641,6 +642,10 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(
             result["observation"]["vision"]["modelErrorCode"],
             "E_MODEL_UNAVAILABLE",
+        )
+        self.assertGreaterEqual(
+            result["observation"]["vision"]["processingMilliseconds"],
+            0,
         )
         self.assertEqual(reports[0]["errorCode"], "E_PERCEPTION_VISION")
 

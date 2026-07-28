@@ -350,8 +350,40 @@ class OllamaVisionProviderTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(second_payload["options"]["num_predict"], 768)  # type: ignore[index]
         recovery_prompt = second_payload["messages"][0]["content"]  # type: ignore[index]
         self.assertIn("Yêu cầu phục hồi", recovery_prompt)
-        self.assertIn("6 đến 8 câu", recovery_prompt)
+        self.assertIn("3–4 câu", recovery_prompt)
         self.assertNotIn("private-first", recovery_prompt)
+
+    async def test_complete_length_response_is_accepted_without_a_second_cloud_call(self) -> None:
+        complete = (
+            "Ảnh hiển thị dashboard Hina với thanh điều hướng phía trên và trang chat đang mở. "
+            "Khung hội thoại có một câu hỏi của chủ máy cùng phần trả lời từ Hina. "
+            "Không thấy cảnh báo khẩn cấp trong vùng giao diện đang nhìn thấy."
+        )
+        fake = _SequencedChatOllama(
+            [
+                {
+                    "message": {"content": complete},
+                    "done_reason": "length",
+                    "eval_count": 512,
+                }
+            ]
+        )
+        provider = OllamaVisionProvider(
+            VisionConfig(),
+            request_json=fake.request,
+        )
+        await provider.configure(
+            provider="ollama_cloud",
+            model="qwen3-vl:2b",
+            api_key="owner-cloud-secret",
+        )
+        result = await provider.analyze(
+            b"\x89PNG\r\n\x1a\nowner-pixels",
+            "Mô tả ảnh.",
+        )
+        self.assertEqual(result, complete)
+        chats = [call for call in fake.calls if call["url"].endswith("/api/chat")]
+        self.assertEqual(len(chats), 1)
 
     async def test_partial_length_response_is_not_accepted_as_complete(self) -> None:
         fake = _SequencedChatOllama(

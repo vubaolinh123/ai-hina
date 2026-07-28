@@ -34,7 +34,45 @@ const CHANNELS = Object.freeze({
   resourcesControl: "hina:resources:control",
   captureSources: "hina:capture:sources",
   captureSubmit: "hina:capture:submit",
+  captureProgress: "hina:capture:progress",
 });
+
+type CaptureProgress = {
+  phase: "capturing" | "encoding" | "analyzing";
+  requestedMaxSide: 640 | 960 | 1280;
+  sourceName: string;
+  width?: number;
+  height?: number;
+  bytes?: number;
+};
+
+function parseCaptureProgress(value: unknown): CaptureProgress | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  if (
+    (raw.phase !== "capturing" && raw.phase !== "encoding" && raw.phase !== "analyzing")
+    || (raw.requestedMaxSide !== 640 && raw.requestedMaxSide !== 960 && raw.requestedMaxSide !== 1280)
+    || typeof raw.sourceName !== "string"
+    || raw.sourceName.length > 160
+  ) {
+    return null;
+  }
+  const dimensions = [raw.width, raw.height, raw.bytes];
+  if (dimensions.some((entry) => (
+    entry !== undefined
+    && (typeof entry !== "number" || !Number.isInteger(entry) || entry < 0)
+  ))) {
+    return null;
+  }
+  return {
+    phase: raw.phase as CaptureProgress["phase"],
+    requestedMaxSide: raw.requestedMaxSide as CaptureProgress["requestedMaxSide"],
+    sourceName: raw.sourceName,
+    ...(typeof raw.width === "number" ? { width: raw.width } : {}),
+    ...(typeof raw.height === "number" ? { height: raw.height } : {}),
+    ...(typeof raw.bytes === "number" ? { bytes: raw.bytes } : {}),
+  };
+}
 
 const hinaDesktop = Object.freeze({
   getWindowMode: () => ipcRenderer.invoke(CHANNELS.windowMode),
@@ -90,6 +128,19 @@ const hinaDesktop = Object.freeze({
   listScreenCaptureSources: () => ipcRenderer.invoke(CHANNELS.captureSources),
   captureScreenSource: (input: unknown) =>
     ipcRenderer.invoke(CHANNELS.captureSubmit, input),
+  onScreenCaptureProgress: (listener: (progress: CaptureProgress) => void) => {
+    const wrapped = (
+      _event: Electron.IpcRendererEvent,
+      progress: unknown,
+    ): void => {
+      const parsed = parseCaptureProgress(progress);
+      if (parsed !== null) listener(parsed);
+    };
+    ipcRenderer.on(CHANNELS.captureProgress, wrapped);
+    return () => {
+      ipcRenderer.removeListener(CHANNELS.captureProgress, wrapped);
+    };
+  },
 });
 
 contextBridge.exposeInMainWorld("hinaDesktop", hinaDesktop);

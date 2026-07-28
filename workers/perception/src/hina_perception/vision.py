@@ -478,7 +478,14 @@ class OllamaVisionProvider:
                     if lease is not None:
                         lease.assert_active()
                     text, exhausted = _final_content(result, token_limit)
-                    if text is not None and not exhausted:
+                    # Some Ollama Cloud models mark a response as ``length``
+                    # exactly at the configured boundary even after emitting a
+                    # complete Vietnamese overview. Do not spend a second
+                    # image request merely because of that metadata; only a
+                    # visibly unfinished final needs the bounded recovery.
+                    if text is not None and (
+                        not exhausted or _looks_like_complete_final(text)
+                    ):
                         await self._remember_error(None)
                         return text
                     if attempt_index == 0:
@@ -659,11 +666,10 @@ def _chat_body(
 def _recovery_prompt(prompt: str) -> str:
     return (
         f"{prompt}\n\n"
-        "Yêu cầu phục hồi: bắt đầu ngay bằng overview chi tiết nhìn thấy trong ảnh, "
-        "không trình bày quá trình suy nghĩ. Giữ đủ cảnh tổng thể, bố cục, đối tượng "
-        "và trạng thái, chữ/nhãn đọc được, màu sắc/cảnh báo và điểm không chắc; viết "
-        "6 đến 8 câu tiếng Việt hoàn chỉnh, khoảng 180 từ hoặc ngắn hơn nếu ảnh ít "
-        "thông tin."
+        "Yêu cầu phục hồi: bỏ qua mọi yêu cầu độ dài trước đó. Trả lời trực tiếp "
+        "bằng tiếng Việt, không nêu suy nghĩ, 3–4 câu hoàn chỉnh, tối đa 110 từ. "
+        "Nêu cảnh tổng thể, bố cục/đối tượng chính, chữ hoặc cảnh báo đọc được, "
+        "và điểm chưa chắc nếu có."
     )
 
 
@@ -691,6 +697,20 @@ def _final_content(
         eval_count is not None and eval_count >= token_limit
     )
     return text, exhausted
+
+
+def _looks_like_complete_final(text: str) -> bool:
+    """Conservatively distinguish a finished overview from a cut sentence.
+
+    This is intentionally not a quality judge. It only accepts a useful,
+    bounded response ending in sentence punctuation when Ollama's token metadata
+    says ``length``. Everything else still gets exactly one compact recovery.
+    """
+
+    normalized = text.strip()
+    if not 24 <= len(normalized) <= 3_500:
+        return False
+    return normalized.endswith((".", "!", "?", "…", "。", "”", "\"", ")"))
 
 
 class _NoRedirect(HTTPRedirectHandler):

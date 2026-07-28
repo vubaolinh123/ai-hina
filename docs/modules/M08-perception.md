@@ -9,6 +9,7 @@
   M08-S8 bounded empty/truncated vision recovery is a runnable candidate;
   M08-S9 fresh same-session observation context is a runnable candidate;
   M08-S10 resource controls + output-quality maintenance is a runnable candidate;
+  M08-S11 capture/runtime-capacity hotfix is a runnable candidate;
   M08 remains active
 - Branch: `main` (fast-development mode)
 - Active slices: M08-S1 perception spine (owner-consented snapshot ingestion,
@@ -25,7 +26,9 @@
   M08-S9 lets one fresh same-session semantic observation inform owner chat
   without turning the snapshot into system instructions, memory or a tool;
   M08-S10 adds owner-only scheduler-safe model controls and prevents hidden
-  model text from reaching the chat or TTS output
+  model text from reaching the chat or TTS output; M08-S11 removes double
+  counting of Windows VRAM, makes Brain/STT manual warmup real, and exposes
+  capture-versus-vision timing without adding image persistence
 
 ## Runnable target
 
@@ -479,6 +482,45 @@ Không được đánh dấu M08 complete khi các phần còn lại chưa có e
 - This slice created no raw screenshot, audio, cache/model download, fixture,
   debug dump or one-off script. A cleanup audit identified legacy M07 smoke
   files under `var/tmp`; the platform denied the verified deletion operation,
-  so their exact targets remain listed for owner cleanup. Generated desktop
-  build output remains the normal runnable artifact of `pnpm start:desktop`,
-  not verification evidence.
+   so their exact targets remain listed for owner cleanup. Generated desktop
+   build output remains the normal runnable artifact of `pnpm start:desktop`,
+   not verification evidence.
+
+## Implemented in M08-S11 (capture latency, manual warmup and capacity hotfix)
+
+- Owner-approved admission ceiling is now **15,872 MiB (15.5 GiB)**. NVIDIA
+  `memory.free` already excludes Windows, the compositor and other GPU apps, so
+  scheduler admission no longer subtracts an additional fixed 2,048 MiB. The
+  live free value remains a hard physical cap; this is not permission to exceed
+  what is actually free on the card.
+- Text-brain owner warmup now has a separate bounded 45-second cold-load
+  deadline instead of the 3-second health-probe timeout, disables thinking for
+  its one-token request, and reports a bounded HTTP/timeout/connection cause.
+- `FasterWhisperProvider` now implements true owner Force load / Force unload:
+  the configured CUDA model is loaded under an accounted scheduler lease, stays
+  resident only until explicit unload or preemption, and never falls back to CPU
+  for a manual CUDA load. Timeout drainage retains the lease until the native
+  worker is truly finished.
+- Vision accepts a complete punctuated final even if a Cloud provider labels it
+  `length`; incomplete output still gets exactly one shorter recovery request.
+  The normal overview target is 4–6 sentences/≤140 words, while recovery is
+  3–4 sentences/≤110 words. Vision result now includes bounded processing time.
+- Electron now reports three non-sensitive progress phases—capture, PNG encode,
+  and runtime analysis—and displays source lookup, encoding, runtime and total
+  time after a result. Raw pixel bytes, source IDs, Cloud keys and prompts still
+  never cross typed renderer IPC or get logged.
+
+## Fast evidence M08-S11 (owner machine)
+
+- `pnpm test:text-brain`: 46 tests pass, including the 15.5-GiB static ceiling,
+  live-free hard cap and owner warmup request shape.
+- `pnpm test:speech`: 40 tests pass, including CUDA Faster-Whisper Force load,
+  reuse during one transcription and exact release on Force unload.
+- `pnpm test:perception`: 62 tests pass, including complete-at-boundary Vision
+  acceptance, incomplete recovery and timing fields on ready/error results.
+- `pnpm --filter @hina/desktop typecheck` and `pnpm test:desktop` pass; desktop
+  build has 53 tests, including typed capture progress with no raw source ID in
+  the renderer bridge.
+- This maintenance slice intentionally runs no real Cloud capture, native model
+  warmup or all-on VRAM benchmark against the owner’s active desktop session.
+  It creates no raw screenshot, audio, model cache, fixture or one-off script.

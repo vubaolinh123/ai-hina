@@ -84,6 +84,7 @@ const screenCaptureBusy = ref(false);
 const screenCaptureMessage = ref("");
 const screenCaptureResult = ref<DesktopPerceptionCaptureResult | null>(null);
 let screenCaptureVisionPreferenceTouched = false;
+let removeScreenCaptureProgressListener: (() => void) | null = null;
 const resourceStatus = ref<ResourceStatus | null>(null);
 const resourceError = ref("");
 const resourcePending = ref(false);
@@ -534,6 +535,29 @@ async function captureSelectedScreenSource(): Promise<void> {
   }
 }
 
+function handleScreenCaptureProgress(progress: ScreenCaptureProgress): void {
+  if (!screenCaptureBusy.value) return;
+  if (progress.phase === "capturing") {
+    screenCaptureMessage.value =
+      `Đang lấy đúng một khung hình từ “${progress.sourceName}”…`;
+    return;
+  }
+  if (progress.phase === "encoding") {
+    screenCaptureMessage.value =
+      `Đã lấy khung hình. Đang hạ cạnh dài xuống tối đa ${progress.requestedMaxSide} px và nén PNG…`;
+    return;
+  }
+  const dimensions = progress.width && progress.height
+    ? `${progress.width}×${progress.height}`
+    : "khung hình";
+  const size = typeof progress.bytes === "number"
+    ? ` · ${Math.ceil(progress.bytes / 1024)} KB`
+    : "";
+  screenCaptureMessage.value = screenCaptureAnalyzeVision.value
+    ? `Ảnh ${dimensions}${size} đã gửi. Hina đang phân tích bằng model vision; chụp và nén đã xong.`
+    : `Ảnh ${dimensions}${size} đã gửi tới Hina để xử lý.`;
+}
+
 function markScreenCaptureVisionPreference(): void {
   screenCaptureVisionPreferenceTouched = true;
 }
@@ -573,23 +597,27 @@ function describeScreenCaptureResult(
       `Đã gửi ảnh ${result.desktopCapture.width}×${result.desktopCapture.height} `
       + `(${Math.ceil(result.desktopCapture.bytes / 1024)} KB).`
     );
+  const timings = result.desktopCapture.timings;
+  const timingSuffix = timings
+    ? ` Chụp/nén ${formatMilliseconds(timings.sourceLookupMilliseconds + timings.encodingMilliseconds)} · runtime ${formatMilliseconds(timings.runtimeMilliseconds)} · tổng ${formatMilliseconds(timings.totalMilliseconds)}.`
+    : "";
   const vision = result.observation?.vision;
   if (vision?.state === "ready" && vision.summary) {
-    return `${prefix} Model vision đã phân tích thành công.`;
+    return `${prefix} Model vision đã phân tích thành công.${timingSuffix}`;
   }
   if (vision?.requested && vision.state !== "ready") {
-    return `${prefix} Phân tích vision thất bại: ${visionAnalysisErrorCode(vision)}.`;
+    return `${prefix} Phân tích vision thất bại: ${visionAnalysisErrorCode(vision)}.${timingSuffix}`;
   }
   const ocr = result.observation?.ocr;
   if (ocr?.state === "ready") {
-    return `${prefix} OCR đã đọc ảnh; model vision chưa được yêu cầu.`;
+    return `${prefix} OCR đã đọc ảnh; model vision chưa được yêu cầu.${timingSuffix}`;
   }
   if (ocr?.requested && ocr.state !== "ready") {
-    return `${prefix} OCR thất bại: ${ocr.errorCode || "E_PERCEPTION_OCR"}.`;
+    return `${prefix} OCR thất bại: ${ocr.errorCode || "E_PERCEPTION_OCR"}.${timingSuffix}`;
   }
   return (
     `${prefix} Ảnh mới chỉ được nhận làm evidence, chưa được phân tích nội dung. `
-    + "Hãy bật “Phân tích bằng model vision” hoặc OCR trước khi chụp."
+    + `Hãy bật “Phân tích bằng model vision” hoặc OCR trước khi chụp.${timingSuffix}`
   );
 }
 
@@ -829,7 +857,7 @@ const resourceAnalysis = computed(() => {
   return {
     level: "healthy",
     title: "Tài nguyên đang cân bằng",
-    message: `Còn ${formatMiB(telemetry.freeVramMiB)} VRAM; cao hơn mức dự phòng bắt buộc ${formatMiB(status.limits.minimumFreeVramMiB)}.`,
+    message: `Còn ${formatMiB(telemetry.freeVramMiB)} VRAM. NVIDIA đã trừ phần Windows và app khác; scheduler so từng model với phần trống thật này.`,
   };
 });
 const resourceVramPercent = computed(() => {
@@ -854,6 +882,12 @@ function formatMiB(value: number | null | undefined): string {
     })} GB`;
   }
   return `${Math.round(value).toLocaleString("vi-VN")} MB`;
+}
+
+function formatMilliseconds(value: number): string {
+  if (!Number.isFinite(value) || value < 0) return "không rõ";
+  if (value < 1_000) return `${Math.round(value)} ms`;
+  return `${(value / 1_000).toLocaleString("vi-VN", { maximumFractionDigits: 1 })} giây`;
 }
 
 function formatMetric(value: number | null | undefined, suffix: string): string {
@@ -1366,6 +1400,10 @@ function stopPolling(): void {
 function cleanupDesktop(): void {
   stopPolling();
   cleanupSpeechTest();
+  if (removeScreenCaptureProgressListener !== null) {
+    removeScreenCaptureProgressListener();
+    removeScreenCaptureProgressListener = null;
+  }
 }
 
 watch(activePage, (page) => {
@@ -1380,6 +1418,9 @@ onMounted(async () => {
   windowMode.value = await window.hinaDesktop.getWindowMode();
   document.documentElement.dataset.windowMode = windowMode.value;
   if (windowMode.value !== "operator") return;
+  removeScreenCaptureProgressListener = window.hinaDesktop.onScreenCaptureProgress(
+    handleScreenCaptureProgress,
+  );
   await Promise.all([
     refreshAvatar(),
     refreshSafety(),
@@ -2119,9 +2160,9 @@ onBeforeUnmount(() => {
               {{ formatMiB(resourceTelemetry?.freeVramMiB) }}.
             </p>
             <small>
-              Hina đặt trần dùng chung ở
-              {{ formatMiB(resourceStatus.limits.allOnVramCeilingMiB) }} để giữ
-              ít nhất {{ formatMiB(resourceStatus.limits.minimumFreeVramMiB) }} cho máy.
+              Hina có trần admission
+              {{ formatMiB(resourceStatus.limits.allOnVramCeilingMiB) }}. VRAM trống NVIDIA
+              đã bao gồm Windows/app khác, nên không bị trừ thêm dự phòng cố định.
             </small>
           </article>
 

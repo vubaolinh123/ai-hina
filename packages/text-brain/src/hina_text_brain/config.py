@@ -22,6 +22,7 @@ class ModelGatewayConfig:
     model: str = "qwen3-vl:8b-thinking-q4_K_M"
     api_key: str | None = None
     health_timeout_seconds: float = 3.0
+    warmup_timeout_seconds: float = 45.0
     request_timeout_seconds: float = 9.0
     retry_attempts: int = 0
     circuit_failure_threshold: int = 3
@@ -54,6 +55,7 @@ class ModelGatewayConfig:
             raise TextBrainError("E_MODEL_CONFIG", "provider API key is invalid")
         for value, name, lower, upper in (
             (self.health_timeout_seconds, "health timeout", 0.1, 30.0),
+            (self.warmup_timeout_seconds, "warmup timeout", 3.0, 120.0),
             (self.request_timeout_seconds, "request timeout", 1.0, 600.0),
             (self.circuit_reset_seconds, "circuit reset", 1.0, 600.0),
         ):
@@ -107,6 +109,7 @@ class ModelGatewayConfig:
             model=values.get("HINA_MODEL_NAME", "qwen3-vl:8b-thinking-q4_K_M"),
             api_key=values.get("HINA_MODEL_API_KEY") or None,
             health_timeout_seconds=_env_float(values, "HINA_MODEL_HEALTH_TIMEOUT", 3.0),
+            warmup_timeout_seconds=_env_float(values, "HINA_MODEL_WARMUP_TIMEOUT", 45.0),
             request_timeout_seconds=_env_float(values, "HINA_MODEL_REQUEST_TIMEOUT", 9.0),
             retry_attempts=_env_int(values, "HINA_MODEL_RETRY_ATTEMPTS", 0),
             circuit_failure_threshold=_env_int(values, "HINA_MODEL_CIRCUIT_THRESHOLD", 3),
@@ -133,6 +136,7 @@ class ModelGatewayConfig:
             "model": self.model,
             "apiKeyConfigured": self.api_key is not None,
             "healthTimeoutSeconds": self.health_timeout_seconds,
+            "warmupTimeoutSeconds": self.warmup_timeout_seconds,
             "requestTimeoutSeconds": self.request_timeout_seconds,
             "admissionTimeoutSeconds": 1.0,
             "defaultTurnDeadlineSeconds": self.request_timeout_seconds + 1.0,
@@ -151,7 +155,8 @@ class ModelGatewayConfig:
             "complexTextPath": "bounded-hidden-thinking",
             "screenVisionPath": "separate-perception-provider",
             "hiddenReasoningExposed": False,
-            "reservedVramHeadroomMiB": 2_048,
+            "admissionCeilingMiB": 15_872,
+            "reservedVramHeadroomMiB": 0,
         }
 
     def endpoint_path(self, operation: str) -> str:

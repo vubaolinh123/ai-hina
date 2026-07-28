@@ -8,7 +8,8 @@ M01-S2 đến M01-S7, M02, M03 và M04 speech vertical slice cung cấp runtime 
 - binary media frame không nhét byte vào base64 JSON;
 - lifecycle dependency ordering, startup rollback và graceful shutdown;
 - JSONL traces, low-cardinality metrics và error report đã che secret;
-- resource lease giữ tối thiểu 2048 MiB VRAM headroom;
+- resource lease áp dụng trần admission Hina 15,5 GiB và luôn đối chiếu VRAM
+  trống thực tế từ NVIDIA (không trừ phần Windows hai lần);
 - deterministic test providers và idempotent turn replay harness;
 - Hina Dev Console chạy lâu dài để owner thao tác với runtime thật.
 - capability policy, emergency controls và hash-chained safety audit.

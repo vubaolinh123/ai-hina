@@ -26,6 +26,8 @@ GpuLeaseFactory = Callable[[Callable[[], Awaitable[None]]], Awaitable[GpuLease]]
 class SttProvider(Protocol):
     async def status(self) -> dict[str, object]: ...
 
+    async def warmup(self) -> None: ...
+
     async def transcribe(self, audio: NormalizedAudio) -> SttResult: ...
 
     async def unload(self) -> None: ...
@@ -51,8 +53,13 @@ class FasterWhisperProvider:
         self._model: Any | None = None
         self._model_device: str | None = None
         self._model_lock = asyncio.Lock()
+        # Serialize owner pin/unpin with real inference.  A native CTranslate2
+        # worker cannot be safely evicted while it is still using CUDA memory.
+        self._inference_lock = asyncio.Lock()
         self._drain_lock = asyncio.Lock()
         self._drain_task: asyncio.Task[None] | None = None
+        self._operator_lease: GpuLease | None = None
+        self._operator_cpu_pinned = False
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="hina-stt")
         self._closed = False
         self._last_error_code: str | None = None
@@ -71,6 +78,7 @@ class FasterWhisperProvider:
             "available": dependency_available,
             "dependencyAvailable": dependency_available,
             "modelLoaded": self._model is not None,
+            "operatorResident": await self._operator_is_resident(),
             "modelCached": _model_is_cached(self.config),
             "effectiveDevice": self._effective_device,
             "downloadOnFirstUse": self.config.allow_download,
@@ -78,54 +86,131 @@ class FasterWhisperProvider:
             "drainingTimedOutInference": draining,
         }
 
-    async def transcribe(self, audio: NormalizedAudio) -> SttResult:
-        if audio.sample_rate_hz != 16_000:
-            raise SpeechError("E_STT_AUDIO", "STT provider requires normalized 16 kHz audio")
+    async def warmup(self) -> None:
+        """Load the configured STT model for an explicit owner Force load.
+
+        Normal STT requests are intentionally bursty and return their GPU lease
+        afterwards.  This owner-only path mirrors the text-brain control: it
+        holds one accounted lease until Force unload or scheduler preemption.
+        CUDA is never silently replaced by CPU for this action.
+        """
+
         if self._closed:
             raise SpeechError("E_STT_UNAVAILABLE", "STT provider is closed", retryable=True)
         await self._reject_while_draining()
-        lease: GpuLease | None = None
-        device = self.config.device
-        if device == "cuda":
-            if self.gpu_lease_factory is None:
-                if not self.config.fallback_to_cpu:
+        async with self._inference_lock:
+            existing = await self._active_operator_lease()
+            if existing is not None:
+                return
+            if self._operator_cpu_pinned and self._model is not None:
+                return
+
+            device = self.config.device
+            lease: GpuLease | None = None
+            if device == "cuda":
+                if self.gpu_lease_factory is None:
                     raise SpeechError(
                         "E_STT_RESOURCE_LEASE",
                         "CUDA STT requires a resource lease",
                         retryable=True,
                     )
-                device = "cpu"
-            else:
                 try:
                     lease = await self.gpu_lease_factory(self.unload)
                     lease.assert_active()
+                except SpeechError:
+                    raise
                 except Exception as exc:
+                    raise SpeechError(
+                        "E_STT_RESOURCE_LEASE",
+                        "CUDA STT resource lease was denied",
+                        retryable=True,
+                    ) from exc
+            try:
+                await self._load_for_warmup(device, lease)
+            except SpeechError as exc:
+                # A timed-out native constructor continues in the single
+                # executor.  Its drain task owns the lease until CTranslate2
+                # really stops; releasing here would admit another GPU model
+                # while the old worker can still allocate memory.
+                if exc.code == "E_STT_TIMEOUT":
+                    lease = None
+                if lease is not None:
+                    await lease.release()
+                if exc.code != "E_STT_TIMEOUT":
+                    await self._clear_model()
+                raise
+            except Exception:
+                if lease is not None:
+                    await lease.release()
+                await self._clear_model()
+                raise
+            if lease is not None:
+                self._operator_lease = lease
+                self._operator_cpu_pinned = False
+            else:
+                self._operator_cpu_pinned = True
+
+    async def transcribe(self, audio: NormalizedAudio) -> SttResult:
+        if audio.sample_rate_hz != 16_000:
+            raise SpeechError("E_STT_AUDIO", "STT provider requires normalized 16 kHz audio")
+        if self._closed:
+            raise SpeechError("E_STT_UNAVAILABLE", "STT provider is closed", retryable=True)
+        async with self._inference_lock:
+            await self._reject_while_draining()
+            lease: GpuLease | None = None
+            borrowed_operator = False
+            device = self.config.device
+            if device == "cuda":
+                operator = await self._active_operator_lease()
+                if operator is not None:
+                    lease = operator
+                    borrowed_operator = True
+                elif self.gpu_lease_factory is None:
                     if not self.config.fallback_to_cpu:
                         raise SpeechError(
                             "E_STT_RESOURCE_LEASE",
-                            "CUDA STT resource lease was denied",
+                            "CUDA STT requires a resource lease",
                             retryable=True,
-                        ) from exc
+                        )
                     device = "cpu"
-        try:
+                else:
+                    try:
+                        lease = await self.gpu_lease_factory(self.unload)
+                        lease.assert_active()
+                    except Exception as exc:
+                        if not self.config.fallback_to_cpu:
+                            raise SpeechError(
+                                "E_STT_RESOURCE_LEASE",
+                                "CUDA STT resource lease was denied",
+                                retryable=True,
+                            ) from exc
+                        device = "cpu"
             try:
-                return await self._run_device(audio, device)
-            except _InferenceTimeout as exc:
-                await self._arm_timeout_drain(exc.worker, lease)
-                lease = None
-                raise
-            except SpeechError:
-                if device != "cuda" or not self.config.fallback_to_cpu:
-                    raise
-                if lease is not None:
-                    await lease.release()
+                try:
+                    return await self._run_device(audio, device)
+                except _InferenceTimeout as exc:
+                    if borrowed_operator:
+                        self._operator_lease = None
+                        self._operator_cpu_pinned = False
+                    await self._arm_timeout_drain(exc.worker, lease)
                     lease = None
-                await self.unload()
-                return await self._run_device(audio, "cpu")
-        finally:
-            if lease is not None:
-                await self._clear_model()
-                await lease.release()
+                    raise
+                except SpeechError:
+                    if device != "cuda" or not self.config.fallback_to_cpu:
+                        raise
+                    if borrowed_operator:
+                        self._operator_lease = None
+                        self._operator_cpu_pinned = False
+                    if lease is not None:
+                        await self._clear_model()
+                        await lease.release()
+                        lease = None
+                    borrowed_operator = False
+                    return await self._run_device(audio, "cpu")
+            finally:
+                if lease is not None and not borrowed_operator:
+                    await self._clear_model()
+                    await lease.release()
 
     async def _run_device(self, audio: NormalizedAudio, device: str) -> SttResult:
         try:
@@ -153,7 +238,13 @@ class FasterWhisperProvider:
         drain = self._drain_task
         if drain is not None:
             await asyncio.shield(drain)
-        await self._clear_model()
+        async with self._inference_lock:
+            lease = self._operator_lease
+            self._operator_lease = None
+            self._operator_cpu_pinned = False
+            await self._clear_model()
+            if lease is not None:
+                await lease.release()
 
     async def _clear_model(self) -> None:
         async with self._model_lock:
@@ -163,6 +254,51 @@ class FasterWhisperProvider:
         if model is not None:
             del model
         gc.collect()
+
+    async def _load_for_warmup(self, device: str, lease: GpuLease | None) -> None:
+        """Run the blocking model constructor under the owner warmup deadline."""
+
+        async with self._model_lock:
+            worker = self._executor.submit(self._load_model, device)
+            try:
+                await asyncio.wait_for(
+                    asyncio.shield(asyncio.wrap_future(worker)),
+                    timeout=self.config.warmup_timeout_seconds,
+                )
+            except TimeoutError as exc:
+                self._last_error_code = "E_STT_TIMEOUT"
+                await self._arm_timeout_drain(worker, lease)
+                raise SpeechError(
+                    "E_STT_TIMEOUT",
+                    "STT model warmup timed out",
+                    retryable=True,
+                ) from exc
+            except SpeechError:
+                raise
+            except Exception as exc:
+                self._last_error_code = "E_STT_MODEL_LOAD"
+                raise SpeechError(
+                    "E_STT_MODEL_LOAD",
+                    "the pinned faster-whisper model could not be loaded",
+                    retryable=True,
+                ) from exc
+
+    async def _active_operator_lease(self) -> GpuLease | None:
+        lease = self._operator_lease
+        if lease is None:
+            return None
+        try:
+            lease.assert_active()
+        except Exception:
+            self._operator_lease = None
+            self._operator_cpu_pinned = False
+            return None
+        return lease
+
+    async def _operator_is_resident(self) -> bool:
+        if self._operator_cpu_pinned:
+            return self._model is not None
+        return await self._active_operator_lease() is not None and self._model is not None
 
     async def close(self) -> None:
         self._closed = True
@@ -193,7 +329,7 @@ class FasterWhisperProvider:
 
     async def _finish_timed_out_inference(
         self,
-        worker: Future[SttResult],
+        worker: Future[Any],
         lease: GpuLease | None,
     ) -> None:
         try:
@@ -322,7 +458,7 @@ def _model_is_cached(config: SpeechConfig) -> bool:
     return any((candidate / "model.bin").is_file() for candidate in candidates)
 
 
-async def _wait_for_native_worker(worker: Future[SttResult]) -> None:
+async def _wait_for_native_worker(worker: Future[Any]) -> None:
     while not worker.done():
         try:
             await asyncio.shield(asyncio.wrap_future(worker))

@@ -36,7 +36,9 @@ class _Scheduler:
             "reservedRamMiB": 6_144,
             "availableVramMiB": 5_755,
             "availableRamMiB": 45_536,
-            "headroomMiB": 2_048,
+            "headroomMiB": 0,
+            "admissionCeilingMiB": 15_872,
+            "liveFreeReserveMiB": 0,
             "leases": [
                 {
                     "owner": "tts.omnivoice",
@@ -200,8 +202,9 @@ class ResourceRouteTests(unittest.IsolatedAsyncioTestCase):
         body = response.body
         self.assertEqual(body["physical"]["telemetry"]["usedVramMiB"], 8_500)
         self.assertEqual(body["physical"]["reservedVramMiB"], 3_072)
-        self.assertEqual(body["limits"]["allOnVramCeilingMiB"], 14_336)
-        self.assertEqual(body["limits"]["minimumFreeVramMiB"], 2_048)
+        self.assertEqual(body["limits"]["allOnVramCeilingMiB"], 15_872)
+        self.assertEqual(body["limits"]["minimumFreeVramMiB"], 0)
+        self.assertIn("already excludes Windows", body["semantics"]["liveFree"])
         self.assertLessEqual(len(body["models"]), 5)
         models = {item["id"]: item for item in body["models"]}
         self.assertEqual(models["brain.text"]["state"], "loaded")

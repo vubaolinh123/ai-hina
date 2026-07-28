@@ -30,6 +30,7 @@ class SpeechConfig:
     cpu_threads: int = 8
     beam_size: int = 1
     request_timeout_seconds: float = 90.0
+    warmup_timeout_seconds: float = 45.0
     model_vram_mib: int = 2_048
     model_ram_mib: int = 2_048
     language: str = "vi"
@@ -85,6 +86,12 @@ class SpeechConfig:
             or not 5 <= self.request_timeout_seconds <= 600
         ):
             raise SpeechError("E_STT_CONFIG", "STT request timeout is invalid")
+        if (
+            isinstance(self.warmup_timeout_seconds, bool)
+            or not isinstance(self.warmup_timeout_seconds, (int, float))
+            or not 5 <= self.warmup_timeout_seconds <= 120
+        ):
+            raise SpeechError("E_STT_CONFIG", "STT warmup timeout is invalid")
 
     @classmethod
     def from_env(
@@ -117,6 +124,7 @@ class SpeechConfig:
             cpu_threads=_env_int(values, "HINA_STT_CPU_THREADS", 8),
             beam_size=_env_int(values, "HINA_STT_BEAM_SIZE", 1),
             request_timeout_seconds=_env_float(values, "HINA_STT_TIMEOUT_SECONDS", 90),
+            warmup_timeout_seconds=_env_float(values, "HINA_STT_WARMUP_TIMEOUT_SECONDS", 45),
             model_vram_mib=_env_int(values, "HINA_STT_MODEL_VRAM_MIB", 2_048),
             model_ram_mib=_env_int(values, "HINA_STT_MODEL_RAM_MIB", 2_048),
             language=values.get("HINA_STT_LANGUAGE", "vi").strip().lower(),
@@ -134,6 +142,9 @@ class SpeechConfig:
             "language": self.language,
             "task": self.task,
             "rawAudioRetention": self.raw_audio_retention,
+            "modelVramMiB": self.model_vram_mib,
+            "modelRamMiB": self.model_ram_mib,
+            "warmupTimeoutSeconds": self.warmup_timeout_seconds,
         }
 
 
