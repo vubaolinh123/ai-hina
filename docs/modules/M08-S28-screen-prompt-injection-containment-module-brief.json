@@ -1,0 +1,73 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M08-S28-screen-prompt-injection-containment",
+  "module_id": "M08",
+  "objective": "Close the M08 displayed-prompt-injection test-matrix gap by neutralizing common fake conversation-role control markers inside fresh Vision summaries and proving, across a deterministic adversarial matrix, that screen content remains bounded untrusted user-role data and never becomes system instruction, replay context or executable tool activity.",
+  "non_goals": [
+    "Do not run a real Vision model, Cloud request, desktop capture, GPU benchmark, repeated workflow or soak test.",
+    "Do not add a second moderation engine, change the persona, change the 15-second TTL, alter Vision confidence or enable autonomous decision support.",
+    "Do not claim that text sanitization alone can guarantee model semantic behavior; structural role separation and policy remain mandatory.",
+    "Do not persist screenshots, prompts, summaries, logs or verification artifacts.",
+    "Do not open M09 or claim the owner scene-QA accuracy/diversity gate."
+  ],
+  "base_sha": "b965f069a7b0b7f9877dcf219dbe6972a597eafb",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "packages/text-brain/src/hina_text_brain/context.py",
+    "packages/text-brain/tests/test_conversation.py",
+    "docs/modules/M08-S28-screen-prompt-injection-containment-module-brief.json",
+    "docs/modules/M08-perception.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    ".gitnexus/",
+    ".claude/",
+    "CLAUDE.md",
+    "docs/research/deep-research-report.md",
+    "voice_demo/",
+    "assets/voices/",
+    "assets/avatars/",
+    "var/perception-sessions/",
+    "apps/desktop/dist/",
+    "apps/desktop/dist-electron/"
+  ],
+  "contracts": [
+    "Fresh screen summaries remain exactly one bounded user-role message wrapped by the canonical UNTRUSTED_FRESH_OBSERVATION_DATA boundary.",
+    "Vision text never enters the system-role message, and fake role/control markers cannot create additional messages or close the canonical boundary.",
+    "Common ChatML, Llama instruction and XML-like role markers are rendered inert while ordinary Vietnamese scene text remains readable.",
+    "The observation remains evidence only: toolExecution stays false and replay does not retain the Vision summary.",
+    "Malformed, cross-session, non-owner-lane, abstained, expired and historical observations retain their existing fail-closed behavior.",
+    "No new dependency, model call, local VRAM use or raw artifact is introduced."
+  ],
+  "allowed_dependencies": [
+    "Python standard library and existing repository test tooling."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "A deterministic matrix covers at least 24 English/Vietnamese prompt-injection and fake role/control marker variants.",
+    "Every matrix case remains one user-role observation block with exactly one canonical opening and closing boundary.",
+    "No adversarial payload appears in the system-role prompt or replay data, and no tool execution is enabled.",
+    "Ordinary Vietnamese scene descriptions and punctuation remain intact after neutralization.",
+    "Text-brain tests and repository fast tests pass.",
+    "Module-brief validation, GitNexus change scan and git diff check pass."
+  ],
+  "required_test_commands": [
+    "uv run --frozen python -c \"import json; from jsonschema import Draft202012Validator; schema=json.load(open('docs/schemas/module-brief.schema.json', encoding='utf-8')); brief=json.load(open('docs/modules/M08-S28-screen-prompt-injection-containment-module-brief.json', encoding='utf-8')); Draft202012Validator(schema).validate(brief)\"",
+    "uv run --frozen python -m unittest discover -s packages/text-brain/tests -p \"test_*.py\"",
+    "pnpm test:fast",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "minimum_adversarial_cases": 24,
+    "allowed_system_role_injections": 0,
+    "allowed_executed_tools": 0,
+    "additional_model_calls": 0,
+    "additional_local_vram_mib": 0,
+    "raw_artifact_persistence": false
+  },
+  "output_artifact_dir": "artifacts/verification/M08/"
+}

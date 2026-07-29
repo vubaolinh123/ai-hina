@@ -11,6 +11,41 @@ from .persona import PersonaSpec, render_system_prompt
 
 MAX_MODEL_CONTEXT_BYTES = 65_536
 CONTEXT_ESTIMATE_BYTES_PER_TOKEN = 4
+_EXTERNAL_ROLE_CONTROL_MARKERS = (
+    "[UNTRUSTED_FRESH_OBSERVATION_DATA]",
+    "[/UNTRUSTED_FRESH_OBSERVATION_DATA]",
+    "[SYSTEM]",
+    "[ASSISTANT]",
+    "[DEVELOPER]",
+    "[TOOL]",
+    "[INST]",
+    "[/INST]",
+    "<<SYS>>",
+    "<</SYS>>",
+    "<system>",
+    "</system>",
+    "<assistant>",
+    "</assistant>",
+    "<developer>",
+    "</developer>",
+    "<tool>",
+    "</tool>",
+    "<|system|>",
+    "<|assistant|>",
+    "<|user|>",
+    "<|developer|>",
+    "<|tool|>",
+    "<|im_start|>",
+    "<|im_end|>",
+    "<|start_header_id|>",
+    "<|end_header_id|>",
+    "<|eot_id|>",
+    "<|begin_of_text|>",
+    "<|end_of_text|>",
+)
+_INERT_DELIMITER_TRANSLATION = str.maketrans(
+    {"[": "［", "]": "］", "<": "＜", ">": "＞"}
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -286,13 +321,10 @@ def _bounded_external_text(value: Any, maximum_characters: int) -> str | None:
     ).strip()
     if not cleaned:
         return None
-    for marker in (
-        "[UNTRUSTED_FRESH_OBSERVATION_DATA]",
-        "[/UNTRUSTED_FRESH_OBSERVATION_DATA]",
-    ):
+    for marker in _EXTERNAL_ROLE_CONTROL_MARKERS:
         cleaned = re.sub(
             re.escape(marker),
-            marker.replace("[", "［").replace("]", "］"),
+            marker.translate(_INERT_DELIMITER_TRANSLATION),
             cleaned,
             flags=re.IGNORECASE,
         )

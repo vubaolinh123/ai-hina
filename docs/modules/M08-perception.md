@@ -1104,3 +1104,37 @@ provenance before they may replace the pinned checkpoint.
 - The owner Vision accuracy/diversity gate remains open: this replay result
   proves freshness isolation, not that the model understands real scenes at
   ≥85%.
+
+## Implemented in M08-S28 (screen prompt-injection containment)
+
+- Fresh Vision summaries still enter the model only as one bounded `user`
+  message inside `[UNTRUSTED_FRESH_OBSERVATION_DATA]`; the system message
+  contains only the fixed persona rule that on-screen commands are untrusted.
+- The external-text boundary now renders common fake role/control delimiters
+  inert before composition. This covers the canonical observation delimiter,
+  ChatML role tokens, Llama header/instruction tokens, XML-like role tags and
+  bracketed `SYSTEM/ASSISTANT/DEVELOPER/TOOL` labels without deleting ordinary
+  Vietnamese scene text.
+- Semantic text such as “ignore previous instructions” remains readable inside
+  the evidence block so Hina can describe what is visible, but it cannot create
+  a new message role or close the canonical boundary. This is defence in depth,
+  not a claim that string replacement replaces role separation or policy.
+- A deterministic 28-case Vietnamese/English adversarial matrix verifies
+  exactly one system/user-observation/user-query message sequence, one canonical
+  opening and closing boundary, no payload in the system prompt or replay, and
+  `toolExecution=false`.
+- Existing fail-closed behavior for non-owner lanes, other sessions, metadata
+  only/abstained observations, context overflow and consecutive screenshots
+  remains covered by the same suite.
+
+## Fast evidence M08-S28 (owner machine)
+
+- Text brain: 54 tests pass, including the 28-case structural prompt-injection
+  matrix and the existing single-screen, consecutive-screen and replay
+  isolation regressions.
+- `pnpm test:fast`: 253 tests pass across Safety, Text brain, Memory, Avatar,
+  Speech, Perception and Core Runtime.
+- No real model, Cloud request, capture, image, audio, local VRAM, dependency
+  or retained test artifact is involved.
+- The owner Vision accuracy/diversity gate remains open; prompt containment
+  does not establish ≥85% scene understanding.

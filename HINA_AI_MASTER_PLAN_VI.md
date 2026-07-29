@@ -1630,6 +1630,16 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
   the existing T−ε/T/T+ε monotonic TTL test, this closes the deterministic
   0-false-current-claim gate without a real model/Cloud/capture call or retained
   artifact. Perception 65 and repository fast suite 252 tests pass.
+- M08-S28 screen prompt-injection containment (2026-07-29): fresh Vision text
+  remains exactly one bounded untrusted `user` message. Common ChatML, Llama
+  instruction/header, XML-like role and bracketed role markers are rendered
+  inert before context composition, while ordinary Vietnamese scene text stays
+  readable as evidence. A deterministic 28-case English/Vietnamese matrix
+  proves no payload enters the system prompt or replay, no fake marker creates
+  another role or closes the canonical boundary, and tool execution remains
+  disabled. This adds no model/Cloud/capture call, dependency, VRAM or retained
+  artifact. Text-brain 54 and repository fast suite 253 tests pass; the owner
+  ≥85% scene-QA gate remains open.
 
 ### Test matrix
 

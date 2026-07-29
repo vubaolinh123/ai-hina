@@ -381,6 +381,14 @@ false current claim: mọi response đều `historical=true`,
 fresh owner chat context luôn rỗng. Exact TTL T−ε/T/T+ε vẫn xanh. Perception 65,
 `pnpm test:fast` 252; không đổi production code, không model/Cloud/capture thật
 và TemporaryDirectory không giữ artifact. Scene-QA ≥85% vẫn chờ owner.
+Ngày 2026-07-29 M08-S28 đóng test-matrix prompt injection hiển thị trên màn
+hình. Vision summary vẫn là đúng một `user` message untrusted có boundary cố
+định; marker giả role/control phổ biến của ChatML, Llama, XML và bracketed
+roles được render inert nhưng text cảnh tiếng Việt vẫn đọc được. Ma trận 28
+case Anh/Việt chứng minh payload không vào system prompt/replay, không tạo role
+mới, không đóng boundary thật và `toolExecution=false`. Text-brain 54 tests
+xanh, `pnpm test:fast` 253; không model/Cloud/capture/dependency/VRAM/artifact.
+Gate scene-QA ≥85% vẫn chờ owner.
 Future M11 dùng post-trained Hugging Face `Qwen/Qwen3.5-4B` frozen làm QLoRA
 SFT base, sau đó DPO/ORPO từ dữ liệu owner-curated. Không train trực tiếp GGUF,
 không mặc định bắt đầu từ raw Base và Qwen3.5-9B chỉ benchmark/fallback thủ công,
