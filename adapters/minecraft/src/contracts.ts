@@ -96,6 +96,60 @@ export interface EmergencyStopResult {
   dispatchDurationMs: number;
 }
 
+export type MinecraftSkillId = "look.v1";
+
+export interface MinecraftSkillDefinition {
+  id: MinecraftSkillId;
+  version: 1;
+  description: string;
+  preconditions: readonly string[];
+  timeoutMs: number;
+  budget: {
+    maximumAttempts: 1;
+  };
+  postcondition: {
+    kind: "player_rotation_matches";
+    toleranceRadians: number;
+  };
+  destructive: false;
+}
+
+export interface MinecraftLookSkillRequest {
+  skillId: "look.v1";
+  arguments: {
+    yawRadians: number;
+    pitchRadians: number;
+  };
+}
+
+export type MinecraftSkillRequest = MinecraftLookSkillRequest;
+
+export interface MinecraftRotationEvidence {
+  yawRadians: number;
+  pitchRadians: number;
+}
+
+export interface MinecraftSkillExecutionResult {
+  schemaVersion: 1;
+  executionId: number;
+  skillId: MinecraftSkillId;
+  status: "succeeded" | "failed";
+  startedAt: string;
+  finishedAt: string;
+  durationMs: number;
+  attempts: 1;
+  precondition: {
+    passed: boolean;
+  };
+  postcondition: {
+    passed: boolean;
+    toleranceRadians: number;
+    expected: MinecraftRotationEvidence;
+    observed: MinecraftRotationEvidence | null;
+  };
+  error: MinecraftAdapterErrorView | null;
+}
+
 export class MinecraftAdapterError extends Error {
   readonly code: string;
 

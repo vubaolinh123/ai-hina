@@ -44,6 +44,12 @@ class FakeBotPort {
   quitCalls = 0;
   quitReason = null;
   world = WORLD;
+  lookCalls = [];
+  lookImplementation = async (yawRadians, pitchRadians) => {
+    this.world = structuredClone(this.world);
+    this.world.player.yaw = yawRadians;
+    this.world.player.pitch = pitchRadians;
+  };
 
   on(event, listener) {
     this.emitter.on(event, listener);
@@ -56,6 +62,11 @@ class FakeBotPort {
 
   captureWorldState() {
     return structuredClone(this.world);
+  }
+
+  async look(yawRadians, pitchRadians) {
+    this.lookCalls.push({ yawRadians, pitchRadians });
+    await this.lookImplementation(yawRadians, pitchRadians);
   }
 
   clearControlStates() {
@@ -165,4 +176,153 @@ test("snapshot failure stays bounded and does not expose a vendor object", async
     code: "E_MINECRAFT_SNAPSHOT",
     message: "snapshot exploded",
   });
+});
+
+test("look.v1 succeeds only after the normalized rotation verifies", async () => {
+  const fake = new FakeBotPort();
+  const controller = new MinecraftController(() => fake);
+  const connected = controller.start(CONFIG);
+  fake.emit("spawn");
+  await connected;
+
+  const result = await controller.executeSkill({
+    skillId: "look.v1",
+    arguments: {
+      yawRadians: 1.2,
+      pitchRadians: -0.25,
+    },
+  });
+
+  assert.equal(result.status, "succeeded");
+  assert.equal(result.attempts, 1);
+  assert.equal(result.precondition.passed, true);
+  assert.equal(result.postcondition.passed, true);
+  assert.deepEqual(fake.lookCalls, [
+    { yawRadians: 1.2, pitchRadians: -0.25 },
+  ]);
+});
+
+test("look.v1 fails when Mineflayer resolves without satisfying state", async () => {
+  const fake = new FakeBotPort();
+  fake.lookImplementation = async () => {};
+  const controller = new MinecraftController(() => fake);
+  const connected = controller.start(CONFIG);
+  fake.emit("spawn");
+  await connected;
+
+  const result = await controller.executeSkill({
+    skillId: "look.v1",
+    arguments: {
+      yawRadians: 2,
+      pitchRadians: 0.4,
+    },
+  });
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.postcondition.passed, false);
+  assert.equal(result.error.code, "E_MINECRAFT_SKILL_POSTCONDITION");
+  assert.equal(fake.lookCalls.length, 1);
+});
+
+test("look.v1 reports vendor failure without retry", async () => {
+  const fake = new FakeBotPort();
+  fake.lookImplementation = async () => {
+    throw new Error("look packet failed");
+  };
+  const controller = new MinecraftController(() => fake);
+  const connected = controller.start(CONFIG);
+  fake.emit("spawn");
+  await connected;
+
+  const result = await controller.executeSkill({
+    skillId: "look.v1",
+    arguments: {
+      yawRadians: 0.1,
+      pitchRadians: 0.1,
+    },
+  });
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.error.code, "E_MINECRAFT_SKILL_ACTION");
+  assert.equal(fake.lookCalls.length, 1);
+});
+
+test("look.v1 enforces its fixed timeout without retry", async (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  const fake = new FakeBotPort();
+  fake.lookImplementation = () => new Promise(() => {});
+  const controller = new MinecraftController(() => fake);
+  const connected = controller.start(CONFIG);
+  fake.emit("spawn");
+  await connected;
+
+  const active = controller.executeSkill({
+    skillId: "look.v1",
+    arguments: {
+      yawRadians: 0.1,
+      pitchRadians: 0.1,
+    },
+  });
+  await Promise.resolve();
+  context.mock.timers.tick(2_001);
+  const result = await active;
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.error.code, "E_MINECRAFT_SKILL_TIMEOUT");
+  assert.equal(fake.lookCalls.length, 1);
+});
+
+test("look.v1 enforces online and single-active-skill preconditions", async () => {
+  const offline = new MinecraftController(() => new FakeBotPort());
+  const offlineResult = await offline.executeSkill({
+    skillId: "look.v1",
+    arguments: { yawRadians: 0, pitchRadians: 0 },
+  });
+  assert.equal(offlineResult.error.code, "E_MINECRAFT_SKILL_PRECONDITION");
+
+  const fake = new FakeBotPort();
+  let releaseLook;
+  fake.lookImplementation = () =>
+    new Promise((resolve) => {
+      releaseLook = resolve;
+    });
+  const controller = new MinecraftController(() => fake);
+  const connected = controller.start(CONFIG);
+  fake.emit("spawn");
+  await connected;
+
+  const active = controller.executeSkill({
+    skillId: "look.v1",
+    arguments: { yawRadians: 0.5, pitchRadians: 0 },
+  });
+  await Promise.resolve();
+  const busy = await controller.executeSkill({
+    skillId: "look.v1",
+    arguments: { yawRadians: 0.6, pitchRadians: 0 },
+  });
+  assert.equal(busy.error.code, "E_MINECRAFT_SKILL_BUSY");
+  releaseLook();
+  await active;
+});
+
+test("emergency stop cancels an active look skill and never retries", async () => {
+  const fake = new FakeBotPort();
+  fake.lookImplementation = () => new Promise(() => {});
+  const controller = new MinecraftController(() => fake);
+  const connected = controller.start(CONFIG);
+  fake.emit("spawn");
+  await connected;
+
+  const active = controller.executeSkill({
+    skillId: "look.v1",
+    arguments: { yawRadians: 0.5, pitchRadians: 0.2 },
+  });
+  await Promise.resolve();
+  await controller.emergencyStop();
+  const result = await active;
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.error.code, "E_MINECRAFT_SKILL_CANCELLED");
+  assert.equal(fake.lookCalls.length, 1);
+  assert.equal(fake.quitCalls, 1);
 });

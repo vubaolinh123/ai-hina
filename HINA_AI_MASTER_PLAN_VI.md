@@ -1739,6 +1739,13 @@ code, pathfinder hoặc destructive action. Build + 13 adapter tests và fast su
 270 test pass; real resettable-server smoke vẫn là acceptance của owner trước
 khi promotion.
 
+M09-S2 thêm registry tĩnh với `look.v1` là deterministic skill đầu tiên. Skill
+có precondition, một attempt, timeout 2 giây, budget cố định và postcondition
+yaw/pitch tolerance 0,05 radian; Mineflayer promise resolve không đủ để báo
+success nếu state verifier không đồng ý. E-stop hủy action đang chờ. Build + 22
+adapter tests và fast suite 279 test pass; chưa có mutating network route hoặc
+real-server smoke.
+
 ### Mục tiêu
 
 Chơi Minecraft mức cơ bản bằng Mineflayer, LLM chỉ lập kế hoạch high-level, mọi skill typed/whitelisted/versioned.

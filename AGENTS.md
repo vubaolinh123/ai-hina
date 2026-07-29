@@ -427,6 +427,16 @@ hoặc destructive action. Build + 13 adapter tests và `pnpm test:fast` 270 xan
 audit không còn finding trên dependency path Minecraft sau override `uuid`
 11.1.1. Real resettable-server smoke vẫn chờ owner nên S1 chỉ là local runnable
 candidate, không production promotion.
+M09-S2 thêm fixed typed skill registry với đúng `look.v1` non-destructive. Skill
+chỉ chạy khi online/not-emergency/player-present/no-concurrent-skill, budget một
+attempt, timeout 2 giây và postcondition yaw/pitch tolerance 0,05 radian.
+Mineflayer promise resolve không được coi là success nếu normalized state
+verifier không đồng ý. Timeout/vendor error/busy/precondition mismatch/
+postcondition mismatch/emergency cancellation có stable failure và không retry;
+e-stop abort active skill trước clear controls/disconnect. Không có mutating
+HTTP, pathfinder/movement, LLM/generated code hoặc destructive action.
+Minecraft 22 tests và `pnpm test:fast` 279 xanh; real resettable-server smoke
+vẫn chờ owner.
 Future M11 dùng post-trained Hugging Face `Qwen/Qwen3.5-4B` frozen làm QLoRA
 SFT base, sau đó DPO/ORPO từ dữ liệu owner-curated. Không train trực tiếp GGUF,
 không mặc định bắt đầu từ raw Base và Qwen3.5-9B chỉ benchmark/fallback thủ công,

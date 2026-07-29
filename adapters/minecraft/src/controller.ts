@@ -6,6 +6,9 @@ import {
   type MinecraftAdapterErrorView,
   type MinecraftConnectionConfig,
   type MinecraftControllerStatus,
+  type MinecraftLookSkillRequest,
+  type MinecraftRotationEvidence,
+  type MinecraftSkillExecutionResult,
   type MinecraftWorldState,
 } from "./contracts.js";
 import { createMineflayerBot } from "./mineflayer-client.js";
@@ -13,6 +16,10 @@ import type {
   MinecraftBotFactory,
   MinecraftBotPort,
 } from "./ports.js";
+import {
+  LOOK_SKILL_DEFINITION,
+  validateMinecraftSkillRequest,
+} from "./skill-registry.js";
 
 type Clock = () => Date;
 
@@ -49,6 +56,8 @@ export class MinecraftController {
   #eventUnsubscribers: Array<() => void> = [];
   #connectPromise: Promise<MinecraftControllerStatus> | null = null;
   #cancelConnection: (() => void) | null = null;
+  #activeSkillAbort: AbortController | null = null;
+  #skillExecutionSequence = 0;
 
   constructor(
     factory: MinecraftBotFactory = createMineflayerBot,
@@ -212,6 +221,235 @@ export class MinecraftController {
     };
   }
 
+  async executeSkill(requestValue: unknown): Promise<MinecraftSkillExecutionResult> {
+    const request = validateMinecraftSkillRequest(requestValue);
+    const executionId = ++this.#skillExecutionSequence;
+    const startedAt = this.#clock();
+    const started = performance.now();
+    const expected: MinecraftRotationEvidence = {
+      yawRadians: request.arguments.yawRadians,
+      pitchRadians: request.arguments.pitchRadians,
+    };
+    const finish = (
+      status: MinecraftSkillExecutionResult["status"],
+      preconditionPassed: boolean,
+      observed: MinecraftRotationEvidence | null,
+      postconditionPassed: boolean,
+      error: MinecraftAdapterErrorView | null,
+    ): MinecraftSkillExecutionResult => ({
+      schemaVersion: 1,
+      executionId,
+      skillId: request.skillId,
+      status,
+      startedAt: startedAt.toISOString(),
+      finishedAt: this.#clock().toISOString(),
+      durationMs: Math.round((performance.now() - started) * 1_000) / 1_000,
+      attempts: 1,
+      precondition: {
+        passed: preconditionPassed,
+      },
+      postcondition: {
+        passed: postconditionPassed,
+        toleranceRadians:
+          LOOK_SKILL_DEFINITION.postcondition.toleranceRadians,
+        expected,
+        observed,
+      },
+      error,
+    });
+
+    if (this.#activeSkillAbort !== null) {
+      return finish(
+        "failed",
+        false,
+        null,
+        false,
+        errorView(
+          "E_MINECRAFT_SKILL_BUSY",
+          "Another deterministic Minecraft skill is already active",
+        ),
+      );
+    }
+    if (
+      this.#emergencyStopped ||
+      this.#phase !== "online" ||
+      this.#bot === null
+    ) {
+      return finish(
+        "failed",
+        false,
+        null,
+        false,
+        errorView(
+          "E_MINECRAFT_SKILL_PRECONDITION",
+          "Minecraft controller must be online and not emergency-stopped",
+        ),
+      );
+    }
+
+    const bot = this.#bot;
+    let before: MinecraftWorldState;
+    try {
+      before = bot.captureWorldState();
+    } catch (error) {
+      return finish(
+        "failed",
+        false,
+        null,
+        false,
+        errorView(
+          "E_MINECRAFT_SKILL_PRECONDITION",
+          payloadMessage(error, "Player state is unavailable"),
+        ),
+      );
+    }
+    if (before.player === null) {
+      return finish(
+        "failed",
+        false,
+        null,
+        false,
+        errorView(
+          "E_MINECRAFT_SKILL_PRECONDITION",
+          "Player state is unavailable",
+        ),
+      );
+    }
+
+    const abortController = new AbortController();
+    this.#activeSkillAbort = abortController;
+    let timeout: NodeJS.Timeout | null = null;
+    let removeAbortListener = (): void => {};
+    try {
+      const timeoutPromise = new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(() => {
+          reject(
+            new MinecraftAdapterError(
+              "E_MINECRAFT_SKILL_TIMEOUT",
+              `look.v1 exceeded ${LOOK_SKILL_DEFINITION.timeoutMs} ms`,
+            ),
+          );
+        }, LOOK_SKILL_DEFINITION.timeoutMs);
+        timeout.unref();
+      });
+      const abortPromise = new Promise<never>((_resolve, reject) => {
+        const onAbort = (): void => {
+          reject(
+            new MinecraftAdapterError(
+              "E_MINECRAFT_SKILL_CANCELLED",
+              "look.v1 was cancelled by emergency stop",
+            ),
+          );
+        };
+        abortController.signal.addEventListener("abort", onAbort, {
+          once: true,
+        });
+        removeAbortListener = () =>
+          abortController.signal.removeEventListener("abort", onAbort);
+      });
+      await Promise.race([
+        this.#executeLook(bot, request),
+        timeoutPromise,
+        abortPromise,
+      ]);
+    } catch (error) {
+      try {
+        bot.clearControlStates();
+      } catch {
+        // The failure result remains authoritative if the vendor client degraded.
+      }
+      const view =
+        error instanceof MinecraftAdapterError
+          ? errorView(error.code, error.message)
+          : errorView(
+              "E_MINECRAFT_SKILL_ACTION",
+              payloadMessage(error, "Mineflayer look action failed"),
+            );
+      return finish("failed", true, null, false, view);
+    } finally {
+      if (timeout !== null) {
+        clearTimeout(timeout);
+      }
+      removeAbortListener();
+      if (this.#activeSkillAbort === abortController) {
+        this.#activeSkillAbort = null;
+      }
+    }
+
+    let after: MinecraftWorldState;
+    try {
+      after = bot.captureWorldState();
+    } catch (error) {
+      return finish(
+        "failed",
+        true,
+        null,
+        false,
+        errorView(
+          "E_MINECRAFT_SKILL_POSTCONDITION",
+          payloadMessage(error, "Post-action player state is unavailable"),
+        ),
+      );
+    }
+    if (after.player === null) {
+      return finish(
+        "failed",
+        true,
+        null,
+        false,
+        errorView(
+          "E_MINECRAFT_SKILL_POSTCONDITION",
+          "Post-action player state is unavailable",
+        ),
+      );
+    }
+    const observed: MinecraftRotationEvidence = {
+      yawRadians: after.player.yaw,
+      pitchRadians: after.player.pitch,
+    };
+    const verified = this.#rotationMatches(expected, observed);
+    return finish(
+      verified ? "succeeded" : "failed",
+      true,
+      observed,
+      verified,
+      verified
+        ? null
+        : errorView(
+            "E_MINECRAFT_SKILL_POSTCONDITION",
+            "Player rotation did not reach the verified target",
+          ),
+    );
+  }
+
+  async #executeLook(
+    bot: MinecraftBotPort,
+    request: MinecraftLookSkillRequest,
+  ): Promise<void> {
+    await bot.look(
+      request.arguments.yawRadians,
+      request.arguments.pitchRadians,
+    );
+  }
+
+  #rotationMatches(
+    expected: MinecraftRotationEvidence,
+    observed: MinecraftRotationEvidence,
+  ): boolean {
+    const yawDelta = Math.abs(
+      Math.atan2(
+        Math.sin(observed.yawRadians - expected.yawRadians),
+        Math.cos(observed.yawRadians - expected.yawRadians),
+      ),
+    );
+    const pitchDelta = Math.abs(
+      observed.pitchRadians - expected.pitchRadians,
+    );
+    const tolerance =
+      LOOK_SKILL_DEFINITION.postcondition.toleranceRadians;
+    return yawDelta <= tolerance && pitchDelta <= tolerance;
+  }
+
   async emergencyStop(): Promise<EmergencyStopResult> {
     const started = performance.now();
     const alreadyStopped = this.#emergencyStopped;
@@ -224,6 +462,7 @@ export class MinecraftController {
       };
     }
     this.#emergencyStopped = true;
+    this.#activeSkillAbort?.abort();
     this.#phase = "stopping";
     this.#sequence += 1;
 

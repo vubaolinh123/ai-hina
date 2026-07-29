@@ -70,6 +70,10 @@ class MineflayerBotAdapter implements MinecraftBotPort {
     this.#bot.clearControlStates();
   }
 
+  async look(yawRadians: number, pitchRadians: number): Promise<void> {
+    await this.#bot.look(yawRadians, pitchRadians, true);
+  }
+
   async stopDigging(): Promise<void> {
     await this.#bot.stopDigging();
   }

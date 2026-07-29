@@ -1,0 +1,81 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M09-S2-look-skill-registry",
+  "module_id": "M09",
+  "objective": "Add the first real deterministic Minecraft skill through a fixed typed registry: look.v1 validates a bounded target, executes exactly once through Mineflayer, obeys timeout and emergency cancellation, and reports success only when a post-action yaw/pitch state verifier agrees.",
+  "non_goals": [
+    "Do not add LLM planning, generated code, eval, shell, arbitrary callbacks or runtime plugin registration.",
+    "Do not add movement, pathfinding, collection, crafting, storage, eating, fleeing, combat, chat, sign, book or destructive actions.",
+    "Do not add a mutating HTTP endpoint, dashboard control or non-loopback listener in this slice.",
+    "Do not retry a failed action, infer success from Mineflayer promise resolution alone or allow the caller to raise timeout/attempt budgets.",
+    "Do not run a real Minecraft server smoke, repeated task benchmark or mechanical-success promotion gate without an owner-provided resettable server."
+  ],
+  "base_sha": "ad0fd74",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "adapters/minecraft/src/contracts.ts",
+    "adapters/minecraft/src/ports.ts",
+    "adapters/minecraft/src/mineflayer-client.ts",
+    "adapters/minecraft/src/controller.ts",
+    "adapters/minecraft/src/index.ts",
+    "adapters/minecraft/src/skill-registry.ts",
+    "adapters/minecraft/test/",
+    "third_party/code.lock.json",
+    "docs/modules/M09-S2-look-skill-registry-module-brief.json",
+    "docs/modules/M09-minecraft-agent.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    ".gitnexus/",
+    ".claude/",
+    "CLAUDE.md",
+    "docs/research/deep-research-report.md",
+    "voice_demo/",
+    "assets/voices/",
+    "assets/avatars/",
+    "var/perception-sessions/",
+    "apps/desktop/dist/",
+    "apps/desktop/dist-electron/"
+  ],
+  "contracts": [
+    "The registry is static and exposes exactly look.v1 in this slice; runtime callers cannot register code or alter budgets.",
+    "look.v1 accepts exactly finite yawRadians and pitchRadians, with yaw in [-pi, pi] and pitch in [-pi/2, pi/2]; unknown fields and skill IDs fail closed.",
+    "Execution requires an online non-emergency controller, one visible player state and no other active skill.",
+    "The fixed budget is one attempt with a 2000 ms timeout and no destructive capability.",
+    "Mineflayer promise resolution is not success evidence; the normalized post-state must match yaw and pitch within a fixed angular tolerance.",
+    "Timeout, postcondition mismatch, vendor error and emergency cancellation return stable bounded failures and never retry.",
+    "Emergency stop aborts the active skill before clearing local controls and disconnecting.",
+    "No chat, sign, book, scoreboard, plugin payload, model output or arbitrary code enters skill validation or execution."
+  ],
+  "allowed_dependencies": [
+    "Node.js standard library and the already-pinned Mineflayer 4.37.1 adapter."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "Registry tests prove only look.v1 exists and its fixed precondition, timeout, one-attempt budget, postcondition and non-destructive metadata are immutable to callers.",
+    "Validation tests reject unknown skills, extra or missing fields, non-finite values and out-of-range angles before Mineflayer receives an action.",
+    "Controller tests prove success requires state verification and cover precondition failure, busy concurrency, timeout, vendor error, postcondition mismatch and emergency cancellation.",
+    "MineflayerBotPort and its real adapter call the official bot.look API without exposing a vendor type through the public package entrypoint.",
+    "Adapter build/tests, repository fast tests, module-brief validation, GitNexus change scan and git diff check pass."
+  ],
+  "required_test_commands": [
+    "uv run --frozen python -c \"import json; from jsonschema import Draft202012Validator; schema=json.load(open('docs/schemas/module-brief.schema.json', encoding='utf-8')); brief=json.load(open('docs/modules/M09-S2-look-skill-registry-module-brief.json', encoding='utf-8')); Draft202012Validator(schema).validate(brief)\"",
+    "pnpm test:minecraft",
+    "pnpm test:fast",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "maximum_attempts": 1,
+    "skill_timeout_milliseconds": 2000,
+    "maximum_angular_error_radians": 0.05,
+    "destructive_capability": false,
+    "model_calls": 0,
+    "additional_local_vram_mib": 0,
+    "raw_artifact_persistence": false
+  },
+  "output_artifact_dir": "artifacts/verification/M09/"
+}

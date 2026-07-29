@@ -36,9 +36,9 @@ read-only mặc định sẽ ở `http://127.0.0.1:8766/v1/minecraft/status`. Nh
 
 ## Slice kế tiếp
 
-M09-S2 sẽ thêm typed skill registry và controller deterministic. Mỗi skill bắt
-buộc có precondition, timeout, budget, postcondition và state verifier trước
-khi được phép báo thành công.
+M09-S3 sẽ nối skill controller vào một owner-only control boundary để owner có
+thể chạy hành động thật trên server test từ Dashboard. Boundary đó vẫn phải
+giữ fixed allowlist và không cho renderer hoặc model tự chọn code/action tùy ý.
 
 ## Fast evidence M09-S1 (owner machine)
 
@@ -60,3 +60,28 @@ khi được phép báo thành công.
   có real-server smoke, chưa đo server acknowledgement và chưa tuyên bố
   compatibility với world/version cụ thể. Candidate chỉ dành cho owner local
   test.
+
+## Implemented in M09-S2
+
+- Registry tĩnh hiện chỉ có `look.v1`, version 1, `destructive=false`, tối đa
+  một attempt, timeout 2.000 ms và yaw/pitch tolerance 0,05 radian. Caller không
+  thể đăng ký callback, đổi budget hoặc gửi field ngoài schema.
+- `look.v1` chỉ chạy khi controller online, emergency stop chưa latch, player
+  state tồn tại và không có skill khác đang chạy.
+- Adapter gọi API `bot.look(yaw, pitch, true)` thật của Mineflayer. Promise
+  resolve không phải success evidence: normalized state sau action phải có yaw
+  và pitch khớp target trong tolerance thì result mới là `succeeded`.
+- Timeout, vendor error, busy, missing precondition, postcondition mismatch và
+  emergency cancellation đều trả mã lỗi bounded, không retry. Emergency stop
+  abort active skill trước khi clear controls và disconnect.
+- Không có movement/pathfinding, chat/sign/book, destructive action, LLM,
+  generated code, `eval`, shell hoặc mutating HTTP route.
+
+## Fast evidence M09-S2 (owner machine)
+
+- `pnpm test:minecraft`: build TypeScript và 22 test pass, gồm validation,
+  immutable registry, verified success, false-success rejection, vendor error,
+  fake-timer timeout, concurrency guard và emergency cancellation.
+- `pnpm test:fast`: tổng 279 test pass.
+- Module brief và `git diff --check` pass. Không gọi model/GPU/Cloud, không tạo
+  world/audio/image test và không chạy Minecraft server thật.

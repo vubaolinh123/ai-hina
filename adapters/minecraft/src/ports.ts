@@ -11,6 +11,7 @@ export interface MinecraftBotPort {
     listener: (payload?: unknown) => void,
   ): () => void;
   captureWorldState(): MinecraftWorldState;
+  look(yawRadians: number, pitchRadians: number): Promise<void>;
   clearControlStates(): void;
   stopDigging(): Promise<void>;
   quit(reason: string): void;
