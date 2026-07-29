@@ -1,0 +1,58 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M09-S5A-movement-evidence-presentation",
+  "module_id": "M09",
+  "objective": "Render the already-bounded move.step.v1 tick, stagnation and maximum-progress evidence in the existing owner Desktop notice after every movement result.",
+  "non_goals": [
+    "Do not change movement execution, freshness, authentication, retries, skill schemas or Mineflayer.",
+    "Do not add a new page, direct renderer network access, persistence, model call or raw telemetry.",
+    "Do not change Vision, Brain, Voice, avatar or resource scheduling."
+  ],
+  "base_sha": "b448540bb2068325fd65dd7d69fd2a81e17f967e",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "apps/desktop/src/App.vue",
+    "apps/desktop/src/env.d.ts",
+    "apps/desktop/test/security.test.mjs",
+    "docs/modules/M09-S5A-movement-evidence-presentation-module-brief.json",
+    "docs/modules/M09-minecraft-agent.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    ".gitnexus/",
+    ".claude/",
+    "CLAUDE.md",
+    "docs/research/deep-research-report.md",
+    "voice_demo/",
+    "assets/",
+    "var/"
+  ],
+  "contracts": [
+    "The renderer receives only the existing bounded postcondition.progress fields through typed preload IPC.",
+    "The owner notice reports physics ticks, stagnant ticks and maximum forward progress for succeeded and failed movement.",
+    "No prompt, packet, bot object, world payload or unbounded vendor value is rendered."
+  ],
+  "allowed_dependencies": [
+    "Existing Desktop dependencies only; no new dependency."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "Desktop types include the exact bounded movement progress shape.",
+    "The Minecraft movement notice renders all three evidence fields for success and failure.",
+    "Desktop typecheck/build/tests, module-brief validation, GitNexus scan and git diff check pass."
+  ],
+  "required_test_commands": [
+    "uv run --frozen python -c \"import json; from jsonschema import Draft202012Validator; schema=json.load(open('docs/schemas/module-brief.schema.json', encoding='utf-8')); brief=json.load(open('docs/modules/M09-S5A-movement-evidence-presentation-module-brief.json', encoding='utf-8')); Draft202012Validator(schema).validate(brief)\"",
+    "pnpm --filter @hina/desktop typecheck",
+    "pnpm test:desktop",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "maximum_notice_characters": 512,
+    "model_calls": 0,
+    "additional_local_vram_mib": 0,
+    "raw_artifact_persistence": false
+  },
+  "output_artifact_dir": "artifacts/verification/M09/"
+}

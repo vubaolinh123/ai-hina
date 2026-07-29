@@ -1257,12 +1257,17 @@ async function moveMinecraft(input: {
   try {
     const result = await window.hinaDesktop.moveMinecraft(input);
     minecraftStatus.value = result.minecraft;
+    const progress = result.execution.postcondition.progress;
+    const evidence =
+      `${progress.physicsTicksObserved} physics tick · ` +
+      `${progress.stagnantTicksObserved} tick đứng yên · ` +
+      `tiến tối đa ${progress.maximumForwardProgressBlocks.toFixed(3)} block`;
     minecraftNotice.value =
       result.execution.status === "succeeded"
-        ? "Hina đã di chuyển đúng hướng và quãng đường đã qua hậu kiểm."
+        ? `Hina đã di chuyển đúng hướng và quãng đường đã qua hậu kiểm. ${evidence}.`
         : `${result.execution.error?.code ?? "E_MINECRAFT_SKILL"}: ${
             result.execution.error?.message ?? "Di chuyển chưa đạt hậu kiểm."
-          }`;
+          } · ${evidence}.`;
   } catch (error) {
     minecraftNotice.value =
       error instanceof Error ? error.message : "E_DESKTOP_MINECRAFT_MOVE";

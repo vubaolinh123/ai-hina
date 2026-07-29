@@ -268,6 +268,7 @@ test("Minecraft controls stay on numeric loopback behind ephemeral operator IPC"
   const preload = read("electron/preload.ts");
   const client = read("electron/minecraft-client.ts");
   const launcher = read("../../tools/dev/Start-HinaDesktop.ps1");
+  const renderer = readOperatorRenderer();
 
   for (const channel of [
     "minecraftStatus",
@@ -289,6 +290,9 @@ test("Minecraft controls stay on numeric loopback behind ephemeral operator IPC"
   assert.match(client, /\/v1\/minecraft\/skills\/move-step/);
   assert.match(client, /distanceBlocks < 0\.25/);
   assert.match(client, /distanceBlocks > 2/);
+  assert.match(renderer, /progress\.physicsTicksObserved/);
+  assert.match(renderer, /progress\.stagnantTicksObserved/);
+  assert.match(renderer, /progress\.maximumForwardProgressBlocks/);
   assert.doesNotMatch(client, /retry|setTimeout\(/i);
   assert.match(launcher, /RandomNumberGenerator\]::Fill/);
   assert.match(launcher, /\$env:HINA_MINECRAFT_CONTROL_TOKEN = New-HinaEphemeralToken/);

@@ -115,8 +115,9 @@ Fast evidence:
 - Dashboard hiện rõ trạng thái **Mới / Đã cũ / Chưa nhận physics tick** và vô
   hiệu hóa hai action khi world-state chưa đủ tươi.
 - Mỗi movement attempt trả số physics tick đã quan sát, số tick đang đứng yên và
-  forward progress lớn nhất. Blocked ở 20 stagnant tick vẫn một attempt, không
-  retry/pathfinding và luôn nhả controls trong `finally`.
+  forward progress lớn nhất; Dashboard hiện ba số này ngay trong kết quả owner.
+  Blocked ở 20 stagnant tick vẫn một attempt, không retry/pathfinding và luôn
+  nhả controls trong `finally`.
 - S5 không thêm skill, model call, GPU/VRAM, Vision path hoặc file world-state.
 
 Fast evidence:

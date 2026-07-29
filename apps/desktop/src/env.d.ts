@@ -631,6 +631,13 @@ type HinaDesktopApi = {
     execution: {
       status: "succeeded" | "failed";
       error?: { code: string; message: string } | null;
+      postcondition: {
+        progress: {
+          physicsTicksObserved: number;
+          stagnantTicksObserved: number;
+          maximumForwardProgressBlocks: number;
+        };
+      };
     };
     minecraft: MinecraftStatus;
   }>;
