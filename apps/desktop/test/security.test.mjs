@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
@@ -301,12 +302,55 @@ test("Minecraft controls stay on numeric loopback behind ephemeral operator IPC"
   assert.match(renderer, /progress\.stagnantTicksObserved/);
   assert.match(renderer, /progress\.maximumForwardProgressBlocks/);
   assert.doesNotMatch(client, /retry|setTimeout\(/i);
-  assert.match(launcher, /RandomNumberGenerator\]::Fill/);
+  assert.match(launcher, /RandomNumberGenerator\]::Create\(\)/);
+  assert.match(launcher, /\$generator\.GetBytes\(\$bytes\)/);
+  assert.match(launcher, /\$generator\.Dispose\(\)/);
+  assert.doesNotMatch(launcher, /RandomNumberGenerator\]::Fill/);
   assert.match(launcher, /\$env:HINA_MINECRAFT_CONTROL_TOKEN = New-HinaEphemeralToken/);
   assert.match(launcher, /Remove-Item Env:HINA_MINECRAFT_CONTROL_TOKEN/);
   assert.match(launcher, /Minecraft control service is ready and disconnected/);
   assert.doesNotMatch(preload, /HINA_MINECRAFT_CONTROL_TOKEN|127\.0\.0\.1:8766/);
 });
+
+test(
+  "Minecraft session token helper runs on Windows PowerShell and returns 32 CSPRNG bytes",
+  { skip: process.platform !== "win32" },
+  () => {
+    const launcher = read("../../tools/dev/Start-HinaDesktop.ps1");
+    const helper = launcher.match(
+      /^function New-HinaEphemeralToken \{[\s\S]*?^\}/m,
+    );
+    assert.ok(helper, "New-HinaEphemeralToken helper must remain discoverable");
+
+    const verification = `
+${helper[0]}
+$token = New-HinaEphemeralToken
+if ($token -notmatch '^[A-Za-z0-9_-]{43}$') { exit 11 }
+$padding = '=' * ((4 - ($token.Length % 4)) % 4)
+$standard = ($token + $padding).Replace('-', '+').Replace('_', '/')
+$decoded = [Convert]::FromBase64String($standard)
+if ($decoded.Length -ne 32) { exit 12 }
+Write-Output 'HINA_TOKEN_GENERATOR_PASS'
+`;
+    const encoded = Buffer.from(verification, "utf16le").toString("base64");
+    const result = spawnSync(
+      "powershell.exe",
+      ["-NoProfile", "-EncodedCommand", encoded],
+      {
+        encoding: "utf8",
+        timeout: 10_000,
+        windowsHide: true,
+      },
+    );
+    assert.equal(
+      result.status,
+      0,
+      `PowerShell token helper failed: ${result.stderr || result.stdout}`,
+    );
+    assert.match(result.stdout, /HINA_TOKEN_GENERATOR_PASS/);
+    assert.doesNotMatch(result.stdout, /[A-Za-z0-9_-]{43}/);
+  },
+);
 
 test("full-frame screen capture stays in Electron main behind one-use grants", () => {
   const main = read("electron/main.ts");

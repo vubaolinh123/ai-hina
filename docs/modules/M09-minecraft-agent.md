@@ -159,3 +159,25 @@ Fast evidence:
 Owner sẽ test S3–S6 trên resettable server. Slice sau chỉ được mở từ lỗi thực tế
 hoặc capability deterministic tiếp theo; pathfinder, LLM planner, phá block và
 combat vẫn chưa được mở.
+
+## M09-S6A — Windows PowerShell launcher hotfix
+
+- Owner log xác nhận `pnpm start:desktop` dừng trước khi mở Minecraft service vì
+  Windows PowerShell 5.1/.NET Framework không có static API
+  `RandomNumberGenerator.Fill`.
+- Launcher vẫn sinh đúng 32 byte CSPRNG và URL-safe Base64 không padding, nhưng
+  dùng API tương thích `RandomNumberGenerator.Create().GetBytes(...)` và luôn
+  dispose generator trong `finally`.
+- Không đổi token size, port, route, quyền owner, child environment boundary hay
+  cơ chế khôi phục/xóa biến môi trường khi Desktop đóng.
+- Desktop security regression chạy chính helper production bằng
+  `powershell.exe`, kiểm 43 ký tự URL-safe và decode đúng 32 byte mà không in
+  token ra log.
+
+Fast evidence:
+
+- `pnpm test:desktop`: production build và 67 tests pass.
+- `pnpm smoke:desktop`: same launcher path pass; model warmup, Minecraft service
+  `ready/disconnected` và Electron typed-IPC smoke đều hoàn tất.
+- Module brief và `git diff --check` pass; không thêm dependency hoặc artifact
+  runtime mới.

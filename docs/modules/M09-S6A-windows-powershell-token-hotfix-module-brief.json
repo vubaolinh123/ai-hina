@@ -1,0 +1,59 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M09-S6A-windows-powershell-token-hotfix",
+  "module_id": "M09",
+  "objective": "Restore start:desktop on Windows PowerShell 5.1 by generating the existing 32-byte Minecraft session secret with a cross-version CSPRNG API.",
+  "non_goals": [
+    "Do not change token size, encoding, authority, routes, ports, startup ordering or child-process ownership.",
+    "Do not expose the token to renderer, logs, files, command-line arguments or persisted configuration.",
+    "Do not change Minecraft skills, models, Vision, speech, avatar or resource scheduling."
+  ],
+  "base_sha": "d1988c529a5d81492fd8d3c0980d7ae3088ef376",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "tools/dev/Start-HinaDesktop.ps1",
+    "apps/desktop/test/security.test.mjs",
+    "docs/modules/M09-S6A-windows-powershell-token-hotfix-module-brief.json",
+    "docs/modules/M09-minecraft-agent.md",
+    "AGENTS.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    ".gitnexus/",
+    ".claude/",
+    "CLAUDE.md",
+    "docs/research/deep-research-report.md",
+    "voice_demo/",
+    "assets/",
+    "var/"
+  ],
+  "contracts": [
+    "Every Desktop session receives a fresh 32-byte cryptographically secure random Minecraft control secret.",
+    "The token remains URL-safe unpadded Base64 and exists only in the launcher and child-process environment boundary.",
+    "The CSPRNG object is disposed even if generation fails, and the previous environment value is restored on exit.",
+    "The exact production token helper executes successfully under Windows PowerShell 5.1 and PowerShell 7-compatible .NET runtimes."
+  ],
+  "allowed_dependencies": [
+    "Existing .NET System.Security.Cryptography APIs only; no new dependency."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "The reproduced RandomNumberGenerator.Fill MethodNotFound path is removed.",
+    "A regression test executes the exact production helper in Windows PowerShell and validates URL-safe encoding plus 32 decoded bytes without printing the secret.",
+    "Desktop tests, launcher startup smoke, module-brief validation, GitNexus detect_changes and git diff check pass."
+  ],
+  "required_test_commands": [
+    "uv run --frozen python -c \"import json; from jsonschema import Draft202012Validator; schema=json.load(open('docs/schemas/module-brief.schema.json', encoding='utf-8')); brief=json.load(open('docs/modules/M09-S6A-windows-powershell-token-hotfix-module-brief.json', encoding='utf-8')); Draft202012Validator(schema).validate(brief)\"",
+    "pnpm test:desktop",
+    "pnpm smoke:desktop",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "token_bytes": 32,
+    "token_persistence": false,
+    "additional_local_vram_mib": 0,
+    "new_dependencies": 0
+  },
+  "output_artifact_dir": "artifacts/verification/M09/"
+}

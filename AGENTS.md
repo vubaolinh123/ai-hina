@@ -482,6 +482,13 @@ lateral drift ≤0,35 block; evidence có khoảng cách còn lại. Desktop dù
 owner-only route/IPC và khóa nút ngoài khoảng cách; widget/model/viewer/game
 text không có authority. Minecraft 46 tests, Desktop build/66 tests và fast
 suite 303 tests xanh; chưa chạy resettable server thật nên chưa promotion.
+M09-S6A sửa blocker startup do Windows PowerShell 5.1 không hỗ trợ static
+`RandomNumberGenerator.Fill`. Secret Minecraft mỗi phiên vẫn là 32 byte CSPRNG,
+URL-safe Base64 không padding và chỉ đi qua child environment, nhưng launcher
+dùng `RandomNumberGenerator.Create().GetBytes(...)` tương thích .NET Framework
+và dispose generator trong `finally`. Regression test thực thi đúng helper bằng
+`powershell.exe`, kiểm decoded length mà không log secret. Desktop build/67 tests
+và same-launcher Electron smoke xanh.
 
 ## Orchestration
 
