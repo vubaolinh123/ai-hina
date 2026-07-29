@@ -40,6 +40,9 @@ const moveTargetX = ref(0);
 const moveTargetZ = ref(0);
 const moveTargetInitialized = ref(false);
 
+type MinecraftNearbyEntity =
+  NonNullable<MinecraftStatus["world"]>["nearbyEntities"][number];
+
 const online = computed(() => props.status?.phase === "online");
 const worldStateFresh = computed(
   () => props.status?.worldFreshness?.state === "fresh",
@@ -49,6 +52,12 @@ const canAct = computed(
 );
 const currentPosition = computed(
   () => props.status?.world?.player?.position ?? null,
+);
+const inventoryEntries = computed(
+  () => props.status?.world?.inventory ?? [],
+);
+const nearbyEntities = computed(
+  () => props.status?.world?.nearbyEntities ?? [],
 );
 const moveTargetDistance = computed(() => {
   const position = currentPosition.value;
@@ -91,6 +100,12 @@ function useNearbyTarget(): void {
   if (position === null) return;
   moveTargetX.value = Math.round((position.x + 1) * 100) / 100;
   moveTargetZ.value = Math.round(position.z * 100) / 100;
+  moveTargetInitialized.value = true;
+}
+
+function useEntityTarget(entity: MinecraftNearbyEntity): void {
+  moveTargetX.value = Math.round(entity.position.x * 100) / 100;
+  moveTargetZ.value = Math.round(entity.position.z * 100) / 100;
   moveTargetInitialized.value = true;
 }
 
@@ -437,40 +452,84 @@ watch(
           sách, biển hiệu, NBT và dữ liệu plugin không được đưa vào đây.
         </p>
       </div>
-      <dl
-        v-if="props.status?.world?.player"
-        class="minecraft-facts minecraft-facts--world"
-      >
-        <div>
-          <dt>Máu / thức ăn</dt>
-          <dd>
-            {{ props.status.world.player.health }} /
-            {{ props.status.world.player.food }}
-          </dd>
-        </div>
-        <div>
-          <dt>Vị trí</dt>
-          <dd>
-            {{ formatNumber(props.status.world.player.position.x) }},
-            {{ formatNumber(props.status.world.player.position.y) }},
-            {{ formatNumber(props.status.world.player.position.z) }}
-          </dd>
-        </div>
-        <div>
-          <dt>Góc nhìn</dt>
-          <dd>
-            yaw {{ formatNumber(props.status.world.player.yaw) }} · pitch
-            {{ formatNumber(props.status.world.player.pitch) }}
-          </dd>
-        </div>
-        <div>
-          <dt>Kho đồ / thực thể gần</dt>
-          <dd>
-            {{ props.status.world.inventory.length }} ô ·
-            {{ props.status.world.nearbyEntities.length }} thực thể
-          </dd>
-        </div>
-      </dl>
+      <div v-if="props.status?.world?.player" class="minecraft-world-data">
+        <dl class="minecraft-facts minecraft-facts--world">
+          <div>
+            <dt>Máu / thức ăn</dt>
+            <dd>
+              {{ props.status.world.player.health }} /
+              {{ props.status.world.player.food }}
+            </dd>
+          </div>
+          <div>
+            <dt>Vị trí</dt>
+            <dd>
+              {{ formatNumber(props.status.world.player.position.x) }},
+              {{ formatNumber(props.status.world.player.position.y) }},
+              {{ formatNumber(props.status.world.player.position.z) }}
+            </dd>
+          </div>
+          <div>
+            <dt>Góc nhìn</dt>
+            <dd>
+              yaw {{ formatNumber(props.status.world.player.yaw) }} · pitch
+              {{ formatNumber(props.status.world.player.pitch) }}
+            </dd>
+          </div>
+          <div>
+            <dt>Kho đồ / thực thể gần</dt>
+            <dd>
+              {{ inventoryEntries.length }} ô ·
+              {{ nearbyEntities.length }} thực thể
+            </dd>
+          </div>
+        </dl>
+
+        <section class="minecraft-world-detail" aria-labelledby="minecraft-inventory-title">
+          <h3 id="minecraft-inventory-title">Túi đồ của Hina</h3>
+          <p class="minecraft-help">
+            Đây là các ô đồ Hina đang mang ở lần đọc mới nhất; không phải dữ liệu demo.
+          </p>
+          <ul v-if="inventoryEntries.length" class="minecraft-list">
+            <li v-for="item in inventoryEntries" :key="item.slot">
+              <strong>{{ item.displayName }}</strong>
+              <span>
+                Ô {{ item.slot }} · x{{ item.count }} · metadata {{ item.metadata }}
+              </span>
+            </li>
+          </ul>
+          <p v-else class="minecraft-empty">Túi đồ hiện chưa có vật phẩm.</p>
+        </section>
+
+        <section class="minecraft-world-detail" aria-labelledby="minecraft-entities-title">
+          <h3 id="minecraft-entities-title">Thực thể gần Hina</h3>
+          <p class="minecraft-help">
+            Tên và loại thực thể đến trực tiếp từ game, chỉ để bạn quan sát. Nút X/Z
+            chỉ điền ô mục tiêu phía trên; Hina không tự di chuyển cho tới khi bạn bấm
+            nút xác nhận riêng.
+          </p>
+          <ul v-if="nearbyEntities.length" class="minecraft-list">
+            <li v-for="entity in nearbyEntities" :key="entity.id" class="minecraft-entity">
+              <div>
+                <strong>{{ entity.name }}</strong>
+                <span>
+                  #{{ entity.id }} · {{ entity.type }} · cách
+                  {{ formatNumber(entity.distance) }} block
+                </span>
+                <span>
+                  X {{ formatNumber(entity.position.x) }} · Y
+                  {{ formatNumber(entity.position.y) }} · Z
+                  {{ formatNumber(entity.position.z) }}
+                </span>
+              </div>
+              <button type="button" class="secondary" @click="useEntityTarget(entity)">
+                Dùng X/Z này
+              </button>
+            </li>
+          </ul>
+          <p v-else class="minecraft-empty">Chưa có thực thể nào trong snapshot gần Hina.</p>
+        </section>
+      </div>
       <p v-else class="minecraft-empty">
         Kết nối vào server để xem trạng thái thật. Đây không phải dữ liệu demo.
       </p>
@@ -637,6 +696,62 @@ input:disabled {
   margin: 0;
 }
 
+.minecraft-world-data {
+  display: grid;
+  gap: 22px;
+  min-width: 0;
+}
+
+.minecraft-world-detail {
+  border-top: 1px solid #332d38;
+  padding-top: 18px;
+}
+
+.minecraft-world-detail h3 {
+  margin: 0 0 8px;
+}
+
+.minecraft-list {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+}
+
+.minecraft-list li {
+  background: #100e14;
+  border: 1px solid #332d38;
+  display: grid;
+  gap: 4px;
+  padding: 11px 12px;
+}
+
+.minecraft-list span {
+  color: #a99cab;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.minecraft-list strong {
+  overflow-wrap: anywhere;
+}
+
+.minecraft-list .minecraft-entity {
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.minecraft-entity > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.minecraft-entity button {
+  align-self: center;
+}
+
 .minecraft-empty {
   align-self: center;
   color: #9d91a3;
@@ -646,6 +761,14 @@ input:disabled {
   .minecraft-grid,
   .minecraft-world {
     grid-template-columns: 1fr;
+  }
+
+  .minecraft-list .minecraft-entity {
+    grid-template-columns: 1fr;
+  }
+
+  .minecraft-entity button {
+    justify-self: start;
   }
 }
 </style>

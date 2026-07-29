@@ -98,17 +98,16 @@ type MinecraftStatus = {
       name: string;
       displayName: string;
       count: number;
-      durabilityUsed: number | null;
-      durabilityMax: number | null;
+      metadata: number;
     }>;
     nearbyEntities: Array<{
       id: number;
-      kind: string;
-      name: string | null;
-      displayName: string | null;
+      type: string;
+      name: string;
+      username?: string;
       position: MinecraftVector;
       distance: number;
-      health: number | null;
+      health?: number;
     }>;
   } | null;
   lastError: {

@@ -6,8 +6,9 @@ M09 đang ở fast-development write phase. M08 đã dừng write phase ở runn
 candidate sau khi owner chọn tiếp tục dùng Vision Cloud và hoãn bộ chấm 20 ảnh
 cho tới khi gặp lỗi thực tế. Đây không phải tuyên bố Vision đã đo và đạt ≥85%.
 
-M09-S1 đến S6 hiện là local runnable candidate. Chưa production-promote vì
-workspace chưa có Minecraft server test có thể reset để owner chạy acceptance.
+M09-S1 đến S7 hiện là local runnable candidate. Owner đã xác nhận được phiên
+LAN thật; module vẫn chưa production-promote vì chưa có Minecraft server test
+có thể reset để chạy acceptance đầy đủ.
 
 ## M09-S1 — Connection spine
 
@@ -203,3 +204,21 @@ Fast evidence:
 - `pnpm test:desktop`: production build và 67 tests pass.
 - Không khởi tạo server, không quét port, không thêm retry tự động, model/GPU hay
   artifact runtime; real-server acceptance vẫn do owner thực hiện.
+
+## M09-S7 — Live world inspector
+
+- Dashboard Minecraft nay hiển thị snapshot giới hạn đã có sẵn từ Mineflayer:
+  các ô đồ đang mang và thực thể gần Hina, kèm trạng thái rỗng khi game chưa trả
+  dữ liệu. Không tạo route, request, dependency hay capability gameplay mới.
+- Tên, loại và nhãn từ game chỉ được render bằng Vue interpolation như dữ liệu
+  không tin cậy; chúng không đi vào text brain, memory, TTS hoặc action planner.
+- Nút **Dùng X/Z này** chỉ chép tọa độ thực thể đã hiện vào form `move.to.v1`.
+  Di chuyển vẫn cần chính owner bấm nút xác nhận có sẵn, chịu giới hạn 0,25–2
+  block và các hậu kiểm M09-S6.
+
+Fast evidence:
+
+- Module brief schema pass và `git diff --check` pass.
+- `pnpm test:desktop`: production build và 67 tests pass.
+- Không khởi động server/game, không gọi model/GPU/Cloud, không tạo screenshot
+  hoặc lưu world artifact; owner sẽ kiểm tra UI trong phiên Minecraft thật.

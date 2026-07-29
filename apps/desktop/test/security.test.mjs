@@ -270,6 +270,7 @@ test("Minecraft controls stay on numeric loopback behind ephemeral operator IPC"
   const preload = read("electron/preload.ts");
   const client = read("electron/minecraft-client.ts");
   const minecraft = read("src/dashboard/pages/MinecraftPage.vue");
+  const env = read("src/env.d.ts");
   const launcher = read("../../tools/dev/Start-HinaDesktop.ps1");
   const renderer = readOperatorRenderer();
 
@@ -297,6 +298,13 @@ test("Minecraft controls stay on numeric loopback behind ephemeral operator IPC"
     assert.match(client, /distanceBlocks > 2/);
     assert.match(client, /skillId: "move\.to\.v1"/);
     assert.match(minecraft, /move\.to\.v1/);
+    assert.match(minecraft, /Túi đồ của Hina/);
+    assert.match(minecraft, /Thực thể gần Hina/);
+    assert.match(minecraft, /function useEntityTarget/);
+    assert.match(minecraft, /@click="useEntityTarget\(entity\)"/);
+    assert.match(env, /metadata: number/);
+    assert.match(env, /type: string/);
+    assert.doesNotMatch(minecraft, /fetch\(|ipcRenderer|child_process|require\(/);
     assert.match(minecraft, /0,25 đến 2 block/);
   assert.match(renderer, /progress\.physicsTicksObserved/);
   assert.match(renderer, /progress\.stagnantTicksObserved/);

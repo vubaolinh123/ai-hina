@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M09-S7-live-world-inspector",
+  "module_id": "M09",
+  "objective": "Expose Hina's existing bounded, verified Minecraft inventory and nearby-entity snapshot in the owner Dashboard so the owner can inspect the live world and prefill a nearby X/Z target without granting any new game capability.",
+  "non_goals": [
+    "Do not add Minecraft actions, collection, pathfinding, combat, mining, crafting, commands, LLM tool authority, or automatic movement.",
+    "Do not persist world, inventory, entity, chat, sign, book, NBT, plugin, or screenshot data.",
+    "Do not change the loopback control boundary, token handling, refresh cadence, emergency-stop behavior, model runtime, GPU allocation, or widget authority."
+  ],
+  "base_sha": "2e7dc8feb62f745810e0baac97fd550210fb9ad7",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "apps/desktop/src/dashboard/pages/MinecraftPage.vue",
+    "apps/desktop/src/env.d.ts",
+    "apps/desktop/test/security.test.mjs",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "docs/modules/M09-S7-live-world-inspector-module-brief.json",
+    "docs/modules/M09-minecraft-agent.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    ".gitnexus/",
+    ".claude/",
+    "CLAUDE.md",
+    "docs/research/deep-research-report.md",
+    "voice_demo/",
+    "assets/",
+    "var/"
+  ],
+  "contracts": [
+    "The Dashboard renders only the pre-existing bounded world snapshot returned through typed owner IPC; it opens no direct renderer network, Electron, Node, storage, or Mineflayer path.",
+    "Inventory and entity fields match the normalized runtime contract exactly; unavailable data remains visibly unavailable rather than fabricated.",
+    "An owner click may copy a displayed entity's bounded X/Z coordinates into the existing move-to form, but it cannot trigger movement or another side effect.",
+    "Entity names and labels remain untrusted game data, are rendered as escaped display text only, and are not sent to the text brain, memory, TTS, or a new action route."
+  ],
+  "allowed_dependencies": [
+    "Existing Vue and workspace dependencies only; no new dependency."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "The Minecraft page shows bounded inventory entries and nearby entities from a real status object, with empty states for absent data.",
+    "Selecting an entity copies only its rounded X/Z values into the existing owner-controlled move-to form; the existing explicit movement button remains the sole movement trigger.",
+    "The renderer static-security checks prove no direct privileged or network API entered the page.",
+    "Desktop production tests, module-brief validation, GitNexus detect_changes, and git diff check pass."
+  ],
+  "required_test_commands": [
+    "uv run --frozen python -c \"import json; from jsonschema import Draft202012Validator; schema=json.load(open('docs/schemas/module-brief.schema.json', encoding='utf-8')); brief=json.load(open('docs/modules/M09-S7-live-world-inspector-module-brief.json', encoding='utf-8')); Draft202012Validator(schema).validate(brief)\"",
+    "pnpm test:desktop",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "additional_local_vram_mib": 0,
+    "additional_network_requests": 0,
+    "new_game_actions": 0,
+    "new_dependencies": 0
+  },
+  "output_artifact_dir": "artifacts/verification/M09/"
+}

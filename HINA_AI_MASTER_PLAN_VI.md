@@ -1830,6 +1830,16 @@ cách, còn widget/model/viewer/game text không có authority. Minecraft 46 tes
 Desktop build/66 tests và fast suite 303 tests pass; real resettable-server
 acceptance vẫn pending, không được diễn giải thành production promotion.
 
+M09-S7 không mở thêm gameplay capability. Dashboard Minecraft hiển thị đúng
+snapshot bounded inventory và nearby entity đã được Mineflayer normalise sẵn;
+game label chỉ là untrusted display text và không đi vào brain, memory, TTS hay
+planner. Owner có thể bấm một entity để copy X/Z đã làm tròn vào form
+`move.to.v1`, nhưng button xác nhận cũ vẫn là điểm duy nhất có thể yêu cầu di
+chuyển và mọi precondition/hậu kiểm M09-S6 vẫn giữ nguyên. Module brief schema
+và Desktop production build/67 tests pass, không khởi động game/server, gọi
+model/GPU/Cloud hoặc tạo world artifact; manual UI acceptance tiếp tục do owner
+thực hiện trên LAN world.
+
 ### Embodied Gate
 
 Chạy full voice + avatar + memory + Minecraft trong local server, kiểm:
