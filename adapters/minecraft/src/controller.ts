@@ -2,6 +2,7 @@ import { performance } from "node:perf_hooks";
 
 import {
   MinecraftAdapterError,
+  MINECRAFT_WORLD_FRESHNESS_MAX_AGE_MS,
   type EmergencyStopResult,
   type MinecraftAdapterErrorView,
   type MinecraftConnectionConfig,
@@ -14,9 +15,11 @@ import {
   type MinecraftRotationEvidence,
   type MinecraftSkillExecutionResult,
   type MinecraftWorldState,
+  type MinecraftWorldFreshness,
 } from "./contracts.js";
 import { createMineflayerBot } from "./mineflayer-client.js";
 import {
+  createMovementProgressTracker,
   executeMoveStep,
   movementEvidence,
   movementMatches,
@@ -196,9 +199,11 @@ export class MinecraftController {
 
   getStatus(): MinecraftControllerStatus {
     let world: MinecraftWorldState | null = null;
+    let worldFreshness: MinecraftWorldFreshness | null = null;
     if (this.#bot !== null && this.#phase === "online") {
       try {
         world = this.#bot.captureWorldState();
+        worldFreshness = this.#readWorldFreshness(this.#bot);
       } catch (error) {
         this.#lastError = errorView(
           "E_MINECRAFT_SNAPSHOT",
@@ -224,6 +229,7 @@ export class MinecraftController {
       connectedAt: this.#connectedAt?.toISOString() ?? null,
       capturedAt,
       world,
+      worldFreshness,
       lastError: this.#lastError,
     };
   }
@@ -303,6 +309,16 @@ export class MinecraftController {
     }
 
     const bot = this.#bot;
+    const worldFreshness = this.#readWorldFreshness(bot);
+    if (worldFreshness.state !== "fresh") {
+      return finish(
+        "failed",
+        false,
+        null,
+        false,
+        this.#staleWorldStateError(worldFreshness),
+      );
+    }
     let before: MinecraftWorldState;
     try {
       before = bot.captureWorldState();
@@ -455,6 +471,7 @@ export class MinecraftController {
       direction: request.arguments.direction,
       distanceBlocks: request.arguments.distanceBlocks,
     };
+    const movementProgress = createMovementProgressTracker();
     const minimumProgressBlocks =
       expected.distanceBlocks * definition.postcondition.minimumProgressRatio;
     const maximumProgressBlocks =
@@ -482,6 +499,12 @@ export class MinecraftController {
         lateralToleranceBlocks:
           definition.postcondition.lateralToleranceBlocks,
         expected,
+        progress: {
+          physicsTicksObserved: movementProgress.physicsTicksObserved,
+          stagnantTicksObserved: movementProgress.stagnantTicksObserved,
+          maximumForwardProgressBlocks:
+            movementProgress.maximumForwardProgressBlocks,
+        },
         observed,
       },
       error,
@@ -517,6 +540,16 @@ export class MinecraftController {
     }
 
     const bot = this.#bot;
+    const worldFreshness = this.#readWorldFreshness(bot);
+    if (worldFreshness.state !== "fresh") {
+      return finish(
+        "failed",
+        false,
+        null,
+        false,
+        this.#staleWorldStateError(worldFreshness),
+      );
+    }
     let before: MinecraftWorldState;
     try {
       before = bot.captureWorldState();
@@ -580,7 +613,13 @@ export class MinecraftController {
           abortController.signal.removeEventListener("abort", onAbort);
       });
       await Promise.race([
-        executeMoveStep(bot, request, before, abortController.signal),
+        executeMoveStep(
+          bot,
+          request,
+          before,
+          abortController.signal,
+          movementProgress,
+        ),
         timeoutPromise,
         abortPromise,
       ]);
@@ -592,7 +631,13 @@ export class MinecraftController {
               "E_MINECRAFT_SKILL_ACTION",
               payloadMessage(error, "Mineflayer movement failed"),
             );
-      return finish("failed", true, null, false, view);
+      return finish(
+        "failed",
+        true,
+        movementProgress.lastObserved,
+        false,
+        view,
+      );
     } finally {
       if (timeout !== null) {
         clearTimeout(timeout);
@@ -639,6 +684,7 @@ export class MinecraftController {
       request.arguments.direction,
       before.player.position,
       after.player.position,
+      movementProgress,
     );
     const verified = movementMatches(observed, expected.distanceBlocks);
     return finish(
@@ -662,6 +708,53 @@ export class MinecraftController {
     await bot.look(
       request.arguments.yawRadians,
       request.arguments.pitchRadians,
+    );
+  }
+
+  #readWorldFreshness(bot: MinecraftBotPort): MinecraftWorldFreshness {
+    try {
+      const freshness = bot.getWorldStateFreshness();
+      const validAge =
+        freshness.ageMs === null ||
+        (Number.isFinite(freshness.ageMs) && freshness.ageMs >= 0);
+      if (
+        !Number.isSafeInteger(freshness.physicsTickSequence) ||
+        freshness.physicsTickSequence < 0 ||
+        !validAge ||
+        freshness.maximumAgeMs !== MINECRAFT_WORLD_FRESHNESS_MAX_AGE_MS ||
+        (freshness.state !== "fresh" &&
+          freshness.state !== "stale" &&
+          freshness.state !== "unavailable") ||
+        (freshness.state === "unavailable" && freshness.ageMs !== null) ||
+        (freshness.state !== "unavailable" && freshness.ageMs === null) ||
+        (freshness.state === "fresh" &&
+          freshness.ageMs !== null &&
+          freshness.ageMs > freshness.maximumAgeMs) ||
+        (freshness.state === "stale" &&
+          freshness.ageMs !== null &&
+          freshness.ageMs <= freshness.maximumAgeMs)
+      ) {
+        throw new Error("Minecraft physics freshness is invalid");
+      }
+      return { ...freshness };
+    } catch {
+      return {
+        physicsTickSequence: 0,
+        ageMs: null,
+        maximumAgeMs: MINECRAFT_WORLD_FRESHNESS_MAX_AGE_MS,
+        state: "unavailable",
+      };
+    }
+  }
+
+  #staleWorldStateError(
+    freshness: MinecraftWorldFreshness,
+  ): MinecraftAdapterErrorView {
+    return errorView(
+      "E_MINECRAFT_SKILL_STALE_STATE",
+      freshness.state === "stale"
+        ? `Minecraft physics state is ${freshness.ageMs ?? "unknown"} ms old; maximum is ${freshness.maximumAgeMs} ms`
+        : "Minecraft physics state is unavailable; wait for a live server tick",
     );
   }
 

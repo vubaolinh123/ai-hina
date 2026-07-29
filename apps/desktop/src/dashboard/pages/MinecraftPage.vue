@@ -34,6 +34,12 @@ const moveDirection = ref<"north" | "east" | "south" | "west">("north");
 const moveDistanceBlocks = ref(1);
 
 const online = computed(() => props.status?.phase === "online");
+const worldStateFresh = computed(
+  () => props.status?.worldFreshness?.state === "fresh",
+);
+const canAct = computed(
+  () => !props.busy && online.value && worldStateFresh.value,
+);
 const canConnect = computed(
   () =>
     !props.busy &&
@@ -64,8 +70,9 @@ function formatNumber(value: number): string {
         <h1>Điều khiển Minecraft có kiểm chứng</h1>
         <p>
           Trang này dùng để bạn tự kết nối Hina vào một server Minecraft local
-          hoặc mạng LAN. Hiện Hina chỉ được phép nhìn và xoay hướng nhìn; chưa tự
-          đi, phá block, đánh quái hay chạy lệnh do AI sinh ra.
+          hoặc mạng LAN. Hiện Hina chỉ được xoay hướng nhìn và đi một bước ngắn
+          do chính bạn yêu cầu; chưa tự tìm đường, phá block, đánh quái hay chạy
+          lệnh do AI sinh ra.
         </p>
       </div>
       <button type="button" :disabled="props.busy" @click="emit('refresh')">
@@ -116,7 +123,29 @@ function formatNumber(value: number): string {
             <dt>Lần cập nhật</dt>
             <dd>{{ props.status?.capturedAt ?? "—" }}</dd>
           </div>
+          <div>
+            <dt>Độ tươi trạng thái game</dt>
+            <dd>
+              {{
+                props.status?.worldFreshness?.state === "fresh"
+                  ? `Mới · ${props.status.worldFreshness.ageMs ?? 0} ms`
+                  : props.status?.worldFreshness?.state === "stale"
+                    ? `Đã cũ · ${props.status.worldFreshness.ageMs ?? "?"} ms`
+                    : online
+                      ? "Chưa nhận physics tick"
+                      : "Chưa có"
+              }}
+            </dd>
+          </div>
         </dl>
+        <p
+          v-if="online && !worldStateFresh"
+          class="minecraft-error"
+          role="status"
+        >
+          Hina sẽ không xoay hoặc di chuyển cho tới khi nhận được trạng thái
+          physics mới từ server.
+        </p>
         <p v-if="props.status?.lastError" class="minecraft-error">
           {{ props.status.lastError.code }}: {{ props.status.lastError.message }}
         </p>
@@ -192,7 +221,7 @@ function formatNumber(value: number): string {
               min="-3.14"
               max="3.14"
               step="0.1"
-              :disabled="props.busy || !online"
+              :disabled="!canAct"
             />
           </label>
           <label>
@@ -203,13 +232,13 @@ function formatNumber(value: number): string {
               min="-1.57"
               max="1.57"
               step="0.1"
-              :disabled="props.busy || !online"
+              :disabled="!canAct"
             />
           </label>
         </div>
         <button
           type="button"
-          :disabled="props.busy || !online"
+          :disabled="!canAct"
           @click="emit('look', {
             yawRadians: Number(yawRadians),
             pitchRadians: Number(pitchRadians),
@@ -232,7 +261,7 @@ function formatNumber(value: number): string {
             Hướng
             <select
               v-model="moveDirection"
-              :disabled="props.busy || !online"
+              :disabled="!canAct"
             >
               <option value="north">Bắc</option>
               <option value="east">Đông</option>
@@ -248,13 +277,13 @@ function formatNumber(value: number): string {
               min="0.25"
               max="2"
               step="0.25"
-              :disabled="props.busy || !online"
+              :disabled="!canAct"
             />
           </label>
         </div>
         <button
           type="button"
-          :disabled="props.busy || !online"
+          :disabled="!canAct"
           @click="emit('move', {
             direction: moveDirection,
             distanceBlocks: Number(moveDistanceBlocks),

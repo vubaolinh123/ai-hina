@@ -47,6 +47,12 @@ class FakeBotPort {
   lookCalls = [];
   controlCalls = [];
   forwardEnabled = false;
+  worldFreshness = {
+    physicsTickSequence: 1,
+    ageMs: 0,
+    maximumAgeMs: 1_000,
+    state: "fresh",
+  };
   lookImplementation = async (yawRadians, pitchRadians) => {
     this.world = structuredClone(this.world);
     this.world.player.yaw = yawRadians;
@@ -71,6 +77,10 @@ class FakeBotPort {
 
   captureWorldState() {
     return structuredClone(this.world);
+  }
+
+  getWorldStateFreshness() {
+    return structuredClone(this.worldFreshness);
   }
 
   async look(yawRadians, pitchRadians) {
@@ -118,6 +128,7 @@ test("connects through the injected port and returns normalized status", async (
   assert.equal(status.target.host, "127.0.0.1");
   assert.equal(status.world.player.username, "Hina");
   assert.equal(status.connectedAt, "2026-07-29T12:00:00.000Z");
+  assert.deepEqual(status.worldFreshness, fake.worldFreshness);
 });
 
 test("maps connection failures to a stable bounded error", async () => {
@@ -240,6 +251,40 @@ test("snapshot failure stays bounded and does not expose a vendor object", async
     code: "E_MINECRAFT_SNAPSHOT",
     message: "snapshot exploded",
   });
+});
+
+test("look.v1 rejects unavailable or stale physics state before acting", async () => {
+  for (const worldFreshness of [
+    {
+      physicsTickSequence: 0,
+      ageMs: null,
+      maximumAgeMs: 1_000,
+      state: "unavailable",
+    },
+    {
+      physicsTickSequence: 4,
+      ageMs: 1_001,
+      maximumAgeMs: 1_000,
+      state: "stale",
+    },
+  ]) {
+    const fake = new FakeBotPort();
+    fake.worldFreshness = worldFreshness;
+    const controller = new MinecraftController(() => fake);
+    const connected = controller.start(CONFIG);
+    fake.emit("spawn");
+    await connected;
+
+    const result = await controller.executeSkill({
+      skillId: "look.v1",
+      arguments: { yawRadians: 0.5, pitchRadians: 0.2 },
+    });
+
+    assert.equal(result.status, "failed");
+    assert.equal(result.precondition.passed, false);
+    assert.equal(result.error.code, "E_MINECRAFT_SKILL_STALE_STATE");
+    assert.equal(fake.lookCalls.length, 0);
+  }
 });
 
 test("look.v1 succeeds only after the normalized rotation verifies", async () => {
@@ -407,6 +452,9 @@ test("move.step.v1 moves one cardinal step and verifies normalized displacement"
   assert.equal(result.postcondition.passed, true);
   assert.ok(result.postcondition.observed.forwardProgressBlocks >= 1);
   assert.ok(result.postcondition.observed.lateralDriftBlocks <= 0.001);
+  assert.ok(result.postcondition.progress.physicsTicksObserved >= 10);
+  assert.equal(result.postcondition.progress.stagnantTicksObserved, 0);
+  assert.ok(result.postcondition.progress.maximumForwardProgressBlocks >= 1);
   assert.deepEqual(fake.lookCalls[0], {
     yawRadians: -Math.PI / 2,
     pitchRadians: 0,
@@ -434,7 +482,37 @@ test("move.step.v1 fails blocked movement after 20 ticks without retry", async (
   assert.equal(result.status, "failed");
   assert.equal(result.error.code, "E_MINECRAFT_SKILL_BLOCKED");
   assert.equal(result.attempts, 1);
+  assert.equal(result.postcondition.progress.physicsTicksObserved, 20);
+  assert.equal(result.postcondition.progress.stagnantTicksObserved, 20);
+  assert.equal(result.postcondition.progress.maximumForwardProgressBlocks, 0);
+  assert.equal(result.postcondition.observed.forwardProgressBlocks, 0);
   assert.equal(fake.clearCalls, 1);
+});
+
+test("move.step.v1 rejects stale physics state before enabling forward", async () => {
+  const fake = new FakeBotPort();
+  fake.worldFreshness = {
+    physicsTickSequence: 12,
+    ageMs: 1_250,
+    maximumAgeMs: 1_000,
+    state: "stale",
+  };
+  const controller = new MinecraftController(() => fake);
+  const connected = controller.start(CONFIG);
+  fake.emit("spawn");
+  await connected;
+
+  const result = await controller.executeSkill({
+    skillId: "move.step.v1",
+    arguments: { direction: "north", distanceBlocks: 1 },
+  });
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.precondition.passed, false);
+  assert.equal(result.error.code, "E_MINECRAFT_SKILL_STALE_STATE");
+  assert.equal(result.postcondition.progress.physicsTicksObserved, 0);
+  assert.equal(fake.controlCalls.length, 0);
+  assert.equal(fake.lookCalls.length, 0);
 });
 
 test("move.step.v1 rejects lateral drift in its postcondition", async () => {
@@ -457,6 +535,8 @@ test("move.step.v1 rejects lateral drift in its postcondition", async () => {
   assert.equal(result.status, "failed");
   assert.equal(result.error.code, "E_MINECRAFT_SKILL_POSTCONDITION");
   assert.ok(result.postcondition.observed.lateralDriftBlocks > 0.35);
+  assert.ok(result.postcondition.progress.physicsTicksObserved > 0);
+  assert.ok(result.postcondition.progress.maximumForwardProgressBlocks >= 1);
   assert.equal(fake.clearCalls, 1);
 });
 
@@ -498,6 +578,11 @@ test("emergency stop cancels move.step.v1 and clears movement controls", async (
 
   assert.equal(result.status, "failed");
   assert.equal(result.error.code, "E_MINECRAFT_SKILL_CANCELLED");
+  assert.deepEqual(result.postcondition.progress, {
+    physicsTicksObserved: 0,
+    stagnantTicksObserved: 0,
+    maximumForwardProgressBlocks: 0,
+  });
   assert.equal(fake.forwardEnabled, false);
   assert.ok(fake.clearCalls >= 1);
 });
@@ -521,6 +606,7 @@ test("owner disconnect cancels move.step.v1 without latching emergency", async (
 
   assert.equal(result.status, "failed");
   assert.equal(result.error.code, "E_MINECRAFT_SKILL_CANCELLED");
+  assert.equal(result.postcondition.progress.physicsTicksObserved, 0);
   assert.equal(controller.getStatus().emergencyStopped, false);
   assert.equal(controller.getStatus().phase, "disconnected");
   assert.equal(fake.forwardEnabled, false);
@@ -547,6 +633,11 @@ test("move.step.v1 enforces its fixed timeout and clears controls", async (conte
   assert.equal(result.status, "failed");
   assert.equal(result.error.code, "E_MINECRAFT_SKILL_TIMEOUT");
   assert.equal(result.attempts, 1);
+  assert.deepEqual(result.postcondition.progress, {
+    physicsTicksObserved: 0,
+    stagnantTicksObserved: 0,
+    maximumForwardProgressBlocks: 0,
+  });
   assert.equal(fake.forwardEnabled, false);
   assert.equal(fake.clearCalls, 1);
 });

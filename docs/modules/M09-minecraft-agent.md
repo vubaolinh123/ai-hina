@@ -6,7 +6,7 @@ M09 đang ở fast-development write phase. M08 đã dừng write phase ở runn
 candidate sau khi owner chọn tiếp tục dùng Vision Cloud và hoãn bộ chấm 20 ảnh
 cho tới khi gặp lỗi thực tế. Đây không phải tuyên bố Vision đã đo và đạt ≥85%.
 
-M09-S1, S2 và S3 hiện là local runnable candidate. Chưa production-promote vì
+M09-S1 đến S5 hiện là local runnable candidate. Chưa production-promote vì
 workspace chưa có Minecraft server test có thể reset để owner chạy acceptance.
 
 ## M09-S1 — Connection spine
@@ -70,7 +70,8 @@ Fast evidence:
 2. Mở page **Minecraft**. Dịch vụ phải báo “Chưa kết nối game”.
 3. Chạy một Minecraft test server offline mode ở localhost/LAN riêng.
 4. Nhập IP/port/username và bấm **Kết nối Hina**.
-5. Thử `look.v1`, xem góc yaw/pitch được hậu kiểm.
+5. Chờ **Độ tươi trạng thái game** báo “Mới”, rồi thử `look.v1` và
+   `move.step.v1`; thành công chỉ được báo sau hậu kiểm.
 6. Dùng **Ngắt kết nối** để có thể vào lại, hoặc **Dừng Minecraft ngay** để latch
    toàn bộ adapter tới lần restart Desktop.
 
@@ -105,9 +106,29 @@ Fast evidence:
 - Module brief và `git diff --check` pass; không model/GPU/Cloud, không world
   artifact và không kết nối server thật.
 
+## M09-S5 — State freshness và movement evidence
+
+- Mineflayer boundary theo dõi physics tick nội bộ, chỉ xuất sequence và tuổi
+  trạng thái đã giới hạn. Không xuất packet, chat, plugin data hoặc bot object.
+- `look.v1` và `move.step.v1` fail trước khi gửi action nếu chưa nhận physics
+  tick hoặc tick mới nhất quá 1.000 ms; unknown age không bị giả thành 0.
+- Dashboard hiện rõ trạng thái **Mới / Đã cũ / Chưa nhận physics tick** và vô
+  hiệu hóa hai action khi world-state chưa đủ tươi.
+- Mỗi movement attempt trả số physics tick đã quan sát, số tick đang đứng yên và
+  forward progress lớn nhất. Blocked ở 20 stagnant tick vẫn một attempt, không
+  retry/pathfinding và luôn nhả controls trong `finally`.
+- S5 không thêm skill, model call, GPU/VRAM, Vision path hoặc file world-state.
+
+Fast evidence:
+
+- `pnpm test:minecraft`: build và 38 tests pass.
+- `pnpm test:desktop`: production build và 65 tests pass.
+- `pnpm test:fast`: 295 tests pass.
+- Module brief, Desktop typecheck và `git diff --check` pass; không chạy server,
+  model, GPU, Cloud hoặc tạo evidence thô.
+
 ## Slice kế tiếp
 
-M09-S5 sẽ bổ sung state freshness và một kỹ năng quay-trước-khi-bước theo target
-tọa độ cực ngắn, hoặc blocked/stuck evidence chi tiết hơn, nhưng chỉ sau khi
-owner thử S3/S4 trên resettable server. Pathfinder, LLM planner, phá block và
-combat vẫn chưa được mở.
+M09-S6 chỉ mở kỹ năng target tọa độ cực ngắn/quay-trước-khi-bước sau khi owner
+thử S3–S5 trên resettable server. Pathfinder, LLM planner, phá block và combat
+vẫn chưa được mở.

@@ -3,6 +3,8 @@ export const MINECRAFT_SNAPSHOT_LIMITS = Object.freeze({
   nearbyEntities: 32,
 });
 
+export const MINECRAFT_WORLD_FRESHNESS_MAX_AGE_MS = 1_000;
+
 export type MinecraftConnectionPhase =
   | "disconnected"
   | "connecting"
@@ -68,6 +70,13 @@ export interface MinecraftWorldState {
   nearbyEntities: MinecraftNearbyEntity[];
 }
 
+export interface MinecraftWorldFreshness {
+  physicsTickSequence: number;
+  ageMs: number | null;
+  maximumAgeMs: number;
+  state: "fresh" | "stale" | "unavailable";
+}
+
 export interface MinecraftAdapterErrorView {
   code: string;
   message: string;
@@ -87,6 +96,7 @@ export interface MinecraftControllerStatus {
   connectedAt: string | null;
   capturedAt: string;
   world: MinecraftWorldState | null;
+  worldFreshness: MinecraftWorldFreshness | null;
   lastError: MinecraftAdapterErrorView | null;
 }
 
@@ -197,7 +207,14 @@ export interface MinecraftLookSkillExecutionResult
   };
 }
 
-export interface MinecraftMovementEvidence {
+export interface MinecraftMovementProgressEvidence {
+  physicsTicksObserved: number;
+  stagnantTicksObserved: number;
+  maximumForwardProgressBlocks: number;
+}
+
+export interface MinecraftMovementEvidence
+  extends MinecraftMovementProgressEvidence {
   deltaX: number;
   deltaZ: number;
   forwardProgressBlocks: number;
@@ -217,6 +234,7 @@ export interface MinecraftMoveSkillExecutionResult
       direction: MinecraftCardinalDirection;
       distanceBlocks: number;
     };
+    progress: MinecraftMovementProgressEvidence;
     observed: MinecraftMovementEvidence | null;
   };
 }

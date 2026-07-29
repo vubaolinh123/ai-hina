@@ -464,6 +464,14 @@ block. Không retry, pathfinder, jump/sprint, combat, phá block hay model/viewe
 execution. Route vẫn owner-only qua ephemeral-secret IPC. Minecraft 34 tests,
 Desktop build/65 tests và fast suite 291 tests xanh; real resettable-server
 acceptance vẫn pending.
+M09-S5 không thêm skill mới: Mineflayer port chỉ xuất bounded physics tick
+sequence/age, và `look.v1`/`move.step.v1` fail trước action nếu chưa có tick
+hoặc tick cũ quá 1.000 ms. Movement result có tick count, stagnant count và
+maximum forward progress cho success/failure; blocked vẫn một attempt, không
+retry/pathfinding và luôn clear controls. Dashboard hiện state fresh/stale/
+unavailable và khóa action khi chưa fresh. Minecraft 38 tests, Desktop build/65
+tests và fast suite 295 tests xanh; Vision/model/VRAM không đổi, real resettable
+server acceptance vẫn pending.
 
 ## Orchestration
 

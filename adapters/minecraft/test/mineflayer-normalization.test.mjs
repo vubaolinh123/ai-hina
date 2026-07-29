@@ -1,8 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { MINECRAFT_SNAPSHOT_LIMITS } from "../dist/index.js";
-import { normalizeMineflayerWorldState } from "../dist/mineflayer-client.js";
+import {
+  MINECRAFT_SNAPSHOT_LIMITS,
+  MINECRAFT_WORLD_FRESHNESS_MAX_AGE_MS,
+} from "../dist/index.js";
+import {
+  evaluateWorldStateFreshness,
+  normalizeMineflayerWorldState,
+  PhysicsFreshnessTracker,
+} from "../dist/mineflayer-client.js";
 
 function point(x, y, z) {
   return {
@@ -78,4 +85,46 @@ test("normalizes and bounds Mineflayer state without chat or plugin payloads", (
   assert.equal(serialized.includes("scoreboard"), false);
   assert.equal(serialized.includes("chat"), false);
   assert.equal(serialized.includes("nbt"), false);
+});
+
+test("physics freshness is unavailable, fresh and stale at fixed boundaries", () => {
+  assert.deepEqual(evaluateWorldStateFreshness(0, null, 5_000), {
+    physicsTickSequence: 0,
+    ageMs: null,
+    maximumAgeMs: MINECRAFT_WORLD_FRESHNESS_MAX_AGE_MS,
+    state: "unavailable",
+  });
+  assert.deepEqual(evaluateWorldStateFreshness(7, 4_000, 5_000), {
+    physicsTickSequence: 7,
+    ageMs: 1_000,
+    maximumAgeMs: MINECRAFT_WORLD_FRESHNESS_MAX_AGE_MS,
+    state: "fresh",
+  });
+  assert.deepEqual(evaluateWorldStateFreshness(8, 4_000, 5_000.001), {
+    physicsTickSequence: 8,
+    ageMs: 1_000.001,
+    maximumAgeMs: MINECRAFT_WORLD_FRESHNESS_MAX_AGE_MS,
+    state: "stale",
+  });
+});
+
+test("physics freshness tracker advances only on recorded ticks", () => {
+  const tracker = new PhysicsFreshnessTracker();
+  assert.equal(tracker.read(5_000).state, "unavailable");
+
+  tracker.recordTick(5_000);
+  assert.deepEqual(tracker.read(5_250), {
+    physicsTickSequence: 1,
+    ageMs: 250,
+    maximumAgeMs: MINECRAFT_WORLD_FRESHNESS_MAX_AGE_MS,
+    state: "fresh",
+  });
+
+  tracker.recordTick(5_500);
+  assert.deepEqual(tracker.read(6_501), {
+    physicsTickSequence: 2,
+    ageMs: 1_001,
+    maximumAgeMs: MINECRAFT_WORLD_FRESHNESS_MAX_AGE_MS,
+    state: "stale",
+  });
 });

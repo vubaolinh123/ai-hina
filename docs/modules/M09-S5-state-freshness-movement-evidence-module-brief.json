@@ -1,0 +1,84 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M09-S5-state-freshness-movement-evidence",
+  "module_id": "M09",
+  "objective": "Reject deterministic Minecraft actions when Mineflayer physics state is missing or stale, and return bounded tick/progress/stagnation evidence for every attempted short movement without adding a new capability.",
+  "non_goals": [
+    "Do not add a new skill, target-coordinate navigation, pathfinding, retry, jumping, sprinting, combat, mining, placing or inventory mutation.",
+    "Do not let the LLM, chat, vision, memory, viewer input or widget invoke Minecraft actions.",
+    "Do not add generated code, eval, shell, arbitrary plugins, telemetry persistence or a new dependency.",
+    "Do not treat local unit evidence as a real-server success-rate result.",
+    "Do not retrain, replace or benchmark the external Vision provider."
+  ],
+  "base_sha": "c3ae48b40f52b121897aa51c9ac47ae7744aa4e0",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "adapters/minecraft/src/contracts.ts",
+    "adapters/minecraft/src/ports.ts",
+    "adapters/minecraft/src/mineflayer-client.ts",
+    "adapters/minecraft/src/movement.ts",
+    "adapters/minecraft/src/controller.ts",
+    "adapters/minecraft/src/index.ts",
+    "adapters/minecraft/test/controller.test.mjs",
+    "adapters/minecraft/test/mineflayer-normalization.test.mjs",
+    "apps/desktop/src/env.d.ts",
+    "apps/desktop/src/dashboard/pages/MinecraftPage.vue",
+    "docs/modules/M09-S5-state-freshness-movement-evidence-module-brief.json",
+    "docs/modules/M09-minecraft-agent.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    ".gitnexus/",
+    ".claude/",
+    "CLAUDE.md",
+    "docs/research/deep-research-report.md",
+    "voice_demo/",
+    "assets/voices/",
+    "assets/avatars/",
+    "var/perception-sessions/",
+    "apps/desktop/dist/",
+    "apps/desktop/dist-electron/"
+  ],
+  "contracts": [
+    "The Mineflayer boundary exposes only a bounded physics tick sequence and age; raw bot, packets and server content remain hidden.",
+    "look.v1 and move.step.v1 fail before emitting an action when no physics tick has been observed or the latest tick is older than 1000 milliseconds.",
+    "Controller status reports fresh, stale or unavailable physics state explicitly and never labels an unknown age as zero.",
+    "Movement evidence includes bounded physics tick count, current stagnant tick count and maximum observed forward progress for success, blocked, timeout, cancellation and verifier failure.",
+    "Blocked movement remains one attempt with no retry or pathfinding, and all control states are still cleared in finally.",
+    "External Cloud Vision behavior, model selection and VRAM accounting remain unchanged."
+  ],
+  "allowed_dependencies": [
+    "Existing pinned Node.js, Electron, Vue and Mineflayer dependencies only; no new dependency."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "Adapter tests prove physics freshness is unavailable before the first tick, fresh after a tick and stale after the fixed age ceiling.",
+    "Controller tests prove stale and unavailable state reject look and movement before Mineflayer receives controls.",
+    "Movement tests prove success and blocked failure expose bounded tick, stagnation and maximum-progress evidence while always clearing controls.",
+    "Desktop Minecraft page explains and renders current physics freshness without exposing network or vendor objects.",
+    "Minecraft tests, Desktop typecheck/build/tests, repository fast tests, module-brief validation, GitNexus scan and git diff check pass."
+  ],
+  "required_test_commands": [
+    "uv run --frozen python -c \"import json; from jsonschema import Draft202012Validator; schema=json.load(open('docs/schemas/module-brief.schema.json', encoding='utf-8')); brief=json.load(open('docs/modules/M09-S5-state-freshness-movement-evidence-module-brief.json', encoding='utf-8')); Draft202012Validator(schema).validate(brief)\"",
+    "pnpm test:minecraft",
+    "pnpm --filter @hina/desktop typecheck",
+    "pnpm test:desktop",
+    "pnpm test:fast",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "maximum_physics_state_age_milliseconds": 1000,
+    "maximum_movement_evidence_ticks": 80,
+    "maximum_attempts": 1,
+    "automatic_execution": false,
+    "destructive_capability": false,
+    "model_calls": 0,
+    "additional_local_vram_mib": 0,
+    "raw_artifact_persistence": false
+  },
+  "output_artifact_dir": "artifacts/verification/M09/"
+}

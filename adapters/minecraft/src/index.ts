@@ -1,6 +1,7 @@
 export {
   MinecraftAdapterError,
   MINECRAFT_SNAPSHOT_LIMITS,
+  MINECRAFT_WORLD_FRESHNESS_MAX_AGE_MS,
   type EmergencyStopResult,
   type MinecraftConnectionConfig,
   type MinecraftControllerStatus,
@@ -13,6 +14,7 @@ export {
   type MinecraftSkillId,
   type MinecraftSkillRequest,
   type MinecraftWorldState,
+  type MinecraftWorldFreshness,
 } from "./contracts.js";
 export {
   parseMinecraftConnectionConfig,

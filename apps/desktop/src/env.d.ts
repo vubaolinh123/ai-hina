@@ -69,6 +69,12 @@ type MinecraftStatus = {
   } | null;
   connectedAt: string | null;
   capturedAt: string;
+  worldFreshness: {
+    physicsTickSequence: number;
+    ageMs: number | null;
+    maximumAgeMs: number;
+    state: "fresh" | "stale" | "unavailable";
+  } | null;
   world: {
     protocolVersion: string | null;
     dimension: string | null;

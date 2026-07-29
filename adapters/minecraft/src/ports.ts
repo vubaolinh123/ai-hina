@@ -1,5 +1,6 @@
 import type {
   MinecraftConnectionConfig,
+  MinecraftWorldFreshness,
   MinecraftWorldState,
 } from "./contracts.js";
 
@@ -11,6 +12,7 @@ export interface MinecraftBotPort {
     listener: (payload?: unknown) => void,
   ): () => void;
   captureWorldState(): MinecraftWorldState;
+  getWorldStateFreshness(): MinecraftWorldFreshness;
   look(yawRadians: number, pitchRadians: number): Promise<void>;
   setControlState(control: "forward", enabled: boolean): void;
   waitForPhysicsTick(signal: AbortSignal): Promise<void>;

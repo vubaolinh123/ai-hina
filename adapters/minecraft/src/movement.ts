@@ -19,10 +19,29 @@ const CARDINAL_MOVEMENT = Object.freeze({
   { yawRadians: number; x: number; z: number }
 >);
 
+const MAXIMUM_RECORDED_PHYSICS_TICKS = 80;
+
+export interface MinecraftMovementProgressTracker {
+  physicsTicksObserved: number;
+  stagnantTicksObserved: number;
+  maximumForwardProgressBlocks: number;
+  lastObserved: MinecraftMovementEvidence | null;
+}
+
+export function createMovementProgressTracker(): MinecraftMovementProgressTracker {
+  return {
+    physicsTicksObserved: 0,
+    stagnantTicksObserved: 0,
+    maximumForwardProgressBlocks: 0,
+    lastObserved: null,
+  };
+}
+
 export function movementEvidence(
   direction: MinecraftCardinalDirection,
   start: MinecraftVector,
   end: MinecraftVector,
+  progress: MinecraftMovementProgressTracker = createMovementProgressTracker(),
 ): MinecraftMovementEvidence {
   const vector = CARDINAL_MOVEMENT[direction];
   const deltaX = end.x - start.x;
@@ -37,6 +56,9 @@ export function movementEvidence(
     forwardProgressBlocks,
     lateralDriftBlocks,
     horizontalDistanceBlocks: Math.hypot(deltaX, deltaZ),
+    physicsTicksObserved: progress.physicsTicksObserved,
+    stagnantTicksObserved: progress.stagnantTicksObserved,
+    maximumForwardProgressBlocks: progress.maximumForwardProgressBlocks,
   };
 }
 
@@ -59,6 +81,7 @@ export async function executeMoveStep(
   request: MinecraftMoveSkillRequest,
   before: MinecraftWorldState,
   signal: AbortSignal,
+  progress: MinecraftMovementProgressTracker,
 ): Promise<void> {
   const player = before.player;
   if (player === null) {
@@ -73,10 +96,13 @@ export async function executeMoveStep(
     throw signal.reason;
   }
   bot.setControlState("forward", true);
-  let stagnantTicks = 0;
   let previousProgress = 0;
   while (true) {
     await bot.waitForPhysicsTick(signal);
+    progress.physicsTicksObserved = Math.min(
+      MAXIMUM_RECORDED_PHYSICS_TICKS,
+      progress.physicsTicksObserved + 1,
+    );
     const current = bot.captureWorldState();
     if (current.player === null) {
       throw new MinecraftAdapterError(
@@ -84,20 +110,35 @@ export async function executeMoveStep(
         "Player state disappeared during move.step.v1",
       );
     }
-    const evidence = movementEvidence(
+    let evidence = movementEvidence(
       request.arguments.direction,
       player.position,
       current.player.position,
+      progress,
     );
+    progress.maximumForwardProgressBlocks = Math.max(
+      progress.maximumForwardProgressBlocks,
+      evidence.forwardProgressBlocks,
+    );
+    if (evidence.forwardProgressBlocks <= previousProgress + 0.005) {
+      progress.stagnantTicksObserved = Math.min(
+        20,
+        progress.stagnantTicksObserved + 1,
+      );
+    } else {
+      progress.stagnantTicksObserved = 0;
+    }
+    evidence = movementEvidence(
+      request.arguments.direction,
+      player.position,
+      current.player.position,
+      progress,
+    );
+    progress.lastObserved = evidence;
     if (evidence.forwardProgressBlocks >= request.arguments.distanceBlocks) {
       return;
     }
-    if (evidence.forwardProgressBlocks <= previousProgress + 0.005) {
-      stagnantTicks += 1;
-    } else {
-      stagnantTicks = 0;
-    }
-    if (stagnantTicks >= 20) {
+    if (progress.stagnantTicksObserved >= 20) {
       throw new MinecraftAdapterError(
         "E_MINECRAFT_SKILL_BLOCKED",
         "move.step.v1 made no forward progress for 20 physics ticks",

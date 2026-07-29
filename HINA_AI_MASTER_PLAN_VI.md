@@ -1808,6 +1808,16 @@ ephemeral-secret boundary; Dashboard không trao quyền cho widget/model/viewer
 Minecraft build/34 tests, Desktop build/65 tests và fast suite 291 tests pass;
 real resettable-server acceptance vẫn pending.
 
+M09-S5 thêm physics-state freshness gate mà không mở capability mới. Mineflayer
+port chỉ xuất tick sequence và age bounded; `look.v1`/`move.step.v1` fail trước
+action nếu chưa có tick hoặc tick cũ quá 1.000 ms. Movement result luôn có
+bounded progress evidence gồm physics ticks, stagnant ticks và forward progress
+lớn nhất; blocked vẫn một attempt, không retry/pathfinding và luôn clear
+controls. Dashboard hiện độ tươi state và khóa action khi state chưa fresh.
+Minecraft build/38 tests, Desktop build/65 tests và fast suite 295 tests pass;
+không model/GPU/Cloud/world artifact và real resettable-server acceptance vẫn
+pending.
+
 ### Embodied Gate
 
 Chạy full voice + avatar + memory + Minecraft trong local server, kiểm:

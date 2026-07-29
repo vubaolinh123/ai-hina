@@ -1,10 +1,14 @@
+import { performance } from "node:perf_hooks";
+
 import { createBot, type Bot, type BotOptions } from "mineflayer";
 
 import {
   MINECRAFT_SNAPSHOT_LIMITS,
+  MINECRAFT_WORLD_FRESHNESS_MAX_AGE_MS,
   type MinecraftConnectionConfig,
   type MinecraftNearbyEntity,
   type MinecraftVector,
+  type MinecraftWorldFreshness,
   type MinecraftWorldState,
 } from "./contracts.js";
 import type {
@@ -46,11 +50,68 @@ function optionalHealth(value: unknown): number | undefined {
   return rounded(value);
 }
 
+export function evaluateWorldStateFreshness(
+  physicsTickSequence: number,
+  lastPhysicsTickAtMs: number | null,
+  nowMs: number,
+): MinecraftWorldFreshness {
+  if (
+    !Number.isSafeInteger(physicsTickSequence) ||
+    physicsTickSequence <= 0 ||
+    lastPhysicsTickAtMs === null ||
+    !Number.isFinite(lastPhysicsTickAtMs) ||
+    !Number.isFinite(nowMs)
+  ) {
+    return {
+      physicsTickSequence: 0,
+      ageMs: null,
+      maximumAgeMs: MINECRAFT_WORLD_FRESHNESS_MAX_AGE_MS,
+      state: "unavailable",
+    };
+  }
+  const ageMs = Math.max(
+    0,
+    Math.round((nowMs - lastPhysicsTickAtMs) * 1_000) / 1_000,
+  );
+  return {
+    physicsTickSequence,
+    ageMs,
+    maximumAgeMs: MINECRAFT_WORLD_FRESHNESS_MAX_AGE_MS,
+    state:
+      ageMs <= MINECRAFT_WORLD_FRESHNESS_MAX_AGE_MS ? "fresh" : "stale",
+  };
+}
+
+export class PhysicsFreshnessTracker {
+  #physicsTickSequence = 0;
+  #lastPhysicsTickAtMs: number | null = null;
+
+  recordTick(nowMs = performance.now()): void {
+    if (!Number.isFinite(nowMs)) {
+      return;
+    }
+    this.#physicsTickSequence += 1;
+    this.#lastPhysicsTickAtMs = nowMs;
+  }
+
+  read(nowMs = performance.now()): MinecraftWorldFreshness {
+    return evaluateWorldStateFreshness(
+      this.#physicsTickSequence,
+      this.#lastPhysicsTickAtMs,
+      nowMs,
+    );
+  }
+}
+
 class MineflayerBotAdapter implements MinecraftBotPort {
   readonly #bot: Bot;
+  readonly #freshness = new PhysicsFreshnessTracker();
 
   constructor(bot: Bot) {
     this.#bot = bot;
+    this.#bot.on("physicsTick", () => {
+      this.#freshness.recordTick();
+    });
   }
 
   on(
@@ -64,6 +125,10 @@ class MineflayerBotAdapter implements MinecraftBotPort {
 
   captureWorldState(): MinecraftWorldState {
     return normalizeMineflayerWorldState(this.#bot);
+  }
+
+  getWorldStateFreshness(): MinecraftWorldFreshness {
+    return this.#freshness.read();
   }
 
   clearControlStates(): void {
