@@ -1257,11 +1257,7 @@ async function moveMinecraft(input: {
   try {
     const result = await window.hinaDesktop.moveMinecraft(input);
     minecraftStatus.value = result.minecraft;
-    const progress = result.execution.postcondition.progress;
-    const evidence =
-      `${progress.physicsTicksObserved} physics tick · ` +
-      `${progress.stagnantTicksObserved} tick đứng yên · ` +
-      `tiến tối đa ${progress.maximumForwardProgressBlocks.toFixed(3)} block`;
+    const evidence = formatMinecraftMovementEvidence(result);
     minecraftNotice.value =
       result.execution.status === "succeeded"
         ? `Hina đã di chuyển đúng hướng và quãng đường đã qua hậu kiểm. ${evidence}.`
@@ -1273,6 +1269,50 @@ async function moveMinecraft(input: {
       error instanceof Error ? error.message : "E_DESKTOP_MINECRAFT_MOVE";
     console.error(
       "[hina-minecraft-dashboard] E_DESKTOP_MINECRAFT_MOVE",
+      minecraftNotice.value,
+    );
+  } finally {
+    minecraftBusy.value = false;
+    await refreshMinecraft();
+  }
+}
+
+function formatMinecraftMovementEvidence(
+  result: MinecraftMovementResponse,
+): string {
+  const progress = result.execution.postcondition.progress;
+  const remaining = result.execution.postcondition.observed?.remainingDistanceBlocks;
+  return (
+    `${progress.physicsTicksObserved} physics tick · ` +
+    `${progress.stagnantTicksObserved} tick đứng yên · ` +
+    `tiến tối đa ${progress.maximumForwardProgressBlocks.toFixed(3)} block` +
+    (remaining === undefined
+      ? ""
+      : ` · cách đích ${remaining.toFixed(3)} block`)
+  );
+}
+
+async function moveMinecraftTo(input: {
+  targetX: number;
+  targetZ: number;
+}): Promise<void> {
+  if (minecraftBusy.value) return;
+  minecraftBusy.value = true;
+  try {
+    const result = await window.hinaDesktop.moveMinecraftTo(input);
+    minecraftStatus.value = result.minecraft;
+    const evidence = formatMinecraftMovementEvidence(result);
+    minecraftNotice.value =
+      result.execution.status === "succeeded"
+        ? `Hina đã quay và đi tới tọa độ gần; vị trí đã qua hậu kiểm. ${evidence}.`
+        : `${result.execution.error?.code ?? "E_MINECRAFT_SKILL"}: ${
+            result.execution.error?.message ?? "Chưa tới được tọa độ yêu cầu."
+          } · ${evidence}.`;
+  } catch (error) {
+    minecraftNotice.value =
+      error instanceof Error ? error.message : "E_DESKTOP_MINECRAFT_MOVE_TO";
+    console.error(
+      "[hina-minecraft-dashboard] E_DESKTOP_MINECRAFT_MOVE_TO",
       minecraftNotice.value,
     );
   } finally {
@@ -1643,6 +1683,7 @@ onBeforeUnmount(() => {
       @disconnect="disconnectMinecraft"
       @look="lookMinecraft"
       @move="moveMinecraft"
+      @move-to="moveMinecraftTo"
       @emergency-stop="emergencyStopMinecraft"
     />
 

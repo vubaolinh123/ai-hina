@@ -6,7 +6,7 @@ M09 đang ở fast-development write phase. M08 đã dừng write phase ở runn
 candidate sau khi owner chọn tiếp tục dùng Vision Cloud và hoãn bộ chấm 20 ảnh
 cho tới khi gặp lỗi thực tế. Đây không phải tuyên bố Vision đã đo và đạt ≥85%.
 
-M09-S1 đến S5 hiện là local runnable candidate. Chưa production-promote vì
+M09-S1 đến S6 hiện là local runnable candidate. Chưa production-promote vì
 workspace chưa có Minecraft server test có thể reset để owner chạy acceptance.
 
 ## M09-S1 — Connection spine
@@ -70,8 +70,8 @@ Fast evidence:
 2. Mở page **Minecraft**. Dịch vụ phải báo “Chưa kết nối game”.
 3. Chạy một Minecraft test server offline mode ở localhost/LAN riêng.
 4. Nhập IP/port/username và bấm **Kết nối Hina**.
-5. Chờ **Độ tươi trạng thái game** báo “Mới”, rồi thử `look.v1` và
-   `move.step.v1`; thành công chỉ được báo sau hậu kiểm.
+5. Chờ **Độ tươi trạng thái game** báo “Mới”, rồi thử `look.v1`,
+   `move.step.v1` và `move.to.v1`; thành công chỉ được báo sau hậu kiểm.
 6. Dùng **Ngắt kết nối** để có thể vào lại, hoặc **Dừng Minecraft ngay** để latch
    toàn bộ adapter tới lần restart Desktop.
 
@@ -128,8 +128,34 @@ Fast evidence:
 - Module brief, Desktop typecheck và `git diff --check` pass; không chạy server,
   model, GPU, Cloud hoặc tạo evidence thô.
 
+## M09-S6 — Quay rồi đi tới tọa độ rất gần
+
+- Theo chỉ thị owner tiếp tục phát triển và sẽ tự test sau, `move.to.v1` được
+  mở trước manual acceptance S3–S5 nhưng không được ghi là real-server pass.
+- Request chỉ nhận đúng `targetX/targetZ` hữu hạn trong world bound. Khoảng cách
+  tính từ world state mới phải nằm trong 0,25–2 block; quá gần/quá xa fail trước
+  khi xoay hoặc bật `forward`.
+- Controller tính vector và yaw deterministic, quay một lần rồi dùng cùng loop
+  movement đã kiểm chứng của `move.step.v1`: một attempt, timeout 4 giây, 20
+  stagnant physics tick thì blocked và luôn nhả controls.
+- Success vẫn cần forward progress ≥75%, overshoot ≤0,75 block và lateral drift
+  ≤0,35 block. Evidence bổ sung khoảng cách còn lại tới tọa độ đích.
+- Dashboard owner có ô X/Z, tự gợi ý điểm cách vị trí hiện tại 1 block, hiển thị
+  khoảng cách trước khi cho bấm và gửi qua route/IPC fixed owner-only. Widget,
+  model, viewer, chat/sign/book và plugin payload không có authority.
+- Không thêm pathfinding, retry, obstacle avoidance, jump/sprint, combat, mining,
+  placing, model call, GPU/Cloud hoặc persistence.
+
+Fast evidence:
+
+- `pnpm test:minecraft`: build và 46 tests pass.
+- `pnpm test:desktop`: production build và 66 tests pass.
+- `pnpm test:fast`: 303 tests pass.
+- Module brief, Desktop typecheck và `git diff --check` pass; không chạy server
+  Minecraft thật và không tạo world/model/media artifact.
+
 ## Slice kế tiếp
 
-M09-S6 chỉ mở kỹ năng target tọa độ cực ngắn/quay-trước-khi-bước sau khi owner
-thử S3–S5 trên resettable server. Pathfinder, LLM planner, phá block và combat
-vẫn chưa được mở.
+Owner sẽ test S3–S6 trên resettable server. Slice sau chỉ được mở từ lỗi thực tế
+hoặc capability deterministic tiếp theo; pathfinder, LLM planner, phá block và
+combat vẫn chưa được mở.

@@ -7,6 +7,7 @@ import {
   requestMinecraftDisconnect,
   requestMinecraftLook,
   requestMinecraftMove,
+  requestMinecraftMoveTo,
   requestMinecraftStatus,
 } from "../dist-electron/minecraft-client.js";
 
@@ -109,6 +110,10 @@ test("Minecraft mutations use fixed paths, authority headers and exact bodies", 
     { direction: "north", distanceBlocks: 1.5 },
     { controlToken: TOKEN, fetchImpl },
   );
+  await requestMinecraftMoveTo(
+    { targetX: 12.5, targetZ: -3.25 },
+    { controlToken: TOKEN, fetchImpl },
+  );
   await requestMinecraftDisconnect({ controlToken: TOKEN, fetchImpl });
 
   assert.deepEqual(
@@ -117,6 +122,7 @@ test("Minecraft mutations use fixed paths, authority headers and exact bodies", 
       "http://127.0.0.1:8766/v1/minecraft/connect",
       "http://127.0.0.1:8766/v1/minecraft/skills/look",
       "http://127.0.0.1:8766/v1/minecraft/skills/move-step",
+      "http://127.0.0.1:8766/v1/minecraft/skills/move-to",
       "http://127.0.0.1:8766/v1/minecraft/disconnect",
     ],
   );
@@ -140,6 +146,12 @@ test("Minecraft mutations use fixed paths, authority headers and exact bodies", 
     skillId: "move.step.v1",
     source: "owner.desktop",
   });
+  assert.deepEqual(requests[3].body, {
+    arguments: { targetX: 12.5, targetZ: -3.25 },
+    ownerConfirmed: true,
+    skillId: "move.to.v1",
+    source: "owner.desktop",
+  });
 });
 
 test("Minecraft client rejects unsafe movement before network I/O", () => {
@@ -158,6 +170,28 @@ test("Minecraft client rejects unsafe movement before network I/O", () => {
       ),
     /E_DESKTOP_MINECRAFT_INPUT/,
   );
+  assert.equal(called, false);
+});
+
+test("Minecraft client rejects invalid target coordinates before network I/O", () => {
+  let called = false;
+  for (const input of [
+    { targetX: Number.NaN, targetZ: 0 },
+    { targetX: 30_000_001, targetZ: 0 },
+    { targetX: 0, targetZ: 0, pathfind: true },
+  ]) {
+    assert.throws(
+      () =>
+        requestMinecraftMoveTo(input, {
+          controlToken: TOKEN,
+          fetchImpl: async () => {
+            called = true;
+            return jsonResponse({});
+          },
+        }),
+      /E_DESKTOP_MINECRAFT_INPUT/,
+    );
+  }
   assert.equal(called, false);
 });
 

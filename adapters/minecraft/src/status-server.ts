@@ -181,7 +181,7 @@ function exactOwnerAction(
 
 function exactSkillRequest(
   value: unknown,
-  skillId: "look.v1" | "move.step.v1",
+  skillId: "look.v1" | "move.step.v1" | "move.to.v1",
 ): unknown {
   if (
     typeof value !== "object" ||
@@ -318,6 +318,17 @@ async function handleRequest(
     if (pathname === "/v1/minecraft/skills/move-step") {
       const execution = await controller.executeSkill(
         exactSkillRequest(body, "move.step.v1"),
+      );
+      sendJson(response, 200, {
+        status: execution.status,
+        execution,
+        minecraft: controller.getStatus(),
+      });
+      return;
+    }
+    if (pathname === "/v1/minecraft/skills/move-to") {
+      const execution = await controller.executeSkill(
+        exactSkillRequest(body, "move.to.v1"),
       );
       sendJson(response, 200, {
         status: execution.status,

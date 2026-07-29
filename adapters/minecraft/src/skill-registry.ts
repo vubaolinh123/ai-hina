@@ -4,6 +4,8 @@ import {
   type MinecraftLookSkillDefinition,
   type MinecraftMoveSkillRequest,
   type MinecraftMoveSkillDefinition,
+  type MinecraftMoveToSkillRequest,
+  type MinecraftMoveToSkillDefinition,
   type MinecraftSkillDefinition,
   type MinecraftSkillRequest,
 } from "./contracts.js";
@@ -53,14 +55,43 @@ export const MOVE_STEP_SKILL_DEFINITION: MinecraftMoveSkillDefinition = Object.f
   destructive: false,
 });
 
+export const MOVE_TO_SKILL_DEFINITION: MinecraftMoveToSkillDefinition = Object.freeze({
+  id: "move.to.v1",
+  version: 1,
+  description: "Turn and move Hina to one verified nearby X/Z coordinate.",
+  preconditions: Object.freeze([
+    "controller_online",
+    "emergency_stop_not_latched",
+    "player_state_available",
+    "player_on_ground",
+    "fresh_physics_state",
+    "target_distance_0.25_to_2_blocks",
+    "no_other_skill_active",
+  ]),
+  timeoutMs: 4_000,
+  budget: Object.freeze({
+    maximumAttempts: 1,
+  }),
+  postcondition: Object.freeze({
+    kind: "player_target_coordinate_matches",
+    minimumProgressRatio: 0.75,
+    maximumOvershootBlocks: 0.75,
+    lateralToleranceBlocks: 0.35,
+  }),
+  destructive: false,
+});
+
 const SKILL_REGISTRY = Object.freeze([
   LOOK_SKILL_DEFINITION,
   MOVE_STEP_SKILL_DEFINITION,
+  MOVE_TO_SKILL_DEFINITION,
 ]);
 const ROOT_FIELDS = Object.freeze(["arguments", "skillId"]);
 const LOOK_FIELDS = Object.freeze(["pitchRadians", "yawRadians"]);
 const MOVE_FIELDS = Object.freeze(["direction", "distanceBlocks"]);
+const MOVE_TO_FIELDS = Object.freeze(["targetX", "targetZ"]);
 const MOVE_DIRECTIONS = new Set(["north", "east", "south", "west"]);
+const MINECRAFT_HORIZONTAL_COORDINATE_LIMIT = 30_000_000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -105,7 +136,8 @@ export function validateMinecraftSkillRequest(
   }
   if (
     value.skillId !== LOOK_SKILL_DEFINITION.id &&
-    value.skillId !== MOVE_STEP_SKILL_DEFINITION.id
+    value.skillId !== MOVE_STEP_SKILL_DEFINITION.id &&
+    value.skillId !== MOVE_TO_SKILL_DEFINITION.id
   ) {
     throw new MinecraftAdapterError(
       "E_MINECRAFT_SKILL_UNKNOWN",
@@ -141,6 +173,40 @@ export function validateMinecraftSkillRequest(
       arguments: {
         direction: direction as MinecraftMoveSkillRequest["arguments"]["direction"],
         distanceBlocks,
+      },
+    };
+    return request;
+  }
+  if (value.skillId === MOVE_TO_SKILL_DEFINITION.id) {
+    if (!hasExactFields(value.arguments, MOVE_TO_FIELDS)) {
+      throw new MinecraftAdapterError(
+        "E_MINECRAFT_SKILL_SCHEMA",
+        "move.to.v1 arguments must contain exactly targetX and targetZ",
+      );
+    }
+    const { targetX, targetZ } = value.arguments;
+    if (
+      !finiteInRange(
+        targetX,
+        -MINECRAFT_HORIZONTAL_COORDINATE_LIMIT,
+        MINECRAFT_HORIZONTAL_COORDINATE_LIMIT,
+      ) ||
+      !finiteInRange(
+        targetZ,
+        -MINECRAFT_HORIZONTAL_COORDINATE_LIMIT,
+        MINECRAFT_HORIZONTAL_COORDINATE_LIMIT,
+      )
+    ) {
+      throw new MinecraftAdapterError(
+        "E_MINECRAFT_SKILL_SCHEMA",
+        "move.to.v1 requires finite X/Z coordinates inside the Minecraft world bound",
+      );
+    }
+    const request: MinecraftMoveToSkillRequest = {
+      skillId: "move.to.v1",
+      arguments: {
+        targetX,
+        targetZ,
       },
     };
     return request;

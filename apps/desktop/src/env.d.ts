@@ -117,6 +117,25 @@ type MinecraftStatus = {
   } | null;
 };
 
+type MinecraftMovementResponse = {
+  status: string;
+  execution: {
+    status: "succeeded" | "failed";
+    error?: { code: string; message: string } | null;
+    postcondition: {
+      progress: {
+        physicsTicksObserved: number;
+        stagnantTicksObserved: number;
+        maximumForwardProgressBlocks: number;
+      };
+      observed?: {
+        remainingDistanceBlocks: number;
+      } | null;
+    };
+  };
+  minecraft: MinecraftStatus;
+};
+
 type ResourceTelemetry = {
   gpuName: string;
   totalVramMiB: number;
@@ -626,21 +645,11 @@ type HinaDesktopApi = {
   moveMinecraft(input: {
     direction: "north" | "east" | "south" | "west";
     distanceBlocks: number;
-  }): Promise<{
-    status: string;
-    execution: {
-      status: "succeeded" | "failed";
-      error?: { code: string; message: string } | null;
-      postcondition: {
-        progress: {
-          physicsTicksObserved: number;
-          stagnantTicksObserved: number;
-          maximumForwardProgressBlocks: number;
-        };
-      };
-    };
-    minecraft: MinecraftStatus;
-  }>;
+  }): Promise<MinecraftMovementResponse>;
+  moveMinecraftTo(input: {
+    targetX: number;
+    targetZ: number;
+  }): Promise<MinecraftMovementResponse>;
   emergencyStopMinecraft(): Promise<{
     status: string;
     minecraft: MinecraftStatus;

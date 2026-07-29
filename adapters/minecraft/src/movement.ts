@@ -1,13 +1,12 @@
 import {
   MinecraftAdapterError,
   type MinecraftCardinalDirection,
-  type MinecraftMoveSkillRequest,
+  type MinecraftMovementSkillRequest,
   type MinecraftMovementEvidence,
   type MinecraftVector,
   type MinecraftWorldState,
 } from "./contracts.js";
 import type { MinecraftBotPort } from "./ports.js";
-import { MOVE_STEP_SKILL_DEFINITION } from "./skill-registry.js";
 
 const CARDINAL_MOVEMENT = Object.freeze({
   north: { yawRadians: Math.PI, x: 0, z: -1 },
@@ -20,6 +19,18 @@ const CARDINAL_MOVEMENT = Object.freeze({
 >);
 
 const MAXIMUM_RECORDED_PHYSICS_TICKS = 80;
+const MINIMUM_TARGET_DISTANCE_BLOCKS = 0.25;
+const MAXIMUM_TARGET_DISTANCE_BLOCKS = 2;
+
+export interface MinecraftMovementPlan {
+  skillId: MinecraftMovementSkillRequest["skillId"];
+  yawRadians: number;
+  unitX: number;
+  unitZ: number;
+  distanceBlocks: number;
+  targetX: number;
+  targetZ: number;
+}
 
 export interface MinecraftMovementProgressTracker {
   physicsTicksObserved: number;
@@ -37,18 +48,65 @@ export function createMovementProgressTracker(): MinecraftMovementProgressTracke
   };
 }
 
+export function createMovementPlan(
+  request: MinecraftMovementSkillRequest,
+  before: MinecraftWorldState,
+): MinecraftMovementPlan {
+  const player = before.player;
+  if (player === null) {
+    throw new MinecraftAdapterError(
+      "E_MINECRAFT_SKILL_PRECONDITION",
+      "Player state is unavailable",
+    );
+  }
+  if (request.skillId === "move.step.v1") {
+    const direction = CARDINAL_MOVEMENT[request.arguments.direction];
+    return {
+      skillId: request.skillId,
+      yawRadians: direction.yawRadians,
+      unitX: direction.x,
+      unitZ: direction.z,
+      distanceBlocks: request.arguments.distanceBlocks,
+      targetX: player.position.x + direction.x * request.arguments.distanceBlocks,
+      targetZ: player.position.z + direction.z * request.arguments.distanceBlocks,
+    };
+  }
+  const deltaX = request.arguments.targetX - player.position.x;
+  const deltaZ = request.arguments.targetZ - player.position.z;
+  const distanceBlocks = Math.hypot(deltaX, deltaZ);
+  if (
+    distanceBlocks < MINIMUM_TARGET_DISTANCE_BLOCKS ||
+    distanceBlocks > MAXIMUM_TARGET_DISTANCE_BLOCKS
+  ) {
+    throw new MinecraftAdapterError(
+      "E_MINECRAFT_SKILL_PRECONDITION",
+      "move.to.v1 target must be 0.25-2.0 blocks from the current player position",
+    );
+  }
+  const unitX = deltaX / distanceBlocks;
+  const unitZ = deltaZ / distanceBlocks;
+  return {
+    skillId: request.skillId,
+    yawRadians: Math.atan2(-unitX, unitZ),
+    unitX,
+    unitZ,
+    distanceBlocks,
+    targetX: request.arguments.targetX,
+    targetZ: request.arguments.targetZ,
+  };
+}
+
 export function movementEvidence(
-  direction: MinecraftCardinalDirection,
+  plan: MinecraftMovementPlan,
   start: MinecraftVector,
   end: MinecraftVector,
   progress: MinecraftMovementProgressTracker = createMovementProgressTracker(),
 ): MinecraftMovementEvidence {
-  const vector = CARDINAL_MOVEMENT[direction];
   const deltaX = end.x - start.x;
   const deltaZ = end.z - start.z;
-  const forwardProgressBlocks = deltaX * vector.x + deltaZ * vector.z;
+  const forwardProgressBlocks = deltaX * plan.unitX + deltaZ * plan.unitZ;
   const lateralDriftBlocks = Math.abs(
-    deltaX * -vector.z + deltaZ * vector.x,
+    deltaX * -plan.unitZ + deltaZ * plan.unitX,
   );
   return {
     deltaX,
@@ -56,6 +114,10 @@ export function movementEvidence(
     forwardProgressBlocks,
     lateralDriftBlocks,
     horizontalDistanceBlocks: Math.hypot(deltaX, deltaZ),
+    remainingDistanceBlocks: Math.hypot(
+      end.x - plan.targetX,
+      end.z - plan.targetZ,
+    ),
     physicsTicksObserved: progress.physicsTicksObserved,
     stagnantTicksObserved: progress.stagnantTicksObserved,
     maximumForwardProgressBlocks: progress.maximumForwardProgressBlocks,
@@ -65,8 +127,12 @@ export function movementEvidence(
 export function movementMatches(
   evidence: MinecraftMovementEvidence,
   distanceBlocks: number,
+  postcondition: {
+    minimumProgressRatio: number;
+    maximumOvershootBlocks: number;
+    lateralToleranceBlocks: number;
+  },
 ): boolean {
-  const postcondition = MOVE_STEP_SKILL_DEFINITION.postcondition;
   return (
     evidence.forwardProgressBlocks >=
       distanceBlocks * postcondition.minimumProgressRatio &&
@@ -78,7 +144,7 @@ export function movementMatches(
 
 export async function executeMoveStep(
   bot: MinecraftBotPort,
-  request: MinecraftMoveSkillRequest,
+  plan: MinecraftMovementPlan,
   before: MinecraftWorldState,
   signal: AbortSignal,
   progress: MinecraftMovementProgressTracker,
@@ -90,8 +156,7 @@ export async function executeMoveStep(
       "Player state is unavailable",
     );
   }
-  const direction = CARDINAL_MOVEMENT[request.arguments.direction];
-  await bot.look(direction.yawRadians, player.pitch);
+  await bot.look(plan.yawRadians, player.pitch);
   if (signal.aborted) {
     throw signal.reason;
   }
@@ -111,7 +176,7 @@ export async function executeMoveStep(
       );
     }
     let evidence = movementEvidence(
-      request.arguments.direction,
+      plan,
       player.position,
       current.player.position,
       progress,
@@ -129,19 +194,19 @@ export async function executeMoveStep(
       progress.stagnantTicksObserved = 0;
     }
     evidence = movementEvidence(
-      request.arguments.direction,
+      plan,
       player.position,
       current.player.position,
       progress,
     );
     progress.lastObserved = evidence;
-    if (evidence.forwardProgressBlocks >= request.arguments.distanceBlocks) {
+    if (evidence.forwardProgressBlocks >= plan.distanceBlocks) {
       return;
     }
     if (progress.stagnantTicksObserved >= 20) {
       throw new MinecraftAdapterError(
         "E_MINECRAFT_SKILL_BLOCKED",
-        "move.step.v1 made no forward progress for 20 physics ticks",
+        `${plan.skillId} made no forward progress for 20 physics ticks`,
       );
     }
     previousProgress = evidence.forwardProgressBlocks;

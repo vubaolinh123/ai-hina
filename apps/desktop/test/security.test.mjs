@@ -104,6 +104,7 @@ test("preload exposes named methods and never exposes raw ipcRenderer", () => {
     "disconnectMinecraft",
     "lookMinecraft",
     "moveMinecraft",
+    "moveMinecraftTo",
     "emergencyStopMinecraft",
     "listScreenCaptureSources",
     "captureScreenSource",
@@ -267,6 +268,7 @@ test("Minecraft controls stay on numeric loopback behind ephemeral operator IPC"
   const main = read("electron/main.ts");
   const preload = read("electron/preload.ts");
   const client = read("electron/minecraft-client.ts");
+  const minecraft = read("src/dashboard/pages/MinecraftPage.vue");
   const launcher = read("../../tools/dev/Start-HinaDesktop.ps1");
   const renderer = readOperatorRenderer();
 
@@ -276,6 +278,7 @@ test("Minecraft controls stay on numeric loopback behind ephemeral operator IPC"
     "minecraftDisconnect",
     "minecraftLook",
     "minecraftMove",
+    "minecraftMoveTo",
     "minecraftEmergencyStop",
   ]) {
     assert.match(main, new RegExp(`CHANNELS\\.${channel}`));
@@ -287,9 +290,13 @@ test("Minecraft controls stay on numeric loopback behind ephemeral operator IPC"
   assert.match(client, /Authorization: `Bearer \$\{token\}`/);
   assert.match(client, /"X-Hina-Source": SOURCE/);
   assert.match(client, /ownerConfirmed: true/);
-  assert.match(client, /\/v1\/minecraft\/skills\/move-step/);
-  assert.match(client, /distanceBlocks < 0\.25/);
-  assert.match(client, /distanceBlocks > 2/);
+    assert.match(client, /\/v1\/minecraft\/skills\/move-step/);
+    assert.match(client, /\/v1\/minecraft\/skills\/move-to/);
+    assert.match(client, /distanceBlocks < 0\.25/);
+    assert.match(client, /distanceBlocks > 2/);
+    assert.match(client, /skillId: "move\.to\.v1"/);
+    assert.match(minecraft, /move\.to\.v1/);
+    assert.match(minecraft, /0,25 đến 2 block/);
   assert.match(renderer, /progress\.physicsTicksObserved/);
   assert.match(renderer, /progress\.stagnantTicksObserved/);
   assert.match(renderer, /progress\.maximumForwardProgressBlocks/);

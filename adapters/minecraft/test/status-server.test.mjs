@@ -42,7 +42,12 @@ function createControllerStub() {
     },
     async executeSkill(request) {
       calls.push({
-        action: request.skillId === "move.step.v1" ? "move" : "look",
+        action:
+          request.skillId === "move.step.v1"
+            ? "move"
+            : request.skillId === "move.to.v1"
+              ? "move_to"
+              : "look",
         request,
       });
       return {
@@ -210,6 +215,25 @@ test("authenticated service exposes only fixed owner operations", async (context
     },
   });
 
+  const moveTo = await request(server, "/v1/minecraft/skills/move-to", {
+    method: "POST",
+    token: TOKEN,
+    body: {
+      arguments: { targetX: 10.5, targetZ: -2.25 },
+      ownerConfirmed: true,
+      skillId: "move.to.v1",
+      source: "owner.desktop",
+    },
+  });
+  assert.equal(moveTo.status, 200);
+  assert.deepEqual(controller.calls[3], {
+    action: "move_to",
+    request: {
+      arguments: { targetX: 10.5, targetZ: -2.25 },
+      skillId: "move.to.v1",
+    },
+  });
+
   const disconnect = await request(server, "/v1/minecraft/disconnect", {
     method: "POST",
     token: TOKEN,
@@ -233,7 +257,7 @@ test("authenticated service exposes only fixed owner operations", async (context
   assert.equal(emergency.status, 200);
   assert.deepEqual(
     controller.calls.map((call) => call.action),
-    ["connect", "look", "move", "disconnect", "emergency_stop"],
+    ["connect", "look", "move", "move_to", "disconnect", "emergency_stop"],
   );
 });
 
@@ -281,6 +305,23 @@ test("mutation authentication, schema and payload bounds fail closed", async (co
   });
   assert.equal(crossRouteSkill.status, 400);
   assert.equal(crossRouteSkill.body.errorCode, "E_MINECRAFT_CONTROL_SCHEMA");
+
+  const crossMoveRoute = await request(
+    server,
+    "/v1/minecraft/skills/move-to",
+    {
+      method: "POST",
+      token: TOKEN,
+      body: {
+        arguments: { direction: "north", distanceBlocks: 1 },
+        ownerConfirmed: true,
+        skillId: "move.step.v1",
+        source: "owner.desktop",
+      },
+    },
+  );
+  assert.equal(crossMoveRoute.status, 400);
+  assert.equal(crossMoveRoute.body.errorCode, "E_MINECRAFT_CONTROL_SCHEMA");
 
   const oversized = await request(server, "/v1/minecraft/connect", {
     method: "POST",

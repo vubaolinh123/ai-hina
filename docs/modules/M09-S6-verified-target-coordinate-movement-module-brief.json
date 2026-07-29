@@ -1,0 +1,88 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M09-S6-verified-target-coordinate-movement",
+  "module_id": "M09",
+  "objective": "Add one owner-triggered deterministic move.to.v1 skill that turns toward and walks to an absolute X/Z target no farther than two blocks, then reports success only after normalized position evidence verifies the result.",
+  "non_goals": [
+    "Do not add pathfinding, obstacle avoidance, retry, jump, sprint, combat, mining, block placement, inventory mutation or destructive actions.",
+    "Do not grant skill authority to the LLM, planner, viewer chat, widget, game text, sign, book or plugin payload.",
+    "Do not claim real resettable-server success; the owner will perform manual application testing after this slice.",
+    "Do not change Vision, Brain, STT, TTS, avatar, memory or resource scheduling."
+  ],
+  "base_sha": "b562472f03411b836bde03843760d78a0ee2b7e0",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "adapters/minecraft/src/contracts.ts",
+    "adapters/minecraft/src/controller.ts",
+    "adapters/minecraft/src/index.ts",
+    "adapters/minecraft/src/movement.ts",
+    "adapters/minecraft/src/skill-registry.ts",
+    "adapters/minecraft/src/status-server.ts",
+    "adapters/minecraft/test/controller.test.mjs",
+    "adapters/minecraft/test/public-boundary.test.mjs",
+    "adapters/minecraft/test/skill-registry.test.mjs",
+    "adapters/minecraft/test/status-server.test.mjs",
+    "apps/desktop/electron/main.ts",
+    "apps/desktop/electron/minecraft-client.ts",
+    "apps/desktop/electron/preload.ts",
+    "apps/desktop/src/App.vue",
+    "apps/desktop/src/dashboard/pages/MinecraftPage.vue",
+    "apps/desktop/src/env.d.ts",
+    "apps/desktop/test/minecraft-client.test.mjs",
+    "apps/desktop/test/security.test.mjs",
+    "docs/modules/M09-S6-verified-target-coordinate-movement-module-brief.json",
+    "docs/modules/M09-minecraft-agent.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    ".gitnexus/",
+    ".claude/",
+    "CLAUDE.md",
+    "docs/research/deep-research-report.md",
+    "voice_demo/",
+    "assets/",
+    "var/"
+  ],
+  "contracts": [
+    "move.to.v1 accepts exactly finite targetX and targetZ coordinates within the Minecraft world bound; current-state distance must be 0.25-2.0 blocks.",
+    "Execution requires online, emergency-stop clear, player present/on ground, no active skill and physics state no older than 1000 ms.",
+    "The controller turns once, holds only forward, makes one attempt within four seconds and always clears control state.",
+    "Twenty physics ticks without forward progress fail as blocked; there is no retry or pathfinding.",
+    "Success requires at least 75 percent target-axis progress, at most 0.75 block overshoot, at most 0.35 block lateral drift and bounded evidence.",
+    "Only the operator Desktop can invoke the fixed authenticated loopback route; POST is never replayed."
+  ],
+  "allowed_dependencies": [
+    "Existing Minecraft adapter and Desktop dependencies only; no new dependency."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "Registry and request validation include exactly move.to.v1 with finite bounded coordinates and immutable one-attempt policy.",
+    "Deterministic tests cover diagonal success, too-near/too-far target, stale state, blocked movement, cancellation, timeout and failed postcondition.",
+    "Status service and Desktop expose a fixed owner-only move-to route and typed X/Z controls without renderer network or token access.",
+    "Minecraft build/tests, Desktop typecheck/build/tests, repository fast suite, module-brief validation, GitNexus detect_changes and git diff check pass.",
+    "No model, GPU, Cloud, real Minecraft server or retained runtime artifact is used by automated verification."
+  ],
+  "required_test_commands": [
+    "uv run --frozen python -c \"import json; from jsonschema import Draft202012Validator; schema=json.load(open('docs/schemas/module-brief.schema.json', encoding='utf-8')); brief=json.load(open('docs/modules/M09-S6-verified-target-coordinate-movement-module-brief.json', encoding='utf-8')); Draft202012Validator(schema).validate(brief)\"",
+    "pnpm test:minecraft",
+    "pnpm --filter @hina/desktop typecheck",
+    "pnpm test:desktop",
+    "pnpm test:fast",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "maximum_target_distance_blocks": 2,
+    "minimum_target_distance_blocks": 0.25,
+    "maximum_attempts": 1,
+    "timeout_milliseconds": 4000,
+    "maximum_stagnant_physics_ticks": 20,
+    "model_calls": 0,
+    "additional_local_vram_mib": 0,
+    "raw_artifact_persistence": false
+  },
+  "output_artifact_dir": "artifacts/verification/M09/"
+}

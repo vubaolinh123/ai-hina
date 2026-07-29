@@ -189,6 +189,32 @@ export function validateMinecraftMoveInput(value: unknown): JsonObject {
   };
 }
 
+export function validateMinecraftMoveToInput(value: unknown): JsonObject {
+  if (
+    !isObject(value) ||
+    Object.keys(value).sort().join(",") !== "targetX,targetZ" ||
+    typeof value.targetX !== "number" ||
+    !Number.isFinite(value.targetX) ||
+    Math.abs(value.targetX) > 30_000_000 ||
+    typeof value.targetZ !== "number" ||
+    !Number.isFinite(value.targetZ) ||
+    Math.abs(value.targetZ) > 30_000_000
+  ) {
+    throw new Error(
+      "E_DESKTOP_MINECRAFT_INPUT: target coordinates are invalid",
+    );
+  }
+  return {
+    arguments: {
+      targetX: value.targetX,
+      targetZ: value.targetZ,
+    },
+    ownerConfirmed: true,
+    skillId: "move.to.v1",
+    source: SOURCE,
+  };
+}
+
 async function requestMinecraft(
   path: string,
   method: "GET" | "POST",
@@ -336,6 +362,18 @@ export function requestMinecraftMove(
     "/v1/minecraft/skills/move-step",
     "POST",
     validateMinecraftMoveInput(input),
+    options,
+  );
+}
+
+export function requestMinecraftMoveTo(
+  input: unknown,
+  options: RequestOptions = {},
+): Promise<JsonObject> {
+  return requestMinecraft(
+    "/v1/minecraft/skills/move-to",
+    "POST",
+    validateMinecraftMoveToInput(input),
     options,
   );
 }

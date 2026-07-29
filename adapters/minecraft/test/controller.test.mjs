@@ -641,3 +641,171 @@ test("move.step.v1 enforces its fixed timeout and clears controls", async (conte
   assert.equal(fake.forwardEnabled, false);
   assert.equal(fake.clearCalls, 1);
 });
+
+test("move.to.v1 turns toward a nearby diagonal coordinate and verifies it", async () => {
+  const fake = new FakeBotPort();
+  const controller = new MinecraftController(() => fake);
+  const connected = controller.start(CONFIG);
+  fake.emit("spawn");
+  await connected;
+
+  const result = await controller.executeSkill({
+    skillId: "move.to.v1",
+    arguments: { targetX: 1.75, targetZ: 1.25 },
+  });
+
+  assert.equal(result.status, "succeeded");
+  assert.equal(result.skillId, "move.to.v1");
+  assert.deepEqual(result.postcondition.expected, {
+    targetX: 1.75,
+    targetZ: 1.25,
+  });
+  assert.ok(result.postcondition.targetDistanceBlocks > 1);
+  assert.ok(result.postcondition.observed.remainingDistanceBlocks <= 0.11);
+  assert.ok(result.postcondition.observed.lateralDriftBlocks <= 0.001);
+  assert.ok(result.postcondition.progress.physicsTicksObserved > 0);
+  assert.equal(fake.lookCalls.length, 1);
+  assert.equal(fake.clearCalls, 1);
+});
+
+test("move.to.v1 rejects targets that are too near or too far before acting", async () => {
+  for (const target of [
+    { targetX: 1.1, targetZ: 2 },
+    { targetX: 4, targetZ: 2 },
+  ]) {
+    const fake = new FakeBotPort();
+    const controller = new MinecraftController(() => fake);
+    const connected = controller.start(CONFIG);
+    fake.emit("spawn");
+    await connected;
+
+    const result = await controller.executeSkill({
+      skillId: "move.to.v1",
+      arguments: target,
+    });
+
+    assert.equal(result.status, "failed");
+    assert.equal(result.precondition.passed, false);
+    assert.equal(result.error.code, "E_MINECRAFT_SKILL_PRECONDITION");
+    assert.equal(result.postcondition.targetDistanceBlocks, null);
+    assert.equal(fake.lookCalls.length, 0);
+    assert.equal(fake.controlCalls.length, 0);
+  }
+});
+
+test("move.to.v1 rejects stale physics state before resolving the target", async () => {
+  const fake = new FakeBotPort();
+  fake.worldFreshness = {
+    physicsTickSequence: 4,
+    ageMs: 1_001,
+    maximumAgeMs: 1_000,
+    state: "stale",
+  };
+  const controller = new MinecraftController(() => fake);
+  const connected = controller.start(CONFIG);
+  fake.emit("spawn");
+  await connected;
+
+  const result = await controller.executeSkill({
+    skillId: "move.to.v1",
+    arguments: { targetX: 1, targetZ: 1 },
+  });
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.precondition.passed, false);
+  assert.equal(result.error.code, "E_MINECRAFT_SKILL_STALE_STATE");
+  assert.equal(fake.lookCalls.length, 0);
+});
+
+test("move.to.v1 reports blocked movement after 20 ticks without retry", async () => {
+  const fake = new FakeBotPort();
+  fake.physicsTickImplementation = async () => {};
+  const controller = new MinecraftController(() => fake);
+  const connected = controller.start(CONFIG);
+  fake.emit("spawn");
+  await connected;
+
+  const result = await controller.executeSkill({
+    skillId: "move.to.v1",
+    arguments: { targetX: 1, targetZ: 1 },
+  });
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.error.code, "E_MINECRAFT_SKILL_BLOCKED");
+  assert.equal(result.attempts, 1);
+  assert.equal(result.postcondition.progress.physicsTicksObserved, 20);
+  assert.equal(result.postcondition.progress.stagnantTicksObserved, 20);
+  assert.equal(fake.clearCalls, 1);
+});
+
+test("move.to.v1 fails postcondition when movement drifts away from target axis", async () => {
+  const fake = new FakeBotPort();
+  fake.physicsTickImplementation = async () => {
+    fake.world = structuredClone(fake.world);
+    fake.world.player.position.x += 0.1;
+    fake.world.player.position.z -= 0.1;
+  };
+  const controller = new MinecraftController(() => fake);
+  const connected = controller.start(CONFIG);
+  fake.emit("spawn");
+  await connected;
+
+  const result = await controller.executeSkill({
+    skillId: "move.to.v1",
+    arguments: { targetX: 1, targetZ: 1 },
+  });
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.error.code, "E_MINECRAFT_SKILL_POSTCONDITION");
+  assert.ok(result.postcondition.observed.lateralDriftBlocks > 0.35);
+  assert.equal(fake.clearCalls, 1);
+});
+
+test("owner disconnect cancels move.to.v1 and clears controls", async () => {
+  const fake = new FakeBotPort();
+  fake.physicsTickImplementation = () => new Promise(() => {});
+  const controller = new MinecraftController(() => fake);
+  const connected = controller.start(CONFIG);
+  fake.emit("spawn");
+  await connected;
+
+  const active = controller.executeSkill({
+    skillId: "move.to.v1",
+    arguments: { targetX: 2, targetZ: 2 },
+  });
+  await Promise.resolve();
+  await Promise.resolve();
+  await controller.disconnect();
+  const result = await active;
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.error.code, "E_MINECRAFT_SKILL_CANCELLED");
+  assert.equal(result.attempts, 1);
+  assert.equal(fake.forwardEnabled, false);
+  assert.equal(controller.getStatus().emergencyStopped, false);
+});
+
+test("move.to.v1 enforces the shared fixed timeout", async (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  const fake = new FakeBotPort();
+  fake.physicsTickImplementation = () => new Promise(() => {});
+  const controller = new MinecraftController(() => fake);
+  const connected = controller.start(CONFIG);
+  fake.emit("spawn");
+  await connected;
+
+  const active = controller.executeSkill({
+    skillId: "move.to.v1",
+    arguments: { targetX: 2, targetZ: 2 },
+  });
+  await Promise.resolve();
+  await Promise.resolve();
+  context.mock.timers.tick(4_001);
+  const result = await active;
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.error.code, "E_MINECRAFT_SKILL_TIMEOUT");
+  assert.equal(result.attempts, 1);
+  assert.equal(fake.forwardEnabled, false);
+  assert.equal(fake.clearCalls, 1);
+});

@@ -9,8 +9,8 @@ import {
   type MinecraftControllerStatus,
   type MinecraftDisconnectResult,
   type MinecraftLookSkillRequest,
-  type MinecraftMoveSkillExecutionResult,
-  type MinecraftMoveSkillRequest,
+  type MinecraftMovementSkillExecutionResult,
+  type MinecraftMovementSkillRequest,
   type MinecraftMovementEvidence,
   type MinecraftRotationEvidence,
   type MinecraftSkillExecutionResult,
@@ -19,6 +19,7 @@ import {
 } from "./contracts.js";
 import { createMineflayerBot } from "./mineflayer-client.js";
 import {
+  createMovementPlan,
   createMovementProgressTracker,
   executeMoveStep,
   movementEvidence,
@@ -31,6 +32,7 @@ import type {
 import {
   LOOK_SKILL_DEFINITION,
   MOVE_STEP_SKILL_DEFINITION,
+  MOVE_TO_SKILL_DEFINITION,
   validateMinecraftSkillRequest,
 } from "./skill-registry.js";
 
@@ -239,7 +241,10 @@ export class MinecraftController {
     const executionId = ++this.#skillExecutionSequence;
     const startedAt = this.#clock();
     const started = performance.now();
-    if (request.skillId === "move.step.v1") {
+    if (
+      request.skillId === "move.step.v1" ||
+      request.skillId === "move.to.v1"
+    ) {
       return this.#executeMoveStepSkill(
         request,
         executionId,
@@ -455,60 +460,94 @@ export class MinecraftController {
   }
 
   async #executeMoveStepSkill(
-    request: MinecraftMoveSkillRequest,
+    request: MinecraftMovementSkillRequest,
     executionId: number,
     startedAt: Date,
     started: number,
-  ): Promise<MinecraftMoveSkillExecutionResult> {
-    const definition = MOVE_STEP_SKILL_DEFINITION;
-    if (definition.id !== "move.step.v1") {
-      throw new MinecraftAdapterError(
-        "E_MINECRAFT_SKILL_REGISTRY",
-        "move.step.v1 definition is unavailable",
-      );
-    }
-    const expected = {
-      direction: request.arguments.direction,
-      distanceBlocks: request.arguments.distanceBlocks,
-    };
+  ): Promise<MinecraftMovementSkillExecutionResult> {
+    const definition =
+      request.skillId === "move.step.v1"
+        ? MOVE_STEP_SKILL_DEFINITION
+        : MOVE_TO_SKILL_DEFINITION;
     const movementProgress = createMovementProgressTracker();
-    const minimumProgressBlocks =
-      expected.distanceBlocks * definition.postcondition.minimumProgressRatio;
-    const maximumProgressBlocks =
-      expected.distanceBlocks + definition.postcondition.maximumOvershootBlocks;
+    let targetDistanceBlocks: number | null =
+      request.skillId === "move.step.v1"
+        ? request.arguments.distanceBlocks
+        : null;
     const finish = (
-      status: MinecraftMoveSkillExecutionResult["status"],
+      status: MinecraftMovementSkillExecutionResult["status"],
       preconditionPassed: boolean,
       observed: MinecraftMovementEvidence | null,
       postconditionPassed: boolean,
       error: MinecraftAdapterErrorView | null,
-    ): MinecraftMoveSkillExecutionResult => ({
-      schemaVersion: 1,
-      executionId,
-      skillId: "move.step.v1",
-      status,
-      startedAt: startedAt.toISOString(),
-      finishedAt: this.#clock().toISOString(),
-      durationMs: Math.round((performance.now() - started) * 1_000) / 1_000,
-      attempts: 1,
-      precondition: { passed: preconditionPassed },
-      postcondition: {
-        passed: postconditionPassed,
-        minimumProgressBlocks,
-        maximumProgressBlocks,
-        lateralToleranceBlocks:
-          definition.postcondition.lateralToleranceBlocks,
-        expected,
-        progress: {
-          physicsTicksObserved: movementProgress.physicsTicksObserved,
-          stagnantTicksObserved: movementProgress.stagnantTicksObserved,
-          maximumForwardProgressBlocks:
-            movementProgress.maximumForwardProgressBlocks,
+    ): MinecraftMovementSkillExecutionResult => {
+      const resultBase = {
+        schemaVersion: 1 as const,
+        executionId,
+        status,
+        startedAt: startedAt.toISOString(),
+        finishedAt: this.#clock().toISOString(),
+        durationMs: Math.round((performance.now() - started) * 1_000) / 1_000,
+        attempts: 1 as const,
+        precondition: { passed: preconditionPassed },
+        error,
+      };
+      const progress = {
+        physicsTicksObserved: movementProgress.physicsTicksObserved,
+        stagnantTicksObserved: movementProgress.stagnantTicksObserved,
+        maximumForwardProgressBlocks:
+          movementProgress.maximumForwardProgressBlocks,
+      };
+      if (request.skillId === "move.step.v1") {
+        return {
+          ...resultBase,
+          skillId: request.skillId,
+          postcondition: {
+            passed: postconditionPassed,
+            minimumProgressBlocks:
+              request.arguments.distanceBlocks *
+              definition.postcondition.minimumProgressRatio,
+            maximumProgressBlocks:
+              request.arguments.distanceBlocks +
+              definition.postcondition.maximumOvershootBlocks,
+            lateralToleranceBlocks:
+              definition.postcondition.lateralToleranceBlocks,
+            expected: {
+              direction: request.arguments.direction,
+              distanceBlocks: request.arguments.distanceBlocks,
+            },
+            progress,
+            observed,
+          },
+        };
+      }
+      return {
+        ...resultBase,
+        skillId: request.skillId,
+        postcondition: {
+          passed: postconditionPassed,
+          targetDistanceBlocks,
+          minimumProgressBlocks:
+            targetDistanceBlocks === null
+              ? null
+              : targetDistanceBlocks *
+                definition.postcondition.minimumProgressRatio,
+          maximumProgressBlocks:
+            targetDistanceBlocks === null
+              ? null
+              : targetDistanceBlocks +
+                definition.postcondition.maximumOvershootBlocks,
+          lateralToleranceBlocks:
+            definition.postcondition.lateralToleranceBlocks,
+          expected: {
+            targetX: request.arguments.targetX,
+            targetZ: request.arguments.targetZ,
+          },
+          progress,
+          observed,
         },
-        observed,
-      },
-      error,
-    });
+      };
+    };
 
     if (this.#activeSkillAbort !== null) {
       return finish(
@@ -573,9 +612,24 @@ export class MinecraftController {
         false,
         errorView(
           "E_MINECRAFT_SKILL_PRECONDITION",
-          "move.step.v1 requires an on-ground player state",
+          `${request.skillId} requires an on-ground player state`,
         ),
       );
+    }
+
+    let movementPlan;
+    try {
+      movementPlan = createMovementPlan(request, before);
+      targetDistanceBlocks = movementPlan.distanceBlocks;
+    } catch (error) {
+      const view =
+        error instanceof MinecraftAdapterError
+          ? errorView(error.code, error.message)
+          : errorView(
+              "E_MINECRAFT_SKILL_PRECONDITION",
+              payloadMessage(error, "Movement target is invalid"),
+            );
+      return finish("failed", false, null, false, view);
     }
 
     const abortController = new AbortController();
@@ -587,7 +641,7 @@ export class MinecraftController {
         timeout = setTimeout(() => {
           const error = new MinecraftAdapterError(
             "E_MINECRAFT_SKILL_TIMEOUT",
-            `move.step.v1 exceeded ${definition.timeoutMs} ms`,
+            `${request.skillId} exceeded ${definition.timeoutMs} ms`,
           );
           abortController.abort(error);
           reject(error);
@@ -602,7 +656,7 @@ export class MinecraftController {
               ? reason
               : new MinecraftAdapterError(
                   "E_MINECRAFT_SKILL_CANCELLED",
-                  "move.step.v1 was cancelled",
+                  `${request.skillId} was cancelled`,
                 ),
           );
         };
@@ -615,7 +669,7 @@ export class MinecraftController {
       await Promise.race([
         executeMoveStep(
           bot,
-          request,
+          movementPlan,
           before,
           abortController.signal,
           movementProgress,
@@ -681,12 +735,16 @@ export class MinecraftController {
       );
     }
     const observed = movementEvidence(
-      request.arguments.direction,
+      movementPlan,
       before.player.position,
       after.player.position,
       movementProgress,
     );
-    const verified = movementMatches(observed, expected.distanceBlocks);
+    const verified = movementMatches(
+      observed,
+      movementPlan.distanceBlocks,
+      definition.postcondition,
+    );
     return finish(
       verified ? "succeeded" : "failed",
       true,
@@ -696,7 +754,7 @@ export class MinecraftController {
         ? null
         : errorView(
             "E_MINECRAFT_SKILL_POSTCONDITION",
-            "Player displacement did not match the verified cardinal target",
+            "Player displacement did not match the verified movement target",
           ),
     );
   }

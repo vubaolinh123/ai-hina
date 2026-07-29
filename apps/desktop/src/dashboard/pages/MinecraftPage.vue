@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 
 const props = defineProps<{
   status: MinecraftStatus | null;
@@ -21,6 +21,10 @@ const emit = defineEmits<{
     direction: "north" | "east" | "south" | "west";
     distanceBlocks: number;
   }];
+  moveTo: [input: {
+    targetX: number;
+    targetZ: number;
+  }];
   emergencyStop: [];
 }>();
 
@@ -32,6 +36,9 @@ const yawRadians = ref(0);
 const pitchRadians = ref(0);
 const moveDirection = ref<"north" | "east" | "south" | "west">("north");
 const moveDistanceBlocks = ref(1);
+const moveTargetX = ref(0);
+const moveTargetZ = ref(0);
+const moveTargetInitialized = ref(false);
 
 const online = computed(() => props.status?.phase === "online");
 const worldStateFresh = computed(
@@ -40,6 +47,24 @@ const worldStateFresh = computed(
 const canAct = computed(
   () => !props.busy && online.value && worldStateFresh.value,
 );
+const currentPosition = computed(
+  () => props.status?.world?.player?.position ?? null,
+);
+const moveTargetDistance = computed(() => {
+  const position = currentPosition.value;
+  if (position === null) return null;
+  return Math.hypot(
+    Number(moveTargetX.value) - position.x,
+    Number(moveTargetZ.value) - position.z,
+  );
+});
+const moveTargetInRange = computed(
+  () =>
+    moveTargetDistance.value !== null &&
+    moveTargetDistance.value >= 0.25 &&
+    moveTargetDistance.value <= 2,
+);
+const canMoveTo = computed(() => canAct.value && moveTargetInRange.value);
 const canConnect = computed(
   () =>
     !props.busy &&
@@ -60,6 +85,24 @@ function requestConnect(): void {
 function formatNumber(value: number): string {
   return Number.isFinite(value) ? value.toFixed(2) : "—";
 }
+
+function useNearbyTarget(): void {
+  const position = currentPosition.value;
+  if (position === null) return;
+  moveTargetX.value = Math.round((position.x + 1) * 100) / 100;
+  moveTargetZ.value = Math.round(position.z * 100) / 100;
+  moveTargetInitialized.value = true;
+}
+
+watch(
+  currentPosition,
+  (position) => {
+    if (position !== null && !moveTargetInitialized.value) {
+      useNearbyTarget();
+    }
+  },
+  { immediate: true },
+);
 </script>
 
 <template>
@@ -291,6 +334,73 @@ function formatNumber(value: number): string {
         >
           Cho Hina đi bước ngắn
         </button>
+      </article>
+
+      <article class="minecraft-card">
+        <p class="eyebrow">KỸ NĂNG ĐÃ ĐƯỢC DUYỆT</p>
+        <h2>Đi tới tọa độ rất gần — move.to.v1</h2>
+        <p class="minecraft-help">
+          Dùng khi bạn muốn Hina quay mặt rồi đi thẳng tới một điểm X/Z cách vị
+          trí hiện tại từ 0,25 đến 2 block. Đây chỉ là một bước thẳng có hậu
+          kiểm; Hina không tự tìm đường, né vật cản, nhảy hoặc thử lại.
+        </p>
+        <div class="minecraft-form-grid">
+          <label>
+            Tọa độ X đích
+            <input
+              v-model.number="moveTargetX"
+              type="number"
+              min="-30000000"
+              max="30000000"
+              step="0.05"
+              :disabled="!canAct"
+            />
+          </label>
+          <label>
+            Tọa độ Z đích
+            <input
+              v-model.number="moveTargetZ"
+              type="number"
+              min="-30000000"
+              max="30000000"
+              step="0.05"
+              :disabled="!canAct"
+            />
+          </label>
+        </div>
+        <p class="minecraft-help">
+          Khoảng cách hiện tại:
+          {{
+            moveTargetDistance === null
+              ? "chưa có vị trí"
+              : `${moveTargetDistance.toFixed(3)} block`
+          }}.
+          {{
+            moveTargetInRange
+              ? "Đủ gần để thử."
+              : "Hãy chọn điểm cách Hina từ 0,25 đến 2 block."
+          }}
+        </p>
+        <div class="minecraft-actions">
+          <button
+            type="button"
+            :disabled="!canMoveTo"
+            @click="emit('moveTo', {
+              targetX: Number(moveTargetX),
+              targetZ: Number(moveTargetZ),
+            })"
+          >
+            Quay và đi tới X/Z
+          </button>
+          <button
+            type="button"
+            class="secondary"
+            :disabled="!canAct"
+            @click="useNearbyTarget"
+          >
+            Gợi ý điểm cách 1 block
+          </button>
+        </div>
       </article>
 
       <article class="minecraft-card minecraft-card--danger">

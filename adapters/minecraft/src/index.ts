@@ -9,6 +9,8 @@ export {
   type MinecraftDisconnectResult,
   type MinecraftLookSkillRequest,
   type MinecraftMoveSkillRequest,
+  type MinecraftMoveToSkillRequest,
+  type MinecraftMovementSkillRequest,
   type MinecraftSkillDefinition,
   type MinecraftSkillExecutionResult,
   type MinecraftSkillId,
@@ -26,6 +28,7 @@ export {
   getMinecraftSkillRegistry,
   LOOK_SKILL_DEFINITION,
   MOVE_STEP_SKILL_DEFINITION,
+  MOVE_TO_SKILL_DEFINITION,
   validateMinecraftSkillRequest,
 } from "./skill-registry.js";
 export {

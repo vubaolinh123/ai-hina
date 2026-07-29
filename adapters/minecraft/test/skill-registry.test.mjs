@@ -5,15 +5,17 @@ import {
   getMinecraftSkillRegistry,
   LOOK_SKILL_DEFINITION,
   MOVE_STEP_SKILL_DEFINITION,
+  MOVE_TO_SKILL_DEFINITION,
   MinecraftAdapterError,
   validateMinecraftSkillRequest,
 } from "../dist/index.js";
 
-test("registry contains exactly two immutable non-destructive skills", () => {
+test("registry contains exactly three immutable non-destructive skills", () => {
   const registry = getMinecraftSkillRegistry();
-  assert.equal(registry.length, 2);
+  assert.equal(registry.length, 3);
   assert.equal(registry[0], LOOK_SKILL_DEFINITION);
   assert.equal(registry[1], MOVE_STEP_SKILL_DEFINITION);
+  assert.equal(registry[2], MOVE_TO_SKILL_DEFINITION);
   assert.deepEqual(registry[0], {
     id: "look.v1",
     version: 1,
@@ -61,6 +63,31 @@ test("registry contains exactly two immutable non-destructive skills", () => {
     },
     destructive: false,
   });
+  assert.deepEqual(registry[2], {
+    id: "move.to.v1",
+    version: 1,
+    description: "Turn and move Hina to one verified nearby X/Z coordinate.",
+    preconditions: [
+      "controller_online",
+      "emergency_stop_not_latched",
+      "player_state_available",
+      "player_on_ground",
+      "fresh_physics_state",
+      "target_distance_0.25_to_2_blocks",
+      "no_other_skill_active",
+    ],
+    timeoutMs: 4_000,
+    budget: {
+      maximumAttempts: 1,
+    },
+    postcondition: {
+      kind: "player_target_coordinate_matches",
+      minimumProgressRatio: 0.75,
+      maximumOvershootBlocks: 0.75,
+      lateralToleranceBlocks: 0.35,
+    },
+    destructive: false,
+  });
 });
 
 test("validates a bounded look.v1 request", () => {
@@ -96,6 +123,25 @@ test("validates a bounded move.step.v1 request", () => {
       arguments: {
         direction: "north",
         distanceBlocks: 2,
+      },
+    },
+  );
+});
+
+test("validates a bounded move.to.v1 coordinate request", () => {
+  assert.deepEqual(
+    validateMinecraftSkillRequest({
+      skillId: "move.to.v1",
+      arguments: {
+        targetX: -123.5,
+        targetZ: 456.25,
+      },
+    }),
+    {
+      skillId: "move.to.v1",
+      arguments: {
+        targetX: -123.5,
+        targetZ: 456.25,
       },
     },
   );
@@ -143,6 +189,18 @@ test("rejects unknown skills, shape changes and unsafe angles", () => {
     {
       skillId: "move.step.v1",
       arguments: { direction: "east", distanceBlocks: 1, sprint: true },
+    },
+    {
+      skillId: "move.to.v1",
+      arguments: { targetX: Number.NaN, targetZ: 2 },
+    },
+    {
+      skillId: "move.to.v1",
+      arguments: { targetX: 30_000_001, targetZ: 2 },
+    },
+    {
+      skillId: "move.to.v1",
+      arguments: { targetX: 1, targetZ: 2, pathfind: true },
     },
   ];
   for (const request of invalid) {

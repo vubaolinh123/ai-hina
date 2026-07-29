@@ -1,6 +1,6 @@
 # Hina AI — Master Plan xây AI VTuber kiểu Neuro-sama
 
-> Trạng thái: đang implementation; module active M08 — Perception, screen snapshot, OCR và optional VLM
+> Trạng thái: đang implementation; module active M09 — Minecraft agent
 > Nguồn đầu vào chính: `deep-research-report.md`  
 > Mục tiêu phần cứng ban đầu: Windows, NVIDIA RTX 5070 Ti 16 GB; RAM/driver/runtime phải được xác minh lại ở M00  
 > Nguyên tắc phát triển: một module sản phẩm tại một thời điểm; nhiều agent làm song song bên trong module; chỉ mở module kế tiếp sau khi module hiện tại qua toàn bộ quality gate
@@ -1817,6 +1817,18 @@ controls. Dashboard hiện độ tươi state và khóa action khi state chưa f
 Minecraft build/38 tests, Desktop build/65 tests và fast suite 295 tests pass;
 không model/GPU/Cloud/world artifact và real resettable-server acceptance vẫn
 pending.
+
+M09-S6 thêm đúng một skill `move.to.v1` theo chỉ thị owner tiếp tục phát triển
+và sẽ tự kiểm thử sau. Skill nhận absolute `targetX/targetZ`, nhưng chỉ chạy khi
+physics state còn mới và khoảng cách hiện tại nằm trong 0,25–2 block. Controller
+tính yaw/vector deterministic, quay một lần rồi dùng cùng bounded forward loop:
+một attempt, timeout 4 giây, blocked sau 20 stagnant physics tick, không retry
+hoặc pathfinding và luôn clear controls. Success vẫn cần tiến ≥75%, overshoot
+≤0,75 block, lateral drift ≤0,35 block; evidence có khoảng cách còn lại tới
+đích. Desktop owner-only thêm fixed route/IPC và form X/Z có kiểm tra khoảng
+cách, còn widget/model/viewer/game text không có authority. Minecraft 46 tests,
+Desktop build/66 tests và fast suite 303 tests pass; real resettable-server
+acceptance vẫn pending, không được diễn giải thành production promotion.
 
 ### Embodied Gate
 

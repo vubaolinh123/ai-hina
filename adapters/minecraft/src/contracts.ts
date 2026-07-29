@@ -112,7 +112,7 @@ export interface MinecraftDisconnectResult {
   dispatchDurationMs: number;
 }
 
-export type MinecraftSkillId = "look.v1" | "move.step.v1";
+export type MinecraftSkillId = "look.v1" | "move.step.v1" | "move.to.v1";
 
 interface MinecraftSkillDefinitionBase {
   id: MinecraftSkillId;
@@ -152,9 +152,21 @@ export interface MinecraftMoveSkillDefinition
   };
 }
 
+export interface MinecraftMoveToSkillDefinition
+  extends MinecraftSkillDefinitionBase {
+  id: "move.to.v1";
+  postcondition: {
+    kind: "player_target_coordinate_matches";
+    minimumProgressRatio: number;
+    maximumOvershootBlocks: number;
+    lateralToleranceBlocks: number;
+  };
+}
+
 export type MinecraftSkillDefinition =
   | MinecraftLookSkillDefinition
-  | MinecraftMoveSkillDefinition;
+  | MinecraftMoveSkillDefinition
+  | MinecraftMoveToSkillDefinition;
 
 export interface MinecraftLookSkillRequest {
   skillId: "look.v1";
@@ -172,9 +184,21 @@ export interface MinecraftMoveSkillRequest {
   };
 }
 
+export interface MinecraftMoveToSkillRequest {
+  skillId: "move.to.v1";
+  arguments: {
+    targetX: number;
+    targetZ: number;
+  };
+}
+
+export type MinecraftMovementSkillRequest =
+  | MinecraftMoveSkillRequest
+  | MinecraftMoveToSkillRequest;
+
 export type MinecraftSkillRequest =
   | MinecraftLookSkillRequest
-  | MinecraftMoveSkillRequest;
+  | MinecraftMovementSkillRequest;
 
 export interface MinecraftRotationEvidence {
   yawRadians: number;
@@ -220,6 +244,7 @@ export interface MinecraftMovementEvidence
   forwardProgressBlocks: number;
   lateralDriftBlocks: number;
   horizontalDistanceBlocks: number;
+  remainingDistanceBlocks: number;
 }
 
 export interface MinecraftMoveSkillExecutionResult
@@ -239,9 +264,31 @@ export interface MinecraftMoveSkillExecutionResult
   };
 }
 
+export interface MinecraftMoveToSkillExecutionResult
+  extends MinecraftSkillExecutionResultBase {
+  skillId: "move.to.v1";
+  postcondition: {
+    passed: boolean;
+    targetDistanceBlocks: number | null;
+    minimumProgressBlocks: number | null;
+    maximumProgressBlocks: number | null;
+    lateralToleranceBlocks: number;
+    expected: {
+      targetX: number;
+      targetZ: number;
+    };
+    progress: MinecraftMovementProgressEvidence;
+    observed: MinecraftMovementEvidence | null;
+  };
+}
+
+export type MinecraftMovementSkillExecutionResult =
+  | MinecraftMoveSkillExecutionResult
+  | MinecraftMoveToSkillExecutionResult;
+
 export type MinecraftSkillExecutionResult =
   | MinecraftLookSkillExecutionResult
-  | MinecraftMoveSkillExecutionResult;
+  | MinecraftMovementSkillExecutionResult;
 
 export class MinecraftAdapterError extends Error {
   readonly code: string;

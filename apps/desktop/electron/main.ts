@@ -79,6 +79,7 @@ import {
   requestMinecraftEmergencyStop,
   requestMinecraftLook,
   requestMinecraftMove,
+  requestMinecraftMoveTo,
   requestMinecraftStatus,
 } from "./minecraft-client";
 
@@ -121,6 +122,7 @@ const CHANNELS = Object.freeze({
   minecraftDisconnect: "hina:minecraft:disconnect",
   minecraftLook: "hina:minecraft:look",
   minecraftMove: "hina:minecraft:move",
+  minecraftMoveTo: "hina:minecraft:move-to",
   minecraftEmergencyStop: "hina:minecraft:emergency-stop",
   captureSources: "hina:capture:sources",
   captureSubmit: "hina:capture:submit",
@@ -930,6 +932,23 @@ function registerIpcHandlers(): void {
           error instanceof Error
             ? error.message.slice(0, 256)
             : "Minecraft movement failed"
+        }`,
+      );
+      throw error;
+    }
+  });
+  ipcMain.handle(CHANNELS.minecraftMoveTo, async (event, input: unknown) => {
+    if (assertTrustedSender(event) !== "operator") {
+      throw new Error("E_DESKTOP_MINECRAFT_AUTHORITY: operator window required");
+    }
+    try {
+      return await requestMinecraftMoveTo(input);
+    } catch (error) {
+      console.error(
+        `[hina-desktop:minecraft:ERROR] ${
+          error instanceof Error
+            ? error.message.slice(0, 256)
+            : "Minecraft target movement failed"
         }`,
       );
       throw error;
