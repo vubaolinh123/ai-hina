@@ -116,20 +116,25 @@ type MinecraftStatus = {
   } | null;
 };
 
-type MinecraftMovementResponse = {
+type MinecraftGoalResponse = {
   status: string;
-  execution: {
+  plan: {
+    state: "ready" | "unsupported";
+    goalId: "harvest.nearby-log.v1" | null;
+    label: string;
+    planVersion: "minecraft.goal.v1";
+  };
+  execution?: {
     status: "succeeded" | "failed";
     error?: { code: string; message: string } | null;
-    postcondition: {
-      progress: {
-        physicsTicksObserved: number;
-        stagnantTicksObserved: number;
-        maximumForwardProgressBlocks: number;
-      };
-      observed?: {
-        remainingDistanceBlocks: number;
-      } | null;
+    target?: {
+      name: string;
+      position: MinecraftVector;
+      distanceBlocks: number;
+    } | null;
+    postcondition?: {
+      passed: boolean;
+      targetStillPresent: boolean | null;
     };
   };
   minecraft: MinecraftStatus;
@@ -599,7 +604,7 @@ type HinaDesktopApi = {
   getSafetyStatus(): Promise<SafetyStatus>;
   applySafetyControl(control:
     | { action: "set_mute"; enabled: boolean }
-    | { action: "set_feature"; feature: "perception"; enabled: boolean }
+    | { action: "set_feature"; feature: "perception" | "gameAction"; enabled: boolean }
     | { action: "emergency_stop" }
     | { action: "emergency_reset" }
   ): Promise<unknown>;
@@ -630,25 +635,7 @@ type HinaDesktopApi = {
     status: string;
     minecraft: MinecraftStatus;
   }>;
-  lookMinecraft(input: {
-    yawRadians: number;
-    pitchRadians: number;
-  }): Promise<{
-    status: string;
-    execution: {
-      status: "succeeded" | "failed";
-      error?: { code: string; message: string } | null;
-    };
-    minecraft: MinecraftStatus;
-  }>;
-  moveMinecraft(input: {
-    direction: "north" | "east" | "south" | "west";
-    distanceBlocks: number;
-  }): Promise<MinecraftMovementResponse>;
-  moveMinecraftTo(input: {
-    targetX: number;
-    targetZ: number;
-  }): Promise<MinecraftMovementResponse>;
+  runMinecraftGoal(input: string): Promise<MinecraftGoalResponse>;
   emergencyStopMinecraft(): Promise<{
     status: string;
     minecraft: MinecraftStatus;

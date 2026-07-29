@@ -6,6 +6,7 @@ import {
   MINECRAFT_SNAPSHOT_LIMITS,
   MINECRAFT_WORLD_FRESHNESS_MAX_AGE_MS,
   type MinecraftConnectionConfig,
+  type MinecraftHarvestTarget,
   type MinecraftNearbyEntity,
   type MinecraftVector,
   type MinecraftWorldFreshness,
@@ -15,6 +16,7 @@ import type {
   MinecraftBotEvent,
   MinecraftBotPort,
 } from "./ports.js";
+import { isHarvestableLogName } from "./goal-registry.js";
 
 function finiteNumber(value: unknown, fallback = 0): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
@@ -172,6 +174,67 @@ class MineflayerBotAdapter implements MinecraftBotPort {
 
   async stopDigging(): Promise<void> {
     await this.#bot.stopDigging();
+  }
+
+  findNearestHarvestableLog(
+    maximumDistanceBlocks: number,
+  ): MinecraftHarvestTarget | null {
+    if (
+      !Number.isFinite(maximumDistanceBlocks) ||
+      maximumDistanceBlocks <= 0 ||
+      this.#bot.entity?.position === undefined
+    ) {
+      return null;
+    }
+    const block = this.#bot.findBlock({
+      matching: (candidate) =>
+        candidate !== null &&
+        isHarvestableLogName(candidate.name) &&
+        this.#bot.canDigBlock(candidate),
+      maxDistance: maximumDistanceBlocks,
+    });
+    if (block === null || !isHarvestableLogName(block.name)) {
+      return null;
+    }
+    return {
+      name: block.name,
+      position: vector(block.position),
+      distanceBlocks: rounded(this.#bot.entity.position.distanceTo(block.position)),
+    };
+  }
+
+  async digHarvestableLog(target: MinecraftHarvestTarget): Promise<void> {
+    const block = this.#findExactHarvestableLog(target);
+    if (block === null || !this.#bot.canDigBlock(block)) {
+      throw new Error("Targeted allowlisted log is no longer diggable");
+    }
+    await this.#bot.dig(block, true);
+  }
+
+  isHarvestableLogPresent(target: MinecraftHarvestTarget): boolean {
+    return this.#findExactHarvestableLog(target) !== null;
+  }
+
+  #findExactHarvestableLog(target: MinecraftHarvestTarget) {
+    if (
+      !isHarvestableLogName(target.name) ||
+      !Number.isFinite(target.position.x) ||
+      !Number.isFinite(target.position.y) ||
+      !Number.isFinite(target.position.z)
+    ) {
+      return null;
+    }
+    const block = this.#bot.findBlock({
+      matching: (candidate) =>
+        candidate !== null &&
+        candidate.name === target.name &&
+        isHarvestableLogName(candidate.name) &&
+        candidate.position.x === target.position.x &&
+        candidate.position.y === target.position.y &&
+        candidate.position.z === target.position.z,
+      maxDistance: 5,
+    });
+    return block ?? null;
   }
 
   quit(reason: string): void {

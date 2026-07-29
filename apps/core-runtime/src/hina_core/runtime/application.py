@@ -36,6 +36,7 @@ class HinaRuntimeApplication:
         *,
         build_commit: str = "development",
         model_gateway: Any | None = None,
+        minecraft_goal_planner: Any | None = None,
         speech_service: Any | None = None,
         tts_service: Any | None = None,
         memory_service: Any | None = None,
@@ -54,6 +55,7 @@ class HinaRuntimeApplication:
         self.server: ControlPlaneServer | None = None
         self.safety_policy: Any | None = None
         self.model_gateway: Any | None = model_gateway
+        self.minecraft_goal_planner: Any | None = minecraft_goal_planner
         self.conversation: Any | None = None
         self.speech_service: Any | None = speech_service
         self.tts_service: Any | None = tts_service
@@ -91,6 +93,7 @@ class HinaRuntimeApplication:
             safety_policy = SafetyPolicyService(manifest, audit)
         store = DurableStore(self.paths.database.resolve())
         conversation = None
+        minecraft_goal_planner = self.minecraft_goal_planner
         speech_service = self.speech_service
         tts_service = self.tts_service
         memory_service = self.memory_service
@@ -114,6 +117,10 @@ class HinaRuntimeApplication:
                     ModelGatewayConfig.from_env(),
                     LocalResourceScheduler(NvidiaSmiTelemetry()),
                 )
+            if minecraft_goal_planner is None:
+                from hina_text_brain import MinecraftGoalPlanner
+
+                minecraft_goal_planner = MinecraftGoalPlanner(model_gateway)
             if self.paths.memory_database is not None or self.paths.memory_index is not None:
                 if self.paths.memory_database is None or self.paths.memory_index is None:
                     raise ValueError("memory_database and memory_index must be configured together")
@@ -300,6 +307,7 @@ class HinaRuntimeApplication:
                 static_dir=self.paths.static_dir,
                 safety_policy=safety_policy,
                 model_gateway=model_gateway,
+                minecraft_goal_planner=minecraft_goal_planner,
                 conversation_service=conversation,
                 speech_service=speech_service,
                 tts_service=tts_service,
@@ -326,6 +334,7 @@ class HinaRuntimeApplication:
         self.server = server
         self.safety_policy = safety_policy
         self.model_gateway = model_gateway
+        self.minecraft_goal_planner = minecraft_goal_planner
         self.conversation = conversation
         self.speech_service = speech_service
         self.tts_service = tts_service
@@ -357,6 +366,7 @@ class HinaRuntimeApplication:
         self.server = None
         self.store = None
         self.safety_policy = None
+        self.minecraft_goal_planner = None
         self.conversation = None
         self.speech_service = None
         self.tts_service = None

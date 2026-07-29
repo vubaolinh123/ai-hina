@@ -5,9 +5,7 @@ import {
   parseMinecraftBaseUrl,
   requestMinecraftConnect,
   requestMinecraftDisconnect,
-  requestMinecraftLook,
-  requestMinecraftMove,
-  requestMinecraftMoveTo,
+  requestMinecraftGoal,
   requestMinecraftStatus,
 } from "../dist-electron/minecraft-client.js";
 
@@ -102,16 +100,8 @@ test("Minecraft mutations use fixed paths, authority headers and exact bodies", 
     },
     { controlToken: TOKEN, fetchImpl },
   );
-  await requestMinecraftLook(
-    { yawRadians: 0.5, pitchRadians: -0.25 },
-    { controlToken: TOKEN, fetchImpl },
-  );
-  await requestMinecraftMove(
-    { direction: "north", distanceBlocks: 1.5 },
-    { controlToken: TOKEN, fetchImpl },
-  );
-  await requestMinecraftMoveTo(
-    { targetX: 12.5, targetZ: -3.25 },
+  await requestMinecraftGoal(
+    { goalId: "harvest.nearby-log.v1" },
     { controlToken: TOKEN, fetchImpl },
   );
   await requestMinecraftDisconnect({ controlToken: TOKEN, fetchImpl });
@@ -120,9 +110,7 @@ test("Minecraft mutations use fixed paths, authority headers and exact bodies", 
     requests.map((request) => request.url),
     [
       "http://127.0.0.1:8766/v1/minecraft/connect",
-      "http://127.0.0.1:8766/v1/minecraft/skills/look",
-      "http://127.0.0.1:8766/v1/minecraft/skills/move-step",
-      "http://127.0.0.1:8766/v1/minecraft/skills/move-to",
+      "http://127.0.0.1:8766/v1/minecraft/goals/execute",
       "http://127.0.0.1:8766/v1/minecraft/disconnect",
     ],
   );
@@ -135,31 +123,18 @@ test("Minecraft mutations use fixed paths, authority headers and exact bodies", 
     ),
   );
   assert.deepEqual(requests[1].body, {
-    arguments: { yawRadians: 0.5, pitchRadians: -0.25 },
+    goalId: "harvest.nearby-log.v1",
     ownerConfirmed: true,
-    skillId: "look.v1",
-    source: "owner.desktop",
-  });
-  assert.deepEqual(requests[2].body, {
-    arguments: { direction: "north", distanceBlocks: 1.5 },
-    ownerConfirmed: true,
-    skillId: "move.step.v1",
-    source: "owner.desktop",
-  });
-  assert.deepEqual(requests[3].body, {
-    arguments: { targetX: 12.5, targetZ: -3.25 },
-    ownerConfirmed: true,
-    skillId: "move.to.v1",
     source: "owner.desktop",
   });
 });
 
-test("Minecraft client rejects unsafe movement before network I/O", () => {
+test("Minecraft client rejects goal identifiers outside the static allowlist before network I/O", () => {
   let called = false;
   assert.throws(
     () =>
-      requestMinecraftMove(
-        { direction: "up", distanceBlocks: 99 },
+      requestMinecraftGoal(
+        { goalId: "move.to.v1" },
         {
           controlToken: TOKEN,
           fetchImpl: async () => {
@@ -168,28 +143,29 @@ test("Minecraft client rejects unsafe movement before network I/O", () => {
           },
         },
       ),
-    /E_DESKTOP_MINECRAFT_INPUT/,
+    /E_DESKTOP_MINECRAFT_GOAL/,
   );
   assert.equal(called, false);
 });
 
-test("Minecraft client rejects invalid target coordinates before network I/O", () => {
+test("Minecraft client rejects goal shape changes before network I/O", () => {
   let called = false;
   for (const input of [
-    { targetX: Number.NaN, targetZ: 0 },
-    { targetX: 30_000_001, targetZ: 0 },
-    { targetX: 0, targetZ: 0, pathfind: true },
+    null,
+    {},
+    { goalId: "harvest.nearby-log.v1", pathfind: true },
+    { goalId: "harvest.nearby-log.v1", targetX: 0 },
   ]) {
     assert.throws(
       () =>
-        requestMinecraftMoveTo(input, {
+        requestMinecraftGoal(input, {
           controlToken: TOKEN,
           fetchImpl: async () => {
             called = true;
             return jsonResponse({});
           },
         }),
-      /E_DESKTOP_MINECRAFT_INPUT/,
+      /E_DESKTOP_MINECRAFT_GOAL/,
     );
   }
   assert.equal(called, false);

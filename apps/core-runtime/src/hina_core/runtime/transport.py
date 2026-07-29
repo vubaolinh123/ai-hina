@@ -163,6 +163,7 @@ class ControlPlaneServer:
         static_dir: Path | None = None,
         safety_policy: Any | None = None,
         model_gateway: Any | None = None,
+        minecraft_goal_planner: Any | None = None,
         conversation_service: Any | None = None,
         speech_service: Any | None = None,
         tts_service: Any | None = None,
@@ -178,6 +179,7 @@ class ControlPlaneServer:
         self.static_dir = static_dir.resolve() if static_dir is not None else None
         self.safety_policy = safety_policy
         self.model_gateway = model_gateway
+        self.minecraft_goal_planner = minecraft_goal_planner
         self.conversation_service = conversation_service
         self.speech_service = speech_service
         self.tts_service = tts_service
@@ -502,6 +504,17 @@ class ControlPlaneServer:
             return self._safety_call("create_context", payload)
         if path == "/v1/safety/moderate":
             return self._safety_call("moderate", payload)
+        if path == "/v1/minecraft/goals/plan":
+            if (
+                set(payload) != {"text", "source", "ownerConfirmed"}
+                or payload.get("source") != "owner.desktop"
+                or payload.get("ownerConfirmed") is not True
+            ):
+                raise PrimitiveError(
+                    RuntimeErrorCode.MINECRAFT_GOAL_BAD_REQUEST,
+                    "Minecraft goal planning requires an owner-confirmed request",
+                )
+            return await self._minecraft_goal_call(payload.get("text"))
         if path == "/v1/chat/turns":
             return await self._chat_call("start_turn", payload)
         if path == "/v1/resources/models/control":
@@ -1509,6 +1522,80 @@ class ControlPlaneServer:
             raise PrimitiveError(RuntimeErrorCode.SAFETY_UNAVAILABLE, "safety policy returned invalid data")
         return result
 
+    async def _minecraft_goal_call(self, raw_text: Any) -> dict[str, Any]:
+        if self.minecraft_goal_planner is None:
+            raise PrimitiveError(
+                RuntimeErrorCode.MINECRAFT_GOAL_UNAVAILABLE,
+                "Minecraft goal planner is unavailable",
+            )
+        correlation_id = str(uuid4())
+        safety_request = {
+            "capability": "game.action",
+            "actorId": "owner.desktop",
+            "trustLevel": "owner",
+            "correlationId": correlation_id,
+            "sessionId": None,
+            "consume": False,
+        }
+        preflight = self._safety_call("evaluate", safety_request)
+        if preflight.get("decision") != "allow":
+            raise PrimitiveError(
+                RuntimeErrorCode.MINECRAFT_GOAL_DENIED,
+                "Minecraft actions are disabled or blocked by Safety",
+            )
+        try:
+            result = await self.minecraft_goal_planner.plan(raw_text)
+        except Exception as exc:
+            code = getattr(exc, "code", "")
+            if isinstance(code, str) and code.startswith("E_MINECRAFT_GOAL_"):
+                runtime_code = (
+                    RuntimeErrorCode.MINECRAFT_GOAL_BAD_REQUEST
+                    if code == "E_MINECRAFT_GOAL_BAD_REQUEST"
+                    else RuntimeErrorCode.MINECRAFT_GOAL_MODEL
+                )
+                raise PrimitiveError(
+                    runtime_code,
+                    getattr(exc, "detail", "Minecraft goal planning failed"),
+                ) from exc
+            if isinstance(code, str) and (
+                code.startswith("E_MODEL_") or code.startswith("E_RESOURCE_")
+            ):
+                raise PrimitiveError(
+                    RuntimeErrorCode.MINECRAFT_GOAL_UNAVAILABLE,
+                    "Minecraft goal model is unavailable",
+                ) from exc
+            raise
+        if not isinstance(result, dict):
+            raise PrimitiveError(
+                RuntimeErrorCode.MINECRAFT_GOAL_UNAVAILABLE,
+                "Minecraft goal planner returned invalid data",
+            )
+        if result == {
+            "state": "unsupported",
+            "goalId": None,
+            "label": "Mục tiêu này chưa có kỹ năng an toàn để thực hiện",
+            "planVersion": "minecraft.goal.v1",
+        }:
+            return result
+        if result != {
+            "state": "ready",
+            "goalId": "harvest.nearby-log.v1",
+            "label": "Chặt một khúc gỗ ở gần",
+            "planVersion": "minecraft.goal.v1",
+        }:
+            raise PrimitiveError(
+                RuntimeErrorCode.MINECRAFT_GOAL_MODEL,
+                "Minecraft goal planner selected an invalid goal",
+            )
+        consume_request = {**safety_request, "consume": True}
+        decision = self._safety_call("evaluate", consume_request)
+        if decision.get("decision") != "allow" or decision.get("consumed") is not True:
+            raise PrimitiveError(
+                RuntimeErrorCode.MINECRAFT_GOAL_DENIED,
+                "Minecraft action is no longer allowed by Safety",
+            )
+        return result
+
     async def _chat_call(self, operation: str, *args: Any) -> dict[str, Any]:
         if self.conversation_service is None:
             raise PrimitiveError(
@@ -2039,6 +2126,10 @@ class ControlPlaneServer:
             return HTTPStatus.NOT_FOUND
         if code is RuntimeErrorCode.CHAT_CONFLICT:
             return HTTPStatus.CONFLICT
+        if code is RuntimeErrorCode.MINECRAFT_GOAL_UNAVAILABLE:
+            return HTTPStatus.SERVICE_UNAVAILABLE
+        if code is RuntimeErrorCode.MINECRAFT_GOAL_DENIED:
+            return HTTPStatus.FORBIDDEN
         return HTTPStatus.BAD_REQUEST
 
     def _log_error(

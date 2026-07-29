@@ -125,10 +125,13 @@ export function validateSafetyControl(raw: unknown): JsonObject {
   }
   if (
     raw.action === "set_feature"
-    && (raw.feature !== "perception" || typeof raw.enabled !== "boolean")
+    && (
+      (raw.feature !== "perception" && raw.feature !== "gameAction")
+      || typeof raw.enabled !== "boolean"
+    )
   ) {
     throw new Error(
-      "E_DESKTOP_SAFETY_CONTROL: only the perception feature may be changed here",
+      "E_DESKTOP_SAFETY_CONTROL: only approved operator feature flags may be changed here",
     );
   }
   if (raw.action === "set_mute") {
@@ -137,7 +140,7 @@ export function validateSafetyControl(raw: unknown): JsonObject {
   if (raw.action === "set_feature") {
     return {
       action: raw.action,
-      feature: "perception",
+      feature: raw.feature,
       enabled: raw.enabled,
     };
   }
@@ -614,6 +617,30 @@ export async function requestChatStart(raw: unknown): Promise<JsonObject> {
     source: "owner.console",
     text: validateChatText(raw.text),
   });
+}
+
+export function validateMinecraftGoalText(raw: unknown): string {
+  if (typeof raw !== "string") {
+    throw new Error("E_DESKTOP_MINECRAFT_GOAL: goal text is invalid");
+  }
+  const text = raw.trim();
+  if (!text || new TextEncoder().encode(text).byteLength > 2_048) {
+    throw new Error("E_DESKTOP_MINECRAFT_GOAL: goal text is invalid");
+  }
+  return text;
+}
+
+export async function requestMinecraftGoalPlan(raw: unknown): Promise<JsonObject> {
+  return requestPath(
+    "POST",
+    "/v1/minecraft/goals/plan",
+    {
+      text: validateMinecraftGoalText(raw),
+      source: "owner.desktop",
+      ownerConfirmed: true,
+    },
+    15_000,
+  );
 }
 
 export async function requestChatTurn(turnId: unknown): Promise<JsonObject> {

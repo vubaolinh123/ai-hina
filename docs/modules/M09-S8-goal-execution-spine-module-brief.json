@@ -1,0 +1,75 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M09-S8-goal-execution-spine",
+  "module_id": "M09",
+  "objective": "Replace owner-facing manual Minecraft look/move controls with one owner-authorized natural-language goal path: the local text model may classify a goal into a fixed allowlist, while a deterministic Mineflayer goal executor performs only the reviewed implementation and returns verified game-state evidence.",
+  "non_goals": [
+    "Do not execute model-generated code, shell commands, JavaScript, Python, Minecraft commands, or arbitrary Mineflayer methods.",
+    "Do not expose goal execution to widget, public chat, viewer chat, game chat, books, signs, OCR, VLM, or any non-owner source.",
+    "Do not add pathfinding, combat, building, storage, crafting, retry loops, autonomous background play, or a claim that Hina can complete a full wood-to-axe chain in this slice.",
+    "Do not retain raw goal prompts, game text, screenshots, block scans, or world artifacts after a request completes.",
+    "Do not remove the deterministic internal skill contracts; only remove their direct owner Dashboard/IPC/HTTP execution surfaces."
+  ],
+  "base_sha": "80703344d823c3be661931acb5deb11673d2d71c",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "adapters/minecraft/src",
+    "adapters/minecraft/test",
+    "apps/core-runtime/src/hina_core/runtime",
+    "apps/core-runtime/tests",
+    "apps/desktop/electron",
+    "apps/desktop/src/App.vue",
+    "apps/desktop/src/dashboard/pages/MinecraftPage.vue",
+    "apps/desktop/src/dashboard/pages/RuntimePage.vue",
+    "apps/desktop/src/env.d.ts",
+    "apps/desktop/test",
+    "packages/contracts/openapi/control-plane.v1.json",
+    "packages/safety-policy/manifests/default.v1.json",
+    "packages/text-brain/src/hina_text_brain",
+    "packages/text-brain/tests",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "docs/modules/M09-minecraft-agent.md",
+    "docs/architecture/desktop-dashboard-modularity.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    "AGENTS.md",
+    ".claude",
+    "CLAUDE.md",
+    "docs/research/deep-research-report.md",
+    "var",
+    ".gitnexus"
+  ],
+  "contracts": [
+    "POST /v1/minecraft/goals/plan accepts only an owner-confirmed bounded text request and returns a fixed goal identifier or a fail-closed error.",
+    "POST /v1/minecraft/goals/execute accepts only the fixed goal identifier produced by the typed desktop bridge; direct manual skill routes are removed.",
+    "The model output is parsed as exact JSON with one allowlisted goal identifier and is never interpreted as executable code or a free-form action list.",
+    "Every executable goal has static preconditions, one attempt, a fixed timeout, cancellation through disconnect/emergency stop, and postcondition evidence from current game state."
+  ],
+  "allowed_dependencies": [],
+  "oss_candidates": [
+    "Mineflayer 4.37.1 already pinned in M09; use only its documented block lookup/dig API through Hina's internal port."
+  ],
+  "acceptance_criteria": [
+    "Minecraft Dashboard no longer renders manual look, cardinal move, coordinate move, entity-target-copy, or direct per-skill action controls.",
+    "The only gameplay request surface is an owner goal phrase; connection, read-only world status, explicit game-action permission, disconnect, and emergency stop remain available.",
+    "A model cannot select an unknown goal, attach arbitrary arguments, or cause an action when the gameAction feature is disabled, the source is not owner.desktop, or the planner output is malformed.",
+    "The first implemented goal is bounded to one nearby allowlisted log block, does not pathfind or retry, and reports success only after the chosen block no longer matches the verified target.",
+    "Disconnect and emergency stop cancel an active goal and invoke local stopDigging/clearControls before socket release.",
+    "No raw model plan, hidden reasoning, raw goal prompt, world scan, or block data is rendered, logged, persisted, or sent to TTS."
+  ],
+  "required_test_commands": [
+    "pnpm test:minecraft",
+    "pnpm test:desktop",
+    "python -m unittest discover -s packages/text-brain/tests -p test_minecraft_goals.py",
+    "python -m unittest discover -s apps/core-runtime/tests -p test_minecraft_goal_routes.py",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "goal_planner_model_budget": "same local Qwen checkpoint; bounded one JSON final without exposing hidden reasoning",
+    "goal_execution": "one attempt; nearby-log goal fixed timeout no greater than 12 seconds",
+    "retention": "in-memory request/result only; no raw inputs or game evidence files"
+  },
+  "output_artifact_dir": "artifacts/verification/M09/"
+}

@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, ref } from "vue";
 
 const props = defineProps<{
   status: MinecraftStatus | null;
   busy: boolean;
   notice: string;
+  gameActionEnabled: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -16,15 +17,7 @@ const emit = defineEmits<{
     version: string | null;
   }];
   disconnect: [];
-  look: [input: { yawRadians: number; pitchRadians: number }];
-  move: [input: {
-    direction: "north" | "east" | "south" | "west";
-    distanceBlocks: number;
-  }];
-  moveTo: [input: {
-    targetX: number;
-    targetZ: number;
-  }];
+  submitGoal: [input: { text: string }];
   emergencyStop: [];
 }>();
 
@@ -32,23 +25,26 @@ const host = ref("127.0.0.1");
 const port = ref(25565);
 const username = ref("Hina");
 const version = ref("");
-const yawRadians = ref(0);
-const pitchRadians = ref(0);
-const moveDirection = ref<"north" | "east" | "south" | "west">("north");
-const moveDistanceBlocks = ref(1);
-const moveTargetX = ref(0);
-const moveTargetZ = ref(0);
-const moveTargetInitialized = ref(false);
-
-type MinecraftNearbyEntity =
-  NonNullable<MinecraftStatus["world"]>["nearbyEntities"][number];
+const goalText = ref("");
 
 const online = computed(() => props.status?.phase === "online");
 const worldStateFresh = computed(
   () => props.status?.worldFreshness?.state === "fresh",
 );
-const canAct = computed(
-  () => !props.busy && online.value && worldStateFresh.value,
+const canConnect = computed(
+  () =>
+    !props.busy
+    && !props.status?.emergencyStopped
+    && (props.status === null || props.status.phase === "disconnected"),
+);
+const canRunGoal = computed(
+  () =>
+    !props.busy
+    && props.gameActionEnabled
+    && online.value
+    && worldStateFresh.value
+    && !props.status?.emergencyStopped
+    && goalText.value.trim().length > 0,
 );
 const currentPosition = computed(
   () => props.status?.world?.player?.position ?? null,
@@ -59,28 +55,21 @@ const inventoryEntries = computed(
 const nearbyEntities = computed(
   () => props.status?.world?.nearbyEntities ?? [],
 );
-const moveTargetDistance = computed(() => {
-  const position = currentPosition.value;
-  if (position === null) return null;
-  return Math.hypot(
-    Number(moveTargetX.value) - position.x,
-    Number(moveTargetZ.value) - position.z,
-  );
+const goalAvailabilityMessage = computed(() => {
+  if (!props.gameActionEnabled) {
+    return "Quyền hành động Minecraft đang tắt. Bật nó ở Runtime & Safety trước khi giao mục tiêu.";
+  }
+  if (!online.value) {
+    return "Kết nối Hina vào một LAN world hoặc server riêng trước khi giao mục tiêu.";
+  }
+  if (props.status?.emergencyStopped) {
+    return "Minecraft đang bị dừng khẩn cấp; hãy khởi động lại Desktop trước khi kết nối và giao mục tiêu mới.";
+  }
+  if (!worldStateFresh.value) {
+    return "Hina đang chờ physics tick mới từ game để không hành động dựa trên trạng thái cũ.";
+  }
+  return "Sẵn sàng: Hina sẽ phân tích câu lệnh, chọn đúng goal tĩnh đã duyệt, thực hiện một lần và hậu kiểm trong game.";
 });
-const moveTargetInRange = computed(
-  () =>
-    moveTargetDistance.value !== null &&
-    moveTargetDistance.value >= 0.25 &&
-    moveTargetDistance.value <= 2,
-);
-const canMoveTo = computed(() => canAct.value && moveTargetInRange.value);
-const canConnect = computed(
-  () =>
-    !props.busy &&
-    !props.status?.emergencyStopped &&
-    (props.status === null ||
-      props.status.phase === "disconnected"),
-);
 
 function requestConnect(): void {
   emit("connect", {
@@ -91,33 +80,15 @@ function requestConnect(): void {
   });
 }
 
+function submitGoal(): void {
+  const text = goalText.value.trim();
+  if (!text) return;
+  emit("submitGoal", { text });
+}
+
 function formatNumber(value: number): string {
   return Number.isFinite(value) ? value.toFixed(2) : "—";
 }
-
-function useNearbyTarget(): void {
-  const position = currentPosition.value;
-  if (position === null) return;
-  moveTargetX.value = Math.round((position.x + 1) * 100) / 100;
-  moveTargetZ.value = Math.round(position.z * 100) / 100;
-  moveTargetInitialized.value = true;
-}
-
-function useEntityTarget(entity: MinecraftNearbyEntity): void {
-  moveTargetX.value = Math.round(entity.position.x * 100) / 100;
-  moveTargetZ.value = Math.round(entity.position.z * 100) / 100;
-  moveTargetInitialized.value = true;
-}
-
-watch(
-  currentPosition,
-  (position) => {
-    if (position !== null && !moveTargetInitialized.value) {
-      useNearbyTarget();
-    }
-  },
-  { immediate: true },
-);
 </script>
 
 <template>
@@ -125,12 +96,11 @@ watch(
     <header class="page-heading">
       <div>
         <p class="eyebrow">M09 / MINECRAFT AGENT</p>
-        <h1>Điều khiển Minecraft có kiểm chứng</h1>
+        <h1>Giao mục tiêu Minecraft cho Hina</h1>
         <p>
-          Trang này dùng để bạn tự kết nối Hina vào một server Minecraft local
-          hoặc mạng LAN. Hiện Hina chỉ được xoay hướng nhìn và đi một bước ngắn
-          do chính bạn yêu cầu; chưa tự tìm đường, phá block, đánh quái hay chạy
-          lệnh do AI sinh ra.
+          Bạn chỉ cần nói việc muốn làm. Hina sẽ phân tích ý định, chọn một goal an toàn
+          từ allowlist, rồi controller Minecraft tự kiểm tra điều kiện và kết quả trong game.
+          Không còn nhập yaw, tọa độ hoặc bấm từng bước di chuyển.
         </p>
       </div>
       <button type="button" :disabled="props.busy" @click="emit('refresh')">
@@ -174,12 +144,12 @@ watch(
             <dd>{{ props.status?.target?.username ?? "Hina" }}</dd>
           </div>
           <div>
-            <dt>Dừng khẩn cấp</dt>
-            <dd>{{ props.status?.emergencyStopped ? "Đang khóa" : "Sẵn sàng" }}</dd>
+            <dt>Quyền hành động</dt>
+            <dd>{{ props.gameActionEnabled ? "Đã bật" : "Đang tắt" }}</dd>
           </div>
           <div>
-            <dt>Lần cập nhật</dt>
-            <dd>{{ props.status?.capturedAt ?? "—" }}</dd>
+            <dt>Dừng khẩn cấp</dt>
+            <dd>{{ props.status?.emergencyStopped ? "Đang khóa" : "Sẵn sàng" }}</dd>
           </div>
           <div>
             <dt>Độ tươi trạng thái game</dt>
@@ -195,15 +165,11 @@ watch(
               }}
             </dd>
           </div>
+          <div>
+            <dt>Lần cập nhật</dt>
+            <dd>{{ props.status?.capturedAt ?? "—" }}</dd>
+          </div>
         </dl>
-        <p
-          v-if="online && !worldStateFresh"
-          class="minecraft-error"
-          role="status"
-        >
-          Hina sẽ không xoay hoặc di chuyển cho tới khi nhận được trạng thái
-          physics mới từ server.
-        </p>
         <p v-if="props.status?.lastError" class="minecraft-error">
           {{ props.status.lastError.code }}: {{ props.status.lastError.message }}
         </p>
@@ -213,14 +179,13 @@ watch(
         <p class="eyebrow">KẾT NỐI DO CHỦ MÁY QUYẾT ĐỊNH</p>
         <h2>Server thử nghiệm</h2>
         <p class="minecraft-help">
-          Chỉ nhập <strong>localhost</strong> hoặc IP riêng trong LAN. Nút này
-          dùng tài khoản offline để thử nghiệm; không gửi mật khẩu hay token game.
+          Chỉ nhập <strong>localhost</strong> hoặc IP riêng trong LAN. Nút này dùng tài khoản
+          offline để thử nghiệm; không gửi mật khẩu hay token game.
         </p>
         <p class="minecraft-help">
-          <strong>Minecraft ở màn hình chính chưa phải là server.</strong> Nếu chơi
-          một mình, hãy vào world, nhấn <strong>Esc → Open to LAN → Start LAN World</strong>,
-          rồi nhập đúng cổng game vừa hiện trong chat (thường khác 25565). Cổng
-          <strong>25565</strong> thường chỉ dùng cho dedicated server tự chạy.
+          <strong>Minecraft ở màn hình chính chưa phải là server.</strong> Nếu chơi một mình,
+          vào world rồi chọn <strong>Esc → Open to LAN → Start LAN World</strong>, sau đó nhập
+          đúng cổng vừa hiện trong chat. Cổng 25565 thường chỉ là dedicated server tự chạy.
         </p>
         <div class="minecraft-form-grid">
           <label>
@@ -269,168 +234,49 @@ watch(
         </div>
       </article>
 
-      <article class="minecraft-card">
-        <p class="eyebrow">KỸ NĂNG ĐÃ ĐƯỢC DUYỆT</p>
-        <h2>Xoay hướng nhìn — look.v1</h2>
+      <article class="minecraft-card minecraft-card--goal">
+        <p class="eyebrow">MỤC TIÊU TỰ NHIÊN → HÀNH ĐỘNG ĐÃ KIỂM CHỨNG</p>
+        <h2>Bạn muốn Hina làm gì?</h2>
         <p class="minecraft-help">
-          Dùng để kiểm tra Hina có thể xoay camera tới góc yêu cầu hay không.
-          Thành công chỉ được báo sau khi hệ thống đọc lại đúng góc trong game.
+          Gõ một câu tự nhiên, ví dụ: <strong>“Hina, chặt một khúc gỗ ở gần đi.”</strong>
+          Model chỉ được chọn goal trong danh sách an toàn cố định; không tạo code, lệnh,
+          tọa độ hay chuỗi thao tác tự do.
         </p>
-        <div class="minecraft-form-grid">
-          <label>
-            Ngang / yaw (−3.14 đến 3.14)
-            <input
-              v-model.number="yawRadians"
-              type="number"
-              min="-3.14"
-              max="3.14"
-              step="0.1"
-              :disabled="!canAct"
-            />
-          </label>
-          <label>
-            Dọc / pitch (−1.57 đến 1.57)
-            <input
-              v-model.number="pitchRadians"
-              type="number"
-              min="-1.57"
-              max="1.57"
-              step="0.1"
-              :disabled="!canAct"
-            />
-          </label>
-        </div>
-        <button
-          type="button"
-          :disabled="!canAct"
-          @click="emit('look', {
-            yawRadians: Number(yawRadians),
-            pitchRadians: Number(pitchRadians),
-          })"
-        >
-          Yêu cầu Hina nhìn
-        </button>
-      </article>
-
-      <article class="minecraft-card">
-        <p class="eyebrow">KỸ NĂNG ĐÃ ĐƯỢC DUYỆT</p>
-        <h2>Đi một bước ngắn — move.step.v1</h2>
-        <p class="minecraft-help">
-          Chỉ di chuyển theo bốn hướng cố định, từ 0,25 đến 2 block và không tự
-          tìm đường vòng. Hina dừng ngay khi đủ khoảng cách; nếu bị chặn, lệch
-          hướng hoặc không còn đứng trên đất thì hệ thống báo thất bại.
-        </p>
-        <div class="minecraft-form-grid">
-          <label>
-            Hướng
-            <select
-              v-model="moveDirection"
-              :disabled="!canAct"
-            >
-              <option value="north">Bắc</option>
-              <option value="east">Đông</option>
-              <option value="south">Nam</option>
-              <option value="west">Tây</option>
-            </select>
-          </label>
-          <label>
-            Quãng đường (0,25–2 block)
-            <input
-              v-model.number="moveDistanceBlocks"
-              type="number"
-              min="0.25"
-              max="2"
-              step="0.25"
-              :disabled="!canAct"
-            />
-          </label>
-        </div>
-        <button
-          type="button"
-          :disabled="!canAct"
-          @click="emit('move', {
-            direction: moveDirection,
-            distanceBlocks: Number(moveDistanceBlocks),
-          })"
-        >
-          Cho Hina đi bước ngắn
-        </button>
-      </article>
-
-      <article class="minecraft-card">
-        <p class="eyebrow">KỸ NĂNG ĐÃ ĐƯỢC DUYỆT</p>
-        <h2>Đi tới tọa độ rất gần — move.to.v1</h2>
-        <p class="minecraft-help">
-          Dùng khi bạn muốn Hina quay mặt rồi đi thẳng tới một điểm X/Z cách vị
-          trí hiện tại từ 0,25 đến 2 block. Đây chỉ là một bước thẳng có hậu
-          kiểm; Hina không tự tìm đường, né vật cản, nhảy hoặc thử lại.
-        </p>
-        <div class="minecraft-form-grid">
-          <label>
-            Tọa độ X đích
-            <input
-              v-model.number="moveTargetX"
-              type="number"
-              min="-30000000"
-              max="30000000"
-              step="0.05"
-              :disabled="!canAct"
-            />
-          </label>
-          <label>
-            Tọa độ Z đích
-            <input
-              v-model.number="moveTargetZ"
-              type="number"
-              min="-30000000"
-              max="30000000"
-              step="0.05"
-              :disabled="!canAct"
-            />
-          </label>
-        </div>
-        <p class="minecraft-help">
-          Khoảng cách hiện tại:
-          {{
-            moveTargetDistance === null
-              ? "chưa có vị trí"
-              : `${moveTargetDistance.toFixed(3)} block`
-          }}.
-          {{
-            moveTargetInRange
-              ? "Đủ gần để thử."
-              : "Hãy chọn điểm cách Hina từ 0,25 đến 2 block."
-          }}
+        <label class="minecraft-goal-input">
+          Mục tiêu cho Hina
+          <textarea
+            v-model="goalText"
+            maxlength="480"
+            rows="4"
+            :disabled="props.busy"
+            placeholder="Ví dụ: Hina, chặt một khúc gỗ ở gần đi."
+          />
+        </label>
+        <p class="minecraft-goal-state" :data-ready="canRunGoal">
+          {{ goalAvailabilityMessage }}
         </p>
         <div class="minecraft-actions">
-          <button
-            type="button"
-            :disabled="!canMoveTo"
-            @click="emit('moveTo', {
-              targetX: Number(moveTargetX),
-              targetZ: Number(moveTargetZ),
-            })"
-          >
-            Quay và đi tới X/Z
-          </button>
-          <button
-            type="button"
-            class="secondary"
-            :disabled="!canAct"
-            @click="useNearbyTarget"
-          >
-            Gợi ý điểm cách 1 block
+          <button type="button" :disabled="!canRunGoal" @click="submitGoal">
+            Giao mục tiêu cho Hina
           </button>
         </div>
+        <aside class="minecraft-scope">
+          <strong>Khả năng chạy thật hiện tại</strong>
+          <span>
+            Hina có thể chặt đúng một khúc gỗ allowlist ở trong tầm với, một lần, rồi xác minh
+            block đó đã biến mất. Chưa có tự đi tìm đường, chế rìu, trang bị rìu, lặp thu thập
+            hay thử lại khi thất bại. Những phần đó sẽ được thêm sau dưới dạng state machine
+            có kiểm chứng, không phải lời hứa từ model.
+          </span>
+        </aside>
       </article>
 
       <article class="minecraft-card minecraft-card--danger">
         <p class="eyebrow">AN TOÀN</p>
         <h2>Dừng khẩn cấp riêng cho Minecraft</h2>
         <p class="minecraft-help">
-          Dùng khi Hina có hành vi không mong muốn. Nút này hủy kỹ năng đang chạy,
-          nhả mọi phím điều khiển và ngắt socket. Sau khi bấm, phải khởi động lại
-          ứng dụng Desktop mới kết nối lại được.
+          Dùng khi Hina có hành vi không mong muốn. Nút này hủy goal đang chạy, nhả mọi phím
+          điều khiển và ngắt socket. Sau đó phải khởi động lại Desktop mới kết nối lại được.
         </p>
         <button
           type="button"
@@ -448,8 +294,8 @@ watch(
         <p class="eyebrow">WORLD STATE ĐÃ GIỚI HẠN</p>
         <h2>Hina đang thấy gì trong game?</h2>
         <p class="minecraft-help">
-          Chỉ hiển thị trạng thái người chơi, vật phẩm và thực thể gần. Chat,
-          sách, biển hiệu, NBT và dữ liệu plugin không được đưa vào đây.
+          Chỉ hiển thị trạng thái người chơi, vật phẩm và thực thể gần. Chat, sách, biển hiệu,
+          NBT và dữ liệu plugin không được đưa vào đây hoặc tự đưa vào model.
         </p>
       </div>
       <div v-if="props.status?.world?.player" class="minecraft-world-data">
@@ -504,27 +350,21 @@ watch(
         <section class="minecraft-world-detail" aria-labelledby="minecraft-entities-title">
           <h3 id="minecraft-entities-title">Thực thể gần Hina</h3>
           <p class="minecraft-help">
-            Tên và loại thực thể đến trực tiếp từ game, chỉ để bạn quan sát. Nút X/Z
-            chỉ điền ô mục tiêu phía trên; Hina không tự di chuyển cho tới khi bạn bấm
-            nút xác nhận riêng.
+            Tên và loại thực thể đến trực tiếp từ game, chỉ để bạn quan sát. Không có nút
+            biến thực thể hoặc tọa độ này thành lệnh di chuyển thủ công.
           </p>
           <ul v-if="nearbyEntities.length" class="minecraft-list">
-            <li v-for="entity in nearbyEntities" :key="entity.id" class="minecraft-entity">
-              <div>
-                <strong>{{ entity.name }}</strong>
-                <span>
-                  #{{ entity.id }} · {{ entity.type }} · cách
-                  {{ formatNumber(entity.distance) }} block
-                </span>
-                <span>
-                  X {{ formatNumber(entity.position.x) }} · Y
-                  {{ formatNumber(entity.position.y) }} · Z
-                  {{ formatNumber(entity.position.z) }}
-                </span>
-              </div>
-              <button type="button" class="secondary" @click="useEntityTarget(entity)">
-                Dùng X/Z này
-              </button>
+            <li v-for="entity in nearbyEntities" :key="entity.id">
+              <strong>{{ entity.name }}</strong>
+              <span>
+                #{{ entity.id }} · {{ entity.type }} · cách
+                {{ formatNumber(entity.distance) }} block
+              </span>
+              <span>
+                X {{ formatNumber(entity.position.x) }} · Y
+                {{ formatNumber(entity.position.y) }} · Z
+                {{ formatNumber(entity.position.z) }}
+              </span>
             </li>
           </ul>
           <p v-else class="minecraft-empty">Chưa có thực thể nào trong snapshot gần Hina.</p>
@@ -590,6 +430,10 @@ watch(
   border-color: #47765f;
 }
 
+.minecraft-card--goal {
+  border-color: #8a6547;
+}
+
 .minecraft-card--danger {
   border-color: #754651;
 }
@@ -635,7 +479,8 @@ watch(
   margin: 18px 0;
 }
 
-.minecraft-form-grid label {
+.minecraft-form-grid label,
+.minecraft-goal-input {
   color: #c9becb;
   display: grid;
   font-size: 13px;
@@ -643,13 +488,45 @@ watch(
 }
 
 .minecraft-form-grid input,
-.minecraft-form-grid select {
+.minecraft-goal-input textarea {
   background: #0e0c12;
   border: 1px solid #443a49;
   color: #f8edf4;
   font: inherit;
   min-width: 0;
   padding: 11px 12px;
+}
+
+.minecraft-goal-input {
+  margin-top: 18px;
+}
+
+.minecraft-goal-input textarea {
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.minecraft-goal-state {
+  border-left: 3px solid #8a6547;
+  color: #c8b7aa;
+  line-height: 1.5;
+  margin: 14px 0;
+  padding: 8px 10px;
+}
+
+.minecraft-goal-state[data-ready="true"] {
+  border-color: #4eaa7c;
+  color: #b9dfca;
+}
+
+.minecraft-scope {
+  border-top: 1px solid #4a3d32;
+  color: #b8adba;
+  display: grid;
+  gap: 7px;
+  line-height: 1.55;
+  margin-top: 18px;
+  padding-top: 16px;
 }
 
 .minecraft-actions {
@@ -681,7 +558,8 @@ button.danger {
 }
 
 button:disabled,
-input:disabled {
+input:disabled,
+textarea:disabled {
   cursor: not-allowed;
   opacity: 0.48;
 }
@@ -737,21 +615,6 @@ input:disabled {
   overflow-wrap: anywhere;
 }
 
-.minecraft-list .minecraft-entity {
-  align-items: center;
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-
-.minecraft-entity > div {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-
-.minecraft-entity button {
-  align-self: center;
-}
-
 .minecraft-empty {
   align-self: center;
   color: #9d91a3;
@@ -759,16 +622,14 @@ input:disabled {
 
 @media (max-width: 980px) {
   .minecraft-grid,
-  .minecraft-world {
+  .minecraft-world,
+  .minecraft-form-grid {
     grid-template-columns: 1fr;
   }
 
-  .minecraft-list .minecraft-entity {
-    grid-template-columns: 1fr;
-  }
-
-  .minecraft-entity button {
-    justify-self: start;
+  .page-heading {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 </style>

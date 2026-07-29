@@ -22,6 +22,7 @@ from .memory import (
     MemoryTurn,
     ShortTermMemory,
 )
+from .minecraft_goals import MinecraftGoalPlanner
 from .persona import PersonaSpec, RelationshipState, render_system_prompt
 from .resource import (
     MIN_VRAM_HEADROOM_MIB,
@@ -55,6 +56,7 @@ __all__ = [
     "ModelGateway",
     "ModelGatewayConfig",
     "MemoryTurn",
+    "MinecraftGoalPlanner",
     "NvidiaSmiTelemetry",
     "ProviderHealth",
     "ProviderKind",

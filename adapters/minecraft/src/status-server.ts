@@ -179,10 +179,7 @@ function exactOwnerAction(
   }
 }
 
-function exactSkillRequest(
-  value: unknown,
-  skillId: "look.v1" | "move.step.v1" | "move.to.v1",
-): unknown {
+function exactGoalRequest(value: unknown): unknown {
   if (
     typeof value !== "object" ||
     value === null ||
@@ -190,25 +187,23 @@ function exactSkillRequest(
   ) {
     throw new MinecraftAdapterError(
       "E_MINECRAFT_CONTROL_SCHEMA",
-      "Minecraft skill request must be an object",
+      "Minecraft goal request must be an object",
     );
   }
   const raw = value as Record<string, unknown>;
   if (
-    Object.keys(raw).sort().join(",") !==
-      "arguments,ownerConfirmed,skillId,source" ||
+    Object.keys(raw).sort().join(",") !== "goalId,ownerConfirmed,source" ||
     raw.source !== OWNER_SOURCE ||
     raw.ownerConfirmed !== true ||
-    raw.skillId !== skillId
+    raw.goalId !== "harvest.nearby-log.v1"
   ) {
     throw new MinecraftAdapterError(
       "E_MINECRAFT_CONTROL_SCHEMA",
-      "Minecraft skill authority fields are invalid",
+      "Minecraft goal authority fields are invalid",
     );
   }
   return {
-    skillId: raw.skillId,
-    arguments: raw.arguments,
+    goalId: raw.goalId,
   };
 }
 
@@ -304,32 +299,8 @@ async function handleRequest(
       });
       return;
     }
-    if (pathname === "/v1/minecraft/skills/look") {
-      const execution = await controller.executeSkill(
-        exactSkillRequest(body, "look.v1"),
-      );
-      sendJson(response, 200, {
-        status: execution.status,
-        execution,
-        minecraft: controller.getStatus(),
-      });
-      return;
-    }
-    if (pathname === "/v1/minecraft/skills/move-step") {
-      const execution = await controller.executeSkill(
-        exactSkillRequest(body, "move.step.v1"),
-      );
-      sendJson(response, 200, {
-        status: execution.status,
-        execution,
-        minecraft: controller.getStatus(),
-      });
-      return;
-    }
-    if (pathname === "/v1/minecraft/skills/move-to") {
-      const execution = await controller.executeSkill(
-        exactSkillRequest(body, "move.to.v1"),
-      );
+    if (pathname === "/v1/minecraft/goals/execute") {
+      const execution = await controller.executeGoal(exactGoalRequest(body));
       sendJson(response, 200, {
         status: execution.status,
         execution,

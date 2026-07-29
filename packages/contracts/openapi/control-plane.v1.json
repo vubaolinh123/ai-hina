@@ -130,6 +130,43 @@
         }
       }
     },
+    "/v1/minecraft/goals/plan": {
+      "post": {
+        "operationId": "planOwnerMinecraftGoal",
+        "description": "Owner-only natural-language classification into one fixed Minecraft goal. The model cannot return code, coordinates, commands or a free-form action sequence.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MinecraftGoalPlanRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "A bounded static goal identifier or an unsupported result. Execution remains in the typed Minecraft adapter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MinecraftGoalPlanResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The owner-confirmed request is malformed."
+          },
+          "403": {
+            "description": "Safety has disabled or blocked game actions."
+          },
+          "503": {
+            "description": "The local goal-planning model is unavailable."
+          }
+        }
+      }
+    },
     "/v1/chat/status": {
       "get": {
         "operationId": "getChatStatus",
@@ -1942,6 +1979,63 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "MinecraftGoalPlanRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "text",
+          "source",
+          "ownerConfirmed"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "source": {
+            "const": "owner.desktop"
+          },
+          "ownerConfirmed": {
+            "const": true
+          }
+        }
+      },
+      "MinecraftGoalPlanResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "state",
+          "goalId",
+          "label",
+          "planVersion"
+        ],
+        "properties": {
+          "state": {
+            "enum": [
+              "ready",
+              "unsupported"
+            ]
+          },
+          "goalId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "harvest.nearby-log.v1",
+              null
+            ]
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 160
+          },
+          "planVersion": {
+            "const": "minecraft.goal.v1"
           }
         }
       },

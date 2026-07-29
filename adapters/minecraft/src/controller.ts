@@ -2,12 +2,16 @@ import { performance } from "node:perf_hooks";
 
 import {
   MinecraftAdapterError,
+  MINECRAFT_HARVEST_MAX_DISTANCE_BLOCKS,
   MINECRAFT_WORLD_FRESHNESS_MAX_AGE_MS,
   type EmergencyStopResult,
   type MinecraftAdapterErrorView,
   type MinecraftConnectionConfig,
   type MinecraftControllerStatus,
   type MinecraftDisconnectResult,
+  type MinecraftGoalExecutionResult,
+  type MinecraftGoalRequest,
+  type MinecraftHarvestTarget,
   type MinecraftLookSkillRequest,
   type MinecraftMovementSkillExecutionResult,
   type MinecraftMovementSkillRequest,
@@ -35,6 +39,11 @@ import {
   MOVE_TO_SKILL_DEFINITION,
   validateMinecraftSkillRequest,
 } from "./skill-registry.js";
+import {
+  HARVEST_NEARBY_LOG_GOAL_DEFINITION,
+  isHarvestableLogName,
+  validateMinecraftGoalRequest,
+} from "./goal-registry.js";
 
 type Clock = () => Date;
 
@@ -56,6 +65,18 @@ function payloadMessage(payload: unknown, fallback: string): string {
     return payload;
   }
   return fallback;
+}
+
+function isBoundedHarvestTarget(value: MinecraftHarvestTarget): boolean {
+  return (
+    isHarvestableLogName(value.name)
+    && Number.isFinite(value.distanceBlocks)
+    && value.distanceBlocks >= 0
+    && value.distanceBlocks <= MINECRAFT_HARVEST_MAX_DISTANCE_BLOCKS
+    && Number.isFinite(value.position.x)
+    && Number.isFinite(value.position.y)
+    && Number.isFinite(value.position.z)
+  );
 }
 
 export class MinecraftController {
@@ -487,6 +508,247 @@ export class MinecraftController {
             "Player rotation did not reach the verified target",
           ),
     );
+  }
+
+  async executeGoal(requestValue: unknown): Promise<MinecraftGoalExecutionResult> {
+    const request = validateMinecraftGoalRequest(requestValue);
+    const executionId = ++this.#skillExecutionSequence;
+    const startedAt = this.#clock();
+    const started = performance.now();
+    const finish = (
+      status: MinecraftGoalExecutionResult["status"],
+      preconditionPassed: boolean,
+      target: MinecraftHarvestTarget | null,
+      targetStillPresent: boolean | null,
+      error: MinecraftAdapterErrorView | null,
+    ): MinecraftGoalExecutionResult => ({
+      schemaVersion: 1,
+      executionId,
+      goalId: request.goalId,
+      status,
+      startedAt: startedAt.toISOString(),
+      finishedAt: this.#clock().toISOString(),
+      durationMs: Math.round((performance.now() - started) * 1_000) / 1_000,
+      attempts: 1,
+      precondition: { passed: preconditionPassed },
+      target,
+      postcondition: {
+        kind: "targeted_allowlisted_log_absent",
+        passed: targetStillPresent === false,
+        targetStillPresent,
+      },
+      error,
+    });
+
+    if (this.#activeSkillAbort !== null) {
+      return finish(
+        "failed",
+        false,
+        null,
+        null,
+        errorView(
+          "E_MINECRAFT_GOAL_BUSY",
+          "Another deterministic Minecraft action is already active",
+        ),
+      );
+    }
+    if (
+      this.#emergencyStopped ||
+      this.#phase !== "online" ||
+      this.#bot === null
+    ) {
+      return finish(
+        "failed",
+        false,
+        null,
+        null,
+        errorView(
+          "E_MINECRAFT_GOAL_PRECONDITION",
+          "Minecraft controller must be online and not emergency-stopped",
+        ),
+      );
+    }
+
+    const bot = this.#bot;
+    const worldFreshness = this.#readWorldFreshness(bot);
+    if (worldFreshness.state !== "fresh") {
+      const stale = this.#staleWorldStateError(worldFreshness);
+      return finish(
+        "failed",
+        false,
+        null,
+        null,
+        errorView("E_MINECRAFT_GOAL_STALE_STATE", stale.message),
+      );
+    }
+    let before: MinecraftWorldState;
+    try {
+      before = bot.captureWorldState();
+    } catch (error) {
+      return finish(
+        "failed",
+        false,
+        null,
+        null,
+        errorView(
+          "E_MINECRAFT_GOAL_PRECONDITION",
+          payloadMessage(error, "Player state is unavailable"),
+        ),
+      );
+    }
+    if (before.player === null || !before.player.onGround) {
+      return finish(
+        "failed",
+        false,
+        null,
+        null,
+        errorView(
+          "E_MINECRAFT_GOAL_PRECONDITION",
+          "harvest.nearby-log.v1 requires an on-ground player state",
+        ),
+      );
+    }
+
+    let target: MinecraftHarvestTarget | null;
+    try {
+      target = bot.findNearestHarvestableLog(
+        MINECRAFT_HARVEST_MAX_DISTANCE_BLOCKS,
+      );
+    } catch (error) {
+      return finish(
+        "failed",
+        false,
+        null,
+        null,
+        errorView(
+          "E_MINECRAFT_GOAL_PRECONDITION",
+          payloadMessage(error, "Could not inspect nearby harvest targets"),
+        ),
+      );
+    }
+    if (target === null) {
+      return finish(
+        "failed",
+        false,
+        null,
+        null,
+        errorView(
+          "E_MINECRAFT_GOAL_PRECONDITION",
+          "No allowlisted log is within reach; Hina will not pathfind or retry",
+        ),
+      );
+    }
+    if (!isBoundedHarvestTarget(target)) {
+      return finish(
+        "failed",
+        false,
+        null,
+        null,
+        errorView(
+          "E_MINECRAFT_GOAL_PRECONDITION",
+          "Harvest target is outside the fixed allowlist or reach bound",
+        ),
+      );
+    }
+
+    const abortController = new AbortController();
+    this.#activeSkillAbort = abortController;
+    let timeout: NodeJS.Timeout | null = null;
+    let removeAbortListener = (): void => {};
+    let failed = false;
+    try {
+      const timeoutPromise = new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(() => {
+          const error = new MinecraftAdapterError(
+            "E_MINECRAFT_GOAL_TIMEOUT",
+            `harvest.nearby-log.v1 exceeded ${HARVEST_NEARBY_LOG_GOAL_DEFINITION.timeoutMs} ms`,
+          );
+          abortController.abort(error);
+          reject(error);
+        }, HARVEST_NEARBY_LOG_GOAL_DEFINITION.timeoutMs);
+        timeout.unref();
+      });
+      const abortPromise = new Promise<never>((_resolve, reject) => {
+        const onAbort = (): void => {
+          const reason = abortController.signal.reason;
+          reject(
+            reason instanceof MinecraftAdapterError
+              ? reason
+              : new MinecraftAdapterError(
+                  "E_MINECRAFT_GOAL_CANCELLED",
+                  "harvest.nearby-log.v1 was cancelled",
+                ),
+          );
+        };
+        abortController.signal.addEventListener("abort", onAbort, { once: true });
+        removeAbortListener = () =>
+          abortController.signal.removeEventListener("abort", onAbort);
+      });
+      await Promise.race([
+        bot.digHarvestableLog(target),
+        timeoutPromise,
+        abortPromise,
+      ]);
+    } catch (error) {
+      failed = true;
+      const view =
+        error instanceof MinecraftAdapterError
+          ? errorView(error.code, error.message)
+          : errorView(
+              "E_MINECRAFT_GOAL_ACTION",
+              payloadMessage(error, "Mineflayer harvest action failed"),
+            );
+      return finish("failed", true, target, null, view);
+    } finally {
+      if (timeout !== null) {
+        clearTimeout(timeout);
+      }
+      removeAbortListener();
+      if (failed || abortController.signal.aborted) {
+        try {
+          await bot.stopDigging();
+        } catch {
+          // The bounded failure result remains authoritative.
+        }
+      }
+      try {
+        bot.clearControlStates();
+      } catch {
+        // The deterministic action never leaves key controls asserted.
+      }
+      if (this.#activeSkillAbort === abortController) {
+        this.#activeSkillAbort = null;
+      }
+    }
+
+    let targetStillPresent: boolean;
+    try {
+      targetStillPresent = bot.isHarvestableLogPresent(target);
+    } catch (error) {
+      return finish(
+        "failed",
+        true,
+        target,
+        null,
+        errorView(
+          "E_MINECRAFT_GOAL_POSTCONDITION",
+          payloadMessage(error, "Could not verify the targeted log after harvesting"),
+        ),
+      );
+    }
+    if (targetStillPresent) {
+      return finish(
+        "failed",
+        true,
+        target,
+        true,
+        errorView(
+          "E_MINECRAFT_GOAL_POSTCONDITION",
+          "Targeted log is still present after one bounded harvest attempt",
+        ),
+      );
+    }
+    return finish("succeeded", true, target, false, null);
   }
 
   async #executeMoveStepSkill(
@@ -927,7 +1189,7 @@ export class MinecraftController {
     this.#activeSkillAbort?.abort(
       new MinecraftAdapterError(
         "E_MINECRAFT_SKILL_CANCELLED",
-        "look.v1 was cancelled by owner disconnect",
+        "Active Minecraft action was cancelled by owner disconnect",
       ),
     );
     this.#cancelConnection?.(
@@ -983,7 +1245,7 @@ export class MinecraftController {
     this.#activeSkillAbort?.abort(
       new MinecraftAdapterError(
         "E_MINECRAFT_SKILL_CANCELLED",
-        "look.v1 was cancelled by emergency stop",
+        "Active Minecraft action was cancelled by emergency stop",
       ),
     );
     this.#phase = "stopping";

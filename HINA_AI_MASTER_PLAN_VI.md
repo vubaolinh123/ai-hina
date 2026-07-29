@@ -1840,6 +1840,23 @@ và Desktop production build/67 tests pass, không khởi động game/server, g
 model/GPU/Cloud hoặc tạo world artifact; manual UI acceptance tiếp tục do owner
 thực hiện trên LAN world.
 
+M09-S8 thay toàn bộ bề mặt gameplay thủ công của owner bằng một đường đi mục
+tiêu tự nhiên: owner Desktop gửi một câu, cùng checkpoint text cục bộ chỉ phân
+loại nó thành đúng một goal ID tĩnh hoặc từ chối, rồi Mineflayer controller tự
+chạy implementation đã review. Dashboard, preload, Electron IPC và HTTP service
+không còn lộ `look`, bước cardinal, form X/Z hay nút copy thực thể thành lệnh.
+Các primitive deterministic cũ chỉ còn implementation nội bộ, không có route
+hay UI trực tiếp. Goal chạy thật đầu tiên là `harvest.nearby-log.v1`: chỉ đúng
+một log allowlist trong tầm với ≤4,5 block, một attempt ≤12 giây, không
+pathfind/craft/equip/retry và chỉ báo thành công sau khi postcondition xác minh
+block mục tiêu đã biến mất. Safety `game.action` vẫn tắt mặc định và cần owner
+bật rõ ràng; widget, viewer, game text, sign/book, VLM/OCR và model output tự do
+không có authority. Model không bao giờ sinh/chạy code, shell, JavaScript,
+Mineflayer method hay chuỗi action. Gate hẹp pass: Minecraft build/54 tests,
+Desktop production build/67 tests + typecheck, text-goal 4 tests, core goal-route
+4 tests, Safety 22 tests và contracts pass. Chưa có real-server/model smoke;
+owner acceptance trên LAN/resettable server vẫn pending.
+
 ### Embodied Gate
 
 Chạy full voice + avatar + memory + Minecraft trong local server, kiểm:

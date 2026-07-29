@@ -4,6 +4,7 @@ export const MINECRAFT_SNAPSHOT_LIMITS = Object.freeze({
 });
 
 export const MINECRAFT_WORLD_FRESHNESS_MAX_AGE_MS = 1_000;
+export const MINECRAFT_HARVEST_MAX_DISTANCE_BLOCKS = 4.5;
 
 export type MinecraftConnectionPhase =
   | "disconnected"
@@ -289,6 +290,59 @@ export type MinecraftMovementSkillExecutionResult =
 export type MinecraftSkillExecutionResult =
   | MinecraftLookSkillExecutionResult
   | MinecraftMovementSkillExecutionResult;
+
+/**
+ * High-level goals are deliberately separate from the internal skill set.
+ * The model may choose only one of these identifiers; it never supplies
+ * coordinates, Mineflayer calls, scripts, or an arbitrary action sequence.
+ */
+export type MinecraftGoalId = "harvest.nearby-log.v1";
+
+export interface MinecraftGoalDefinition {
+  id: MinecraftGoalId;
+  version: 1;
+  description: string;
+  preconditions: readonly string[];
+  timeoutMs: number;
+  budget: {
+    maximumAttempts: 1;
+  };
+  destructive: true;
+  postcondition: {
+    kind: "targeted_allowlisted_log_absent";
+  };
+}
+
+export interface MinecraftGoalRequest {
+  goalId: "harvest.nearby-log.v1";
+}
+
+export interface MinecraftHarvestTarget {
+  name: string;
+  position: MinecraftVector;
+  distanceBlocks: number;
+}
+
+export interface MinecraftGoalExecutionResult {
+  schemaVersion: 1;
+  executionId: number;
+  goalId: MinecraftGoalId;
+  status: "succeeded" | "failed";
+  startedAt: string;
+  finishedAt: string;
+  durationMs: number;
+  attempts: 1;
+  precondition: {
+    passed: boolean;
+  };
+  target: MinecraftHarvestTarget | null;
+  postcondition: {
+    passed: boolean;
+    kind: "targeted_allowlisted_log_absent";
+    targetStillPresent: boolean | null;
+  };
+  error: MinecraftAdapterErrorView | null;
+}
 
 export class MinecraftAdapterError extends Error {
   readonly code: string;

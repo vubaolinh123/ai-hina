@@ -21,6 +21,7 @@ function createControllerStub() {
     connectedAt: null,
     capturedAt: "2026-07-29T00:00:00.000Z",
     world: null,
+    worldFreshness: null,
     lastError: null,
   });
   return {
@@ -40,22 +41,29 @@ function createControllerStub() {
         dispatchDurationMs: 1,
       };
     },
-    async executeSkill(request) {
-      calls.push({
-        action:
-          request.skillId === "move.step.v1"
-            ? "move"
-            : request.skillId === "move.to.v1"
-              ? "move_to"
-              : "look",
-        request,
-      });
+    async executeGoal(request) {
+      calls.push({ action: "goal", request });
       return {
         schemaVersion: 1,
         executionId: 1,
-        skillId: "look.v1",
+        goalId: "harvest.nearby-log.v1",
         status: "succeeded",
+        startedAt: "2026-07-29T00:00:00.000Z",
+        finishedAt: "2026-07-29T00:00:00.001Z",
+        durationMs: 1,
         attempts: 1,
+        precondition: { passed: true },
+        target: {
+          name: "oak_log",
+          position: { x: 1, y: 64, z: 1 },
+          distanceBlocks: 1,
+        },
+        postcondition: {
+          kind: "targeted_allowlisted_log_absent",
+          passed: true,
+          targetStillPresent: false,
+        },
+        error: null,
       };
     },
     async emergencyStop() {
@@ -138,10 +146,10 @@ test("serves bounded read-only status on loopback without control authority", as
   assert.equal(status.body.schemaVersion, 1);
   assert.equal(status.body.world, null);
 
-  const mutation = await request(server, "/v1/minecraft/disconnect", {
+  const mutation = await request(server, "/v1/minecraft/goals/execute", {
     method: "POST",
     body: {
-      action: "disconnect",
+      goalId: "harvest.nearby-log.v1",
       ownerConfirmed: true,
       source: "owner.desktop",
     },
@@ -154,7 +162,7 @@ test("serves bounded read-only status on loopback without control authority", as
   assert.equal(missing.body.errorCode, "E_MINECRAFT_STATUS_NOT_FOUND");
 });
 
-test("authenticated service exposes only fixed owner operations", async (context) => {
+test("authenticated service exposes only fixed owner operations and one static goal", async (context) => {
   const controller = createControllerStub();
   const server = await startMinecraftStatusServer(controller, {
     port: 0,
@@ -177,61 +185,20 @@ test("authenticated service exposes only fixed owner operations", async (context
   assert.equal(connect.status, 200);
   assert.equal(controller.calls[0].config.statusPort, server.port);
 
-  const look = await request(server, "/v1/minecraft/skills/look", {
+  const goal = await request(server, "/v1/minecraft/goals/execute", {
     method: "POST",
     token: TOKEN,
     body: {
-      arguments: { yawRadians: 0.4, pitchRadians: -0.2 },
+      goalId: "harvest.nearby-log.v1",
       ownerConfirmed: true,
-      skillId: "look.v1",
       source: "owner.desktop",
     },
   });
-  assert.equal(look.status, 200);
+  assert.equal(goal.status, 200);
+  assert.equal(goal.body.status, "succeeded");
   assert.deepEqual(controller.calls[1], {
-    action: "look",
-    request: {
-      arguments: { yawRadians: 0.4, pitchRadians: -0.2 },
-      skillId: "look.v1",
-    },
-  });
-
-  const move = await request(server, "/v1/minecraft/skills/move-step", {
-    method: "POST",
-    token: TOKEN,
-    body: {
-      arguments: { direction: "east", distanceBlocks: 1 },
-      ownerConfirmed: true,
-      skillId: "move.step.v1",
-      source: "owner.desktop",
-    },
-  });
-  assert.equal(move.status, 200);
-  assert.deepEqual(controller.calls[2], {
-    action: "move",
-    request: {
-      arguments: { direction: "east", distanceBlocks: 1 },
-      skillId: "move.step.v1",
-    },
-  });
-
-  const moveTo = await request(server, "/v1/minecraft/skills/move-to", {
-    method: "POST",
-    token: TOKEN,
-    body: {
-      arguments: { targetX: 10.5, targetZ: -2.25 },
-      ownerConfirmed: true,
-      skillId: "move.to.v1",
-      source: "owner.desktop",
-    },
-  });
-  assert.equal(moveTo.status, 200);
-  assert.deepEqual(controller.calls[3], {
-    action: "move_to",
-    request: {
-      arguments: { targetX: 10.5, targetZ: -2.25 },
-      skillId: "move.to.v1",
-    },
+    action: "goal",
+    request: { goalId: "harvest.nearby-log.v1" },
   });
 
   const disconnect = await request(server, "/v1/minecraft/disconnect", {
@@ -257,11 +224,11 @@ test("authenticated service exposes only fixed owner operations", async (context
   assert.equal(emergency.status, 200);
   assert.deepEqual(
     controller.calls.map((call) => call.action),
-    ["connect", "look", "move", "move_to", "disconnect", "emergency_stop"],
+    ["connect", "goal", "disconnect", "emergency_stop"],
   );
 });
 
-test("mutation authentication, schema and payload bounds fail closed", async (context) => {
+test("goal mutations reject bad authority, schema and retired manual routes", async (context) => {
   const controller = createControllerStub();
   const server = await startMinecraftStatusServer(controller, {
     port: 0,
@@ -269,22 +236,22 @@ test("mutation authentication, schema and payload bounds fail closed", async (co
   });
   context.after(() => server.close());
 
-  const wrongToken = await request(server, "/v1/minecraft/disconnect", {
+  const wrongToken = await request(server, "/v1/minecraft/goals/execute", {
     method: "POST",
     token: `${TOKEN}x`,
     body: {
-      action: "disconnect",
+      goalId: "harvest.nearby-log.v1",
       ownerConfirmed: true,
       source: "owner.desktop",
     },
   });
   assert.equal(wrongToken.status, 401);
 
-  const extraField = await request(server, "/v1/minecraft/disconnect", {
+  const extraField = await request(server, "/v1/minecraft/goals/execute", {
     method: "POST",
     token: TOKEN,
     body: {
-      action: "disconnect",
+      goalId: "harvest.nearby-log.v1",
       ownerConfirmed: true,
       source: "owner.desktop",
       injected: true,
@@ -293,35 +260,29 @@ test("mutation authentication, schema and payload bounds fail closed", async (co
   assert.equal(extraField.status, 400);
   assert.equal(extraField.body.errorCode, "E_MINECRAFT_CONTROL_SCHEMA");
 
-  const crossRouteSkill = await request(server, "/v1/minecraft/skills/look", {
+  const unknownGoal = await request(server, "/v1/minecraft/goals/execute", {
     method: "POST",
     token: TOKEN,
     body: {
-      arguments: { direction: "north", distanceBlocks: 1 },
+      goalId: "move.to.v1",
       ownerConfirmed: true,
-      skillId: "move.step.v1",
       source: "owner.desktop",
     },
   });
-  assert.equal(crossRouteSkill.status, 400);
-  assert.equal(crossRouteSkill.body.errorCode, "E_MINECRAFT_CONTROL_SCHEMA");
+  assert.equal(unknownGoal.status, 400);
+  assert.equal(unknownGoal.body.errorCode, "E_MINECRAFT_CONTROL_SCHEMA");
 
-  const crossMoveRoute = await request(
-    server,
-    "/v1/minecraft/skills/move-to",
-    {
-      method: "POST",
-      token: TOKEN,
-      body: {
-        arguments: { direction: "north", distanceBlocks: 1 },
-        ownerConfirmed: true,
-        skillId: "move.step.v1",
-        source: "owner.desktop",
-      },
+  const retiredManualRoute = await request(server, "/v1/minecraft/skills/move-step", {
+    method: "POST",
+    token: TOKEN,
+    body: {
+      goalId: "harvest.nearby-log.v1",
+      ownerConfirmed: true,
+      source: "owner.desktop",
     },
-  );
-  assert.equal(crossMoveRoute.status, 400);
-  assert.equal(crossMoveRoute.body.errorCode, "E_MINECRAFT_CONTROL_SCHEMA");
+  });
+  assert.equal(retiredManualRoute.status, 404);
+  assert.equal(retiredManualRoute.body.errorCode, "E_MINECRAFT_STATUS_NOT_FOUND");
 
   const oversized = await request(server, "/v1/minecraft/connect", {
     method: "POST",

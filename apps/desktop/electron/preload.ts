@@ -37,9 +37,7 @@ const CHANNELS = Object.freeze({
   minecraftStatus: "hina:minecraft:status",
   minecraftConnect: "hina:minecraft:connect",
   minecraftDisconnect: "hina:minecraft:disconnect",
-  minecraftLook: "hina:minecraft:look",
-  minecraftMove: "hina:minecraft:move",
-  minecraftMoveTo: "hina:minecraft:move-to",
+  minecraftGoal: "hina:minecraft:goal",
   minecraftEmergencyStop: "hina:minecraft:emergency-stop",
   captureSources: "hina:capture:sources",
   captureSubmit: "hina:capture:submit",
@@ -142,12 +140,8 @@ const hinaDesktop = Object.freeze({
   connectMinecraft: (input: unknown) =>
     ipcRenderer.invoke(CHANNELS.minecraftConnect, input),
   disconnectMinecraft: () => ipcRenderer.invoke(CHANNELS.minecraftDisconnect),
-  lookMinecraft: (input: unknown) =>
-    ipcRenderer.invoke(CHANNELS.minecraftLook, input),
-  moveMinecraft: (input: unknown) =>
-    ipcRenderer.invoke(CHANNELS.minecraftMove, input),
-  moveMinecraftTo: (input: unknown) =>
-    ipcRenderer.invoke(CHANNELS.minecraftMoveTo, input),
+  runMinecraftGoal: (input: unknown) =>
+    ipcRenderer.invoke(CHANNELS.minecraftGoal, input),
   emergencyStopMinecraft: () =>
     ipcRenderer.invoke(CHANNELS.minecraftEmergencyStop),
   listScreenCaptureSources: () => ipcRenderer.invoke(CHANNELS.captureSources),

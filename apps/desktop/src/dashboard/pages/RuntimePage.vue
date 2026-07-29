@@ -4,12 +4,14 @@ const props = defineProps<{
   widgetStatus: WidgetStatus | null;
   safety: SafetyStatus | null;
   busy: boolean;
+  gameActionEnabled: boolean;
 }>();
 
 const emit = defineEmits<{
   widgetControl: [action: "show" | "hide" | "reset_position"];
   toggleMute: [];
   toggleEmergency: [];
+  toggleMinecraftGameAction: [];
 }>();
 </script>
 
@@ -117,6 +119,24 @@ const emit = defineEmits<{
             {{ props.safety?.state.emergencyStopped ? "Khôi phục hoạt động" : "Dừng khẩn cấp" }}
           </button>
         </div>
+        <div class="runtime-minecraft-permission">
+          <div>
+            <span>Quyền giao mục tiêu Minecraft</span>
+            <strong>{{ props.gameActionEnabled ? "Đang bật" : "Đang tắt" }}</strong>
+          </div>
+          <p>
+            Đây chỉ mở quyền để chủ máy giao một mục tiêu bằng câu tự nhiên trên trang Minecraft.
+            Nó không mở nút điều khiển hướng, tọa độ hay lệnh tự do; controller vẫn chỉ nhận goal
+            nằm trong allowlist và tự hậu kiểm kết quả.
+          </p>
+          <button
+            class="secondary"
+            :disabled="props.busy || !props.safety"
+            @click="emit('toggleMinecraftGameAction')"
+          >
+            {{ props.gameActionEnabled ? "Tắt quyền mục tiêu Minecraft" : "Bật quyền mục tiêu Minecraft" }}
+          </button>
+        </div>
       </section>
     </div>
 
@@ -126,6 +146,39 @@ const emit = defineEmits<{
       <span><strong>Đặt lại vị trí:</strong> khi widget bị kéo ra mép màn hình hoặc khó tìm.</span>
       <span><strong>Mute:</strong> giữ chat/text hoạt động nhưng không phát voice.</span>
       <span><strong>Dừng khẩn cấp:</strong> dùng khi muốn Hina dừng nhận hành động mới ngay; bấm lần nữa để khôi phục.</span>
+      <span><strong>Quyền mục tiêu Minecraft:</strong> chỉ bật khi bạn đã sẵn sàng để Hina thực hiện các goal Minecraft đã được kiểm chứng.</span>
     </aside>
   </section>
 </template>
+
+<style scoped>
+.runtime-minecraft-permission {
+  border-top: 1px solid #3b3440;
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+  padding-top: 16px;
+}
+
+.runtime-minecraft-permission > div {
+  align-items: baseline;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.runtime-minecraft-permission span {
+  color: #b8adba;
+  font-size: 13px;
+}
+
+.runtime-minecraft-permission strong {
+  color: #78d8a3;
+}
+
+.runtime-minecraft-permission p {
+  color: #b8adba;
+  line-height: 1.5;
+  margin: 0;
+}
+</style>

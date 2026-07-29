@@ -1,5 +1,6 @@
 import type {
   MinecraftConnectionConfig,
+  MinecraftHarvestTarget,
   MinecraftWorldFreshness,
   MinecraftWorldState,
 } from "./contracts.js";
@@ -18,6 +19,11 @@ export interface MinecraftBotPort {
   waitForPhysicsTick(signal: AbortSignal): Promise<void>;
   clearControlStates(): void;
   stopDigging(): Promise<void>;
+  findNearestHarvestableLog(
+    maximumDistanceBlocks: number,
+  ): MinecraftHarvestTarget | null;
+  digHarvestableLog(target: MinecraftHarvestTarget): Promise<void>;
+  isHarvestableLogPresent(target: MinecraftHarvestTarget): boolean;
   quit(reason: string): void;
 }
 

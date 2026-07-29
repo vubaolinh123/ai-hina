@@ -88,6 +88,7 @@ class TransportValueTests(unittest.TestCase):
                 "/v1/metrics",
                 "/v1/model/status",
                 "/v1/resources/models/control",
+                "/v1/minecraft/goals/plan",
                 "/v1/chat/status",
                 "/v1/chat/turns",
                 "/v1/chat/turns/{turnId}",
@@ -121,6 +122,12 @@ class TransportValueTests(unittest.TestCase):
                 "/v1/memory/records/{memoryId}/delete",
                 "/v1/memory/rebuild",
             },
+        )
+        minecraft_goal = openapi["paths"]["/v1/minecraft/goals/plan"]["post"]
+        self.assertEqual(minecraft_goal["operationId"], "planOwnerMinecraftGoal")
+        self.assertEqual(
+            minecraft_goal["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/MinecraftGoalPlanRequest",
         )
         self.assertEqual(asyncapi["asyncapi"], "3.0.0")
         self.assertEqual(

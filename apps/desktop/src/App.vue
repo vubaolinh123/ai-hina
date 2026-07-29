@@ -162,6 +162,9 @@ const selectedScreenCaptureSource = computed(
 const perceptionFeatureEnabled = computed(
   () => safety.value?.state.featureFlags?.perception === true,
 );
+const minecraftGameActionEnabled = computed(
+  () => safety.value?.state.featureFlags?.gameAction === true,
+);
 const selectableVisionModels = computed<VisionModelOption[]>(() => {
   const models = [...visionModels.value];
   const persisted = visionProviderStatus.value?.persistence;
@@ -584,6 +587,33 @@ async function togglePerceptionFeature(): Promise<void> {
     );
   } finally {
     screenCaptureBusy.value = false;
+  }
+}
+
+async function toggleMinecraftGameActionFeature(): Promise<void> {
+  if (minecraftBusy.value || !safety.value) return;
+  const nextEnabled = !minecraftGameActionEnabled.value;
+  minecraftBusy.value = true;
+  try {
+    await window.hinaDesktop.applySafetyControl({
+      action: "set_feature",
+      feature: "gameAction",
+      enabled: nextEnabled,
+    });
+    await refreshSafety();
+    minecraftNotice.value = nextEnabled
+      ? "Đã mở quyền mục tiêu Minecraft. Hina vẫn chỉ thực hiện goal đã có trong allowlist an toàn."
+      : "Đã tắt quyền mục tiêu Minecraft. Hina sẽ không phân tích hoặc thực thi action mới.";
+  } catch (error) {
+    minecraftNotice.value = error instanceof Error
+      ? error.message
+      : "E_DESKTOP_MINECRAFT_SAFETY";
+    console.error(
+      "[hina-minecraft-dashboard] E_DESKTOP_MINECRAFT_SAFETY",
+      minecraftNotice.value,
+    );
+  } finally {
+    minecraftBusy.value = false;
   }
 }
 
@@ -1199,7 +1229,7 @@ async function connectMinecraft(input: {
   try {
     const result = await window.hinaDesktop.connectMinecraft(input);
     minecraftStatus.value = result.minecraft;
-    minecraftNotice.value = "Hina đã kết nối. Bạn có thể thử kỹ năng xoay hướng nhìn.";
+    minecraftNotice.value = "Hina đã kết nối. Hãy bật quyền mục tiêu Minecraft ở Runtime & Safety, rồi giao một mục tiêu bằng câu tự nhiên.";
   } catch (error) {
     minecraftNotice.value = describeMinecraftConnectError(error);
     console.error(
@@ -1232,99 +1262,27 @@ async function disconnectMinecraft(): Promise<void> {
   }
 }
 
-async function lookMinecraft(input: {
-  yawRadians: number;
-  pitchRadians: number;
-}): Promise<void> {
+async function runMinecraftGoal(input: { text: string }): Promise<void> {
   if (minecraftBusy.value) return;
   minecraftBusy.value = true;
+  minecraftNotice.value = "Hina đang phân tích mục tiêu theo allowlist an toàn…";
   try {
-    const result = await window.hinaDesktop.lookMinecraft(input);
+    const result = await window.hinaDesktop.runMinecraftGoal(input.text);
     minecraftStatus.value = result.minecraft;
-    minecraftNotice.value =
-      result.execution.status === "succeeded"
-        ? "Hina đã xoay đúng góc và hệ thống đã kiểm tra lại trạng thái trong game."
-        : `${result.execution.error?.code ?? "E_MINECRAFT_SKILL"}: ${
-            result.execution.error?.message ?? "Kỹ năng chưa đạt hậu kiểm."
-          }`;
+    if (result.plan.state === "unsupported") {
+      minecraftNotice.value = "Hina hiểu đây là một mục tiêu Minecraft, nhưng kỹ năng an toàn tương ứng chưa được mở. Hiện Hina mới thực hiện thật được: chặt một khúc gỗ ở gần trong tầm với.";
+    } else if (result.execution?.status === "succeeded") {
+      minecraftNotice.value = "Hina đã chặt một khúc gỗ ở gần và hậu kiểm xác nhận block mục tiêu không còn ở vị trí đó.";
+    } else {
+      minecraftNotice.value = `${result.execution?.error?.code ?? "E_MINECRAFT_GOAL"}: ${
+        result.execution?.error?.message ?? "Mục tiêu chưa đạt hậu kiểm."
+      }`;
+    }
   } catch (error) {
     minecraftNotice.value =
-      error instanceof Error ? error.message : "E_DESKTOP_MINECRAFT_LOOK";
+      error instanceof Error ? error.message : "E_DESKTOP_MINECRAFT_GOAL";
     console.error(
-      "[hina-minecraft-dashboard] E_DESKTOP_MINECRAFT_LOOK",
-      minecraftNotice.value,
-    );
-  } finally {
-    minecraftBusy.value = false;
-    await refreshMinecraft();
-  }
-}
-
-async function moveMinecraft(input: {
-  direction: "north" | "east" | "south" | "west";
-  distanceBlocks: number;
-}): Promise<void> {
-  if (minecraftBusy.value) return;
-  minecraftBusy.value = true;
-  try {
-    const result = await window.hinaDesktop.moveMinecraft(input);
-    minecraftStatus.value = result.minecraft;
-    const evidence = formatMinecraftMovementEvidence(result);
-    minecraftNotice.value =
-      result.execution.status === "succeeded"
-        ? `Hina đã di chuyển đúng hướng và quãng đường đã qua hậu kiểm. ${evidence}.`
-        : `${result.execution.error?.code ?? "E_MINECRAFT_SKILL"}: ${
-            result.execution.error?.message ?? "Di chuyển chưa đạt hậu kiểm."
-          } · ${evidence}.`;
-  } catch (error) {
-    minecraftNotice.value =
-      error instanceof Error ? error.message : "E_DESKTOP_MINECRAFT_MOVE";
-    console.error(
-      "[hina-minecraft-dashboard] E_DESKTOP_MINECRAFT_MOVE",
-      minecraftNotice.value,
-    );
-  } finally {
-    minecraftBusy.value = false;
-    await refreshMinecraft();
-  }
-}
-
-function formatMinecraftMovementEvidence(
-  result: MinecraftMovementResponse,
-): string {
-  const progress = result.execution.postcondition.progress;
-  const remaining = result.execution.postcondition.observed?.remainingDistanceBlocks;
-  return (
-    `${progress.physicsTicksObserved} physics tick · ` +
-    `${progress.stagnantTicksObserved} tick đứng yên · ` +
-    `tiến tối đa ${progress.maximumForwardProgressBlocks.toFixed(3)} block` +
-    (remaining === undefined
-      ? ""
-      : ` · cách đích ${remaining.toFixed(3)} block`)
-  );
-}
-
-async function moveMinecraftTo(input: {
-  targetX: number;
-  targetZ: number;
-}): Promise<void> {
-  if (minecraftBusy.value) return;
-  minecraftBusy.value = true;
-  try {
-    const result = await window.hinaDesktop.moveMinecraftTo(input);
-    minecraftStatus.value = result.minecraft;
-    const evidence = formatMinecraftMovementEvidence(result);
-    minecraftNotice.value =
-      result.execution.status === "succeeded"
-        ? `Hina đã quay và đi tới tọa độ gần; vị trí đã qua hậu kiểm. ${evidence}.`
-        : `${result.execution.error?.code ?? "E_MINECRAFT_SKILL"}: ${
-            result.execution.error?.message ?? "Chưa tới được tọa độ yêu cầu."
-          } · ${evidence}.`;
-  } catch (error) {
-    minecraftNotice.value =
-      error instanceof Error ? error.message : "E_DESKTOP_MINECRAFT_MOVE_TO";
-    console.error(
-      "[hina-minecraft-dashboard] E_DESKTOP_MINECRAFT_MOVE_TO",
+      "[hina-minecraft-dashboard] E_DESKTOP_MINECRAFT_GOAL",
       minecraftNotice.value,
     );
   } finally {
@@ -1690,12 +1648,11 @@ onBeforeUnmount(() => {
       :status="minecraftStatus"
       :busy="minecraftBusy"
       :notice="minecraftNotice"
+      :game-action-enabled="minecraftGameActionEnabled"
       @refresh="refreshMinecraft"
       @connect="connectMinecraft"
       @disconnect="disconnectMinecraft"
-      @look="lookMinecraft"
-      @move="moveMinecraft"
-      @move-to="moveMinecraftTo"
+      @submit-goal="runMinecraftGoal"
       @emergency-stop="emergencyStopMinecraft"
     />
 
@@ -1751,10 +1708,12 @@ onBeforeUnmount(() => {
       :runtime="runtime"
       :widget-status="widgetStatus"
       :safety="safety"
-      :busy="busy"
+      :busy="busy || minecraftBusy"
+      :game-action-enabled="minecraftGameActionEnabled"
       @widget-control="applyWidgetControl"
       @toggle-mute="toggleMute"
       @toggle-emergency="toggleEmergency"
+      @toggle-minecraft-game-action="toggleMinecraftGameActionFeature"
     />
   </main>
 </template>

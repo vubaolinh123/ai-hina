@@ -86,3 +86,21 @@ navigation, context meter and sticky-chat boundary. Run:
 pnpm --filter @hina/desktop typecheck
 pnpm test:desktop
 ```
+
+## Minecraft goal boundary (M09-S8)
+
+- `pages/MinecraftPage.vue` is a presentation/intent page. It can collect one
+  bounded natural-language owner goal and display a bounded status/world snapshot,
+  but it has no direct network, Mineflayer, Electron, model, secret or filesystem
+  access.
+- The page deliberately contains no yaw/pitch, cardinal movement, distance, X/Z,
+  target-copy or per-skill gameplay controls. Connection, read-only status,
+  emergency stop and the explicit Safety permission remain separate owner actions.
+- `App.vue` invokes a typed Electron bridge. Electron main first asks the local
+  text service to select one fixed allowlisted goal, then calls the separate
+  Mineflayer service only with that exact ID. Raw model output, hidden reasoning,
+  free-form action lists and arbitrary arguments never cross into the renderer or
+  controller.
+- New Minecraft capability must add a reviewed goal/state-machine module with
+  typed preconditions, cancellation, bounded attempt/timeout and game-state
+  postcondition evidence. Do not rebuild manual UI controls as a shortcut.

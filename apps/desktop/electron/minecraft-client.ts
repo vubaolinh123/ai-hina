@@ -137,80 +137,17 @@ export function validateMinecraftConnectInput(value: unknown): JsonObject {
   };
 }
 
-export function validateMinecraftLookInput(value: unknown): JsonObject {
+export function validateMinecraftGoalInput(value: unknown): JsonObject {
   if (
     !isObject(value) ||
-    Object.keys(value).sort().join(",") !== "pitchRadians,yawRadians" ||
-    typeof value.yawRadians !== "number" ||
-    !Number.isFinite(value.yawRadians) ||
-    value.yawRadians < -Math.PI ||
-    value.yawRadians > Math.PI ||
-    typeof value.pitchRadians !== "number" ||
-    !Number.isFinite(value.pitchRadians) ||
-    value.pitchRadians < -Math.PI / 2 ||
-    value.pitchRadians > Math.PI / 2
+    Object.keys(value).sort().join(",") !== "goalId" ||
+    value.goalId !== "harvest.nearby-log.v1"
   ) {
-    throw new Error("E_DESKTOP_MINECRAFT_INPUT: look angles are invalid");
+    throw new Error("E_DESKTOP_MINECRAFT_GOAL: goal is not in the fixed allowlist");
   }
   return {
-    arguments: {
-      yawRadians: value.yawRadians,
-      pitchRadians: value.pitchRadians,
-    },
+    goalId: "harvest.nearby-log.v1",
     ownerConfirmed: true,
-    skillId: "look.v1",
-    source: SOURCE,
-  };
-}
-
-export function validateMinecraftMoveInput(value: unknown): JsonObject {
-  if (
-    !isObject(value) ||
-    Object.keys(value).sort().join(",") !== "direction,distanceBlocks" ||
-    (value.direction !== "north" &&
-      value.direction !== "east" &&
-      value.direction !== "south" &&
-      value.direction !== "west") ||
-    typeof value.distanceBlocks !== "number" ||
-    !Number.isFinite(value.distanceBlocks) ||
-    value.distanceBlocks < 0.25 ||
-    value.distanceBlocks > 2
-  ) {
-    throw new Error("E_DESKTOP_MINECRAFT_INPUT: movement request is invalid");
-  }
-  return {
-    arguments: {
-      direction: value.direction,
-      distanceBlocks: value.distanceBlocks,
-    },
-    ownerConfirmed: true,
-    skillId: "move.step.v1",
-    source: SOURCE,
-  };
-}
-
-export function validateMinecraftMoveToInput(value: unknown): JsonObject {
-  if (
-    !isObject(value) ||
-    Object.keys(value).sort().join(",") !== "targetX,targetZ" ||
-    typeof value.targetX !== "number" ||
-    !Number.isFinite(value.targetX) ||
-    Math.abs(value.targetX) > 30_000_000 ||
-    typeof value.targetZ !== "number" ||
-    !Number.isFinite(value.targetZ) ||
-    Math.abs(value.targetZ) > 30_000_000
-  ) {
-    throw new Error(
-      "E_DESKTOP_MINECRAFT_INPUT: target coordinates are invalid",
-    );
-  }
-  return {
-    arguments: {
-      targetX: value.targetX,
-      targetZ: value.targetZ,
-    },
-    ownerConfirmed: true,
-    skillId: "move.to.v1",
     source: SOURCE,
   };
 }
@@ -229,6 +166,8 @@ async function requestMinecraft(
     options.timeoutMilliseconds ??
     (path === "/v1/minecraft/connect"
       ? CONNECT_TIMEOUT_MILLISECONDS
+      : path === "/v1/minecraft/goals/execute"
+        ? 15_000
       : DEFAULT_TIMEOUT_MILLISECONDS);
   if (
     !Number.isInteger(timeoutMilliseconds) ||
@@ -342,38 +281,14 @@ export function requestMinecraftDisconnect(
   );
 }
 
-export function requestMinecraftLook(
+export function requestMinecraftGoal(
   input: unknown,
   options: RequestOptions = {},
 ): Promise<JsonObject> {
   return requestMinecraft(
-    "/v1/minecraft/skills/look",
+    "/v1/minecraft/goals/execute",
     "POST",
-    validateMinecraftLookInput(input),
-    options,
-  );
-}
-
-export function requestMinecraftMove(
-  input: unknown,
-  options: RequestOptions = {},
-): Promise<JsonObject> {
-  return requestMinecraft(
-    "/v1/minecraft/skills/move-step",
-    "POST",
-    validateMinecraftMoveInput(input),
-    options,
-  );
-}
-
-export function requestMinecraftMoveTo(
-  input: unknown,
-  options: RequestOptions = {},
-): Promise<JsonObject> {
-  return requestMinecraft(
-    "/v1/minecraft/skills/move-to",
-    "POST",
-    validateMinecraftMoveToInput(input),
+    validateMinecraftGoalInput(input),
     options,
   );
 }

@@ -222,3 +222,48 @@ Fast evidence:
 - `pnpm test:desktop`: production build và 67 tests pass.
 - Không khởi động server/game, không gọi model/GPU/Cloud, không tạo screenshot
   hoặc lưu world artifact; owner sẽ kiểm tra UI trong phiên Minecraft thật.
+
+## M09-S8 — Mục tiêu tự nhiên, controller xác minh
+
+- Theo quyết định owner, Dashboard không còn là bảng điều khiển yaw/pitch,
+  hướng, khoảng cách, X/Z hay các nút hành động vi mô. Các thao tác đó cũng bị
+  gỡ khỏi preload, Electron IPC và HTTP control surface; primitive typed cũ chỉ
+  còn ở bên trong controller để có thể được ghép vào state machine đã review ở
+  slice sau.
+- Owner chỉ nhập một câu mục tiêu. Text brain dùng đúng checkpoint local hiện
+  có để chọn **một** goal ID từ allowlist cố định hoặc trả `unsupported`. Output
+  phải là exact JSON, không được có reasoning, code, tool call, tọa độ hay action
+  sequence; malformed/unknown output fail closed. Prompt, output thô và hidden
+  reasoning không được persist, render hay đưa sang TTS.
+- Goal chạy thật đầu tiên là `harvest.nearby-log.v1`: controller chỉ tìm một log
+  normal allowlist trong tầm với tối đa 4,5 block, yêu cầu player on-ground và
+  physics state còn mới, dig đúng một lần với timeout 12 giây, rồi re-read block
+  mục tiêu để xác minh đã biến mất. Không có tự đi tìm cây, craft/equip rìu,
+  combat, loop, retry hay autonomous play.
+- Safety `game.action` vẫn tắt mặc định. Chỉ owner Desktop bật rõ ràng trên
+  Runtime & Safety mới có thể plan; sau đó Electron main mới gọi typed goal
+  endpoint. Widget, viewer/public chat, Minecraft game text/sign/book, OCR/VLM
+  và model không có quyền gọi gameplay action.
+- Disconnect hoặc emergency stop abort goal đang chạy, gọi `stopDigging`, nhả
+  controls rồi mới release socket. Kết quả chỉ là evidence game state đã giới
+  hạn, không ghi world scan hay artifact ra đĩa.
+
+### Cách owner thử sau khi pull
+
+1. Chạy `pnpm start:desktop`, vào **Runtime & Safety** và bật **Quyền giao mục
+   tiêu Minecraft**.
+2. Vào **Minecraft**, kết nối LAN world/server riêng như trước. Đợi trạng thái
+   physics là **Mới** và đặt Hina đứng trên mặt đất, cạnh một log thường trong
+   tầm với.
+3. Nhập: `Hina, chặt một khúc gỗ ở gần đi.` rồi bấm **Giao mục tiêu cho Hina**.
+4. Chỉ coi là thành công khi Dashboard báo hậu kiểm block đã biến mất. Nếu log
+   ở xa hoặc không có, Hina phải từ chối/thất bại an toàn, không tự đi tìm.
+
+Fast evidence:
+
+- `pnpm test:minecraft`: adapter build và 54 tests pass.
+- `pnpm test:desktop`: production build và 67 tests pass; Desktop typecheck pass.
+- Text-goal planner 4 tests, core goal-route 4 tests, Safety 22 tests và contract
+  suite đều pass.
+- Chưa kết nối LAN/server thật hoặc gọi provider model thật trong gate này;
+  manual real-world acceptance vẫn do owner thực hiện.

@@ -1,12 +1,18 @@
 export {
   MinecraftAdapterError,
   MINECRAFT_SNAPSHOT_LIMITS,
+  MINECRAFT_HARVEST_MAX_DISTANCE_BLOCKS,
   MINECRAFT_WORLD_FRESHNESS_MAX_AGE_MS,
   type EmergencyStopResult,
   type MinecraftConnectionConfig,
   type MinecraftControllerStatus,
   type MinecraftCardinalDirection,
   type MinecraftDisconnectResult,
+  type MinecraftGoalDefinition,
+  type MinecraftGoalExecutionResult,
+  type MinecraftGoalId,
+  type MinecraftGoalRequest,
+  type MinecraftHarvestTarget,
   type MinecraftLookSkillRequest,
   type MinecraftMoveSkillRequest,
   type MinecraftMoveToSkillRequest,
@@ -24,6 +30,12 @@ export {
   validatePrivateMinecraftHost,
 } from "./config.js";
 export { MinecraftController } from "./controller.js";
+export {
+  getMinecraftGoalRegistry,
+  HARVEST_NEARBY_LOG_GOAL_DEFINITION,
+  isHarvestableLogName,
+  validateMinecraftGoalRequest,
+} from "./goal-registry.js";
 export {
   getMinecraftSkillRegistry,
   LOOK_SKILL_DEFINITION,

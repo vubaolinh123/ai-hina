@@ -17,6 +17,7 @@ import {
   requestChatStart,
   requestChatStatus,
   requestChatTurn,
+  requestMinecraftGoalPlan,
   requestPerceptionClear,
   requestPerceptionSnapshot,
   requestSpeechSynthesis,
@@ -77,9 +78,7 @@ import {
   requestMinecraftConnect,
   requestMinecraftDisconnect,
   requestMinecraftEmergencyStop,
-  requestMinecraftLook,
-  requestMinecraftMove,
-  requestMinecraftMoveTo,
+  requestMinecraftGoal,
   requestMinecraftStatus,
 } from "./minecraft-client";
 
@@ -120,9 +119,7 @@ const CHANNELS = Object.freeze({
   minecraftStatus: "hina:minecraft:status",
   minecraftConnect: "hina:minecraft:connect",
   minecraftDisconnect: "hina:minecraft:disconnect",
-  minecraftLook: "hina:minecraft:look",
-  minecraftMove: "hina:minecraft:move",
-  minecraftMoveTo: "hina:minecraft:move-to",
+  minecraftGoal: "hina:minecraft:goal",
   minecraftEmergencyStop: "hina:minecraft:emergency-stop",
   captureSources: "hina:capture:sources",
   captureSubmit: "hina:capture:submit",
@@ -158,6 +155,56 @@ type CaptureProgress = {
   height?: number;
   bytes?: number;
 };
+
+type MinecraftGoalPlan =
+  | {
+    state: "ready";
+    goalId: "harvest.nearby-log.v1";
+    label: "Chặt một khúc gỗ ở gần";
+    planVersion: "minecraft.goal.v1";
+  }
+  | {
+    state: "unsupported";
+    goalId: null;
+    label: "Mục tiêu này chưa có kỹ năng an toàn để thực hiện";
+    planVersion: "minecraft.goal.v1";
+  };
+
+function validateMinecraftGoalPlan(value: unknown): MinecraftGoalPlan {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("E_DESKTOP_MINECRAFT_GOAL: planner response is invalid");
+  }
+  const raw = value as Record<string, unknown>;
+  if (
+    raw.state === "ready"
+    && raw.goalId === "harvest.nearby-log.v1"
+    && raw.label === "Chặt một khúc gỗ ở gần"
+    && raw.planVersion === "minecraft.goal.v1"
+    && Object.keys(raw).length === 4
+  ) {
+    return {
+      state: "ready",
+      goalId: "harvest.nearby-log.v1",
+      label: "Chặt một khúc gỗ ở gần",
+      planVersion: "minecraft.goal.v1",
+    };
+  }
+  if (
+    raw.state === "unsupported"
+    && raw.goalId === null
+    && raw.label === "Mục tiêu này chưa có kỹ năng an toàn để thực hiện"
+    && raw.planVersion === "minecraft.goal.v1"
+    && Object.keys(raw).length === 4
+  ) {
+    return {
+      state: "unsupported",
+      goalId: null,
+      label: "Mục tiêu này chưa có kỹ năng an toàn để thực hiện",
+      planVersion: "minecraft.goal.v1",
+    };
+  }
+  throw new Error("E_DESKTOP_MINECRAFT_GOAL: planner selected an invalid goal");
+}
 
 function captureElapsedMilliseconds(startedAt: number): number {
   return Math.max(0, Math.round((performance.now() - startedAt) * 10) / 10);
@@ -903,52 +950,27 @@ function registerIpcHandlers(): void {
       throw error;
     }
   });
-  ipcMain.handle(CHANNELS.minecraftLook, async (event, input: unknown) => {
+  ipcMain.handle(CHANNELS.minecraftGoal, async (event, input: unknown) => {
     if (assertTrustedSender(event) !== "operator") {
       throw new Error("E_DESKTOP_MINECRAFT_AUTHORITY: operator window required");
     }
     try {
-      return await requestMinecraftLook(input);
+      const plan = validateMinecraftGoalPlan(await requestMinecraftGoalPlan(input));
+      if (plan.state === "unsupported") {
+        return {
+          status: "unsupported",
+          plan,
+          minecraft: await requestMinecraftStatus(),
+        };
+      }
+      const execution = await requestMinecraftGoal({ goalId: plan.goalId });
+      return { ...execution, plan };
     } catch (error) {
       console.error(
         `[hina-desktop:minecraft:ERROR] ${
           error instanceof Error
             ? error.message.slice(0, 256)
-            : "Minecraft look failed"
-        }`,
-      );
-      throw error;
-    }
-  });
-  ipcMain.handle(CHANNELS.minecraftMove, async (event, input: unknown) => {
-    if (assertTrustedSender(event) !== "operator") {
-      throw new Error("E_DESKTOP_MINECRAFT_AUTHORITY: operator window required");
-    }
-    try {
-      return await requestMinecraftMove(input);
-    } catch (error) {
-      console.error(
-        `[hina-desktop:minecraft:ERROR] ${
-          error instanceof Error
-            ? error.message.slice(0, 256)
-            : "Minecraft movement failed"
-        }`,
-      );
-      throw error;
-    }
-  });
-  ipcMain.handle(CHANNELS.minecraftMoveTo, async (event, input: unknown) => {
-    if (assertTrustedSender(event) !== "operator") {
-      throw new Error("E_DESKTOP_MINECRAFT_AUTHORITY: operator window required");
-    }
-    try {
-      return await requestMinecraftMoveTo(input);
-    } catch (error) {
-      console.error(
-        `[hina-desktop:minecraft:ERROR] ${
-          error instanceof Error
-            ? error.message.slice(0, 256)
-            : "Minecraft target movement failed"
+            : "Minecraft goal execution failed"
         }`,
       );
       throw error;

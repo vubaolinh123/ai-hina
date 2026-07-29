@@ -103,9 +103,7 @@ test("preload exposes named methods and never exposes raw ipcRenderer", () => {
     "getMinecraftStatus",
     "connectMinecraft",
     "disconnectMinecraft",
-    "lookMinecraft",
-    "moveMinecraft",
-    "moveMinecraftTo",
+    "runMinecraftGoal",
     "emergencyStopMinecraft",
     "listScreenCaptureSources",
     "captureScreenSource",
@@ -211,7 +209,9 @@ test("operator dashboard keeps page markup modular and chat input reachable", ()
   assert.match(resources, /Force load/);
   assert.match(resources, /emit\('controlModel'/);
   assert.doesNotMatch(resources, /window\.hinaDesktop|\bfetch\s*\(|from\s+["']electron["']/);
-  assert.match(minecraft, /look\.v1/);
+  assert.match(minecraft, /Giao mục tiêu Minecraft cho Hina/);
+  assert.match(minecraft, /submitGoal/);
+  assert.doesNotMatch(minecraft, /look\.v1|move\.step\.v1|move\.to\.v1/);
   assert.match(minecraft, /Đây không phải dữ liệu demo/);
   assert.doesNotMatch(
     minecraft,
@@ -229,6 +229,7 @@ test("operator dashboard keeps page markup modular and chat input reachable", ()
   assert.doesNotMatch(avatar, /window\.hinaDesktop|\bfetch\s*\(|\bWebSocket\b|from\s+["']electron["']/);
   assert.match(runtime, /Quản lý widget avatar/);
   assert.match(runtime, /emit\('widgetControl'/);
+  assert.match(runtime, /toggleMinecraftGameAction/);
   assert.doesNotMatch(runtime, /window\.hinaDesktop|\bfetch\s*\(|\bWebSocket\b|from\s+["']electron["']/);
   assert.match(avatarRuntime, /window\.hinaDesktop\.getAvatarStatus/);
   assert.match(avatarRuntime, /window\.hinaDesktop\.applyWidgetControl/);
@@ -265,7 +266,7 @@ test("resource telemetry and owner controls stay behind typed operator IPC", () 
   assert.doesNotMatch(renderer, /child_process|nvidia-smi|process\.memoryUsage|node:os/);
 });
 
-test("Minecraft controls stay on numeric loopback behind ephemeral operator IPC", () => {
+test("Minecraft goal execution stays on numeric loopback behind ephemeral operator IPC", () => {
   const main = read("electron/main.ts");
   const preload = read("electron/preload.ts");
   const client = read("electron/minecraft-client.ts");
@@ -278,9 +279,7 @@ test("Minecraft controls stay on numeric loopback behind ephemeral operator IPC"
     "minecraftStatus",
     "minecraftConnect",
     "minecraftDisconnect",
-    "minecraftLook",
-    "minecraftMove",
-    "minecraftMoveTo",
+    "minecraftGoal",
     "minecraftEmergencyStop",
   ]) {
     assert.match(main, new RegExp(`CHANNELS\\.${channel}`));
@@ -292,23 +291,22 @@ test("Minecraft controls stay on numeric loopback behind ephemeral operator IPC"
   assert.match(client, /Authorization: `Bearer \$\{token\}`/);
   assert.match(client, /"X-Hina-Source": SOURCE/);
   assert.match(client, /ownerConfirmed: true/);
-    assert.match(client, /\/v1\/minecraft\/skills\/move-step/);
-    assert.match(client, /\/v1\/minecraft\/skills\/move-to/);
-    assert.match(client, /distanceBlocks < 0\.25/);
-    assert.match(client, /distanceBlocks > 2/);
-    assert.match(client, /skillId: "move\.to\.v1"/);
-    assert.match(minecraft, /move\.to\.v1/);
-    assert.match(minecraft, /Túi đồ của Hina/);
-    assert.match(minecraft, /Thực thể gần Hina/);
-    assert.match(minecraft, /function useEntityTarget/);
-    assert.match(minecraft, /@click="useEntityTarget\(entity\)"/);
-    assert.match(env, /metadata: number/);
-    assert.match(env, /type: string/);
-    assert.doesNotMatch(minecraft, /fetch\(|ipcRenderer|child_process|require\(/);
-    assert.match(minecraft, /0,25 đến 2 block/);
-  assert.match(renderer, /progress\.physicsTicksObserved/);
-  assert.match(renderer, /progress\.stagnantTicksObserved/);
-  assert.match(renderer, /progress\.maximumForwardProgressBlocks/);
+  assert.match(client, /\/v1\/minecraft\/goals\/execute/);
+  assert.match(client, /goalId: "harvest\.nearby-log\.v1"/);
+  assert.match(main, /requestMinecraftGoalPlan/);
+  assert.match(main, /validateMinecraftGoalPlan/);
+  assert.match(minecraft, /Giao mục tiêu cho Hina/);
+  assert.match(minecraft, /MỤC TIÊU TỰ NHIÊN/);
+  assert.match(minecraft, /Túi đồ của Hina/);
+  assert.match(minecraft, /Thực thể gần Hina/);
+  assert.doesNotMatch(minecraft, /function useEntityTarget|Dùng X\/Z này/);
+  assert.doesNotMatch(minecraft, /look\.v1|move\.step\.v1|move\.to\.v1/);
+  assert.match(env, /metadata: number/);
+  assert.match(env, /type: string/);
+  assert.match(env, /runMinecraftGoal\(input: string\)/);
+  assert.doesNotMatch(minecraft, /fetch\(|ipcRenderer|child_process|require\(/);
+  assert.match(renderer, /runMinecraftGoal/);
+  assert.doesNotMatch(renderer, /lookMinecraft|moveMinecraft|moveMinecraftTo/);
   assert.doesNotMatch(client, /retry|setTimeout\(/i);
   assert.match(launcher, /RandomNumberGenerator\]::Create\(\)/);
   assert.match(launcher, /\$generator\.GetBytes\(\$bytes\)/);
@@ -751,13 +749,21 @@ test("control client accepts numeric loopback only and validates mutations", () 
     }),
     { action: "set_feature", feature: "perception", enabled: true },
   );
+  assert.deepEqual(
+    control.validateSafetyControl({
+      action: "set_feature",
+      feature: "gameAction",
+      enabled: true,
+    }),
+    { action: "set_feature", feature: "gameAction", enabled: true },
+  );
   assert.throws(
     () => control.validateSafetyControl({
       action: "set_feature",
       feature: "streamOutput",
       enabled: true,
     }),
-    /only the perception feature/,
+    /only approved operator feature flags/,
   );
   assert.throws(
     () => control.validateSafetyControl({ action: "execute", command: "whoami" }),

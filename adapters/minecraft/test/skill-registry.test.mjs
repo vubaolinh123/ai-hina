@@ -8,7 +8,56 @@ import {
   MOVE_TO_SKILL_DEFINITION,
   MinecraftAdapterError,
   validateMinecraftSkillRequest,
+  getMinecraftGoalRegistry,
+  HARVEST_NEARBY_LOG_GOAL_DEFINITION,
+  validateMinecraftGoalRequest,
 } from "../dist/index.js";
+
+test("goal registry exposes exactly one model-selectable verified harvest goal", () => {
+  const registry = getMinecraftGoalRegistry();
+  assert.equal(registry.length, 1);
+  assert.equal(registry[0], HARVEST_NEARBY_LOG_GOAL_DEFINITION);
+  assert.deepEqual(registry[0], {
+    id: "harvest.nearby-log.v1",
+    version: 1,
+    description:
+      "Harvest exactly one nearby allowlisted log after fresh-state checks and postcondition verification.",
+    preconditions: [
+      "controller_online",
+      "emergency_stop_not_latched",
+      "fresh_physics_state",
+      "player_state_available",
+      "player_on_ground",
+      "allowlisted_log_within_4.5_blocks",
+      "no_other_action_active",
+    ],
+    timeoutMs: 12_000,
+    budget: { maximumAttempts: 1 },
+    destructive: true,
+    postcondition: { kind: "targeted_allowlisted_log_absent" },
+  });
+  assert.throws(() => registry.push({}));
+  assert.throws(() => {
+    registry[0].budget.maximumAttempts = 3;
+  });
+  assert.deepEqual(
+    validateMinecraftGoalRequest({ goalId: "harvest.nearby-log.v1" }),
+    { goalId: "harvest.nearby-log.v1" },
+  );
+  for (const value of [
+    null,
+    {},
+    { goalId: "move.to.v1" },
+    { goalId: "harvest.nearby-log.v1", targetX: 2 },
+  ]) {
+    assert.throws(
+      () => validateMinecraftGoalRequest(value),
+      (error) =>
+        error instanceof MinecraftAdapterError
+        && error.code.startsWith("E_MINECRAFT_GOAL_"),
+    );
+  }
+});
 
 test("registry contains exactly three immutable non-destructive skills", () => {
   const registry = getMinecraftSkillRegistry();
