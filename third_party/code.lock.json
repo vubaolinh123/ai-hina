@@ -141,6 +141,24 @@
       ]
     },
     {
+      "name": "mineflayer",
+      "source_url": "https://github.com/PrismarineJS/mineflayer",
+      "revision": "npm:mineflayer@4.37.1@03eba44f3e9cb93a0f0bf69a75938246e174dc6f",
+      "license_spdx": "MIT",
+      "source_hash": "sha512-kchZCJb1znzz8ZhE0+gLQ3e2t/9xUsqUy/IM/sGfceINxi3h6KXKY9luaUEa59vnD/x0OKwYdERY4sscm0ErNQ==",
+      "destination_paths": [
+        "pnpm-lock.yaml",
+        "adapters/minecraft/package.json",
+        "adapters/minecraft/src/mineflayer-client.ts"
+      ],
+      "modifications": [
+        "Used as an exact npm runtime dependency behind Hina's repository-owned MinecraftBotPort; no upstream source file or snippet was copied.",
+        "The initial adapter uses offline authentication only, accepts localhost or private IP targets, excludes chat/book/sign/plugin payloads from its bounded snapshot and exposes no Mineflayer or Prismarine type from the package public entrypoint.",
+        "The transitive license inventory contains permissive MIT, Apache-2.0, BSD, ISC, CC0-1.0 and 0BSD packages; pathfinding and every future plugin remain separately gated and are not installed in M09-S1.",
+        "Workspace overrides move the transitive uuid 8.3.2 and 10.0.0 nodes to patched uuid 11.1.1. The only observed upstream consumers call the compatible v4 API, and adapter build/unit plus production audit guard the override."
+      ]
+    },
+    {
       "name": "electron",
       "source_url": "https://github.com/electron/electron",
       "revision": "npm:electron@43.2.0",

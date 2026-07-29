@@ -1723,6 +1723,22 @@ Yêu cầu: không stale claim, không memory poisoning, đạt latency/resource
 
 ## M09 — Minecraft agent
 
+### Quyết định mở module (2026-07-29)
+
+Owner chấp nhận tiếp tục dùng provider Vision Cloud hiện tại và hoãn bộ chấm
+20 ảnh đa dạng của M08 cho tới khi gặp lỗi thực tế. M08 vì vậy dừng write phase
+ở runnable candidate để chỉ M09 ở write phase. Quyết định này không được diễn
+giải thành bằng chứng đo lường rằng Vision đã đạt ngưỡng ≥85%; bộ QA và
+calibration vẫn giữ nguyên để mở lại khi owner cần.
+
+M09-S1 hiện là local runnable candidate: Mineflayer 4.37.1 được pin sau
+repository-owned port, chỉ offline auth tới server loopback/private resettable,
+snapshot world/inventory/entity bounded, status chỉ đọc trên loopback và
+emergency stop latched qua signal. Chưa có planner, gameplay skill, generated
+code, pathfinder hoặc destructive action. Build + 13 adapter tests và fast suite
+270 test pass; real resettable-server smoke vẫn là acceptance của owner trước
+khi promotion.
+
 ### Mục tiêu
 
 Chơi Minecraft mức cơ bản bằng Mineflayer, LLM chỉ lập kế hoạch high-level, mọi skill typed/whitelisted/versioned.

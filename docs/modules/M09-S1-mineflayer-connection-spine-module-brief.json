@@ -1,0 +1,87 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M09-S1-mineflayer-connection-spine",
+  "module_id": "M09",
+  "objective": "Open the Minecraft module with a real pinned Mineflayer adapter that can connect only to an owner-selected local or private resettable server, exposes a bounded repository-owned world and inventory snapshot, and stops local bot control immediately through a latched emergency stop.",
+  "non_goals": [
+    "Do not connect to a public server, an important owner world or a production realm.",
+    "Do not add pathfinding, movement, collection, crafting, combat, chat, sign, book or destructive actions in this slice.",
+    "Do not connect the LLM, execute model-generated JavaScript, use eval, launch a shell or accept arbitrary plugin code.",
+    "Do not expose Mineflayer or Prismarine vendor types outside the adapter implementation.",
+    "Do not expose a mutating network control endpoint, bind a status listener outside loopback or enable a debug viewer.",
+    "Do not claim real-server compatibility or emergency-stop network acknowledgement until the owner runs the local server smoke.",
+    "Do not resume M08 implementation; the owner deferred the real 20-image Cloud Vision quality evidence without converting it into a measured pass."
+  ],
+  "base_sha": "b74fea9f6874200bbf2f027eeb99e70702106704",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "adapters/minecraft/",
+    "package.json",
+    "pnpm-workspace.yaml",
+    "pnpm-lock.yaml",
+    "tools/dev/Invoke-FastUnit.ps1",
+    "third_party/candidates.json",
+    "third_party/code.lock.json",
+    "docs/modules/M09-S1-mineflayer-connection-spine-module-brief.json",
+    "docs/modules/M09-minecraft-agent.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    ".gitnexus/",
+    ".claude/",
+    "CLAUDE.md",
+    "docs/research/deep-research-report.md",
+    "voice_demo/",
+    "assets/voices/",
+    "assets/avatars/",
+    "var/perception-sessions/",
+    "apps/desktop/dist/",
+    "apps/desktop/dist-electron/"
+  ],
+  "contracts": [
+    "Runtime connection targets are restricted to localhost, IPv4 loopback, RFC1918 IPv4, IPv6 loopback, link-local IPv6 or unique-local IPv6; public IPs and arbitrary DNS names fail closed.",
+    "The initial runtime supports offline authentication only and validates the Minecraft username, port, optional protocol version and status-port bounds before calling Mineflayer.",
+    "Mineflayer and Prismarine objects stay private to the adapter; public status contains only bounded repository-owned plain data.",
+    "The status service is read-only, binds exactly to 127.0.0.1 and exposes only fixed health and status GET routes.",
+    "Emergency stop is idempotent and latched for the process lifetime; it clears local control states, requests digging cancellation and disconnects without waiting for server acknowledgement.",
+    "Chat, book, sign, scoreboard and plugin payloads are not collected, logged or surfaced in the normalized snapshot.",
+    "No model, LLM planner, generated code, eval, shell, arbitrary action or destructive capability is reachable in this slice."
+  ],
+  "allowed_dependencies": [
+    "Node.js standard library.",
+    "mineflayer 4.37.1 pinned from the official PrismarineJS package.",
+    "TypeScript 6.0.3 and @types/node 26.1.1 already pinned in the workspace."
+  ],
+  "oss_candidates": [
+    "PrismarineJS/mineflayer 4.37.1 at git commit 03eba44f3e9cb93a0f0bf69a75938246e174dc6f, MIT."
+  ],
+  "acceptance_criteria": [
+    "The package builds a real Mineflayer-backed CLI and does not contain a fake runtime implementation.",
+    "Unit tests prove private-target validation, public-target rejection, bounded snapshot normalization, vendor-type isolation, connection error handling and idempotent latched emergency stop.",
+    "A read-only loopback status server returns bounded health/status JSON and rejects all mutation methods and unknown routes.",
+    "Root scripts expose start:minecraft and test:minecraft, and the repository fast test includes the Minecraft unit gate.",
+    "Mineflayer package version, npm integrity, upstream revision, license and no-copy integration are recorded in the lock/provenance files.",
+    "Module-brief validation, adapter test/build, repository fast tests, GitNexus change scan and git diff check pass."
+  ],
+  "required_test_commands": [
+    "uv run --frozen python -c \"import json; from jsonschema import Draft202012Validator; schema=json.load(open('docs/schemas/module-brief.schema.json', encoding='utf-8')); brief=json.load(open('docs/modules/M09-S1-mineflayer-connection-spine-module-brief.json', encoding='utf-8')); Draft202012Validator(schema).validate(brief)\"",
+    "pnpm test:minecraft",
+    "pnpm test:fast",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "local_emergency_stop_dispatch_milliseconds": 250,
+    "maximum_inventory_entries": 46,
+    "maximum_nearby_entities": 32,
+    "maximum_status_payload_bytes": 65536,
+    "status_bind_host": "127.0.0.1",
+    "model_calls": 0,
+    "additional_local_vram_mib": 0,
+    "raw_artifact_persistence": false
+  },
+  "output_artifact_dir": "artifacts/verification/M09/"
+}

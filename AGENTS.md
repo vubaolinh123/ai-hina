@@ -4,8 +4,12 @@
 
 Đọc `HINA_AI_MASTER_PLAN_VI.md` trước khi thay đổi kiến trúc hoặc mở module mới. Chỉ một module sản phẩm được ở write phase tại một thời điểm.
 
-Module active hiện tại: **M08 — Perception: screen snapshot, OCR và optional
-VLM**. M01,
+Module active hiện tại: **M09 — Minecraft agent**. M08 đã dừng write phase ở
+runnable candidate theo quyết định owner ngày 2026-07-29: tiếp tục dùng Vision
+Cloud hiện tại và hoãn bộ chấm 20 ảnh đa dạng cho tới khi gặp lỗi thực tế. Đây
+không phải tuyên bố rằng ngưỡng ≥85% đã được đo hoặc pass. M09 chỉ dùng
+Mineflayer sau deterministic controller, typed allowlist, state verification và
+emergency stop; LLM không được chạy generated code, `eval` hoặc shell. M01,
 M02 và M03 đã qua fast unit/contract/startup gate. Runtime persona hiện dùng
 `hina.prompt.v4`: mặc định 1–2 câu/≤45 từ, normal ceiling 3 câu/80 từ,
 `max_tokens=192`, chỉ mở rộng cho chuyện/ngữ cảnh đời thường hoặc safety. Năm few-shot do owner cung cấp
@@ -411,6 +415,18 @@ khi có ≥2 ảnh; `candidateTargetMet` cần đồng thời ≥20 ảnh, score
 nhóm được phủ, còn `promotionApproved=false`. Perception 69, route 14, Desktop
 build/58 + typecheck và `pnpm test:fast` 257 xanh; không model/Cloud/capture/
 GPU/artifact. Owner vẫn phải chấm và duyệt phiên ảnh thật trước M08 promotion.
+Ngày 2026-07-29 owner quyết định tiếp tục dùng Vision Cloud hiện tại và hoãn
+phiên chấm 20 ảnh cho tới khi gặp lỗi thực tế. M08 vì vậy dừng write phase ở
+runnable candidate; quyết định chuyển sang M09 không được ghi thành quality
+pass ≥85%. M09-S1 đã mở connection spine thật bằng pinned
+`mineflayer@4.37.1`: chỉ offline auth tới loopback/RFC1918/private IPv6, vendor
+types không qua public boundary, snapshot player/inventory/entity bounded,
+status chỉ đọc trên `127.0.0.1`, `Ctrl+C` gọi emergency stop latched/idempotent.
+Không có LLM, generated code, `eval`, shell, chat/sign/book payload, pathfinder
+hoặc destructive action. Build + 13 adapter tests và `pnpm test:fast` 270 xanh;
+audit không còn finding trên dependency path Minecraft sau override `uuid`
+11.1.1. Real resettable-server smoke vẫn chờ owner nên S1 chỉ là local runnable
+candidate, không production promotion.
 Future M11 dùng post-trained Hugging Face `Qwen/Qwen3.5-4B` frozen làm QLoRA
 SFT base, sau đó DPO/ORPO từ dữ liệu owner-curated. Không train trực tiếp GGUF,
 không mặc định bắt đầu từ raw Base và Qwen3.5-9B chỉ benchmark/fallback thủ công,

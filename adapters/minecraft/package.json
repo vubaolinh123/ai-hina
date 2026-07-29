@@ -1,0 +1,27 @@
+{
+  "name": "@hina/minecraft-adapter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Deterministic Mineflayer boundary for Hina AI",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "pnpm run build && node dist/cli.js",
+    "test": "pnpm run build && node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=22 <25"
+  },
+  "dependencies": {
+    "mineflayer": "4.37.1"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.1",
+    "typescript": "6.0.3"
+  }
+}

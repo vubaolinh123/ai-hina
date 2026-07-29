@@ -121,9 +121,9 @@
     {
       "id": "prismarinejs-mineflayer",
       "name": "Mineflayer",
-      "kind": "runtime_dependency_candidate",
+      "kind": "pinned_runtime_dependency",
       "source_url": "https://github.com/PrismarineJS/mineflayer",
-      "revision": null,
+      "revision": "4.37.1@03eba44f3e9cb93a0f0bf69a75938246e174dc6f",
       "observed_default_branch": "master",
       "license": {
         "spdx": "MIT",
@@ -133,9 +133,8 @@
         "minecraft_low_level_bot_state_and_actions"
       ],
       "freeze_blockers": [
-        "pin_release_and_lockfile_integrity",
-        "verify_supported_minecraft_version",
-        "audit_pathfinder_and_other_plugins_separately"
+        "audit_pathfinder_and_other_plugins_separately_before_import",
+        "run_real_owner_resettable_server_smoke_before_candidate_promotion"
       ]
     },
     {

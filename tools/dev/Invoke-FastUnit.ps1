@@ -50,6 +50,11 @@ if ($LASTEXITCODE -ne 0) {
     throw "Fast unit tests failed with exit code $LASTEXITCODE"
 }
 
+& pnpm --filter @hina/minecraft-adapter test
+if ($LASTEXITCODE -ne 0) {
+    throw "Minecraft adapter unit tests failed with exit code $LASTEXITCODE"
+}
+
 & node --check (Join-Path $repoRoot "apps\dev-console\public\app.js")
 if ($LASTEXITCODE -ne 0) {
     throw "Dev Console JavaScript syntax check failed with exit code $LASTEXITCODE"
