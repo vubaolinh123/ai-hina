@@ -1,0 +1,77 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M08-S23-vision-confidence-abstention",
+  "module_id": "M08",
+  "objective": "Add a bounded, explicitly heuristic confidence and abstention boundary to owner-triggered screen Vision so uncertain descriptions remain visible as untrusted reference text but cannot enter fresh chat context or become decision-support evidence.",
+  "non_goals": [
+    "Do not calibrate semantic confidence or claim the M08 scene-QA gate has passed in this slice.",
+    "Do not enable automatic capture, OCR, game control or autonomous decisions.",
+    "Do not change the configured Cloud/local Vision provider, text brain, STT, TTS or VRAM budgets.",
+    "Do not run deep all-on, soak or release verification."
+  ],
+  "base_sha": "e6586ee328d71102238f1853d41c41b3d861807d",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "workers/perception/src/hina_perception/service.py",
+    "workers/perception/tests/test_perception.py",
+    "apps/core-runtime/tests/test_perception_routes.py",
+    "apps/desktop/src/env.d.ts",
+    "apps/desktop/src/App.vue",
+    "apps/desktop/src/dashboard/pages/PerceptionPage.vue",
+    "apps/desktop/src/style.css",
+    "apps/desktop/test/",
+    "docs/modules/M08-S23-vision-confidence-abstention-module-brief.json",
+    "docs/modules/M08-perception.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    ".gitnexus/",
+    ".claude/",
+    "CLAUDE.md",
+    "voice_demo/",
+    "assets/voices/",
+    "assets/avatars/",
+    "var/perception-sessions/",
+    "apps/desktop/dist/",
+    "apps/desktop/dist-electron/"
+  ],
+  "contracts": [
+    "Every requested Vision result exposes state, bounded summary, confidence, confidence source, calibration flag, threshold and an optional bounded abstention reason; unavailable/error/not-requested results never invent confidence.",
+    "The confidence score is a deterministic conservative heuristic over final visible text, is explicitly marked uncalibrated, and cannot be represented as semantic accuracy.",
+    "Explicit inability statements, severely underspecified summaries or a score below the fixed threshold produce state=abstained and decisionSupportEligible=false.",
+    "Only state=ready Vision summaries can enter the same-session owner fresh-context path within the existing fifteen-second TTL; abstained text never enters chat memory, replay, TTS or decision support.",
+    "The Dashboard distinguishes provider failure from abstention, shows the heuristic percentage and reason in plain Vietnamese, and disables the ask-about-capture action for abstained results."
+  ],
+  "allowed_dependencies": [
+    "Python standard library, existing Vue/TypeScript desktop stack and existing repository test tooling."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "A complete, sufficiently detailed Vision summary remains ready and exposes uncalibrated heuristic confidence at or above the threshold.",
+    "A model response that explicitly says the image cannot be determined becomes abstained, remains untrusted reference text in the capture result, and is absent from fresh_context_for_turn.",
+    "Provider errors retain their existing error codes and are not mislabeled as abstention.",
+    "Desktop capture messaging and the Perception page render ready, abstained and error as three distinct states without exposing prompt, reasoning, pixels, source ID or API key.",
+    "Perception unit tests, desktop typecheck/build/tests, module-brief validation and git diff check pass."
+  ],
+  "required_test_commands": [
+    "uv run --frozen python -c \"import json; from jsonschema import Draft202012Validator; schema=json.load(open('docs/schemas/module-brief.schema.json', encoding='utf-8')); brief=json.load(open('docs/modules/M08-S23-vision-confidence-abstention-module-brief.json', encoding='utf-8')); Draft202012Validator(schema).validate(brief)\"",
+    "uv run --frozen python -m unittest discover -s workers/perception/tests -p \"test_*.py\"",
+    "uv run --frozen python -m unittest discover -s apps/core-runtime/tests -p \"test_perception_routes.py\"",
+    "pnpm --filter @hina/desktop typecheck",
+    "pnpm --filter @hina/desktop test",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "vision_confidence_threshold": 0.6,
+    "vision_confidence_calibrated": false,
+    "fresh_context_ttl_seconds": 15,
+    "additional_model_calls": 0,
+    "additional_local_vram_mib": 0,
+    "generated_test_artifacts_retained": false
+  },
+  "output_artifact_dir": "artifacts/verification/M08/"
+}

@@ -362,11 +362,16 @@ type DesktopPerceptionCaptureResult = {
       bytes: number;
     };
     vision?: {
-      state: string;
+      state: "not-requested" | "unavailable" | "ready" | "abstained" | "error";
       requested: boolean;
       provider?: string;
       model?: string | null;
-      summary?: string;
+      summary?: string | null;
+      confidence?: number | null;
+      confidenceSource?: string | null;
+      confidenceCalibrated?: boolean;
+      minimumConfidence?: number;
+      abstainReason?: string | null;
       errorCode?: string;
       providerErrorCode?: string;
       modelErrorCode?: string;

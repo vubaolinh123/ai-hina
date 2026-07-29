@@ -22,7 +22,7 @@ const readOperatorRenderer = () => [
 const require = createRequire(import.meta.url);
 const control = require("../dist-electron/control-client.js");
 
-test("desktop warms the one 8B brain through the bounded GPU fast path", () => {
+test("desktop warms the one Qwen3.5 4B Q8 brain through the bounded GPU fast path", () => {
   const launcher = read("../../tools/dev/Start-HinaDesktop.ps1");
   const providerBootstrap = read("../../tools/dev/Start-HinaModelProvider.ps1");
   assert.match(
@@ -33,7 +33,7 @@ test("desktop warms the one 8B brain through the bounded GPU fast path", () => {
   assert.match(providerBootstrap, /wasResident/);
   assert.match(providerBootstrap, /keep_alive\s*=\s*\$probeKeepAlive/);
   assert.match(providerBootstrap, /num_predict\s*=\s*8/);
-  assert.match(providerBootstrap, /else\s*\{\s*32\s*\}/);
+  assert.match(providerBootstrap, /else\s*\{\s*999\s*\}/);
   assert.match(providerBootstrap, /num_gpu\s*=\s*\$gpuLayers/);
   assert.match(providerBootstrap, /Elapsed\.TotalSeconds\s+-ge\s+10/);
 });
@@ -281,6 +281,9 @@ test("full-frame screen capture stays in Electron main behind one-use grants", (
   );
   assert.match(renderer, /Model vision chưa trả được kết quả/);
   assert.match(renderer, /visionAnalysisErrorCode/);
+  assert.match(renderer, /Hina chủ động không đoán/);
+  assert.match(renderer, /confidenceCalibrated/);
+  assert.match(renderer, /không được đưa vào Chat, memory, TTS hay quyết định game/);
   assert.match(renderer, /Chụp toàn bộ nguồn đã chọn và gửi Hina/);
   assert.doesNotMatch(renderer, /getDisplayMedia|desktopCapturer|sourceId/);
 });

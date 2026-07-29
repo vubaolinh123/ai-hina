@@ -297,6 +297,15 @@ class PerceptionRouteTests(unittest.IsolatedAsyncioTestCase):
         observation = body["observation"]
         self.assertEqual(observation["vision"]["state"], "ready")
         self.assertIn("Có chữ gì quan trọng?", observation["vision"]["summary"])
+        self.assertGreaterEqual(
+            observation["vision"]["confidence"],
+            observation["vision"]["minimumConfidence"],
+        )
+        self.assertEqual(
+            observation["vision"]["confidenceSource"],
+            "summary-heuristic.v1",
+        )
+        self.assertFalse(observation["vision"]["confidenceCalibrated"])
         self.assertFalse(observation["vision"]["decisionSupportEligible"])
 
     async def test_wrong_content_type_and_empty_body_are_rejected(self) -> None:

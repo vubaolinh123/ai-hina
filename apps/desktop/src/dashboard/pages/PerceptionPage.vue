@@ -107,6 +107,26 @@ function visionAnalysisErrorCode(vision: VisionObservation): string {
   );
 }
 
+function formatVisionConfidence(vision: VisionObservation): string {
+  if (typeof vision.confidence !== "number" || !Number.isFinite(vision.confidence)) {
+    return "chưa đo được";
+  }
+  return `${Math.round(Math.max(0, Math.min(vision.confidence, 1)) * 100)}%`;
+}
+
+function visionAbstentionReason(vision: VisionObservation): string {
+  switch (vision.abstainReason) {
+    case "model-explicitly-uncertain":
+      return "Model tự báo rằng ảnh không đủ rõ hoặc không đủ dữ kiện.";
+    case "summary-too-short":
+      return "Mô tả trả về quá ngắn để dùng làm ngữ cảnh đáng tin.";
+    case "summary-confidence-below-threshold":
+      return "Mô tả chứa quá nhiều dấu hiệu không chắc chắn.";
+    default:
+      return "Kết quả chưa đạt ngưỡng an toàn để đưa vào hội thoại.";
+  }
+}
+
 function formatVisionModelSize(bytes: number | null): string {
   if (bytes === null) return "Cloud / không tải vào máy";
   return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
@@ -279,8 +299,8 @@ function formatVisionModelSize(bytes: number | null): string {
               ? "Đã dùng lại quan sát còn hạn"
               : screenCaptureResult.observation?.vision?.state === "ready"
                 ? "Hina đã nhìn và phân tích ảnh"
-                : screenCaptureResult.observation?.ocr?.state === "ready"
-                  ? "Hina đã nhận ảnh và OCR đã đọc chữ"
+                : screenCaptureResult.observation?.vision?.state === "abstained"
+                  ? "Hina chưa đủ chắc chắn nên không đoán"
                   : "Hina đã nhận ảnh nhưng chưa phân tích thành công"
           }}
         </strong>
@@ -289,14 +309,46 @@ function formatVisionModelSize(bytes: number | null): string {
           · {{ Math.ceil(screenCaptureResult.desktopCapture.bytes / 1024) }} KB
           · full frame · correlation {{ screenCaptureResult.correlationId }}
         </span>
-        <p v-if="screenCaptureResult.observation?.vision?.summary">
+        <p
+          v-if="
+            screenCaptureResult.observation?.vision?.state === 'ready'
+              && screenCaptureResult.observation.vision.summary
+          "
+        >
           <b>Model vision:</b> {{ screenCaptureResult.observation.vision.summary }}
         </p>
         <p
-          v-else-if="
-            screenCaptureResult.observation?.vision?.requested
-              && screenCaptureResult.observation.vision.state !== 'ready'
-          "
+          v-if="screenCaptureResult.observation?.vision?.state === 'ready'"
+          class="capture-confidence"
+        >
+          <b>Độ chắc chắn nội bộ:</b>
+          {{ formatVisionConfidence(screenCaptureResult.observation.vision) }}.
+          Đây là điểm heuristic
+          {{ screenCaptureResult.observation.vision.confidenceCalibrated ? "đã hiệu chuẩn" : "chưa hiệu chuẩn" }},
+          không phải xác suất model nhìn đúng;
+          kết quả vẫn là dữ liệu không tin cậy và chưa được dùng để tự điều khiển game.
+        </p>
+        <div
+          v-else-if="screenCaptureResult.observation?.vision?.state === 'abstained'"
+          class="capture-analysis-abstained"
+        >
+          <p>
+            <b>Hina chủ động không đoán:</b>
+            {{ visionAbstentionReason(screenCaptureResult.observation.vision) }}
+          </p>
+          <p v-if="screenCaptureResult.observation.vision.summary">
+            <b>Bản mô tả chỉ để bạn tham khảo:</b>
+            {{ screenCaptureResult.observation.vision.summary }}
+          </p>
+          <p>
+            Điểm heuristic
+            {{ screenCaptureResult.observation.vision.confidenceCalibrated ? "đã hiệu chuẩn" : "chưa hiệu chuẩn" }}:
+            {{ formatVisionConfidence(screenCaptureResult.observation.vision) }}.
+            Nội dung này không được đưa vào Chat, memory, TTS hay quyết định game.
+          </p>
+        </div>
+        <p
+          v-else-if="screenCaptureResult.observation?.vision?.requested"
           class="capture-analysis-error"
         >
           <b>Model vision chưa trả được kết quả:</b>
@@ -308,24 +360,8 @@ function formatVisionModelSize(bytes: number | null): string {
           <b>Model vision:</b> chưa được yêu cầu trong lượt này. Bật
           “Phân tích bằng model vision đang chọn” trước khi chụp để Hina mô tả ảnh.
         </p>
-        <p v-if="screenCaptureResult.observation?.ocr?.text">
-          <b>OCR:</b> {{ screenCaptureResult.observation.ocr.text }}
-        </p>
-        <p
-          v-else-if="
-            screenCaptureResult.observation?.ocr?.requested
-              && screenCaptureResult.observation.ocr.state !== 'ready'
-          "
-          class="capture-analysis-error"
-        >
-          <b>OCR chưa trả được kết quả:</b>
-          {{ screenCaptureResult.observation.ocr.errorCode || "E_PERCEPTION_OCR" }}.
-        </p>
         <div
-          v-if="
-            screenCaptureResult.observation?.vision?.state === 'ready'
-              || screenCaptureResult.observation?.ocr?.state === 'ready'
-          "
+          v-if="screenCaptureResult.observation?.vision?.state === 'ready'"
           class="button-row"
         >
           <button
@@ -509,8 +545,7 @@ function formatVisionModelSize(bytes: number | null): string {
       Chọn Cloud nếu cần chất lượng đọc ảnh tốt mà không tăng VRAM; ảnh được gửi
       tới Ollama Cloud ở đúng lượt bạn yêu cầu. Chọn local nếu ảnh không được rời
       máy; đổi lại model vision sẽ dùng GPU và được scheduler unload sau lượt đọc.
-      OCR local vẫn là lớp riêng và kết quả ảnh luôn bị coi là dữ liệu không đáng
-      tin, không tự điều khiển game.
+      Kết quả ảnh luôn bị coi là dữ liệu không đáng tin, không tự điều khiển game.
     </aside>
   </section>
 </template>

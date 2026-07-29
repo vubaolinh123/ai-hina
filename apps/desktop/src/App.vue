@@ -656,10 +656,7 @@ function markScreenCaptureVisionPreference(): void {
 
 async function askHinaAboutLastCapture(): Promise<void> {
   const observation = screenCaptureResult.value?.observation;
-  const hasSemanticContext = (
-    observation?.vision?.state === "ready"
-    || observation?.ocr?.state === "ready"
-  );
+  const hasSemanticContext = observation?.vision?.state === "ready";
   if (!hasSemanticContext || chatBusy.value) return;
   activePage.value = "chat";
   chatInput.value = screenCaptureVisionQuestion.value.trim()
@@ -697,19 +694,18 @@ function describeScreenCaptureResult(
   if (vision?.state === "ready" && vision.summary) {
     return `${prefix} Model vision đã phân tích thành công.${timingSuffix}`;
   }
+  if (vision?.state === "abstained") {
+    return (
+      `${prefix} Hina chưa đủ chắc chắn để dùng mô tả này trong hội thoại; `
+      + `kết quả chỉ được hiển thị để bạn tham khảo.${timingSuffix}`
+    );
+  }
   if (vision?.requested && vision.state !== "ready") {
     return `${prefix} Phân tích vision thất bại: ${visionAnalysisErrorCode(vision)}.${timingSuffix}`;
   }
-  const ocr = result.observation?.ocr;
-  if (ocr?.state === "ready") {
-    return `${prefix} OCR đã đọc ảnh; model vision chưa được yêu cầu.${timingSuffix}`;
-  }
-  if (ocr?.requested && ocr.state !== "ready") {
-    return `${prefix} OCR thất bại: ${ocr.errorCode || "E_PERCEPTION_OCR"}.${timingSuffix}`;
-  }
   return (
     `${prefix} Ảnh mới chỉ được nhận làm evidence, chưa được phân tích nội dung. `
-    + `Hãy bật “Phân tích bằng model vision” hoặc OCR trước khi chụp.${timingSuffix}`
+    + `Hãy bật “Phân tích bằng model vision” trước khi chụp.${timingSuffix}`
   );
 }
 

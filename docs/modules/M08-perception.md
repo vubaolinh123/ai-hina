@@ -24,6 +24,7 @@
   M08-S21 adaptive reasoning budgets and M08-S22 Qwen3.5 4B Q8_0 migration are
   runnable local candidates pending owner application acceptance; the refreshed
   all-on fast resource gate passed;
+  M08-S23 Vision confidence/abstention is a runnable candidate;
   M08 remains active
 - Branch: `main` (fast-development mode)
 - Active slices: M08-S1 perception spine (owner-consented snapshot ingestion,
@@ -50,7 +51,9 @@
   M08-S20 bounds desktop resource-control recovery and fixes the chat viewport;
   M08-S21 selects bounded viewer/emotional/game budgets on one checkpoint;
   M08-S22 replaces the retired 8B cache with one full-GPU Qwen3.5 4B Q8_0
-  checkpoint while the independent Vision route remains unchanged
+  checkpoint while the independent Vision route remains unchanged; M08-S23
+  adds an explicitly uncalibrated confidence heuristic and blocks uncertain
+  Vision summaries from fresh chat context
 
 ## Runnable target
 
@@ -71,12 +74,14 @@ token. Toàn bộ khung hình được giữ nguyên bố cục và hạ cạnh 
 Khi owner chủ động đánh dấu **Nhờ provider vision đã chọn phân tích nội dung
 ảnh**, cùng PNG đó được đưa qua Ollama Cloud hoặc model Ollama local nhẹ đã cấu
 hình trong Dashboard desktop. Observation chỉ nhận một mô tả text
-tối đa 2.000 ký tự, luôn mang `trustLevel=untrusted`,
-`decisionSupportEligible=false` và hết hạn cùng TTL. Trong tối đa 15 giây,
-owner có thể hỏi Hina về ảnh vừa chụp trong đúng phiên chat đó. Runtime đưa
-tối đa một mô tả semantic vào user-role block bị giới hạn và gắn nhãn
-untrusted; không đưa raw pixel/hash/box vào prompt, không ghi vào memory,
-không cấp quyền tool và không cho Hina tuyên bố đang nhìn màn hình trực tiếp.
+tối đa 3.500 ký tự, luôn mang `trustLevel=untrusted`,
+`decisionSupportEligible=false` và hết hạn cùng TTL. M08-S23 gắn thêm điểm
+heuristic chưa hiệu chuẩn; mô tả dưới ngưỡng `0,60` hoặc tự báo không đủ dữ kiện
+chuyển sang `state=abstained`. Chỉ `state=ready` mới có thể đi vào tối đa 15
+giây context của đúng phiên owner chat. Runtime đưa tối đa một mô tả semantic
+vào user-role block bị giới hạn và gắn nhãn untrusted; không đưa raw
+pixel/hash/box vào prompt, không ghi vào memory, không cấp quyền tool và không
+cho Hina tuyên bố đang nhìn màn hình trực tiếp.
 
 ## Implemented in M08-S1
 
@@ -913,3 +918,42 @@ provenance before they may replace the pinned checkpoint.
   2.584 seconds. Physical VRAM peaked at 13,990 MiB with 2,006 MiB minimum free
   and 91% peak GPU utilization. The fast resource gate passed; owner
   application/quality acceptance is still required before promotion.
+
+## Implemented in M08-S23 (Vision confidence and abstention)
+
+- Requested Vision output now includes `confidence`, `confidenceSource`,
+  `confidenceCalibrated`, `minimumConfidence` and a bounded
+  `abstainReason`. Error, unavailable and not-requested paths keep confidence
+  unknown instead of inventing a number.
+- `summary-heuristic.v1` is a deterministic conservative text-quality signal,
+  not a calibrated probability that the scene description is correct. It uses
+  only the already-visible bounded final summary, adds no provider call and
+  consumes no additional VRAM.
+- A global inability statement, a severely underspecified final summary or a
+  score below `0.60` produces `state=abstained`. The result stays visible as
+  untrusted reference text for the owner but is excluded from
+  `fresh_context_for_turn`; it therefore cannot enter Chat, memory, TTS or
+  decision support.
+- The desktop distinguishes success, provider error and abstention. It shows
+  the heuristic percentage and a plain-language reason, disables
+  **Hỏi Hina ngay** for abstained results and does not log abstention as a
+  provider failure.
+- Stale desktop OCR presentation branches left after the M08-S19 retirement
+  were removed. Screen understanding now has one visible path: explicit
+  Cloud/light-local Vision.
+
+## Fast evidence M08-S23 (owner machine)
+
+- Perception worker: 55 tests pass, including ready confidence and an explicit
+  abstention that never enters same-session fresh context.
+- Core perception routes: 11 tests pass with confidence metadata preserved over
+  the bounded loopback response.
+- `pnpm test:fast`: 239 tests pass across Safety, Text brain, Memory, Avatar,
+  Speech, Perception and Core Runtime.
+- Desktop: typecheck pass; production build + 56 tests pass, including distinct
+  abstention copy, no renderer-side secret/system access and the corrected
+  Qwen3.5 4B Q8 startup contract.
+- No model, Cloud request, screen capture, image, audio, benchmark media,
+  fixture, cache download or one-off script was created for this slice.
+- This slice does not claim the ≥85% scene-QA gate. Calibration and owner image
+  acceptance remain required before any future decision-support promotion.

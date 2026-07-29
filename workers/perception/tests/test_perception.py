@@ -492,9 +492,48 @@ class ServiceTests(unittest.TestCase):
         )
         self.assertEqual(vision["trustLevel"], "untrusted")
         self.assertFalse(vision["decisionSupportEligible"])
+        self.assertGreaterEqual(vision["confidence"], vision["minimumConfidence"])
+        self.assertEqual(vision["confidenceSource"], "summary-heuristic.v1")
+        self.assertFalse(vision["confidenceCalibrated"])
+        self.assertIsNone(vision["abstainReason"])
         self.assertGreaterEqual(vision["processingMilliseconds"], 0)
         self.assertNotIn("Nhân vật đang đứng", str(result["observation"]))
         self.assertNotIn(encoded.hex()[:32], str(result))
+
+    def test_uncertain_vision_abstains_and_never_enters_fresh_chat_context(self) -> None:
+        async def analyze(_image: bytes, _prompt: str) -> str:
+            return (
+                "Không thể xác định nội dung của ảnh vì ảnh quá mờ để nhận diện. "
+                "Không có chi tiết nào đủ chắc chắn để mô tả."
+            )
+
+        service = _service(
+            _RecordingEvaluate("allow"),
+            vision_analyze=analyze,
+        )
+        result = asyncio.run(
+            service.ingest_snapshot(
+                encode_png(gradient()),
+                correlation_id=CORRELATION,
+                session_id=SESSION,
+                source="owner.desktop",
+                analyze_with_vlm=True,
+            )
+        )
+
+        vision = result["observation"]["vision"]
+        self.assertEqual(vision["state"], "abstained")
+        self.assertEqual(vision["abstainReason"], "model-explicitly-uncertain")
+        self.assertLess(vision["confidence"], vision["minimumConfidence"])
+        self.assertFalse(vision["confidenceCalibrated"])
+        self.assertFalse(vision["decisionSupportEligible"])
+        self.assertIn("Không thể xác định", vision["summary"])
+        self.assertEqual(
+            (),
+            asyncio.run(
+                service.fresh_context_for_turn(SESSION, source="owner.console")
+            ),
+        )
 
     def test_fresh_chat_context_is_semantic_same_session_owner_only_and_expires(self) -> None:
         clock = FakeClock()

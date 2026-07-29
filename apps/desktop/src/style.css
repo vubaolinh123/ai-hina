@@ -837,6 +837,23 @@ pre,
   background: rgba(240, 184, 95, 0.08);
 }
 
+.capture-result .capture-confidence,
+.capture-result .capture-analysis-abstained {
+  padding: 10px 12px;
+  border-left: 3px solid var(--warning);
+  color: #f4cf86;
+  background: rgba(240, 184, 95, 0.08);
+}
+
+.capture-result .capture-analysis-abstained {
+  display: grid;
+  gap: 8px;
+}
+
+.capture-result .capture-analysis-abstained p {
+  margin: 0;
+}
+
 .vision-status-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

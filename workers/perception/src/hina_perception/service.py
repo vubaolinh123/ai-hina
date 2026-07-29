@@ -23,6 +23,39 @@ PerceptionErrorCallback = Callable[[dict[str, str]], None]
 VisionAnalyzeCallback = Callable[[bytes, str], Awaitable[str]]
 _MAX_VISION_QUESTION_CHARS = 500
 _MAX_VISION_SUMMARY_CHARS = 3_500
+_VISION_CONFIDENCE_THRESHOLD = 0.6
+_VISION_CONFIDENCE_SOURCE = "summary-heuristic.v1"
+_VISION_GLOBAL_ABSTENTION_MARKERS = (
+    "không thể phân tích ảnh",
+    "không thể xác định nội dung",
+    "không đủ thông tin để mô tả",
+    "không thấy nội dung nào",
+    "không thể nhìn thấy ảnh",
+    "ảnh quá mờ để",
+    "cannot analyze the image",
+    "cannot determine the image",
+    "cannot see the image",
+    "not enough information to describe",
+    "image is too blurry to",
+    "unable to analyze the image",
+)
+_VISION_UNCERTAINTY_MARKERS = (
+    "có vẻ",
+    "dường như",
+    "có thể",
+    "không chắc",
+    "khó đọc",
+    "không đọc rõ",
+    "bị mờ",
+    "bị khuất",
+    "appears to",
+    "seems to",
+    "possibly",
+    "unclear",
+    "not sure",
+    "hard to read",
+    "partially obscured",
+)
 _VISION_PROMPT = (
     "Quan sát toàn bộ ảnh và viết overview chi tiết bằng tiếng Việt, plain text, "
     "không markdown, 4–6 câu hoàn chỉnh và tối đa 140 từ. Lần lượt mô tả: (1) cảnh "
@@ -121,6 +154,9 @@ class PerceptionService:
                 "mode": "explicit-owner-request",
                 "automatic": False,
                 "decisionSupportEligible": False,
+                "minimumConfidence": _VISION_CONFIDENCE_THRESHOLD,
+                "confidenceSource": _VISION_CONFIDENCE_SOURCE,
+                "confidenceCalibrated": False,
                 "maxSummaryCharacters": _MAX_VISION_SUMMARY_CHARS,
             },
             "retention": {
@@ -479,6 +515,9 @@ class PerceptionService:
                 and vision.get("state") == "ready"
                 and isinstance(vision.get("summary"), str)
                 and bool(vision["summary"].strip())
+                and isinstance(vision.get("confidence"), (int, float))
+                and not isinstance(vision.get("confidence"), bool)
+                and float(vision["confidence"]) >= _VISION_CONFIDENCE_THRESHOLD
             )
             if has_vision:
                 return (record,)
@@ -736,6 +775,11 @@ class PerceptionService:
             "decisionSupportEligible": False,
             "trustLevel": "untrusted",
             "questionProvided": question is not None,
+            "confidence": None,
+            "confidenceSource": None,
+            "confidenceCalibrated": False,
+            "minimumConfidence": _VISION_CONFIDENCE_THRESHOLD,
+            "abstainReason": None,
         }
         if not requested:
             return {**base, "state": "not-requested", "summary": None}
@@ -757,10 +801,14 @@ class PerceptionService:
                 assert self._vision_analyze is not None
                 result = await self._vision_analyze(encoded, prompt)
             summary = _sanitize_vision_summary(result)
+            confidence, abstain_reason = _assess_vision_summary(summary)
             return {
                 **base,
-                "state": "ready",
+                "state": "abstained" if abstain_reason is not None else "ready",
                 "summary": summary,
+                "confidence": confidence,
+                "confidenceSource": _VISION_CONFIDENCE_SOURCE,
+                "abstainReason": abstain_reason,
                 "processingMilliseconds": round((time.monotonic() - started) * 1_000, 3),
             }
         except Exception as exc:
@@ -898,6 +946,28 @@ def _sanitize_vision_summary(summary: str) -> str:
             retryable=True,
         )
     return cleaned[:_MAX_VISION_SUMMARY_CHARS]
+
+
+def _assess_vision_summary(summary: str) -> tuple[float, str | None]:
+    """Conservatively grade visible final text without claiming semantic accuracy."""
+
+    normalized = " ".join(summary.casefold().split())
+    if any(marker in normalized for marker in _VISION_GLOBAL_ABSTENTION_MARKERS):
+        return 0.15, "model-explicitly-uncertain"
+    if len(normalized) < 32:
+        return 0.35, "summary-too-short"
+
+    confidence = 0.9
+    if len(normalized) < 80:
+        confidence -= 0.1
+    uncertainty_count = sum(
+        1 for marker in _VISION_UNCERTAINTY_MARKERS if marker in normalized
+    )
+    confidence -= min(uncertainty_count * 0.08, 0.32)
+    bounded = round(max(0.0, min(confidence, 1.0)), 3)
+    if bounded < _VISION_CONFIDENCE_THRESHOLD:
+        return bounded, "summary-confidence-below-threshold"
+    return bounded, None
 
 
 def _validate_uuid(value: str, name: str) -> None:

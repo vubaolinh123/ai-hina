@@ -333,6 +333,15 @@ Faster-Whisper + OmniVoice đạt peak physical 13.990 MiB, minimum free
 2.006 MiB và peak GPU utilization 91%; text turn thật hoàn tất 5,313 giây,
 TTS first chunk 1,266 giây/request 2,584 giây. Fast resource gate xanh nhưng
 vẫn chờ owner application/quality acceptance trước promotion.
+Ngày 2026-07-29 M08-S23 thêm fail-closed Vision confidence/abstention:
+`summary-heuristic.v1` chấm điểm deterministic trên final summary với threshold
+0,60, luôn ghi rõ chưa hiệu chuẩn và không được coi là xác suất đúng semantic.
+Model tự báo không đủ dữ kiện, summary quá ngắn hoặc dưới threshold chuyển
+`state=abstained`; text chỉ hiện để owner tham khảo và không vào fresh chat
+context, memory, TTS hay decision support. Dashboard phân biệt ready/abstained/
+error, tắt nút hỏi ảnh cho abstained và đã dọn các nhánh OCR desktop còn sót.
+Fast gate: perception 55 test, core perception route 11 test, desktop typecheck
++ production build/56 test xanh; chưa claim ≥85% scene QA hay calibration.
 Future M11 dùng post-trained Hugging Face `Qwen/Qwen3.5-4B` frozen làm QLoRA
 SFT base, sau đó DPO/ORPO từ dữ liệu owner-curated. Không train trực tiếp GGUF,
 không mặc định bắt đầu từ raw Base và Qwen3.5-9B chỉ benchmark/fallback thủ công,

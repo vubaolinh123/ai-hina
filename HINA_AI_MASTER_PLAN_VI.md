@@ -1576,6 +1576,16 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
   completed the request in 2,584 seconds without writing benchmark audio to
   disk. This is a runnable local candidate awaiting owner application
   acceptance, not production promotion.
+- M08-S23 Vision confidence/abstention (2026-07-29): explicit screen analysis
+  now exposes a deterministic `summary-heuristic.v1` score with fixed threshold
+  `0.60`, labeled uncalibrated and never represented as semantic accuracy.
+  Global inability text, severely underspecified output or a below-threshold
+  score becomes `state=abstained`; the owner can still inspect the untrusted
+  summary, but it is excluded from same-session fresh chat context, memory, TTS
+  and every decision-support path. Desktop renders ready/abstained/error
+  separately and no longer carries stale OCR presentation branches. This closes
+  the fail-closed abstain-state implementation, but the ≥85% owner scene-QA and
+  calibration gates remain open.
 
 ### Test matrix
 
