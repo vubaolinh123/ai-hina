@@ -1228,7 +1228,11 @@ onBeforeUnmount(() => {
 
 <template>
   <DesktopWidget v-if="windowMode === 'widget'" />
-  <main v-else-if="windowMode === 'operator'" class="desktop-shell">
+  <main
+    v-else-if="windowMode === 'operator'"
+    class="desktop-shell"
+    :class="{ 'desktop-shell--chat': activePage === 'chat' }"
+  >
     <header class="desktop-header">
       <div class="brand">
         <div class="brand-mark">H</div>

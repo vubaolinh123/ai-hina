@@ -1533,6 +1533,22 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
   thành reservation hay 0. Context runtime giữ 8.192 token: 50.000 token ước
   tính thêm khoảng 5.879 MiB KV f16 hoặc 2.940 MiB KV q8_0 so với 8K, chưa tính
   buffer, nên chưa phù hợp all-on budget 16 GiB.
+- M08-S20 runtime/voice/VRAM recovery (2026-07-29): Electron resource control
+  retries only a real bounded control-plane offline window and never replays a
+  timed-out POST. The startup probe preserves any pre-existing `/api/ps`
+  residency instead of evicting an owner-pinned Brain. Chat messages now own an
+  inner scroll while the composer stays
+  reachable. The installed Q4_K_M brain keeps context 8,192 but runs 32/36 text
+  layers on GPU; four layers run in RAM. Selective Thinking uses a private
+  256-token scratchpad followed by a 128-token final pass on the same checkpoint,
+  completing the real complex Vietnamese smoke in 5.789 seconds without
+  exposing reasoning. Brain + Faster-Whisper + OmniVoice all-on peaked at
+  12,905 MiB physical VRAM with 3,091 MiB free. OmniVoice remains default:
+  tested VieNeu v2 and public Vietnamese OmniVoice fine-tunes failed reverse-STT,
+  while G-OmniVoice remains gated until owner accepts its Hugging Face terms.
+  Future conversation learning follows owner-curated offline QLoRA SFT and
+  preference pairs documented in `docs/architecture/hina-conversation-learning.md`;
+  live/public chat never changes weights.
 
 ### Test matrix
 
@@ -1557,16 +1573,14 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
 - Observation chỉ là evidence/untrusted context; không tự kích hoạt action nguy hiểm.
 - Snapshot không persist nếu owner chưa chủ động mở session archive; mỗi capture
   vẫn cần explicit owner action và policy hiện hành.
-- All-on workload vẫn giữ 2 GB VRAM headroom.
-- Budget owner machine: hard ceiling 14.336 MiB và headroom tối thiểu 2.048 MiB.
-  Shared scheduler serialize heavy local providers và unload sau lease.
-  Measurement trực tiếp Qwen3-VL 8B Thinking text brain gồm ambient đạt peak
-  total 9.975 MiB, còn 6.328 MiB physical free; Ollama Cloud vision thêm 0 MiB
-  model VRAM local. Workload OCR/STT/TTS toàn chuỗi phải được đo lại khi
-  provider/profile của các module đó thay đổi.
-- Owner dashboard phải cảnh báo khi physical used vượt 14.336 MiB hoặc free
-  VRAM dưới 2.048 MiB; reservation luôn được ghi nhãn là admission budget,
-  không cộng lần hai vào physical allocation.
+- All-on workload không được vượt owner-approved hard ceiling 15.872 MiB.
+  `nvidia-smi memory.free` đã phản ánh Windows/compositor và ứng dụng GPU khác,
+  nên scheduler không trừ thêm một headroom cố định lần hai.
+- Profile M08-S20 đã đo Brain + Faster-Whisper + OmniVoice resident cùng lúc:
+  peak physical 12.905 MiB, còn tối thiểu 3.091 MiB free. Cloud Vision thêm
+  0 MiB model VRAM local. Provider/profile đổi thì phải đo lại toàn chuỗi.
+- Owner dashboard cảnh báo khi physical used vượt 15.872 MiB; reservation luôn
+  được ghi nhãn là admission budget, không cộng lần hai vào physical allocation.
 
 ### Companion Gate B
 

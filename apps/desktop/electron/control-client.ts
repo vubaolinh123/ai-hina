@@ -1,5 +1,13 @@
 const DEFAULT_CONTROL_BASE = "http://127.0.0.1:8765";
 const REQUEST_TIMEOUT_MILLISECONDS = 5_000;
+const RESOURCE_CONTROL_TIMEOUT_MILLISECONDS = 120_000;
+const RESOURCE_CONTROL_RETRY_DELAYS_MILLISECONDS = Object.freeze([
+  250,
+  500,
+  1_000,
+  2_000,
+  4_000,
+]);
 const MAX_RESPONSE_BYTES = 262_144;
 
 type JsonObject = Record<string, unknown>;
@@ -140,6 +148,7 @@ export async function requestControl(
   options: {
     baseUrl?: string;
     fetchImpl?: typeof fetch;
+    timeoutMilliseconds?: number;
   } = {},
 ): Promise<JsonObject> {
   const spec = OPERATIONS[operation];
@@ -156,6 +165,15 @@ export async function requestControl(
     options.baseUrl ?? process.env.HINA_CONTROL_BASE_URL ?? DEFAULT_CONTROL_BASE,
   );
   const fetchImpl = options.fetchImpl ?? fetch;
+  const timeoutMilliseconds = options.timeoutMilliseconds
+    ?? REQUEST_TIMEOUT_MILLISECONDS;
+  if (
+    !Number.isInteger(timeoutMilliseconds)
+    || timeoutMilliseconds < 1
+    || timeoutMilliseconds > RESOURCE_CONTROL_TIMEOUT_MILLISECONDS
+  ) {
+    throw new Error("E_DESKTOP_CONTROL_TIMEOUT: request timeout is invalid");
+  }
   let response: Response;
   try {
     response = await fetchImpl(`${baseUrl}${spec.path}`, {
@@ -166,9 +184,22 @@ export async function requestControl(
         ...(payload ? { "Content-Type": "application/json" } : {}),
       },
       body: payload ? JSON.stringify(payload) : undefined,
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MILLISECONDS),
+      signal: AbortSignal.timeout(timeoutMilliseconds),
     });
-  } catch {
+  } catch (error) {
+    const name = (
+      error
+      && typeof error === "object"
+      && "name" in error
+      && typeof error.name === "string"
+    )
+      ? error.name
+      : "";
+    if (name === "TimeoutError" || name === "AbortError") {
+      throw new Error(
+        `E_DESKTOP_CONTROL_TIMEOUT: Hina control plane did not answer within ${timeoutMilliseconds} ms`,
+      );
+    }
     throw new Error("E_DESKTOP_CONTROL_OFFLINE: Hina control plane is unavailable");
   }
   const declaredLength = Number(response.headers.get("content-length") || 0);
@@ -249,11 +280,60 @@ export function validateResourceModelControl(
 export async function requestResourceModelControl(
   modelId: unknown,
   action: unknown,
+  options: {
+    baseUrl?: string;
+    fetchImpl?: typeof fetch;
+    retryDelaysMilliseconds?: readonly number[];
+    sleep?: (milliseconds: number) => Promise<void>;
+    timeoutMilliseconds?: number;
+  } = {},
 ): Promise<JsonObject> {
-  return requestControl(
-    "resources.model",
-    validateResourceModelControl(modelId, action),
-  );
+  const payload = validateResourceModelControl(modelId, action);
+  const retryDelays = options.retryDelaysMilliseconds
+    ?? RESOURCE_CONTROL_RETRY_DELAYS_MILLISECONDS;
+  const sleep = options.sleep
+    ?? ((milliseconds: number) => new Promise((resolve) => {
+      setTimeout(resolve, milliseconds);
+    }));
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await requestControl(
+        "resources.model",
+        payload,
+        {
+          baseUrl: options.baseUrl,
+          fetchImpl: options.fetchImpl,
+          timeoutMilliseconds: options.timeoutMilliseconds
+            ?? RESOURCE_CONTROL_TIMEOUT_MILLISECONDS,
+        },
+      );
+    } catch (error) {
+      const message = error instanceof Error
+        ? error.message
+        : "E_DESKTOP_RESOURCE_CONTROL: resource model control failed";
+      if (
+        !message.includes("E_DESKTOP_CONTROL_OFFLINE")
+        || attempt >= retryDelays.length
+      ) {
+        throw new Error(
+          `${message} modelId=${payload.modelId} action=${payload.action}`,
+        );
+      }
+      const delay = retryDelays[attempt];
+      if (
+        delay === undefined
+        ||
+        !Number.isInteger(delay)
+        || delay < 0
+        || delay > 5_000
+      ) {
+        throw new Error(
+          `E_DESKTOP_RESOURCE_CONTROL: retry delay is invalid modelId=${payload.modelId} action=${payload.action}`,
+        );
+      }
+      await sleep(delay);
+    }
+  }
 }
 
 const VISION_PROVIDERS = new Set(["ollama_local", "ollama_cloud"]);

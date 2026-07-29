@@ -1,0 +1,109 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M08-S20-runtime-voice-vram-recovery",
+  "module_id": "M08",
+  "objective": "Recover desktop resource controls across control-plane startup gaps, keep long chat content fully reachable, evaluate and only promote a materially better Vietnamese local voice model when quality, provenance and the owner-approved all-on VRAM ceiling pass, and reduce Qwen runtime memory pressure with documented Ollama controls without misrepresenting RAM/VRAM offload.",
+  "non_goals": [
+    "Do not promote a TTS candidate from model-card claims alone, accept an unknown or incompatible weight/data license, delete owner-provided voice samples, or retain benchmark audio and one-off scripts after recording bounded metrics.",
+    "Do not replace the current q4_K_M brain weights with q8 weights under the false assumption that q8 is smaller, raise context beyond 8,192, add a second resident brain, bypass the scheduler, or exceed the owner-approved 15,872 MiB physical VRAM ceiling.",
+    "Do not make Hina train online from raw chat, public messages or unreviewed model output; this slice documents the future consented offline SFT/LoRA plus preference-learning path but does not open M11."
+  ],
+  "base_sha": "86187cfa6968d3ffe540e5e6a52172370a67bda4",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "tools/dev/Start-HinaDesktop.ps1",
+    "tools/dev/Start-HinaControlPlane.ps1",
+    "tools/dev/Start-HinaModelProvider.ps1",
+    "apps/desktop/electron/control-client.ts",
+    "apps/desktop/electron/main.ts",
+    "apps/desktop/src/App.vue",
+    "apps/desktop/src/style.css",
+    "apps/desktop/src/dashboard/pages/ChatPage.vue",
+    "apps/desktop/src/dashboard/pages/ResourcesPage.vue",
+    "apps/desktop/test/",
+    "packages/resource-scheduler/",
+    "packages/text-brain/src/hina_text_brain/config.py",
+    "packages/text-brain/src/hina_text_brain/providers.py",
+    "packages/text-brain/tests/",
+    "workers/speech/",
+    "apps/core-runtime/src/hina_core/runtime/application.py",
+    "apps/core-runtime/src/hina_core/runtime/transport.py",
+    "apps/core-runtime/tests/",
+    "pyproject.toml",
+    "uv.lock",
+    "package.json",
+    "third_party/code.lock.json",
+    "third_party/THIRD_PARTY_NOTICES.md",
+    "ml/models/manifests/",
+    "docs/provenance/",
+    "docs/modules/M08-S20-runtime-voice-vram-recovery-module-brief.json",
+    "docs/modules/M08-perception.md",
+    "docs/architecture/",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    ".gitnexus/",
+    ".claude/",
+    "CLAUDE.md",
+    "voice_demo/",
+    "assets/voices/",
+    "assets/avatars/",
+    "var/perception-sessions/",
+    "apps/desktop/dist/",
+    "apps/desktop/dist-electron/"
+  ],
+  "contracts": [
+    "A desktop owner action that begins during the bounded control-plane startup or restart window retries only idempotent read/load/unload control calls with a fixed deadline and reports phase plus correlation-safe error after exhaustion; it never loops indefinitely or hides a runtime crash.",
+    "The launcher proves control-plane readiness before considering desktop startup healthy, reuses one live loopback runtime, surfaces child exit and startup log output, and does not leak duplicate managed bridge/runtime processes.",
+    "The chat message viewport and sticky composer form a bounded flex layout with min-height zero, independent overflow and bottom padding so the final assistant message remains fully reachable at every supported desktop size.",
+    "A TTS replacement is selected only after real Vietnamese owner-reference generation, reverse-STT intelligibility, listening handoff, code/weight/data provenance review and a simultaneous local-model VRAM benchmark remain within 15,872 MiB physical used memory; otherwise OmniVoice remains the truthful default.",
+    "Ollama optimization distinguishes weight quantization from KV-cache quantization: q4_K_M weights remain the compact baseline, Flash Attention plus q8_0 KV and single parallel request are preferred, while partial GPU offload is an explicit slower degraded profile rather than a transparent mid-request VRAM spill.",
+    "Resource telemetry reports physical GPU totals and provider-attributable current/peak values when available, keeps unsupported per-model values null, and records the all-on measured peak without converting scheduler reservations into fake CUDA measurements.",
+    "Future learning uses owner-consented, curated and versioned Vietnamese conversation examples for offline SFT/LoRA and chosen/rejected preference pairs for DPO/ORPO-style training, with frozen evaluation, manual promotion and rollback; raw live chat never updates weights automatically."
+  ],
+  "allowed_dependencies": [
+    "Existing Python standard library, PyTorch CUDA stack, Vue 3/TypeScript, Electron typed preload, Ollama local API and repository test tooling.",
+    "One reviewed local TTS package/checkpoint may be pinned only if its code, weights and known data terms satisfy the current local non-commercial owner-testing policy and the real benchmark gates."
+  ],
+  "oss_candidates": [
+    "https://huggingface.co/g-group-ai-lab/g-omnivoice",
+    "https://huggingface.co/splendor1811/omnivoice-vietnamese",
+    "https://github.com/pnnbao97/VieNeu-TTS",
+    "https://github.com/fishaudio/fish-speech",
+    "https://github.com/k2-fsa/OmniVoice",
+    "https://docs.ollama.com/faq",
+    "https://docs.ollama.com/api",
+    "https://github.com/ollama/ollama"
+  ],
+  "acceptance_criteria": [
+    "Reproduction or fault injection shows a resource load/unload click during a short control-plane outage recovers after readiness, while a sustained outage logs one bounded E_DESKTOP_CONTROL_OFFLINE result with model/action context and no unbounded console spam.",
+    "A desktop layout regression proves the last long assistant message and composer are both reachable after scrolling at the screenshot viewport size and at a smaller supported height.",
+    "At least one credible newer Vietnamese local TTS candidate is verified from primary sources and run on the owner GPU when license/runtime compatibility permits; the default changes only if intelligibility/quality and the all-on admission gate beat OmniVoice without exceeding the ceiling.",
+    "The actual launcher/runtime enables or clearly diagnoses Ollama Flash Attention, q8_0 KV cache and one parallel request; documentation states that q8 weight quantization would consume more memory than the installed q4_K_M and that partial offload requires reload plus slower CPU/RAM execution.",
+    "A bounded all-on run records physical VRAM peak, resident model list and every attributable per-provider value, preserves unknown where attribution is impossible, then unloads test-only residency and removes generated artifacts.",
+    "Documentation gives the owner a concrete M11 data format and staged SFT/LoRA plus preference-learning workflow for improving Hina's Vietnamese conversation quality without unsafe online self-training.",
+    "Narrow desktop/control/text/speech/resource tests, one real startup smoke and git diff check pass; GitNexus impact precedes symbol edits and detect_changes validates scope before commit."
+  ],
+  "required_test_commands": [
+    "uv run --frozen python -c \"import json; from jsonschema import Draft202012Validator; schema=json.load(open('docs/schemas/module-brief.schema.json', encoding='utf-8')); brief=json.load(open('docs/modules/M08-S20-runtime-voice-vram-recovery-module-brief.json', encoding='utf-8')); Draft202012Validator(schema).validate(brief)\"",
+    "pnpm --filter @hina/desktop typecheck",
+    "pnpm test:desktop",
+    "uv run --frozen python -m unittest packages/text-brain/tests/test_providers.py packages/resource-scheduler/tests/test_scheduler.py workers/speech/tests/test_*.py apps/core-runtime/tests/test_resource_routes.py",
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Run-M07DesktopSmoke.ps1",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "control_recovery_deadline_seconds": 15,
+    "text_brain_context_tokens": 8192,
+    "text_response_deadline_seconds": 10,
+    "physical_vram_ceiling_mib": 15872,
+    "ollama_parallel_requests": 1,
+    "tts_speaking_rate": 1.0,
+    "generated_benchmark_media_retained": false
+  },
+  "output_artifact_dir": "artifacts/verification/M08/"
+}

@@ -292,6 +292,19 @@ pre,
   min-height: 100vh;
 }
 
+.desktop-shell--chat {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.desktop-shell--chat > .desktop-header,
+.desktop-shell--chat > .desktop-nav,
+.desktop-shell--chat > .error-banner {
+  flex: 0 0 auto;
+}
+
 .desktop-header {
   position: sticky;
   z-index: 10;
@@ -1511,9 +1524,19 @@ pre,
 .chat-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.3fr) minmax(320px, 0.7fr);
-  align-items: start;
+  align-items: stretch;
   gap: 18px;
-  min-height: 520px;
+  min-height: 0;
+  height: 100%;
+}
+
+.chat-page {
+  flex: 1 1 auto;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
 }
 
 .chat-messages,
@@ -1527,11 +1550,14 @@ pre,
   display: grid;
   align-content: start;
   gap: 12px;
-  min-height: 420px;
-  max-height: calc(100vh - 218px);
+  min-height: 0;
+  max-height: none;
+  height: 100%;
+  padding-bottom: 34px;
   overflow-y: auto;
   overscroll-behavior: contain;
   scroll-behavior: smooth;
+  scroll-padding-block-end: 34px;
 }
 
 .chat-empty,
@@ -1597,8 +1623,8 @@ pre,
 .chat-composer {
   align-self: start;
   position: sticky;
-  top: 148px;
-  max-height: calc(100vh - 166px);
+  top: 0;
+  max-height: 100%;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -2151,6 +2177,13 @@ pre {
 }
 
 @media (max-width: 1050px) {
+  .desktop-shell--chat {
+    display: block;
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
   .overview-grid,
   .live2d-grid,
   .vision-status-grid,
@@ -2203,9 +2236,18 @@ pre {
 
   .chat-layout {
     grid-template-columns: 1fr;
+    height: auto;
+  }
+
+  .chat-page {
+    height: auto;
+    min-height: calc(100vh - 134px);
+    grid-template-rows: auto auto;
+    overflow: visible;
   }
 
   .chat-messages {
+    min-height: 420px;
     max-height: min(560px, calc(100vh - 250px));
   }
 

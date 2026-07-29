@@ -18,6 +18,9 @@
   M08-S17 Avatar/Runtime dashboard modularity is a runnable candidate;
   M08-S18 Avatar/Runtime trusted composable modularity is a runnable candidate;
   M08-S19 observation isolation/OCR retirement/truthful VRAM is a runnable candidate;
+  M08-S20 desktop recovery/chat layout/partial-offload reasoning is a runnable
+  candidate; the TTS replacement gate retained OmniVoice because tested public
+  alternatives did not beat its Vietnamese owner-reference baseline;
   M08 remains active
 - Branch: `main` (fast-development mode)
 - Active slices: M08-S1 perception spine (owner-consented snapshot ingestion,
@@ -40,7 +43,10 @@
   keeps companion chat/prompt and dashboard boundaries explicit; M08-S13 moves
   the complete owner-facing Perception workflow into a dedicated page component
   while preserving the existing capture and secret boundaries; M08-S19 isolates
-  consecutive images, retires local OCR and makes model VRAM sources explicit
+  consecutive images, retires local OCR and makes model VRAM sources explicit;
+  M08-S20 bounds desktop resource-control recovery, fixes the chat viewport,
+  offloads four Qwen text layers to RAM and keeps selective Thinking below the
+  ten-second owner deadline
 
 ## Runnable target
 
@@ -830,3 +836,49 @@ provenance before they may replace the pinned checkpoint.
 - `pnpm test:desktop`: production build + 54 tests pass; sampled peak is retained
   only in memory for the current desktop session.
 - `pnpm smoke:dev-console`: loopback startup/health smoke pass.
+
+## Implemented in M08-S20 (desktop recovery, voice gate and all-on VRAM)
+
+- Electron resource `load`/`unload` calls now allow a 120-second cold-operation
+  window and retry only a true loopback `E_DESKTOP_CONTROL_OFFLINE` condition
+  with bounded 250/500/1,000/2,000/4,000 ms backoff. A timed-out POST is never
+  replayed. Logs include the allowlisted model/action while keeping payloads and
+  prompts out of the renderer console.
+- The Ollama startup smoke checks `/api/ps` before probing and preserves a
+  checkpoint that was already resident. Re-running `start:desktop` no longer
+  evicts an owner-pinned Brain behind the scheduler's back.
+- The chat page is a viewport-bounded grid. Its message list owns the vertical
+  scroll and bottom padding, while the composer remains reachable without
+  compressing or clipping the last assistant message.
+- Ollama still runs the same `qwen3-vl:8b-thinking-q4_K_M` weights and 8,192
+  context. The text brain now requests 32 of 36 text layers on GPU; four layers
+  run from system RAM. Flash Attention, q8_0 KV cache, one parallel request and
+  one loaded Ollama model remain the launcher defaults.
+- Selective Thinking is now two bounded passes on that same checkpoint:
+  256 private scratchpad tokens followed by a 128-token final-answer pass. The
+  scratchpad never crosses the provider boundary into logs, memory, desktop or
+  TTS.
+- A Vietnamese TTS replacement was not promoted. VieNeu v2 Standard and the
+  public `splendor1811/omnivoice-vietnamese` checkpoint both failed owner-
+  reference reverse-STT quality. G-OmniVoice is the next credible candidate but
+  its files require owner acceptance of gated Hugging Face terms before a real
+  A/B can run. The measured current OmniVoice baseline remains the default.
+- Detailed research and measurements are in
+  `docs/research/M08-S20-vietnamese-tts-ollama-vram-2026-07-29.md`. The future
+  owner-curated SFT/QLoRA plus preference-learning workflow is in
+  `docs/architecture/hina-conversation-learning.md`.
+
+## Fast evidence M08-S20 (owner machine)
+
+- Brain, Faster-Whisper large-v3 and OmniVoice were forced resident together.
+- Simple owner turn: 2.673 s, completed.
+- Selectively reasoned owner turn: 5.789 s, completed.
+- 100 ms NVIDIA sampling across both turns: 12,905 MiB physical peak, 3,091
+  MiB minimum free, 99% maximum GPU utilization.
+- Ollama `/api/ps`: brain resident about 4,735 MiB at 8,192 context.
+- OmniVoice provider baseline: 1,946.3 MiB allocated; Faster-Whisper remains
+  `null` per-model because CTranslate2 exposes no trustworthy model-only CUDA
+  counter in the shared native worker.
+- Text-brain provider/config tests: 21 pass. Desktop production build and 56
+  security/contract tests pass; real Electron startup smoke reports runtime,
+  local VRM, resource IPC and transparent widget ready.

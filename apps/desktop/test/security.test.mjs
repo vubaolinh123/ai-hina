@@ -29,9 +29,12 @@ test("desktop warms the one 8B brain through the bounded GPU fast path", () => {
     launcher,
     /&\s+\$modelScript\s+-PullMissingModel\s+-StartupCheck/,
   );
-  assert.match(providerBootstrap, /keep_alive\s*=\s*0/);
+  assert.match(providerBootstrap, /\/api\/ps/);
+  assert.match(providerBootstrap, /wasResident/);
+  assert.match(providerBootstrap, /keep_alive\s*=\s*\$probeKeepAlive/);
   assert.match(providerBootstrap, /num_predict\s*=\s*8/);
-  assert.match(providerBootstrap, /num_gpu\s*=\s*999/);
+  assert.match(providerBootstrap, /else\s*\{\s*32\s*\}/);
+  assert.match(providerBootstrap, /num_gpu\s*=\s*\$gpuLayers/);
   assert.match(providerBootstrap, /Elapsed\.TotalSeconds\s+-ge\s+10/);
 });
 
@@ -215,7 +218,12 @@ test("operator dashboard keeps page markup modular and chat input reachable", ()
   assert.match(avatarRuntime, /window\.hinaDesktop\.applySafetyControl/);
   assert.doesNotMatch(avatarRuntime, /from\s+["']electron["']|\bfetch\s*\(|node:|localStorage|sessionStorage|indexedDB|process\.env/);
   assert.match(style, /\.chat-composer[\s\S]*position:\s*sticky/);
+  assert.match(app, /class="desktop-shell"[\s\S]*desktop-shell--chat[\s\S]*activePage === 'chat'/);
+  assert.match(style, /\.desktop-shell--chat\s*\{[\s\S]*height:\s*100vh[\s\S]*overflow:\s*hidden/);
+  assert.match(style, /\.chat-page\s*\{[\s\S]*flex:\s*1 1 auto[\s\S]*height:\s*auto[\s\S]*overflow:\s*hidden/);
+  assert.match(style, /\.chat-messages\s*\{[\s\S]*height:\s*100%[\s\S]*padding-bottom:\s*34px[\s\S]*overflow-y:\s*auto[\s\S]*scroll-padding-block-end:\s*34px/);
   assert.match(style, /\.chat-layout[\s\S]*grid-template-columns:\s*1fr/);
+  assert.match(style, /@media \(max-width:\s*1050px\)[\s\S]*\.chat-page\s*\{[\s\S]*height:\s*auto[\s\S]*overflow:\s*visible/);
 });
 
 test("resource telemetry and owner controls stay behind typed operator IPC", () => {
@@ -717,6 +725,58 @@ test("control client retries cleanly after a transient service restart", async (
     { status: "ready" },
   );
   assert.equal(attempts, 2);
+});
+
+test("resource model control survives a bounded control-plane restart", async () => {
+  let attempts = 0;
+  const delays = [];
+  const fetchImpl = async () => {
+    attempts += 1;
+    if (attempts < 3) {
+      throw new TypeError("connection refused");
+    }
+    return new Response(JSON.stringify({ status: "loaded" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+  const result = await control.requestResourceModelControl(
+    "speech.tts",
+    "load",
+    {
+      fetchImpl,
+      retryDelaysMilliseconds: [10, 20],
+      sleep: async (milliseconds) => {
+        delays.push(milliseconds);
+      },
+    },
+  );
+  assert.deepEqual(result, { status: "loaded" });
+  assert.equal(attempts, 3);
+  assert.deepEqual(delays, [10, 20]);
+});
+
+test("resource model control reports warmup timeout without replaying the POST", async () => {
+  let attempts = 0;
+  const timeout = new Error("timed out");
+  timeout.name = "TimeoutError";
+  await assert.rejects(
+    control.requestResourceModelControl(
+      "speech.stt",
+      "load",
+      {
+        fetchImpl: async () => {
+          attempts += 1;
+          throw timeout;
+        },
+        retryDelaysMilliseconds: [0, 0],
+        sleep: async () => {},
+        timeoutMilliseconds: 25,
+      },
+    ),
+    /E_DESKTOP_CONTROL_TIMEOUT:.*25 ms.*modelId=speech\.stt action=load/,
+  );
+  assert.equal(attempts, 1);
 });
 
 test("renderer CSP denies network, objects, framing and form submission", () => {

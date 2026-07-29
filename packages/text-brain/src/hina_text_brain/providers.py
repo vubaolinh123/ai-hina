@@ -331,13 +331,27 @@ class LocalHttpChatProvider:
         stop: threading.Event,
         connection_holder: dict[str, http.client.HTTPConnection],
     ) -> None:
-        connection = self._connection(self.config.request_timeout_seconds)
-        connection_holder["connection"] = connection
         deadline = time.monotonic() + self.config.request_timeout_seconds
         if (
             self.config.provider is ProviderKind.OLLAMA
-            and not _requires_hidden_thinking(messages)
+            and _requires_hidden_thinking(messages)
         ):
+            try:
+                self._stream_reasoned_ollama_sync(
+                    messages,
+                    emit,
+                    stop,
+                    connection_holder,
+                    deadline,
+                )
+            finally:
+                if not self._operator_pinned:
+                    self._unload_sync()
+            return
+
+        connection = self._connection(self.config.request_timeout_seconds)
+        connection_holder["connection"] = connection
+        if self.config.provider is ProviderKind.OLLAMA:
             endpoint = self.config.endpoint_path("generate")
             body = self._fast_generate_body(messages)
             stream_kind = "ollama-generate"
@@ -400,6 +414,153 @@ class LocalHttpChatProvider:
         finally:
             connection_holder.pop("connection", None)
             connection.close()
+
+    def _stream_reasoned_ollama_sync(
+        self,
+        messages: list[dict[str, str]],
+        emit: Any,
+        stop: threading.Event,
+        connection_holder: dict[str, http.client.HTTPConnection],
+        deadline: float,
+    ) -> None:
+        """Run a bounded private scratchpad, then stream only its final answer."""
+
+        reasoning_connection = self._connection(self.config.request_timeout_seconds)
+        connection_holder["connection"] = reasoning_connection
+        try:
+            body = self._chat_body(messages)
+            reasoning_connection.request(
+                "POST",
+                self.config.endpoint_path("chat"),
+                body=body,
+                headers=self._headers(content_length=len(body)),
+            )
+            response = reasoning_connection.getresponse()
+            _assert_before_deadline(deadline)
+            if response.status != 200:
+                response.read(4_096)
+                raise TextBrainError(
+                    "E_MODEL_UNAVAILABLE",
+                    f"local model provider returned HTTP {response.status}",
+                    retryable=response.status >= 500 or response.status in {408, 429},
+                )
+            _set_remaining_socket_timeout(reasoning_connection, deadline)
+            raw = response.read(self.config.max_output_bytes + 1)
+            _assert_before_deadline(deadline)
+            if len(raw) > self.config.max_output_bytes:
+                raise TextBrainError(
+                    "E_MODEL_STREAM_INVALID",
+                    "private reasoning response exceeds byte limit",
+                )
+            payload = json.loads(raw.decode("utf-8"))
+            if not isinstance(payload, dict) or payload.get("error") is not None:
+                raise ValueError
+            message = payload.get("message")
+            if not isinstance(message, dict):
+                raise ValueError
+            content = message.get("content", "")
+            thinking = message.get("thinking", "")
+            if not isinstance(content, str) or not isinstance(thinking, str):
+                raise ValueError
+            if content.strip() and payload.get("done_reason") != "length":
+                emit(content)
+                return
+            if not thinking.strip():
+                raise TextBrainError(
+                    "E_MODEL_EMPTY_RESPONSE",
+                    "local model returned no private scratchpad or final answer",
+                    retryable=True,
+                )
+        except TextBrainError:
+            raise
+        except TimeoutError as exc:
+            raise TextBrainError(
+                "E_MODEL_TIMEOUT",
+                "local model exceeded the configured response deadline",
+                retryable=True,
+            ) from exc
+        except (
+            OSError,
+            http.client.HTTPException,
+            json.JSONDecodeError,
+            UnicodeDecodeError,
+            ValueError,
+        ) as exc:
+            raise TextBrainError(
+                "E_MODEL_UNAVAILABLE",
+                "local model private reasoning request failed",
+                retryable=True,
+            ) from exc
+        finally:
+            connection_holder.pop("connection", None)
+            reasoning_connection.close()
+
+        if stop.is_set():
+            return
+
+        answer_connection = self._connection(self.config.request_timeout_seconds)
+        connection_holder["connection"] = answer_connection
+        body = self._reasoned_generate_body(messages, thinking)
+        try:
+            answer_connection.request(
+                "POST",
+                self.config.endpoint_path("generate"),
+                body=body,
+                headers=self._headers(content_length=len(body)),
+            )
+            response = answer_connection.getresponse()
+            _assert_before_deadline(deadline)
+            if response.status != 200:
+                response.read(4_096)
+                raise TextBrainError(
+                    "E_MODEL_UNAVAILABLE",
+                    f"local model provider returned HTTP {response.status}",
+                    retryable=response.status >= 500 or response.status in {408, 429},
+                )
+            total_bytes = 0
+            while not stop.is_set():
+                _set_remaining_socket_timeout(answer_connection, deadline)
+                line = response.readline(65_537)
+                _assert_before_deadline(deadline)
+                if not line:
+                    break
+                if len(line) > 65_536:
+                    raise TextBrainError(
+                        "E_MODEL_STREAM_INVALID",
+                        "provider stream line is too large",
+                    )
+                token, done = self._parse_stream_line(
+                    line,
+                    stream_kind="ollama-generate",
+                )
+                if token:
+                    token_bytes = len(token.encode("utf-8"))
+                    total_bytes += token_bytes
+                    if total_bytes > self.config.max_output_bytes:
+                        raise TextBrainError(
+                            "E_MODEL_STREAM_INVALID",
+                            "provider output exceeds byte limit",
+                        )
+                    emit(token)
+                if done:
+                    break
+        except TextBrainError:
+            raise
+        except TimeoutError as exc:
+            raise TextBrainError(
+                "E_MODEL_TIMEOUT",
+                "local model exceeded the configured response deadline",
+                retryable=True,
+            ) from exc
+        except (OSError, http.client.HTTPException) as exc:
+            raise TextBrainError(
+                "E_MODEL_UNAVAILABLE",
+                "local model provider stream is unavailable",
+                retryable=True,
+            ) from exc
+        finally:
+            connection_holder.pop("connection", None)
+            answer_connection.close()
 
     def _parse_stream_line(
         self,
@@ -487,7 +648,10 @@ class LocalHttpChatProvider:
                 "think": False,
                 "options": {
                     "num_predict": 1,
-                    "num_ctx": min(self.config.context_tokens, 2_048),
+                    # Force-load must reflect the context that real turns use;
+                    # a 2K probe understated resident KV memory and caused the
+                    # first 8K turn to reload inside its nine-second deadline.
+                    "num_ctx": self.config.context_tokens,
                     "num_gpu": self.config.ollama_gpu_layers,
                 },
             },
@@ -600,12 +764,11 @@ class LocalHttpChatProvider:
             payload: dict[str, Any] = {
                 "model": self.config.model,
                 "messages": messages,
-                "stream": True,
-                # Hina alternates one 8B multimodal model with GPU-only STT/TTS on a
-                # 16 GiB card. Keeping Ollama resident after the stream leaves
-                # no truthful way for the shared scheduler to preserve its
-                # mandatory 2 GiB headroom.
-                "keep_alive": -1 if self._operator_pinned else 0,
+                "stream": False,
+                # Keep the same resident checkpoint between the private
+                # scratchpad and final-answer pass. The second pass releases it
+                # when the operator has not explicitly pinned the model.
+                "keep_alive": -1,
                 "think": True,
                 "options": {
                     "temperature": self.config.temperature,
@@ -632,6 +795,43 @@ class LocalHttpChatProvider:
                 "temperature": self.config.temperature,
                 "max_tokens": self.config.max_tokens,
             }
+        return json.dumps(
+            payload,
+            ensure_ascii=False,
+            allow_nan=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+
+    def _reasoned_generate_body(
+        self,
+        messages: list[dict[str, str]],
+        thinking: str,
+    ) -> bytes:
+        payload = {
+            "model": self.config.model,
+            "prompt": _qwen_reasoned_prompt(messages, thinking),
+            "raw": True,
+            "stream": True,
+            # The wrapper explicitly unloads non-pinned models after this
+            # second pass, including cancellation and error paths.
+            "keep_alive": -1,
+            "options": {
+                "temperature": self.config.temperature,
+                "repeat_penalty": self.config.repeat_penalty,
+                "num_predict": self.config.max_tokens,
+                "num_ctx": self.config.context_tokens,
+                "num_gpu": self.config.ollama_gpu_layers,
+                "stop": [
+                    "<|im_end|>",
+                    "<think>",
+                    "\n---\n",
+                    "\n**Phân tích hành vi",
+                    "\nPhân tích hành vi:",
+                    "\nSystem prompt:",
+                    "\nDeveloper instruction:",
+                ],
+            },
+        }
         return json.dumps(
             payload,
             ensure_ascii=False,
@@ -793,6 +993,23 @@ def _qwen_no_think_prompt(messages: list[dict[str, str]]) -> str:
     # Closing the private block in the raw prompt gives simple text requests a
     # same-weight fast path without loading a second Instruct checkpoint.
     parts.append("<|im_start|>assistant\n<think>\n\n</think>\n\n")
+    return "".join(parts)
+
+
+def _qwen_reasoned_prompt(
+    messages: list[dict[str, str]],
+    thinking: str,
+) -> str:
+    parts: list[str] = []
+    for item in messages:
+        role = item["role"]
+        content = _neutralize_qwen_control_tokens(item["content"])
+        parts.append(f"<|im_start|>{role}\n{content}<|im_end|>\n")
+    private_scratchpad = _neutralize_qwen_control_tokens(thinking)
+    parts.append(
+        "<|im_start|>assistant\n"
+        f"<think>\n{private_scratchpad}\n</think>\n\n"
+    )
     return "".join(parts)
 
 

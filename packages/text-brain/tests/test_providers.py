@@ -26,6 +26,7 @@ class _ProviderHandler(BaseHTTPRequestHandler):
     malformed = False
     authorization: str | None = None
     received_body: dict[str, Any] | None = None
+    received_requests: list[tuple[str, dict[str, Any]]] = []
 
     def log_message(self, *_: object) -> None:
         return
@@ -59,8 +60,25 @@ class _ProviderHandler(BaseHTTPRequestHandler):
         type(self).authorization = self.headers.get("Authorization")
         length = int(self.headers.get("Content-Length", "0"))
         type(self).received_body = json.loads(self.rfile.read(length).decode("utf-8"))
+        type(self).received_requests.append((self.path, type(self).received_body))
         if self.path == "/api/chat":
             if type(self).received_body.get("stream") is False:
+                if not any(
+                    isinstance(item, dict) and "images" in item
+                    for item in type(self).received_body.get("messages", [])
+                ):
+                    self._json(
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "thinking": "private reasoning must not be yielded",
+                                "content": "",
+                            },
+                            "done": True,
+                            "done_reason": "length",
+                        }
+                    )
+                    return
                 self._json(
                     {
                         "message": {
@@ -146,6 +164,7 @@ class ProviderAdapterTests(unittest.IsolatedAsyncioTestCase):
         _ProviderHandler.malformed = False
         _ProviderHandler.authorization = None
         _ProviderHandler.received_body = None
+        _ProviderHandler.received_requests = []
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), _ProviderHandler)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -181,11 +200,11 @@ class ProviderAdapterTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(
             _ProviderHandler.received_body["options"]["num_gpu"],
-            999,
+            32,
         )
         self.assertEqual(
             _ProviderHandler.received_body["options"]["num_predict"],
-            192,
+            128,
         )
         self.assertEqual(
             _ProviderHandler.received_body["options"]["temperature"],
@@ -213,6 +232,8 @@ class ProviderAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(body["think"])
         self.assertEqual(body["keep_alive"], -1)
         self.assertEqual(body["options"]["num_predict"], 1)
+        self.assertEqual(body["options"]["num_ctx"], 8_192)
+        self.assertEqual(body["options"]["num_gpu"], 32)
 
     async def test_ollama_residency_distinguishes_loaded_from_installed(self) -> None:
         provider = LocalHttpChatProvider(
@@ -244,12 +265,27 @@ class ProviderAdapterTests(unittest.IsolatedAsyncioTestCase):
             )
         ]
         self.assertEqual("".join(tokens), "Xin chao")
-        body = _ProviderHandler.received_body
-        assert body is not None
-        self.assertIs(body["think"], True)
-        self.assertEqual(body["options"]["num_predict"], 768)
-        self.assertEqual(body["options"]["num_ctx"], 8_192)
-        self.assertEqual(body["options"]["num_gpu"], 999)
+        self.assertEqual(
+            [path for path, _ in _ProviderHandler.received_requests],
+            ["/api/chat", "/api/generate", "/api/generate"],
+        )
+        reasoning_body = _ProviderHandler.received_requests[0][1]
+        answer_body = _ProviderHandler.received_requests[1][1]
+        unload_body = _ProviderHandler.received_requests[2][1]
+        self.assertIs(reasoning_body["think"], True)
+        self.assertFalse(reasoning_body["stream"])
+        self.assertEqual(reasoning_body["keep_alive"], -1)
+        self.assertEqual(reasoning_body["options"]["num_predict"], 256)
+        self.assertEqual(reasoning_body["options"]["num_ctx"], 8_192)
+        self.assertEqual(reasoning_body["options"]["num_gpu"], 32)
+        self.assertTrue(answer_body["stream"])
+        self.assertTrue(answer_body["raw"])
+        self.assertEqual(answer_body["keep_alive"], -1)
+        self.assertEqual(answer_body["options"]["num_predict"], 128)
+        self.assertIn("\n**Phân tích hành vi", answer_body["options"]["stop"])
+        self.assertIn("\nPhân tích hành vi:", answer_body["options"]["stop"])
+        self.assertIn("<think>\nprivate reasoning must not be yielded\n</think>", answer_body["prompt"])
+        self.assertEqual(unload_body, {"model": "hina-local:4b", "keep_alive": 0})
         self.assertNotIn("private reasoning", "".join(tokens))
 
     async def test_fast_prompt_neutralizes_untrusted_qwen_control_tokens(self) -> None:
@@ -294,7 +330,7 @@ class ProviderAdapterTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(text, "Hello Hina")
         self.assertEqual(_ProviderHandler.authorization, "Bearer test-secret")
-        self.assertEqual(_ProviderHandler.received_body["max_tokens"], 192)
+        self.assertEqual(_ProviderHandler.received_body["max_tokens"], 128)
 
     async def test_malformed_provider_stream_fails_without_fake_text(self) -> None:
         _ProviderHandler.malformed = True
@@ -327,7 +363,7 @@ class ProviderAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertIs(body["think"], True)
         self.assertEqual(body["options"]["num_ctx"], 8_192)
         self.assertEqual(body["options"]["num_predict"], 256)
-        self.assertEqual(body["options"]["num_gpu"], 999)
+        self.assertEqual(body["options"]["num_gpu"], 32)
         self.assertEqual(
             body["messages"][1],
             {"role": "assistant", "content": "<think>\n\n</think>\n\n"},
@@ -350,7 +386,7 @@ class ProviderAdapterTests(unittest.IsolatedAsyncioTestCase):
         assert body is not None
         self.assertEqual(len(body["messages"]), 1)
         self.assertIs(body["think"], True)
-        self.assertEqual(body["options"]["num_predict"], 768)
+        self.assertEqual(body["options"]["num_predict"], 256)
 
     async def test_vision_rejects_non_png_without_http_request(self) -> None:
         provider = LocalHttpChatProvider(

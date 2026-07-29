@@ -31,10 +31,20 @@ class ModelGatewayConfig:
     model_vram_mib: int = 8_192
     model_ram_mib: int = 2_048
     context_tokens: int = 8_192
-    ollama_gpu_layers: int = 999
-    max_tokens: int = 192
+    # Keep four of Qwen3-VL's 36 text layers in system RAM.  On the owner's
+    # 16 GiB GPU this leaves enough live VRAM for Faster-Whisper and OmniVoice
+    # while preserving the same Q4_K_M weights and 8K context.
+    ollama_gpu_layers: int = 32
+    # Persona v4 normally answers in at most 45 words.  A 128-token ceiling
+    # leaves room for Vietnamese punctuation while preventing a simple turn
+    # from consuming the whole nine-second deadline with unwanted verbosity.
+    max_tokens: int = 128
     vision_fast_max_tokens: int = 256
-    thinking_max_tokens: int = 768
+    # Complex turns use this as a private scratchpad budget before a second,
+    # bounded final-answer pass on the same checkpoint.  A larger one-pass
+    # budget regularly consumed the whole nine-second owner latency deadline
+    # without producing any visible answer under partial GPU offload.
+    thinking_max_tokens: int = 256
     temperature: float = 0.7
     repeat_penalty: float = 1.15
 
@@ -117,14 +127,14 @@ class ModelGatewayConfig:
             model_vram_mib=_env_int(values, "HINA_MODEL_VRAM_MIB", 8_192),
             model_ram_mib=_env_int(values, "HINA_MODEL_RAM_MIB", 2_048),
             context_tokens=_env_int(values, "HINA_MODEL_CONTEXT_TOKENS", 8_192),
-            ollama_gpu_layers=_env_int(values, "HINA_MODEL_OLLAMA_GPU_LAYERS", 999),
-            max_tokens=_env_int(values, "HINA_MODEL_MAX_TOKENS", 192),
+            ollama_gpu_layers=_env_int(values, "HINA_MODEL_OLLAMA_GPU_LAYERS", 32),
+            max_tokens=_env_int(values, "HINA_MODEL_MAX_TOKENS", 128),
             vision_fast_max_tokens=_env_int(
                 values,
                 "HINA_MODEL_VISION_FAST_MAX_TOKENS",
                 256,
             ),
-            thinking_max_tokens=_env_int(values, "HINA_MODEL_THINKING_MAX_TOKENS", 768),
+            thinking_max_tokens=_env_int(values, "HINA_MODEL_THINKING_MAX_TOKENS", 256),
             temperature=_env_float(values, "HINA_MODEL_TEMPERATURE", 0.7),
             repeat_penalty=_env_float(values, "HINA_MODEL_REPEAT_PENALTY", 1.15),
         )

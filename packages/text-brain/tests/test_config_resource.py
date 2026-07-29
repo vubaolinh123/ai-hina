@@ -43,6 +43,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(default.warmup_timeout_seconds, 45.0)
         self.assertEqual(default.retry_attempts, 0)
         self.assertEqual(default.model_vram_mib, 8_192)
+        self.assertEqual(default.ollama_gpu_layers, 32)
         config = ModelGatewayConfig(
             provider=ProviderKind.OPENAI_COMPATIBLE,
             base_url="http://localhost:1234/v1",
@@ -52,12 +53,12 @@ class ConfigTests(unittest.TestCase):
         status = config.public_status()
         self.assertTrue(status["apiKeyConfigured"])
         self.assertNotIn("owner-secret", str(status))
-        self.assertEqual(config.max_tokens, 192)
-        self.assertEqual(status["maxTokens"], 192)
+        self.assertEqual(config.max_tokens, 128)
+        self.assertEqual(status["maxTokens"], 128)
         self.assertEqual(config.vision_fast_max_tokens, 256)
         self.assertEqual(status["visionFastMaxTokens"], 256)
-        self.assertEqual(config.thinking_max_tokens, 768)
-        self.assertEqual(status["thinkingMaxTokens"], 768)
+        self.assertEqual(config.thinking_max_tokens, 256)
+        self.assertEqual(status["thinkingMaxTokens"], 256)
         self.assertEqual(config.context_tokens, 8_192)
         self.assertEqual(status["contextTokens"], 8_192)
         self.assertEqual(status["admissionTimeoutSeconds"], 1.0)
@@ -69,6 +70,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(status["temperature"], 0.7)
         self.assertEqual(config.repeat_penalty, 1.15)
         self.assertEqual(status["repeatPenalty"], 1.15)
+        self.assertEqual(status["ollamaGpuLayers"], 32)
         self.assertEqual(status["reasoningPolicy"], "deterministic-auto")
         self.assertFalse(status["hiddenReasoningExposed"])
         self.assertEqual(config.endpoint_path("chat"), "/v1/chat/completions")

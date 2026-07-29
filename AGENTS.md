@@ -300,6 +300,23 @@ research estimate vì KV f16 thêm khoảng 5.879 MiB (q8_0 khoảng 2.940 MiB) 
 tính buffer và không vừa all-on budget an toàn hiện tại. GitNexus `ai-hina`
 được dùng để query/context/impact trước edit và `detect_changes` trước commit;
 generated `.gitnexus` index không phải source artifact.
+Ngày 2026-07-29 M08-S20 sửa resource-control desktop: cold load/unload có timeout
+120 giây, chỉ retry `E_DESKTOP_CONTROL_OFFLINE` theo backoff bounded và không
+replay POST đã timeout; startup probe bảo toàn model đã resident trong `/api/ps`
+thay vì unload Brain owner-pinned; chat page dùng inner scroll với composer luôn
+reachable.
+Text brain giữ `qwen3-vl:8b-thinking-q4_K_M` Q4_K_M/context 8.192 nhưng chuyển
+4/36 text layer sang RAM (`num_gpu=32`). Selective Thinking chạy private
+scratchpad 256 token rồi final 128 token trên cùng checkpoint; reasoning không
+được log/memory/UI/TTS. Real all-on Brain + Faster-Whisper + OmniVoice đạt peak
+12.905 MiB, free tối thiểu 3.091 MiB; simple/complex turn hoàn tất 2,673/5,789
+giây. TTS gate không promote model mới: VieNeu v2 và public Vietnamese OmniVoice
+fine-tune fail reverse-STT owner reference; G-OmniVoice cần owner accept gated
+Hugging Face terms. OmniVoice hiện tại vẫn là default có evidence tốt nhất.
+Future style learning phải theo owner-curated offline QLoRA SFT + preference
+pairs trong `docs/architecture/hina-conversation-learning.md`, không online
+self-training từ live/public chat. Fast gate M08-S20: text-brain 21 test,
+desktop production build + 56 test và Electron startup smoke xanh.
 
 Legacy AIRI skill paths dưới `D:\ProjectAiri` mặc định ánh xạ sang repository
 hiện tại `D:\ProjectHinaAI`, trừ khi owner chỉ định workspace khác.

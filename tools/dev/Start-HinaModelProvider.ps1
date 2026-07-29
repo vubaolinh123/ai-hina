@@ -10,6 +10,15 @@ $logDirectory = [System.IO.Path]::GetFullPath((Join-Path $repoRoot "var\logs"))
 $provider = if ($env:HINA_MODEL_PROVIDER) { $env:HINA_MODEL_PROVIDER.Trim().ToLowerInvariant() } else { "ollama" }
 $baseUrl = if ($env:HINA_MODEL_BASE_URL) { $env:HINA_MODEL_BASE_URL.TrimEnd("/") } else { "http://127.0.0.1:11434" }
 $model = if ($env:HINA_MODEL_NAME) { $env:HINA_MODEL_NAME.Trim() } else { "qwen3-vl:8b-thinking-q4_K_M" }
+$gpuLayers = if ($env:HINA_MODEL_OLLAMA_GPU_LAYERS) {
+    [int]$env:HINA_MODEL_OLLAMA_GPU_LAYERS
+}
+else {
+    32
+}
+if ($gpuLayers -lt 1 -or $gpuLayers -gt 4096) {
+    throw "HINA_MODEL_OLLAMA_GPU_LAYERS must be between 1 and 4096"
+}
 
 if ($provider -ne "ollama") {
     Write-Host "[hina-model] Skipping Ollama bootstrap because provider is '$provider'."
@@ -101,17 +110,29 @@ if ($installed -notcontains $model) {
 Write-Host "[hina-model] Ready: $provider / $model at $baseUrl"
 
 if ($StartupCheck) {
+    # A second desktop launch must not silently evict a model that the running
+    # control plane has owner-pinned. Preserve the pre-probe residency state;
+    # a genuinely cold startup still unloads after its bounded health smoke.
+    $residentBeforeProbe = Invoke-RestMethod `
+        -Method Get `
+        -Uri "$baseUrl/api/ps" `
+        -TimeoutSec 5
+    $wasResident = @(
+        $residentBeforeProbe.models |
+            ForEach-Object { if ($_.name) { $_.name } else { $_.model } }
+    ) -contains $model
+    $probeKeepAlive = if ($wasResident) { -1 } else { 0 }
     $body = @{
         model = $model
         stream = $false
         raw = $true
-        keep_alive = 0
+        keep_alive = $probeKeepAlive
         prompt = "<|im_start|>user`nReply with exactly one word: OK<|im_end|>`n<|im_start|>assistant`n<think>`n`n</think>`n`n"
         options = @{
             num_predict = 8
             temperature = 0
             num_ctx = 8192
-            num_gpu = 999
+            num_gpu = $gpuLayers
             stop = @("<|im_end|>", "<think>")
         }
     } | ConvertTo-Json -Depth 5
@@ -130,7 +151,7 @@ if ($StartupCheck) {
         throw "Ollama startup smoke exceeded the 10-second model deadline."
     }
     Write-Host (
-        "[hina-model] Fast-path smoke PASS in {0:N2}s (Qwen3-VL Thinking, GPU-only request)." `
-            -f $stopwatch.Elapsed.TotalSeconds
+        "[hina-model] Fast-path smoke PASS in {0:N2}s (Qwen3-VL Thinking, {1} GPU layers, resident preserved: {2})." `
+            -f $stopwatch.Elapsed.TotalSeconds, $gpuLayers, $wasResident
     )
 }
