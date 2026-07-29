@@ -17,6 +17,7 @@ import {
   requestChatStart,
   requestChatStatus,
   requestChatTurn,
+  requestPerceptionClear,
   requestPerceptionSnapshot,
   requestSpeechSynthesis,
   requestSpeechTranscription,
@@ -261,6 +262,11 @@ async function submitDesktopCapture(
     request.grantSessionId,
     request.sourceToken,
   );
+  // A new explicit capture starts a new observation epoch. Revoke the prior
+  // frame before asking the OS for a replacement so a disappeared source,
+  // encoder failure or dead downstream worker cannot leave old image context
+  // eligible as though it belonged to this attempt.
+  await requestPerceptionClear();
   const totalStartedAt = performance.now();
   onProgress?.({
     phase: "capturing",

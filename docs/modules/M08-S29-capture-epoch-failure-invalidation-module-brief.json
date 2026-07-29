@@ -1,0 +1,74 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M08-S29-capture-epoch-failure-invalidation",
+  "module_id": "M08",
+  "objective": "Close the M08 dropped-frame/capture-worker-failure gap by invalidating every prior fresh screen observation at the start of a new owner-confirmed capture epoch, before Electron requests the selected OS frame, so a disappeared source or failed capture cannot leave the previous image eligible for chat context.",
+  "non_goals": [
+    "Do not run a real desktop capture, Vision model, Cloud request, GPU benchmark, repeated workflow or soak test.",
+    "Do not add auto-capture, background monitoring, renderer access to raw source IDs or a new persistence path.",
+    "Do not change the 15-second TTL, owner grant lifetime, single-use behavior, Vision confidence, archive retention or scene-QA gate.",
+    "Do not change shared control transport parsing, retry semantics or response bounds.",
+    "Do not open M09 or claim the owner scene-QA accuracy/diversity gate."
+  ],
+  "base_sha": "4b7f54adbbd1a28c0763cdd1573bef7871b148d9",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "apps/desktop/electron/control-client.ts",
+    "apps/desktop/electron/main.ts",
+    "apps/desktop/test/security.test.mjs",
+    "docs/modules/M08-S29-capture-epoch-failure-invalidation-module-brief.json",
+    "docs/modules/M08-perception.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    ".gitnexus/",
+    ".claude/",
+    "CLAUDE.md",
+    "docs/research/deep-research-report.md",
+    "voice_demo/",
+    "assets/voices/",
+    "assets/avatars/",
+    "var/perception-sessions/",
+    "apps/desktop/dist/",
+    "apps/desktop/dist-electron/"
+  ],
+  "contracts": [
+    "A validated single-use capture grant is consumed before any capture epoch side effect.",
+    "The desktop posts the fixed payload {action: clear} to the fixed loopback /v1/perception/clear route before calling desktopCapturer for the new frame.",
+    "If prior-observation invalidation fails, the new OS frame is not requested and no snapshot is submitted.",
+    "If the selected source disappears, encoding fails or snapshot submission fails after invalidation, no previous screen observation remains eligible as fresh context.",
+    "The clear operation remains main-process only and is not exposed through preload or renderer IPC.",
+    "No new dependency, model call, local VRAM use or raw artifact is introduced."
+  ],
+  "allowed_dependencies": [
+    "Existing Electron, TypeScript and repository test tooling."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "Control-client tests prove exactly one fixed POST to /v1/perception/clear with payload {action: clear}.",
+    "Desktop integration source-order tests prove grant consume precedes invalidation and invalidation precedes desktopCapturer.getSources and snapshot submission.",
+    "No renderer or preload API can invoke perception clear directly.",
+    "Desktop typecheck, production build and all desktop tests pass.",
+    "Repository fast tests pass.",
+    "Module-brief validation, GitNexus change scan and git diff check pass."
+  ],
+  "required_test_commands": [
+    "uv run --frozen python -c \"import json; from jsonschema import Draft202012Validator; schema=json.load(open('docs/schemas/module-brief.schema.json', encoding='utf-8')); brief=json.load(open('docs/modules/M08-S29-capture-epoch-failure-invalidation-module-brief.json', encoding='utf-8')); Draft202012Validator(schema).validate(brief)\"",
+    "pnpm test:desktop",
+    "pnpm test:fast",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "allowed_prior_fresh_observations_after_capture_epoch_start": 0,
+    "allowed_os_capture_calls_when_invalidation_fails": 0,
+    "clear_timeout_milliseconds": 5000,
+    "additional_model_calls": 0,
+    "additional_local_vram_mib": 0,
+    "raw_artifact_persistence": false
+  },
+  "output_artifact_dir": "artifacts/verification/M08/"
+}

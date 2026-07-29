@@ -1138,3 +1138,36 @@ provenance before they may replace the pinned checkpoint.
   or retained test artifact is involved.
 - The owner Vision accuracy/diversity gate remains open; prompt containment
   does not establish ≥85% scene understanding.
+
+## Implemented in M08-S29 (capture-epoch failure invalidation)
+
+- Every validated, owner-confirmed one-shot capture now begins a new observation
+  epoch. Electron consumes the opaque grant, then posts the fixed
+  `{ "action": "clear" }` payload to the loopback-only
+  `/v1/perception/clear` route before requesting a replacement frame from the
+  OS.
+- This ordering revokes all prior in-memory fresh observations before a selected
+  window can disappear, return an empty thumbnail, fail PNG encoding or reach
+  an unavailable perception worker. A failed replacement therefore cannot
+  leave the previous image eligible for chat context as though it belonged to
+  the new attempt.
+- Invalidation is fail closed: if the clear request does not complete, Electron
+  does not call `desktopCapturer.getSources` and does not submit a snapshot.
+  The already-consumed grant cannot be replayed.
+- The clear operation is a fixed main-process control-client operation. It is
+  not exposed through preload, renderer IPC or the companion widget, and it
+  adds no raw source ID, pixel persistence or autonomous capture behavior.
+- Runtime clear semantics and route validation were already covered by the
+  perception service/route suites; the new desktop test additionally fixes the
+  required consume → clear → OS capture → snapshot-submit ordering.
+
+## Fast evidence M08-S29 (owner machine)
+
+- Desktop production build and all 58 Node tests pass, including the fixed
+  perception-clear request and capture-epoch ordering/security assertions.
+- Desktop Vue/Node TypeScript typecheck and repository fast suite 253 tests
+  pass.
+- No real desktop capture, model, Cloud request, image, audio, local VRAM,
+  dependency or retained test artifact is involved.
+- This closes the deterministic worker/drop failure path but does not replace
+  the owner Vision ≥85% scene-accuracy/diversity acceptance run.

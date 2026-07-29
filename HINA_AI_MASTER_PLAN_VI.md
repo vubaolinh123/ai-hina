@@ -1640,6 +1640,16 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
   disabled. This adds no model/Cloud/capture call, dependency, VRAM or retained
   artifact. Text-brain 54 and repository fast suite 253 tests pass; the owner
   ≥85% scene-QA gate remains open.
+- M08-S29 capture-epoch failure invalidation (2026-07-29): after consuming a
+  validated one-shot grant, Electron clears the prior in-memory observation
+  ledger through the fixed loopback control route before requesting a new OS
+  frame. A disappeared source, empty frame, encoder failure or unavailable
+  downstream worker therefore cannot leave the previous image eligible as
+  current chat context. Clear failure aborts before OS capture; the operation
+  is main-process only and not exposed through preload/renderer. Desktop
+  typecheck, production build/58 tests and repository fast suite 253 pass
+  without real capture/model/Cloud/VRAM or retained artifact; owner ≥85%
+  scene-QA remains open.
 
 ### Test matrix
 

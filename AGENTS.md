@@ -389,6 +389,14 @@ case Anh/Việt chứng minh payload không vào system prompt/replay, không t�
 mới, không đóng boundary thật và `toolExecution=false`. Text-brain 54 tests
 xanh, `pnpm test:fast` 253; không model/Cloud/capture/dependency/VRAM/artifact.
 Gate scene-QA ≥85% vẫn chờ owner.
+Ngày 2026-07-29 M08-S29 đóng failure path dropped frame/capture worker. Sau khi
+consume grant hợp lệ, Electron clear observation ledger qua fixed loopback route
+trước khi gọi OS lấy frame mới. Source biến mất, thumbnail rỗng, encode lỗi hoặc
+downstream worker offline vì vậy không thể để ảnh trước tiếp tục thành fresh
+chat context; clear fail thì abort trước OS capture. Operation chỉ ở main
+process, không lộ preload/renderer. Desktop typecheck/build + 58 tests và
+`pnpm test:fast` 253 xanh; không real capture/model/Cloud/VRAM/artifact.
+Scene-QA ≥85% vẫn chờ owner.
 Future M11 dùng post-trained Hugging Face `Qwen/Qwen3.5-4B` frozen làm QLoRA
 SFT base, sau đó DPO/ORPO từ dữ liệu owner-curated. Không train trực tiếp GGUF,
 không mặc định bắt đầu từ raw Base và Qwen3.5-9B chỉ benchmark/fallback thủ công,

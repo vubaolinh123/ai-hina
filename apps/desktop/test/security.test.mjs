@@ -260,6 +260,7 @@ test("full-frame screen capture stays in Electron main behind one-use grants", (
   assert.match(main, /E_DESKTOP_CAPTURE_DISABLED: enable Quan sát màn hình/);
   assert.match(main, /requestControl\("safety\.status"\)/);
   assert.match(main, /captureGrantStore\.consume/);
+  assert.match(main, /requestPerceptionClear/);
   assert.match(main, /requestPerceptionSnapshot/);
   assert.match(preload, /listScreenCaptureSources:/);
   assert.match(preload, /captureScreenSource:/);
@@ -272,6 +273,10 @@ test("full-frame screen capture stays in Electron main behind one-use grants", (
   assert.match(capture, /persistence:\s*false/);
   assert.match(client, /"X-Hina-Source":\s*"owner\.desktop"/);
   assert.match(client, /"X-Hina-Owner-Confirmed":\s*"true"/);
+  assert.match(
+    client,
+    /"perception\.clear":\s*\{\s*method:\s*"POST",\s*path:\s*"\/v1\/perception\/clear"/,
+  );
   assert.match(renderer, /screenCaptureMaxSide\s*=\s*ref<640 \| 960 \| 1280>\(960\)/);
   assert.match(renderer, /sessionId:\s*chatSessionId/);
   assert.match(renderer, /askHinaAboutLastCapture/);
@@ -305,6 +310,21 @@ test("full-frame screen capture stays in Electron main behind one-use grants", (
   assert.match(renderer, /không lưu ảnh hay nội dung mô tả/);
   assert.match(renderer, /Chụp toàn bộ nguồn đã chọn và gửi Hina/);
   assert.doesNotMatch(renderer, /getDisplayMedia|desktopCapturer|sourceId/);
+  assert.doesNotMatch(preload, /requestPerceptionClear|perception\.clear/);
+  assert.doesNotMatch(renderer, /requestPerceptionClear|perception\.clear/);
+
+  const submitStart = main.indexOf("async function submitDesktopCapture");
+  const submitEnd = main.indexOf("\nasync function", submitStart + 1);
+  const submit = main.slice(submitStart, submitEnd);
+  const consumeIndex = submit.indexOf("captureGrantStore.consume");
+  const clearIndex = submit.indexOf("await requestPerceptionClear()");
+  const captureIndex = submit.indexOf("desktopCapturer.getSources");
+  const snapshotIndex = submit.indexOf("requestPerceptionSnapshot");
+  assert.ok(submitStart >= 0);
+  assert.ok(consumeIndex >= 0);
+  assert.ok(clearIndex > consumeIndex);
+  assert.ok(captureIndex > clearIndex);
+  assert.ok(snapshotIndex > captureIndex);
 });
 
 test("Vision scene-QA client rejects arbitrary ratings before network I/O", async () => {
@@ -741,6 +761,26 @@ test("control client sends bounded PNG only to the fixed perception route", asyn
     ),
     /snapshot must be a PNG/,
   );
+});
+
+test("control client starts a capture epoch with one fixed perception clear", async () => {
+  const calls = [];
+  const result = await control.requestPerceptionClear({
+    baseUrl: "http://127.0.0.1:8765",
+    fetchImpl: async (url, options) => {
+      calls.push({ url, options });
+      return new Response(JSON.stringify({ status: "cleared", removed: 1 }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    },
+  });
+
+  assert.deepEqual(result, { status: "cleared", removed: 1 });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, "http://127.0.0.1:8765/v1/perception/clear");
+  assert.equal(calls[0].options.method, "POST");
+  assert.equal(calls[0].options.body, JSON.stringify({ action: "clear" }));
 });
 
 test("control client retries cleanly after a transient service restart", async () => {

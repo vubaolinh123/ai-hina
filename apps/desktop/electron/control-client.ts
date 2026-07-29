@@ -22,6 +22,7 @@ type ControlOperation =
   | "speech.status"
   | "tts.status"
   | "perception.status"
+  | "perception.clear"
   | "resources.status"
   | "resources.model";
 
@@ -41,6 +42,7 @@ const OPERATIONS: Readonly<Record<ControlOperation, OperationSpec>> = Object.fre
   "speech.status": { method: "GET", path: "/v1/speech/status" },
   "tts.status": { method: "GET", path: "/v1/tts/status" },
   "perception.status": { method: "GET", path: "/v1/perception/status" },
+  "perception.clear": { method: "POST", path: "/v1/perception/clear" },
   "resources.status": { method: "GET", path: "/v1/resources/status" },
   "resources.model": { method: "POST", path: "/v1/resources/models/control" },
 });
@@ -373,6 +375,19 @@ export function validateVisionApiKey(value: unknown): string {
 
 export async function requestVisionStatus(): Promise<JsonObject> {
   return requestControl("perception.status");
+}
+
+export async function requestPerceptionClear(
+  options: {
+    baseUrl?: string;
+    fetchImpl?: typeof fetch;
+  } = {},
+): Promise<JsonObject> {
+  return requestControl(
+    "perception.clear",
+    { action: "clear" },
+    options,
+  );
 }
 
 export async function requestPerceptionSnapshot(
