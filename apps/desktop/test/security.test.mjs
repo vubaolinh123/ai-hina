@@ -103,6 +103,7 @@ test("preload exposes named methods and never exposes raw ipcRenderer", () => {
     "connectMinecraft",
     "disconnectMinecraft",
     "lookMinecraft",
+    "moveMinecraft",
     "emergencyStopMinecraft",
     "listScreenCaptureSources",
     "captureScreenSource",
@@ -273,6 +274,7 @@ test("Minecraft controls stay on numeric loopback behind ephemeral operator IPC"
     "minecraftConnect",
     "minecraftDisconnect",
     "minecraftLook",
+    "minecraftMove",
     "minecraftEmergencyStop",
   ]) {
     assert.match(main, new RegExp(`CHANNELS\\.${channel}`));
@@ -284,6 +286,9 @@ test("Minecraft controls stay on numeric loopback behind ephemeral operator IPC"
   assert.match(client, /Authorization: `Bearer \$\{token\}`/);
   assert.match(client, /"X-Hina-Source": SOURCE/);
   assert.match(client, /ownerConfirmed: true/);
+  assert.match(client, /\/v1\/minecraft\/skills\/move-step/);
+  assert.match(client, /distanceBlocks < 0\.25/);
+  assert.match(client, /distanceBlocks > 2/);
   assert.doesNotMatch(client, /retry|setTimeout\(/i);
   assert.match(launcher, /RandomNumberGenerator\]::Fill/);
   assert.match(launcher, /\$env:HINA_MINECRAFT_CONTROL_TOKEN = New-HinaEphemeralToken/);

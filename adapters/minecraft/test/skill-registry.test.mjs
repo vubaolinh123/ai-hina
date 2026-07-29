@@ -4,14 +4,16 @@ import test from "node:test";
 import {
   getMinecraftSkillRegistry,
   LOOK_SKILL_DEFINITION,
+  MOVE_STEP_SKILL_DEFINITION,
   MinecraftAdapterError,
   validateMinecraftSkillRequest,
 } from "../dist/index.js";
 
-test("registry contains exactly one immutable non-destructive look skill", () => {
+test("registry contains exactly two immutable non-destructive skills", () => {
   const registry = getMinecraftSkillRegistry();
-  assert.equal(registry.length, 1);
+  assert.equal(registry.length, 2);
   assert.equal(registry[0], LOOK_SKILL_DEFINITION);
+  assert.equal(registry[1], MOVE_STEP_SKILL_DEFINITION);
   assert.deepEqual(registry[0], {
     id: "look.v1",
     version: 1,
@@ -36,6 +38,29 @@ test("registry contains exactly one immutable non-destructive look skill", () =>
   assert.throws(() => {
     registry[0].budget.maximumAttempts = 3;
   });
+  assert.deepEqual(registry[1], {
+    id: "move.step.v1",
+    version: 1,
+    description: "Move Hina a short verified cardinal step on a resettable world.",
+    preconditions: [
+      "controller_online",
+      "emergency_stop_not_latched",
+      "player_state_available",
+      "player_on_ground",
+      "no_other_skill_active",
+    ],
+    timeoutMs: 4_000,
+    budget: {
+      maximumAttempts: 1,
+    },
+    postcondition: {
+      kind: "player_cardinal_displacement_matches",
+      minimumProgressRatio: 0.75,
+      maximumOvershootBlocks: 0.75,
+      lateralToleranceBlocks: 0.35,
+    },
+    destructive: false,
+  });
 });
 
 test("validates a bounded look.v1 request", () => {
@@ -52,6 +77,25 @@ test("validates a bounded look.v1 request", () => {
       arguments: {
         yawRadians: Math.PI,
         pitchRadians: -Math.PI / 2,
+      },
+    },
+  );
+});
+
+test("validates a bounded move.step.v1 request", () => {
+  assert.deepEqual(
+    validateMinecraftSkillRequest({
+      skillId: "move.step.v1",
+      arguments: {
+        direction: "north",
+        distanceBlocks: 2,
+      },
+    }),
+    {
+      skillId: "move.step.v1",
+      arguments: {
+        direction: "north",
+        distanceBlocks: 2,
       },
     },
   );
@@ -83,6 +127,22 @@ test("rejects unknown skills, shape changes and unsafe angles", () => {
     {
       skillId: "look.v1",
       arguments: { yawRadians: 0, pitchRadians: Math.PI },
+    },
+    {
+      skillId: "move.step.v1",
+      arguments: { direction: "up", distanceBlocks: 1 },
+    },
+    {
+      skillId: "move.step.v1",
+      arguments: { direction: "east", distanceBlocks: 2.01 },
+    },
+    {
+      skillId: "move.step.v1",
+      arguments: { direction: "east", distanceBlocks: 0.24 },
+    },
+    {
+      skillId: "move.step.v1",
+      arguments: { direction: "east", distanceBlocks: 1, sprint: true },
     },
   ];
   for (const request of invalid) {

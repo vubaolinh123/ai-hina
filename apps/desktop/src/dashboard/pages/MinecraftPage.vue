@@ -17,6 +17,10 @@ const emit = defineEmits<{
   }];
   disconnect: [];
   look: [input: { yawRadians: number; pitchRadians: number }];
+  move: [input: {
+    direction: "north" | "east" | "south" | "west";
+    distanceBlocks: number;
+  }];
   emergencyStop: [];
 }>();
 
@@ -26,6 +30,8 @@ const username = ref("Hina");
 const version = ref("");
 const yawRadians = ref(0);
 const pitchRadians = ref(0);
+const moveDirection = ref<"north" | "east" | "south" | "west">("north");
+const moveDistanceBlocks = ref(1);
 
 const online = computed(() => props.status?.phase === "online");
 const canConnect = computed(
@@ -213,6 +219,51 @@ function formatNumber(value: number): string {
         </button>
       </article>
 
+      <article class="minecraft-card">
+        <p class="eyebrow">KỸ NĂNG ĐÃ ĐƯỢC DUYỆT</p>
+        <h2>Đi một bước ngắn — move.step.v1</h2>
+        <p class="minecraft-help">
+          Chỉ di chuyển theo bốn hướng cố định, từ 0,25 đến 2 block và không tự
+          tìm đường vòng. Hina dừng ngay khi đủ khoảng cách; nếu bị chặn, lệch
+          hướng hoặc không còn đứng trên đất thì hệ thống báo thất bại.
+        </p>
+        <div class="minecraft-form-grid">
+          <label>
+            Hướng
+            <select
+              v-model="moveDirection"
+              :disabled="props.busy || !online"
+            >
+              <option value="north">Bắc</option>
+              <option value="east">Đông</option>
+              <option value="south">Nam</option>
+              <option value="west">Tây</option>
+            </select>
+          </label>
+          <label>
+            Quãng đường (0,25–2 block)
+            <input
+              v-model.number="moveDistanceBlocks"
+              type="number"
+              min="0.25"
+              max="2"
+              step="0.25"
+              :disabled="props.busy || !online"
+            />
+          </label>
+        </div>
+        <button
+          type="button"
+          :disabled="props.busy || !online"
+          @click="emit('move', {
+            direction: moveDirection,
+            distanceBlocks: Number(moveDistanceBlocks),
+          })"
+        >
+          Cho Hina đi bước ngắn
+        </button>
+      </article>
+
       <article class="minecraft-card minecraft-card--danger">
         <p class="eyebrow">AN TOÀN</p>
         <h2>Dừng khẩn cấp riêng cho Minecraft</h2>
@@ -387,7 +438,8 @@ function formatNumber(value: number): string {
   gap: 7px;
 }
 
-.minecraft-form-grid input {
+.minecraft-form-grid input,
+.minecraft-form-grid select {
   background: #0e0c12;
   border: 1px solid #443a49;
   color: #f8edf4;

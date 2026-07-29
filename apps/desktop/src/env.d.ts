@@ -617,6 +617,17 @@ type HinaDesktopApi = {
     };
     minecraft: MinecraftStatus;
   }>;
+  moveMinecraft(input: {
+    direction: "north" | "east" | "south" | "west";
+    distanceBlocks: number;
+  }): Promise<{
+    status: string;
+    execution: {
+      status: "succeeded" | "failed";
+      error?: { code: string; message: string } | null;
+    };
+    minecraft: MinecraftStatus;
+  }>;
   emergencyStopMinecraft(): Promise<{
     status: string;
     minecraft: MinecraftStatus;

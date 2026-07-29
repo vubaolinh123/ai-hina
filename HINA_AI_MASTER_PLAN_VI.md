@@ -1798,6 +1798,16 @@ world state thật; không auto-connect, planner, pathfinder hay destructive
 action. Minecraft 26 tests, Desktop build/64 tests và fast suite 283 tests pass;
 real resettable-server acceptance vẫn chờ owner.
 
+M09-S4 thêm `move.step.v1` vào registry tĩnh. Skill chỉ nhận bốn hướng cardinal
+và 0,25–2 block, yêu cầu player on-ground, một attempt và timeout 4 giây.
+Controller chỉ giữ `forward`, dừng khi đạt target và luôn clear controls trong
+`finally`; 20 physics tick không tiến sẽ báo blocked, không retry/pathfinding.
+Success cần normalized displacement đúng hướng, tiến ít nhất 75% target,
+overshoot ≤0,75 block và lệch ngang ≤0,35 block. Route owner-only giữ cùng
+ephemeral-secret boundary; Dashboard không trao quyền cho widget/model/viewer.
+Minecraft build/34 tests, Desktop build/65 tests và fast suite 291 tests pass;
+real resettable-server acceptance vẫn pending.
+
 ### Embodied Gate
 
 Chạy full voice + avatar + memory + Minecraft trong local server, kiểm:

@@ -179,7 +179,10 @@ function exactOwnerAction(
   }
 }
 
-function exactLookRequest(value: unknown): unknown {
+function exactSkillRequest(
+  value: unknown,
+  skillId: "look.v1" | "move.step.v1",
+): unknown {
   if (
     typeof value !== "object" ||
     value === null ||
@@ -195,7 +198,8 @@ function exactLookRequest(value: unknown): unknown {
     Object.keys(raw).sort().join(",") !==
       "arguments,ownerConfirmed,skillId,source" ||
     raw.source !== OWNER_SOURCE ||
-    raw.ownerConfirmed !== true
+    raw.ownerConfirmed !== true ||
+    raw.skillId !== skillId
   ) {
     throw new MinecraftAdapterError(
       "E_MINECRAFT_CONTROL_SCHEMA",
@@ -301,7 +305,20 @@ async function handleRequest(
       return;
     }
     if (pathname === "/v1/minecraft/skills/look") {
-      const execution = await controller.executeSkill(exactLookRequest(body));
+      const execution = await controller.executeSkill(
+        exactSkillRequest(body, "look.v1"),
+      );
+      sendJson(response, 200, {
+        status: execution.status,
+        execution,
+        minecraft: controller.getStatus(),
+      });
+      return;
+    }
+    if (pathname === "/v1/minecraft/skills/move-step") {
+      const execution = await controller.executeSkill(
+        exactSkillRequest(body, "move.step.v1"),
+      );
       sendJson(response, 200, {
         status: execution.status,
         execution,

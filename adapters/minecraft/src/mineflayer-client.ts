@@ -74,6 +74,37 @@ class MineflayerBotAdapter implements MinecraftBotPort {
     await this.#bot.look(yawRadians, pitchRadians, true);
   }
 
+  setControlState(control: "forward", enabled: boolean): void {
+    this.#bot.setControlState(control, enabled);
+  }
+
+  waitForPhysicsTick(signal: AbortSignal): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      const onTick = (): void => {
+        cleanup();
+        resolve();
+      };
+      const onAbort = (): void => {
+        cleanup();
+        reject(
+          signal.reason instanceof Error
+            ? signal.reason
+            : new Error("Minecraft physics wait was cancelled"),
+        );
+      };
+      const cleanup = (): void => {
+        this.#bot.off("physicsTick", onTick);
+        signal.removeEventListener("abort", onAbort);
+      };
+      if (signal.aborted) {
+        onAbort();
+        return;
+      }
+      this.#bot.once("physicsTick", onTick);
+      signal.addEventListener("abort", onAbort, { once: true });
+    });
+  }
+
   async stopDigging(): Promise<void> {
     await this.#bot.stopDigging();
   }

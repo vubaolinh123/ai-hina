@@ -78,6 +78,7 @@ import {
   requestMinecraftDisconnect,
   requestMinecraftEmergencyStop,
   requestMinecraftLook,
+  requestMinecraftMove,
   requestMinecraftStatus,
 } from "./minecraft-client";
 
@@ -119,6 +120,7 @@ const CHANNELS = Object.freeze({
   minecraftConnect: "hina:minecraft:connect",
   minecraftDisconnect: "hina:minecraft:disconnect",
   minecraftLook: "hina:minecraft:look",
+  minecraftMove: "hina:minecraft:move",
   minecraftEmergencyStop: "hina:minecraft:emergency-stop",
   captureSources: "hina:capture:sources",
   captureSubmit: "hina:capture:submit",
@@ -911,6 +913,23 @@ function registerIpcHandlers(): void {
           error instanceof Error
             ? error.message.slice(0, 256)
             : "Minecraft look failed"
+        }`,
+      );
+      throw error;
+    }
+  });
+  ipcMain.handle(CHANNELS.minecraftMove, async (event, input: unknown) => {
+    if (assertTrustedSender(event) !== "operator") {
+      throw new Error("E_DESKTOP_MINECRAFT_AUTHORITY: operator window required");
+    }
+    try {
+      return await requestMinecraftMove(input);
+    } catch (error) {
+      console.error(
+        `[hina-desktop:minecraft:ERROR] ${
+          error instanceof Error
+            ? error.message.slice(0, 256)
+            : "Minecraft movement failed"
         }`,
       );
       throw error;

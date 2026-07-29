@@ -1248,6 +1248,34 @@ async function lookMinecraft(input: {
   }
 }
 
+async function moveMinecraft(input: {
+  direction: "north" | "east" | "south" | "west";
+  distanceBlocks: number;
+}): Promise<void> {
+  if (minecraftBusy.value) return;
+  minecraftBusy.value = true;
+  try {
+    const result = await window.hinaDesktop.moveMinecraft(input);
+    minecraftStatus.value = result.minecraft;
+    minecraftNotice.value =
+      result.execution.status === "succeeded"
+        ? "Hina đã di chuyển đúng hướng và quãng đường đã qua hậu kiểm."
+        : `${result.execution.error?.code ?? "E_MINECRAFT_SKILL"}: ${
+            result.execution.error?.message ?? "Di chuyển chưa đạt hậu kiểm."
+          }`;
+  } catch (error) {
+    minecraftNotice.value =
+      error instanceof Error ? error.message : "E_DESKTOP_MINECRAFT_MOVE";
+    console.error(
+      "[hina-minecraft-dashboard] E_DESKTOP_MINECRAFT_MOVE",
+      minecraftNotice.value,
+    );
+  } finally {
+    minecraftBusy.value = false;
+    await refreshMinecraft();
+  }
+}
+
 async function emergencyStopMinecraft(): Promise<void> {
   minecraftBusy.value = true;
   try {
@@ -1609,6 +1637,7 @@ onBeforeUnmount(() => {
       @connect="connectMinecraft"
       @disconnect="disconnectMinecraft"
       @look="lookMinecraft"
+      @move="moveMinecraft"
       @emergency-stop="emergencyStopMinecraft"
     />
 

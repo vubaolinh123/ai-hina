@@ -102,9 +102,9 @@ export interface MinecraftDisconnectResult {
   dispatchDurationMs: number;
 }
 
-export type MinecraftSkillId = "look.v1";
+export type MinecraftSkillId = "look.v1" | "move.step.v1";
 
-export interface MinecraftSkillDefinition {
+interface MinecraftSkillDefinitionBase {
   id: MinecraftSkillId;
   version: 1;
   description: string;
@@ -113,12 +113,38 @@ export interface MinecraftSkillDefinition {
   budget: {
     maximumAttempts: 1;
   };
+  destructive: false;
+}
+
+export interface MinecraftLookSkillDefinition
+  extends MinecraftSkillDefinitionBase {
+  id: "look.v1";
   postcondition: {
     kind: "player_rotation_matches";
     toleranceRadians: number;
   };
-  destructive: false;
 }
+
+export type MinecraftCardinalDirection =
+  | "north"
+  | "east"
+  | "south"
+  | "west";
+
+export interface MinecraftMoveSkillDefinition
+  extends MinecraftSkillDefinitionBase {
+  id: "move.step.v1";
+  postcondition: {
+    kind: "player_cardinal_displacement_matches";
+    minimumProgressRatio: number;
+    maximumOvershootBlocks: number;
+    lateralToleranceBlocks: number;
+  };
+}
+
+export type MinecraftSkillDefinition =
+  | MinecraftLookSkillDefinition
+  | MinecraftMoveSkillDefinition;
 
 export interface MinecraftLookSkillRequest {
   skillId: "look.v1";
@@ -128,14 +154,24 @@ export interface MinecraftLookSkillRequest {
   };
 }
 
-export type MinecraftSkillRequest = MinecraftLookSkillRequest;
+export interface MinecraftMoveSkillRequest {
+  skillId: "move.step.v1";
+  arguments: {
+    direction: MinecraftCardinalDirection;
+    distanceBlocks: number;
+  };
+}
+
+export type MinecraftSkillRequest =
+  | MinecraftLookSkillRequest
+  | MinecraftMoveSkillRequest;
 
 export interface MinecraftRotationEvidence {
   yawRadians: number;
   pitchRadians: number;
 }
 
-export interface MinecraftSkillExecutionResult {
+interface MinecraftSkillExecutionResultBase {
   schemaVersion: 1;
   executionId: number;
   skillId: MinecraftSkillId;
@@ -147,14 +183,47 @@ export interface MinecraftSkillExecutionResult {
   precondition: {
     passed: boolean;
   };
+  error: MinecraftAdapterErrorView | null;
+}
+
+export interface MinecraftLookSkillExecutionResult
+  extends MinecraftSkillExecutionResultBase {
+  skillId: "look.v1";
   postcondition: {
     passed: boolean;
     toleranceRadians: number;
     expected: MinecraftRotationEvidence;
     observed: MinecraftRotationEvidence | null;
   };
-  error: MinecraftAdapterErrorView | null;
 }
+
+export interface MinecraftMovementEvidence {
+  deltaX: number;
+  deltaZ: number;
+  forwardProgressBlocks: number;
+  lateralDriftBlocks: number;
+  horizontalDistanceBlocks: number;
+}
+
+export interface MinecraftMoveSkillExecutionResult
+  extends MinecraftSkillExecutionResultBase {
+  skillId: "move.step.v1";
+  postcondition: {
+    passed: boolean;
+    minimumProgressBlocks: number;
+    maximumProgressBlocks: number;
+    lateralToleranceBlocks: number;
+    expected: {
+      direction: MinecraftCardinalDirection;
+      distanceBlocks: number;
+    };
+    observed: MinecraftMovementEvidence | null;
+  };
+}
+
+export type MinecraftSkillExecutionResult =
+  | MinecraftLookSkillExecutionResult
+  | MinecraftMoveSkillExecutionResult;
 
 export class MinecraftAdapterError extends Error {
   readonly code: string;

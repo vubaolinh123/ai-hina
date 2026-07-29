@@ -12,6 +12,8 @@ export interface MinecraftBotPort {
   ): () => void;
   captureWorldState(): MinecraftWorldState;
   look(yawRadians: number, pitchRadians: number): Promise<void>;
+  setControlState(control: "forward", enabled: boolean): void;
+  waitForPhysicsTick(signal: AbortSignal): Promise<void>;
   clearControlStates(): void;
   stopDigging(): Promise<void>;
   quit(reason: string): void;

@@ -163,6 +163,32 @@ export function validateMinecraftLookInput(value: unknown): JsonObject {
   };
 }
 
+export function validateMinecraftMoveInput(value: unknown): JsonObject {
+  if (
+    !isObject(value) ||
+    Object.keys(value).sort().join(",") !== "direction,distanceBlocks" ||
+    (value.direction !== "north" &&
+      value.direction !== "east" &&
+      value.direction !== "south" &&
+      value.direction !== "west") ||
+    typeof value.distanceBlocks !== "number" ||
+    !Number.isFinite(value.distanceBlocks) ||
+    value.distanceBlocks < 0.25 ||
+    value.distanceBlocks > 2
+  ) {
+    throw new Error("E_DESKTOP_MINECRAFT_INPUT: movement request is invalid");
+  }
+  return {
+    arguments: {
+      direction: value.direction,
+      distanceBlocks: value.distanceBlocks,
+    },
+    ownerConfirmed: true,
+    skillId: "move.step.v1",
+    source: SOURCE,
+  };
+}
+
 async function requestMinecraft(
   path: string,
   method: "GET" | "POST",
@@ -298,6 +324,18 @@ export function requestMinecraftLook(
     "/v1/minecraft/skills/look",
     "POST",
     validateMinecraftLookInput(input),
+    options,
+  );
+}
+
+export function requestMinecraftMove(
+  input: unknown,
+  options: RequestOptions = {},
+): Promise<JsonObject> {
+  return requestMinecraft(
+    "/v1/minecraft/skills/move-step",
+    "POST",
+    validateMinecraftMoveInput(input),
     options,
   );
 }

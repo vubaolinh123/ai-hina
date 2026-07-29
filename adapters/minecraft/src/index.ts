@@ -4,8 +4,10 @@ export {
   type EmergencyStopResult,
   type MinecraftConnectionConfig,
   type MinecraftControllerStatus,
+  type MinecraftCardinalDirection,
   type MinecraftDisconnectResult,
   type MinecraftLookSkillRequest,
+  type MinecraftMoveSkillRequest,
   type MinecraftSkillDefinition,
   type MinecraftSkillExecutionResult,
   type MinecraftSkillId,
@@ -21,6 +23,7 @@ export { MinecraftController } from "./controller.js";
 export {
   getMinecraftSkillRegistry,
   LOOK_SKILL_DEFINITION,
+  MOVE_STEP_SKILL_DEFINITION,
   validateMinecraftSkillRequest,
 } from "./skill-registry.js";
 export {

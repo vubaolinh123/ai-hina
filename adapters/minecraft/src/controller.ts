@@ -8,17 +8,26 @@ import {
   type MinecraftControllerStatus,
   type MinecraftDisconnectResult,
   type MinecraftLookSkillRequest,
+  type MinecraftMoveSkillExecutionResult,
+  type MinecraftMoveSkillRequest,
+  type MinecraftMovementEvidence,
   type MinecraftRotationEvidence,
   type MinecraftSkillExecutionResult,
   type MinecraftWorldState,
 } from "./contracts.js";
 import { createMineflayerBot } from "./mineflayer-client.js";
+import {
+  executeMoveStep,
+  movementEvidence,
+  movementMatches,
+} from "./movement.js";
 import type {
   MinecraftBotFactory,
   MinecraftBotPort,
 } from "./ports.js";
 import {
   LOOK_SKILL_DEFINITION,
+  MOVE_STEP_SKILL_DEFINITION,
   validateMinecraftSkillRequest,
 } from "./skill-registry.js";
 
@@ -224,6 +233,14 @@ export class MinecraftController {
     const executionId = ++this.#skillExecutionSequence;
     const startedAt = this.#clock();
     const started = performance.now();
+    if (request.skillId === "move.step.v1") {
+      return this.#executeMoveStepSkill(
+        request,
+        executionId,
+        startedAt,
+        started,
+      );
+    }
     const expected: MinecraftRotationEvidence = {
       yawRadians: request.arguments.yawRadians,
       pitchRadians: request.arguments.pitchRadians,
@@ -417,6 +434,223 @@ export class MinecraftController {
         : errorView(
             "E_MINECRAFT_SKILL_POSTCONDITION",
             "Player rotation did not reach the verified target",
+          ),
+    );
+  }
+
+  async #executeMoveStepSkill(
+    request: MinecraftMoveSkillRequest,
+    executionId: number,
+    startedAt: Date,
+    started: number,
+  ): Promise<MinecraftMoveSkillExecutionResult> {
+    const definition = MOVE_STEP_SKILL_DEFINITION;
+    if (definition.id !== "move.step.v1") {
+      throw new MinecraftAdapterError(
+        "E_MINECRAFT_SKILL_REGISTRY",
+        "move.step.v1 definition is unavailable",
+      );
+    }
+    const expected = {
+      direction: request.arguments.direction,
+      distanceBlocks: request.arguments.distanceBlocks,
+    };
+    const minimumProgressBlocks =
+      expected.distanceBlocks * definition.postcondition.minimumProgressRatio;
+    const maximumProgressBlocks =
+      expected.distanceBlocks + definition.postcondition.maximumOvershootBlocks;
+    const finish = (
+      status: MinecraftMoveSkillExecutionResult["status"],
+      preconditionPassed: boolean,
+      observed: MinecraftMovementEvidence | null,
+      postconditionPassed: boolean,
+      error: MinecraftAdapterErrorView | null,
+    ): MinecraftMoveSkillExecutionResult => ({
+      schemaVersion: 1,
+      executionId,
+      skillId: "move.step.v1",
+      status,
+      startedAt: startedAt.toISOString(),
+      finishedAt: this.#clock().toISOString(),
+      durationMs: Math.round((performance.now() - started) * 1_000) / 1_000,
+      attempts: 1,
+      precondition: { passed: preconditionPassed },
+      postcondition: {
+        passed: postconditionPassed,
+        minimumProgressBlocks,
+        maximumProgressBlocks,
+        lateralToleranceBlocks:
+          definition.postcondition.lateralToleranceBlocks,
+        expected,
+        observed,
+      },
+      error,
+    });
+
+    if (this.#activeSkillAbort !== null) {
+      return finish(
+        "failed",
+        false,
+        null,
+        false,
+        errorView(
+          "E_MINECRAFT_SKILL_BUSY",
+          "Another deterministic Minecraft skill is already active",
+        ),
+      );
+    }
+    if (
+      this.#emergencyStopped ||
+      this.#phase !== "online" ||
+      this.#bot === null
+    ) {
+      return finish(
+        "failed",
+        false,
+        null,
+        false,
+        errorView(
+          "E_MINECRAFT_SKILL_PRECONDITION",
+          "Minecraft controller must be online and not emergency-stopped",
+        ),
+      );
+    }
+
+    const bot = this.#bot;
+    let before: MinecraftWorldState;
+    try {
+      before = bot.captureWorldState();
+    } catch (error) {
+      return finish(
+        "failed",
+        false,
+        null,
+        false,
+        errorView(
+          "E_MINECRAFT_SKILL_PRECONDITION",
+          payloadMessage(error, "Player state is unavailable"),
+        ),
+      );
+    }
+    if (before.player === null || !before.player.onGround) {
+      return finish(
+        "failed",
+        false,
+        null,
+        false,
+        errorView(
+          "E_MINECRAFT_SKILL_PRECONDITION",
+          "move.step.v1 requires an on-ground player state",
+        ),
+      );
+    }
+
+    const abortController = new AbortController();
+    this.#activeSkillAbort = abortController;
+    let timeout: NodeJS.Timeout | null = null;
+    let removeAbortListener = (): void => {};
+    try {
+      const timeoutPromise = new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(() => {
+          const error = new MinecraftAdapterError(
+            "E_MINECRAFT_SKILL_TIMEOUT",
+            `move.step.v1 exceeded ${definition.timeoutMs} ms`,
+          );
+          abortController.abort(error);
+          reject(error);
+        }, definition.timeoutMs);
+        timeout.unref();
+      });
+      const abortPromise = new Promise<never>((_resolve, reject) => {
+        const onAbort = (): void => {
+          const reason = abortController.signal.reason;
+          reject(
+            reason instanceof MinecraftAdapterError
+              ? reason
+              : new MinecraftAdapterError(
+                  "E_MINECRAFT_SKILL_CANCELLED",
+                  "move.step.v1 was cancelled",
+                ),
+          );
+        };
+        abortController.signal.addEventListener("abort", onAbort, {
+          once: true,
+        });
+        removeAbortListener = () =>
+          abortController.signal.removeEventListener("abort", onAbort);
+      });
+      await Promise.race([
+        executeMoveStep(bot, request, before, abortController.signal),
+        timeoutPromise,
+        abortPromise,
+      ]);
+    } catch (error) {
+      const view =
+        error instanceof MinecraftAdapterError
+          ? errorView(error.code, error.message)
+          : errorView(
+              "E_MINECRAFT_SKILL_ACTION",
+              payloadMessage(error, "Mineflayer movement failed"),
+            );
+      return finish("failed", true, null, false, view);
+    } finally {
+      if (timeout !== null) {
+        clearTimeout(timeout);
+      }
+      removeAbortListener();
+      try {
+        bot.clearControlStates();
+      } catch {
+        // The bounded failure result remains authoritative.
+      }
+      if (this.#activeSkillAbort === abortController) {
+        this.#activeSkillAbort = null;
+      }
+    }
+
+    let after: MinecraftWorldState;
+    try {
+      after = bot.captureWorldState();
+    } catch (error) {
+      return finish(
+        "failed",
+        true,
+        null,
+        false,
+        errorView(
+          "E_MINECRAFT_SKILL_POSTCONDITION",
+          payloadMessage(error, "Post-action player state is unavailable"),
+        ),
+      );
+    }
+    if (after.player === null) {
+      return finish(
+        "failed",
+        true,
+        null,
+        false,
+        errorView(
+          "E_MINECRAFT_SKILL_POSTCONDITION",
+          "Post-action player state is unavailable",
+        ),
+      );
+    }
+    const observed = movementEvidence(
+      request.arguments.direction,
+      before.player.position,
+      after.player.position,
+    );
+    const verified = movementMatches(observed, expected.distanceBlocks);
+    return finish(
+      verified ? "succeeded" : "failed",
+      true,
+      observed,
+      verified,
+      verified
+        ? null
+        : errorView(
+            "E_MINECRAFT_SKILL_POSTCONDITION",
+            "Player displacement did not match the verified cardinal target",
           ),
     );
   }

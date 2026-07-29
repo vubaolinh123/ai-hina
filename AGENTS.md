@@ -456,6 +456,14 @@ không replay POST. Dashboard có page Minecraft giải thích/hiển thị worl
 thật. Disconnect cho reconnect; e-stop latch tới restart. Minecraft 26 tests,
 Desktop build/64 tests và fast suite 283 tests xanh; chưa có real resettable
 server smoke nên chưa promotion.
+M09-S4 thêm đúng một skill `move.step.v1`: cardinal direction, 0,25–2 block,
+on-ground precondition, một attempt, timeout 4 giây, 20 stagnant physics tick
+thì blocked và luôn clear controls trong `finally`. Success chỉ khi normalized
+displacement đạt ≥75% target, overshoot ≤0,75 block và lateral drift ≤0,35
+block. Không retry, pathfinder, jump/sprint, combat, phá block hay model/viewer
+execution. Route vẫn owner-only qua ephemeral-secret IPC. Minecraft 34 tests,
+Desktop build/65 tests và fast suite 291 tests xanh; real resettable-server
+acceptance vẫn pending.
 
 ## Orchestration
 

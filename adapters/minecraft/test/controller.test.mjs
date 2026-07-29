@@ -45,10 +45,19 @@ class FakeBotPort {
   quitReason = null;
   world = WORLD;
   lookCalls = [];
+  controlCalls = [];
+  forwardEnabled = false;
   lookImplementation = async (yawRadians, pitchRadians) => {
     this.world = structuredClone(this.world);
     this.world.player.yaw = yawRadians;
     this.world.player.pitch = pitchRadians;
+  };
+  physicsTickImplementation = async () => {
+    if (!this.forwardEnabled) return;
+    this.world = structuredClone(this.world);
+    const yaw = this.world.player.yaw;
+    this.world.player.position.x += -Math.sin(yaw) * 0.1;
+    this.world.player.position.z += Math.cos(yaw) * 0.1;
   };
 
   on(event, listener) {
@@ -69,8 +78,19 @@ class FakeBotPort {
     await this.lookImplementation(yawRadians, pitchRadians);
   }
 
+  setControlState(control, enabled) {
+    this.controlCalls.push({ control, enabled });
+    if (control === "forward") this.forwardEnabled = enabled;
+  }
+
+  async waitForPhysicsTick(signal) {
+    if (signal.aborted) throw signal.reason;
+    await this.physicsTickImplementation(signal);
+  }
+
   clearControlStates() {
     this.clearCalls += 1;
+    this.forwardEnabled = false;
   }
 
   async stopDigging() {
@@ -369,4 +389,164 @@ test("emergency stop cancels an active look skill and never retries", async () =
   assert.equal(result.error.code, "E_MINECRAFT_SKILL_CANCELLED");
   assert.equal(fake.lookCalls.length, 1);
   assert.equal(fake.quitCalls, 1);
+});
+
+test("move.step.v1 moves one cardinal step and verifies normalized displacement", async () => {
+  const fake = new FakeBotPort();
+  const controller = new MinecraftController(() => fake);
+  const connected = controller.start(CONFIG);
+  fake.emit("spawn");
+  await connected;
+
+  const result = await controller.executeSkill({
+    skillId: "move.step.v1",
+    arguments: { direction: "east", distanceBlocks: 1 },
+  });
+
+  assert.equal(result.status, "succeeded");
+  assert.equal(result.postcondition.passed, true);
+  assert.ok(result.postcondition.observed.forwardProgressBlocks >= 1);
+  assert.ok(result.postcondition.observed.lateralDriftBlocks <= 0.001);
+  assert.deepEqual(fake.lookCalls[0], {
+    yawRadians: -Math.PI / 2,
+    pitchRadians: 0,
+  });
+  assert.deepEqual(fake.controlCalls, [
+    { control: "forward", enabled: true },
+  ]);
+  assert.equal(fake.forwardEnabled, false);
+  assert.equal(fake.clearCalls, 1);
+});
+
+test("move.step.v1 fails blocked movement after 20 ticks without retry", async () => {
+  const fake = new FakeBotPort();
+  fake.physicsTickImplementation = async () => {};
+  const controller = new MinecraftController(() => fake);
+  const connected = controller.start(CONFIG);
+  fake.emit("spawn");
+  await connected;
+
+  const result = await controller.executeSkill({
+    skillId: "move.step.v1",
+    arguments: { direction: "north", distanceBlocks: 1 },
+  });
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.error.code, "E_MINECRAFT_SKILL_BLOCKED");
+  assert.equal(result.attempts, 1);
+  assert.equal(fake.clearCalls, 1);
+});
+
+test("move.step.v1 rejects lateral drift in its postcondition", async () => {
+  const fake = new FakeBotPort();
+  fake.physicsTickImplementation = async () => {
+    fake.world = structuredClone(fake.world);
+    fake.world.player.position.z -= 0.2;
+    fake.world.player.position.x += 0.1;
+  };
+  const controller = new MinecraftController(() => fake);
+  const connected = controller.start(CONFIG);
+  fake.emit("spawn");
+  await connected;
+
+  const result = await controller.executeSkill({
+    skillId: "move.step.v1",
+    arguments: { direction: "north", distanceBlocks: 1 },
+  });
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.error.code, "E_MINECRAFT_SKILL_POSTCONDITION");
+  assert.ok(result.postcondition.observed.lateralDriftBlocks > 0.35);
+  assert.equal(fake.clearCalls, 1);
+});
+
+test("move.step.v1 requires an on-ground player", async () => {
+  const fake = new FakeBotPort();
+  fake.world = structuredClone(fake.world);
+  fake.world.player.onGround = false;
+  const controller = new MinecraftController(() => fake);
+  const connected = controller.start(CONFIG);
+  fake.emit("spawn");
+  await connected;
+
+  const result = await controller.executeSkill({
+    skillId: "move.step.v1",
+    arguments: { direction: "south", distanceBlocks: 0.5 },
+  });
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.error.code, "E_MINECRAFT_SKILL_PRECONDITION");
+  assert.equal(fake.controlCalls.length, 0);
+});
+
+test("emergency stop cancels move.step.v1 and clears movement controls", async () => {
+  const fake = new FakeBotPort();
+  fake.physicsTickImplementation = () => new Promise(() => {});
+  const controller = new MinecraftController(() => fake);
+  const connected = controller.start(CONFIG);
+  fake.emit("spawn");
+  await connected;
+
+  const active = controller.executeSkill({
+    skillId: "move.step.v1",
+    arguments: { direction: "west", distanceBlocks: 1 },
+  });
+  await Promise.resolve();
+  await Promise.resolve();
+  await controller.emergencyStop();
+  const result = await active;
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.error.code, "E_MINECRAFT_SKILL_CANCELLED");
+  assert.equal(fake.forwardEnabled, false);
+  assert.ok(fake.clearCalls >= 1);
+});
+
+test("owner disconnect cancels move.step.v1 without latching emergency", async () => {
+  const fake = new FakeBotPort();
+  fake.physicsTickImplementation = () => new Promise(() => {});
+  const controller = new MinecraftController(() => fake);
+  const connected = controller.start(CONFIG);
+  fake.emit("spawn");
+  await connected;
+
+  const active = controller.executeSkill({
+    skillId: "move.step.v1",
+    arguments: { direction: "west", distanceBlocks: 1 },
+  });
+  await Promise.resolve();
+  await Promise.resolve();
+  await controller.disconnect();
+  const result = await active;
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.error.code, "E_MINECRAFT_SKILL_CANCELLED");
+  assert.equal(controller.getStatus().emergencyStopped, false);
+  assert.equal(controller.getStatus().phase, "disconnected");
+  assert.equal(fake.forwardEnabled, false);
+});
+
+test("move.step.v1 enforces its fixed timeout and clears controls", async (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  const fake = new FakeBotPort();
+  fake.physicsTickImplementation = () => new Promise(() => {});
+  const controller = new MinecraftController(() => fake);
+  const connected = controller.start(CONFIG);
+  fake.emit("spawn");
+  await connected;
+
+  const active = controller.executeSkill({
+    skillId: "move.step.v1",
+    arguments: { direction: "south", distanceBlocks: 2 },
+  });
+  await Promise.resolve();
+  await Promise.resolve();
+  context.mock.timers.tick(4_001);
+  const result = await active;
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.error.code, "E_MINECRAFT_SKILL_TIMEOUT");
+  assert.equal(result.attempts, 1);
+  assert.equal(fake.forwardEnabled, false);
+  assert.equal(fake.clearCalls, 1);
 });

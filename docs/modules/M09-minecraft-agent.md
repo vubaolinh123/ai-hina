@@ -80,8 +80,34 @@ Lệnh terminal cũ vẫn dùng được khi cần smoke riêng:
 pnpm start:minecraft -- --host 127.0.0.1 --port 25565 --username Hina
 ```
 
+## M09-S4 — Di chuyển ngắn có hậu kiểm
+
+- Registry tĩnh hiện có đúng hai skill: `look.v1` và `move.step.v1`; cả hai đều
+  non-destructive, một attempt và có postcondition cố định.
+- `move.step.v1` chỉ nhận `north|east|south|west` và 0,25–2 block. Extra field,
+  NaN, hướng khác hoặc khoảng cách ngoài range fail trước Mineflayer.
+- Player phải online, có state, đang đứng trên đất và không có skill khác chạy.
+- Controller xoay về cardinal yaw cố định, chỉ giữ control `forward`, chờ physics
+  tick bounded và luôn `clearControlStates()` trong `finally`.
+- Sau 20 tick không tiến được thì báo `E_MINECRAFT_SKILL_BLOCKED`; toàn skill có
+  timeout 4 giây. Không retry hoặc tự tìm đường vòng.
+- Success cần forward progress ≥75% target, không overshoot quá 0,75 block và
+  lateral drift ≤0,35 block. Elapsed time hay vendor promise không phải evidence.
+- Dashboard owner có hướng/khoảng cách rõ ràng; widget, model và viewer không gọi
+  được route này.
+
+Fast evidence:
+
+- `pnpm test:minecraft`: build và 34 tests pass, gồm cardinal mapping, blocked,
+  lateral mismatch, airborne precondition, timeout, disconnect/emergency cancel.
+- `pnpm test:desktop`: production build và 65 tests pass.
+- `pnpm test:fast`: 291 tests pass.
+- Module brief và `git diff --check` pass; không model/GPU/Cloud, không world
+  artifact và không kết nối server thật.
+
 ## Slice kế tiếp
 
-M09-S4 sẽ mở một kỹ năng di chuyển ngắn theo hướng cố định với timeout, quãng
-đường tối đa và hậu kiểm vị trí. Kỹ năng vẫn chỉ dành cho server test có thể
-reset; chưa có pathfinder, planner LLM, phá block hay chiến đấu.
+M09-S5 sẽ bổ sung state freshness và một kỹ năng quay-trước-khi-bước theo target
+tọa độ cực ngắn, hoặc blocked/stuck evidence chi tiết hơn, nhưng chỉ sau khi
+owner thử S3/S4 trên resettable server. Pathfinder, LLM planner, phá block và
+combat vẫn chưa được mở.

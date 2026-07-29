@@ -1,0 +1,95 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M09-S4-verified-step-movement",
+  "module_id": "M09",
+  "objective": "Add one bounded non-destructive move.step.v1 skill that moves Hina a short owner-requested cardinal distance on a resettable Minecraft test server and reports success only after normalized position evidence verifies direction and distance.",
+  "non_goals": [
+    "Do not add pathfinding, jumping, sprinting, parkour, combat, mining, placing, collection, crafting, storage, eating or fleeing.",
+    "Do not add LLM planning, model-selected actions, runtime skill registration, generated code, eval, shell or arbitrary Mineflayer plugins.",
+    "Do not navigate around obstacles or retry a blocked movement.",
+    "Do not auto-connect, auto-move or execute the skill from chat, vision, memory, viewer input or the widget.",
+    "Do not claim real-server success rate without an owner-provided resettable server."
+  ],
+  "base_sha": "5546049",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "adapters/minecraft/src/contracts.ts",
+    "adapters/minecraft/src/ports.ts",
+    "adapters/minecraft/src/mineflayer-client.ts",
+    "adapters/minecraft/src/movement.ts",
+    "adapters/minecraft/src/skill-registry.ts",
+    "adapters/minecraft/src/controller.ts",
+    "adapters/minecraft/src/status-server.ts",
+    "adapters/minecraft/src/index.ts",
+    "adapters/minecraft/test/",
+    "apps/desktop/electron/minecraft-client.ts",
+    "apps/desktop/electron/main.ts",
+    "apps/desktop/electron/preload.ts",
+    "apps/desktop/src/env.d.ts",
+    "apps/desktop/src/App.vue",
+    "apps/desktop/src/dashboard/pages/MinecraftPage.vue",
+    "apps/desktop/test/minecraft-client.test.mjs",
+    "apps/desktop/test/security.test.mjs",
+    "docs/modules/M09-S4-verified-step-movement-module-brief.json",
+    "docs/modules/M09-minecraft-agent.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    ".gitnexus/",
+    ".claude/",
+    "CLAUDE.md",
+    "docs/research/deep-research-report.md",
+    "voice_demo/",
+    "assets/voices/",
+    "assets/avatars/",
+    "var/perception-sessions/",
+    "apps/desktop/dist/",
+    "apps/desktop/dist-electron/"
+  ],
+  "contracts": [
+    "The static registry contains only look.v1 and move.step.v1; both are versioned, non-destructive, one-attempt skills with fixed timeout and postcondition.",
+    "move.step.v1 accepts exactly direction north|east|south|west and distanceBlocks from 0.25 through 2.0; invalid or extra input fails before Mineflayer.",
+    "Movement requires online, non-emergency, player-present, on-ground and no-concurrent-skill preconditions.",
+    "The controller faces the fixed cardinal yaw, holds only forward, waits on bounded physics ticks and always clears controls in finally on success, block, timeout, disconnect or emergency stop.",
+    "Success requires normalized post-state displacement in the requested cardinal direction, minimum progress relative to distance and bounded lateral drift; resolved vendor promises or elapsed time alone never prove success.",
+    "Blocked, missing-ground, timeout, vendor, cancellation and verifier mismatch are stable bounded failures with zero retry.",
+    "Only the operator Dashboard can request move.step.v1 through the existing ephemeral-secret authenticated loopback boundary; widget/model/viewer cannot invoke it."
+  ],
+  "allowed_dependencies": [
+    "Existing pinned Node.js, Electron, Vue and Mineflayer dependencies only; no new dependency."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "Registry tests prove exactly two immutable safe skills and reject unknown, malformed, excessive-distance or extra-field move requests.",
+    "Controller tests prove cardinal mapping, control clearing, direction/distance/lateral postcondition, blocked result, timeout and emergency/disconnect cancellation without retry.",
+    "Authenticated service and Desktop client tests prove one fixed move route with bounded exact-schema input and no POST retry.",
+    "Dashboard explains the movement limit and exposes direction plus distance only while online.",
+    "Minecraft tests, Desktop typecheck/build/tests, repository fast tests, module-brief validation, GitNexus scan and git diff check pass."
+  ],
+  "required_test_commands": [
+    "uv run --frozen python -c \"import json; from jsonschema import Draft202012Validator; schema=json.load(open('docs/schemas/module-brief.schema.json', encoding='utf-8')); brief=json.load(open('docs/modules/M09-S4-verified-step-movement-module-brief.json', encoding='utf-8')); Draft202012Validator(schema).validate(brief)\"",
+    "pnpm test:minecraft",
+    "pnpm test:desktop",
+    "pnpm test:fast",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "maximum_distance_blocks": 2.0,
+    "minimum_distance_blocks": 0.25,
+    "maximum_attempts": 1,
+    "skill_timeout_milliseconds": 4000,
+    "physics_tick_wait_milliseconds": 250,
+    "lateral_tolerance_blocks": 0.35,
+    "minimum_progress_ratio": 0.75,
+    "automatic_execution": false,
+    "destructive_capability": false,
+    "model_calls": 0,
+    "additional_local_vram_mib": 0,
+    "raw_artifact_persistence": false
+  },
+  "output_artifact_dir": "artifacts/verification/M09/"
+}

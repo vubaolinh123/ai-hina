@@ -6,6 +6,7 @@ import {
   requestMinecraftConnect,
   requestMinecraftDisconnect,
   requestMinecraftLook,
+  requestMinecraftMove,
   requestMinecraftStatus,
 } from "../dist-electron/minecraft-client.js";
 
@@ -104,6 +105,10 @@ test("Minecraft mutations use fixed paths, authority headers and exact bodies", 
     { yawRadians: 0.5, pitchRadians: -0.25 },
     { controlToken: TOKEN, fetchImpl },
   );
+  await requestMinecraftMove(
+    { direction: "north", distanceBlocks: 1.5 },
+    { controlToken: TOKEN, fetchImpl },
+  );
   await requestMinecraftDisconnect({ controlToken: TOKEN, fetchImpl });
 
   assert.deepEqual(
@@ -111,6 +116,7 @@ test("Minecraft mutations use fixed paths, authority headers and exact bodies", 
     [
       "http://127.0.0.1:8766/v1/minecraft/connect",
       "http://127.0.0.1:8766/v1/minecraft/skills/look",
+      "http://127.0.0.1:8766/v1/minecraft/skills/move-step",
       "http://127.0.0.1:8766/v1/minecraft/disconnect",
     ],
   );
@@ -128,6 +134,31 @@ test("Minecraft mutations use fixed paths, authority headers and exact bodies", 
     skillId: "look.v1",
     source: "owner.desktop",
   });
+  assert.deepEqual(requests[2].body, {
+    arguments: { direction: "north", distanceBlocks: 1.5 },
+    ownerConfirmed: true,
+    skillId: "move.step.v1",
+    source: "owner.desktop",
+  });
+});
+
+test("Minecraft client rejects unsafe movement before network I/O", () => {
+  let called = false;
+  assert.throws(
+    () =>
+      requestMinecraftMove(
+        { direction: "up", distanceBlocks: 99 },
+        {
+          controlToken: TOKEN,
+          fetchImpl: async () => {
+            called = true;
+            return jsonResponse({});
+          },
+        },
+      ),
+    /E_DESKTOP_MINECRAFT_INPUT/,
+  );
+  assert.equal(called, false);
 });
 
 test("Minecraft client rejects oversized and invalid JSON responses", async () => {
