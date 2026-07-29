@@ -6,6 +6,7 @@ import {
   type MinecraftAdapterErrorView,
   type MinecraftConnectionConfig,
   type MinecraftControllerStatus,
+  type MinecraftDisconnectResult,
   type MinecraftLookSkillRequest,
   type MinecraftRotationEvidence,
   type MinecraftSkillExecutionResult,
@@ -55,7 +56,9 @@ export class MinecraftController {
   #lastError: MinecraftAdapterErrorView | null = null;
   #eventUnsubscribers: Array<() => void> = [];
   #connectPromise: Promise<MinecraftControllerStatus> | null = null;
-  #cancelConnection: (() => void) | null = null;
+  #cancelConnection:
+    | ((code: string, message: string) => void)
+    | null = null;
   #activeSkillAbort: AbortController | null = null;
   #skillExecutionSequence = 0;
 
@@ -123,19 +126,14 @@ export class MinecraftController {
           this.#cancelConnection = null;
           reject(new MinecraftAdapterError(code, this.#lastError.message));
         };
-        this.#cancelConnection = () => {
-          settleFailure(
-            "E_MINECRAFT_EMERGENCY_STOPPED",
-            "Emergency stop interrupted the Minecraft connection",
-          );
-        };
+        this.#cancelConnection = settleFailure;
 
         const timeout = setTimeout(() => {
           settleFailure(
             "E_MINECRAFT_CONNECT_TIMEOUT",
             `Minecraft did not spawn within ${config.connectTimeoutMs} ms`,
           );
-          void this.emergencyStop();
+          void this.disconnect();
         }, config.connectTimeoutMs);
         timeout.unref();
 
@@ -334,12 +332,13 @@ export class MinecraftController {
       });
       const abortPromise = new Promise<never>((_resolve, reject) => {
         const onAbort = (): void => {
-          reject(
-            new MinecraftAdapterError(
-              "E_MINECRAFT_SKILL_CANCELLED",
-              "look.v1 was cancelled by emergency stop",
-            ),
-          );
+          const reason = abortController.signal.reason;
+          reject(reason instanceof MinecraftAdapterError
+            ? reason
+            : new MinecraftAdapterError(
+                "E_MINECRAFT_SKILL_CANCELLED",
+                "look.v1 was cancelled",
+              ));
         };
         abortController.signal.addEventListener("abort", onAbort, {
           once: true,
@@ -450,6 +449,64 @@ export class MinecraftController {
     return yawDelta <= tolerance && pitchDelta <= tolerance;
   }
 
+  async disconnect(): Promise<MinecraftDisconnectResult> {
+    const started = performance.now();
+    const alreadyDisconnected =
+      this.#bot === null && this.#connectPromise === null;
+    if (alreadyDisconnected) {
+      this.#phase = this.#emergencyStopped ? "stopped" : "disconnected";
+      return {
+        alreadyDisconnected: true,
+        localActionsStoppedAt: this.#clock().toISOString(),
+        dispatchDurationMs:
+          Math.round((performance.now() - started) * 1_000) / 1_000,
+      };
+    }
+
+    this.#activeSkillAbort?.abort(
+      new MinecraftAdapterError(
+        "E_MINECRAFT_SKILL_CANCELLED",
+        "look.v1 was cancelled by owner disconnect",
+      ),
+    );
+    this.#cancelConnection?.(
+      "E_MINECRAFT_DISCONNECTED",
+      "Owner disconnected the Minecraft adapter",
+    );
+    this.#cancelConnection = null;
+    const bot = this.#bot;
+    if (bot !== null) {
+      try {
+        bot.clearControlStates();
+      } catch {
+        // Disconnect remains authoritative if local controls are degraded.
+      }
+      try {
+        void bot.stopDigging().catch(() => {
+          // Socket disconnect remains authoritative.
+        });
+      } catch {
+        // A broken vendor implementation must not delay disconnect.
+      }
+      try {
+        bot.quit("Hina owner disconnect");
+      } catch {
+        // The socket may already be closed.
+      }
+    }
+    this.#eventUnsubscribers.splice(0).forEach((unsubscribe) => unsubscribe());
+    this.#bot = null;
+    this.#connectedAt = null;
+    this.#phase = this.#emergencyStopped ? "stopped" : "disconnected";
+    this.#sequence += 1;
+    return {
+      alreadyDisconnected: false,
+      localActionsStoppedAt: this.#clock().toISOString(),
+      dispatchDurationMs:
+        Math.round((performance.now() - started) * 1_000) / 1_000,
+    };
+  }
+
   async emergencyStop(): Promise<EmergencyStopResult> {
     const started = performance.now();
     const alreadyStopped = this.#emergencyStopped;
@@ -462,12 +519,20 @@ export class MinecraftController {
       };
     }
     this.#emergencyStopped = true;
-    this.#activeSkillAbort?.abort();
+    this.#activeSkillAbort?.abort(
+      new MinecraftAdapterError(
+        "E_MINECRAFT_SKILL_CANCELLED",
+        "look.v1 was cancelled by emergency stop",
+      ),
+    );
     this.#phase = "stopping";
     this.#sequence += 1;
 
     const bot = this.#bot;
-    this.#cancelConnection?.();
+    this.#cancelConnection?.(
+      "E_MINECRAFT_EMERGENCY_STOPPED",
+      "Emergency stop interrupted the Minecraft connection",
+    );
     this.#cancelConnection = null;
     if (!alreadyStopped && bot !== null) {
       try {

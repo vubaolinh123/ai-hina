@@ -50,6 +50,67 @@ type RuntimeHealth = {
   uptimeSeconds: number;
 };
 
+type MinecraftVector = {
+  x: number;
+  y: number;
+  z: number;
+};
+
+type MinecraftStatus = {
+  schemaVersion: 1;
+  phase: "disconnected" | "connecting" | "online" | "error" | "stopping" | "stopped";
+  emergencyStopped: boolean;
+  sequence: number;
+  target: {
+    host: string;
+    port: number;
+    username: string;
+    version: string | null;
+  } | null;
+  connectedAt: string | null;
+  capturedAt: string;
+  world: {
+    protocolVersion: string | null;
+    dimension: string | null;
+    timeOfDay: number | null;
+    isDay: boolean | null;
+    player: {
+      username: string;
+      health: number;
+      food: number;
+      foodSaturation: number;
+      oxygenLevel: number;
+      gameMode: string;
+      position: MinecraftVector;
+      velocity: MinecraftVector;
+      yaw: number;
+      pitch: number;
+      onGround: boolean;
+    } | null;
+    inventory: Array<{
+      slot: number;
+      name: string;
+      displayName: string;
+      count: number;
+      durabilityUsed: number | null;
+      durabilityMax: number | null;
+    }>;
+    nearbyEntities: Array<{
+      id: number;
+      kind: string;
+      name: string | null;
+      displayName: string | null;
+      position: MinecraftVector;
+      distance: number;
+      health: number | null;
+    }>;
+  } | null;
+  lastError: {
+    code: string;
+    message: string;
+  } | null;
+};
+
 type ResourceTelemetry = {
   gpuName: string;
   totalVramMiB: number;
@@ -530,6 +591,35 @@ type HinaDesktopApi = {
     noOp: boolean;
     message: string;
     resources: ResourceStatus;
+  }>;
+  getMinecraftStatus(): Promise<MinecraftStatus>;
+  connectMinecraft(input: {
+    host: string;
+    port: number;
+    username: string;
+    version: string | null;
+  }): Promise<{
+    status: string;
+    minecraft: MinecraftStatus;
+  }>;
+  disconnectMinecraft(): Promise<{
+    status: string;
+    minecraft: MinecraftStatus;
+  }>;
+  lookMinecraft(input: {
+    yawRadians: number;
+    pitchRadians: number;
+  }): Promise<{
+    status: string;
+    execution: {
+      status: "succeeded" | "failed";
+      error?: { code: string; message: string } | null;
+    };
+    minecraft: MinecraftStatus;
+  }>;
+  emergencyStopMinecraft(): Promise<{
+    status: string;
+    minecraft: MinecraftStatus;
   }>;
   getChatStatus(): Promise<ChatRuntimeStatus>;
   startChatTurn(payload: {

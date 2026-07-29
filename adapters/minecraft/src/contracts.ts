@@ -96,6 +96,12 @@ export interface EmergencyStopResult {
   dispatchDurationMs: number;
 }
 
+export interface MinecraftDisconnectResult {
+  alreadyDisconnected: boolean;
+  localActionsStoppedAt: string;
+  dispatchDurationMs: number;
+}
+
 export type MinecraftSkillId = "look.v1";
 
 export interface MinecraftSkillDefinition {

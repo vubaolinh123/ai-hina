@@ -73,6 +73,13 @@ import {
   type CaptureSourceCandidate,
   type CaptureSourceKind,
 } from "./screen-capture";
+import {
+  requestMinecraftConnect,
+  requestMinecraftDisconnect,
+  requestMinecraftEmergencyStop,
+  requestMinecraftLook,
+  requestMinecraftStatus,
+} from "./minecraft-client";
 
 const CHANNELS = Object.freeze({
   windowMode: "hina:window:mode",
@@ -108,6 +115,11 @@ const CHANNELS = Object.freeze({
   visionClearKey: "hina:vision:clear-key",
   resourcesStatus: "hina:resources:status",
   resourcesControl: "hina:resources:control",
+  minecraftStatus: "hina:minecraft:status",
+  minecraftConnect: "hina:minecraft:connect",
+  minecraftDisconnect: "hina:minecraft:disconnect",
+  minecraftLook: "hina:minecraft:look",
+  minecraftEmergencyStop: "hina:minecraft:emergency-stop",
   captureSources: "hina:capture:sources",
   captureSubmit: "hina:capture:submit",
   captureProgress: "hina:capture:progress",
@@ -836,6 +848,91 @@ function registerIpcHandlers(): void {
       }
     },
   );
+  ipcMain.handle(CHANNELS.minecraftStatus, async (event) => {
+    if (assertTrustedSender(event) !== "operator") {
+      throw new Error("E_DESKTOP_MINECRAFT_AUTHORITY: operator window required");
+    }
+    try {
+      return await requestMinecraftStatus();
+    } catch (error) {
+      console.error(
+        `[hina-desktop:minecraft:ERROR] ${
+          error instanceof Error
+            ? error.message.slice(0, 256)
+            : "Minecraft status failed"
+        }`,
+      );
+      throw error;
+    }
+  });
+  ipcMain.handle(CHANNELS.minecraftConnect, async (event, input: unknown) => {
+    if (assertTrustedSender(event) !== "operator") {
+      throw new Error("E_DESKTOP_MINECRAFT_AUTHORITY: operator window required");
+    }
+    try {
+      return await requestMinecraftConnect(input);
+    } catch (error) {
+      console.error(
+        `[hina-desktop:minecraft:ERROR] ${
+          error instanceof Error
+            ? error.message.slice(0, 256)
+            : "Minecraft connect failed"
+        }`,
+      );
+      throw error;
+    }
+  });
+  ipcMain.handle(CHANNELS.minecraftDisconnect, async (event) => {
+    if (assertTrustedSender(event) !== "operator") {
+      throw new Error("E_DESKTOP_MINECRAFT_AUTHORITY: operator window required");
+    }
+    try {
+      return await requestMinecraftDisconnect();
+    } catch (error) {
+      console.error(
+        `[hina-desktop:minecraft:ERROR] ${
+          error instanceof Error
+            ? error.message.slice(0, 256)
+            : "Minecraft disconnect failed"
+        }`,
+      );
+      throw error;
+    }
+  });
+  ipcMain.handle(CHANNELS.minecraftLook, async (event, input: unknown) => {
+    if (assertTrustedSender(event) !== "operator") {
+      throw new Error("E_DESKTOP_MINECRAFT_AUTHORITY: operator window required");
+    }
+    try {
+      return await requestMinecraftLook(input);
+    } catch (error) {
+      console.error(
+        `[hina-desktop:minecraft:ERROR] ${
+          error instanceof Error
+            ? error.message.slice(0, 256)
+            : "Minecraft look failed"
+        }`,
+      );
+      throw error;
+    }
+  });
+  ipcMain.handle(CHANNELS.minecraftEmergencyStop, async (event) => {
+    if (assertTrustedSender(event) !== "operator") {
+      throw new Error("E_DESKTOP_MINECRAFT_AUTHORITY: operator window required");
+    }
+    try {
+      return await requestMinecraftEmergencyStop();
+    } catch (error) {
+      console.error(
+        `[hina-desktop:minecraft:ERROR] ${
+          error instanceof Error
+            ? error.message.slice(0, 256)
+            : "Minecraft emergency stop failed"
+        }`,
+      );
+      throw error;
+    }
+  });
   ipcMain.handle(CHANNELS.captureSources, async (event) => {
     if (assertTrustedSender(event) !== "operator") {
       throw new Error("E_DESKTOP_CAPTURE_AUTHORITY: operator window required");

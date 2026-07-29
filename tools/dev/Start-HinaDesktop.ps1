@@ -5,12 +5,17 @@ $controlScript = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "Start-H
 $modelScript = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "Start-HinaModelProvider.ps1"))
 $healthUrl = "http://127.0.0.1:8765/v1/health"
 $versionUrl = "http://127.0.0.1:8765/v1/version"
+$minecraftHealthUrl = "http://127.0.0.1:8766/health"
+$minecraftEntrypoint = [System.IO.Path]::GetFullPath((Join-Path $repoRoot "adapters\minecraft\dist\service-cli.js"))
 $logDirectory = [System.IO.Path]::GetFullPath((Join-Path $repoRoot "var\logs"))
 if (-not $controlScript.StartsWith($repoRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
     throw "Control-plane launcher escaped the repository"
 }
 if (-not $logDirectory.StartsWith($repoRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
     throw "Desktop log directory escaped the repository"
+}
+if (-not $minecraftEntrypoint.StartsWith($repoRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "Minecraft service entrypoint escaped the repository"
 }
 [System.IO.Directory]::CreateDirectory($logDirectory) | Out-Null
 
@@ -30,6 +35,25 @@ function Test-HinaControlPlane {
     catch {
         return $false
     }
+}
+
+function Test-HinaMinecraftService {
+    try {
+        $response = Invoke-RestMethod -Uri $minecraftHealthUrl -TimeoutSec 2
+        return (
+            $response.status -eq "ok" -and
+            $response.controlEnabled -eq $true
+        )
+    }
+    catch {
+        return $false
+    }
+}
+
+function New-HinaEphemeralToken {
+    $bytes = [byte[]]::new(32)
+    [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+    return [Convert]::ToBase64String($bytes).TrimEnd("=").Replace("+", "-").Replace("/", "_")
 }
 
 function Get-HinaControlVersion {
@@ -93,10 +117,21 @@ function Write-HinaRuntimeErrors {
                 ForEach-Object { Write-Host "[hina-$name] $_" }
         }
     }
+    foreach ($name in @("desktop-minecraft.stderr.log", "desktop-minecraft.stdout.log")) {
+        $path = Join-Path $logDirectory $name
+        if (Test-Path -LiteralPath $path) {
+            Get-Content -LiteralPath $path -Tail 20 |
+                Where-Object { $_.Trim() } |
+                ForEach-Object { Write-Host "[hina-$name] $_" }
+        }
+    }
 }
 
 $controlProcess = $null
 $startedControlPlane = $false
+$minecraftProcess = $null
+$startedMinecraftService = $false
+$previousMinecraftToken = $env:HINA_MINECRAFT_CONTROL_TOKEN
 try {
     & $modelScript -PullMissingModel -StartupCheck
     if (-not $?) {
@@ -129,6 +164,38 @@ try {
         Write-Host "[hina-desktop] Control plane đã sẵn sàng."
     }
 
+    if (Test-HinaMinecraftService) {
+        throw "Minecraft control service is already running on 127.0.0.1:8766. Stop it before starting this Desktop session."
+    }
+    & pnpm --filter @hina/minecraft-adapter build
+    if ($LASTEXITCODE -ne 0) {
+        throw "Minecraft adapter build failed with exit code $LASTEXITCODE"
+    }
+    $env:HINA_MINECRAFT_CONTROL_TOKEN = New-HinaEphemeralToken
+    $minecraftStdoutPath = Join-Path $logDirectory "desktop-minecraft.stdout.log"
+    $minecraftStderrPath = Join-Path $logDirectory "desktop-minecraft.stderr.log"
+    $nodeCommand = (Get-Command node -ErrorAction Stop).Source
+    $minecraftProcess = Start-Process `
+        -FilePath $nodeCommand `
+        -ArgumentList @($minecraftEntrypoint) `
+        -WorkingDirectory $repoRoot `
+        -WindowStyle Hidden `
+        -RedirectStandardOutput $minecraftStdoutPath `
+        -RedirectStandardError $minecraftStderrPath `
+        -PassThru
+    $startedMinecraftService = $true
+    $minecraftDeadline = [DateTimeOffset]::UtcNow.AddSeconds(15)
+    while (-not (Test-HinaMinecraftService)) {
+        if ($minecraftProcess.HasExited) {
+            throw "Minecraft control service exited before becoming ready. See var/logs/desktop-minecraft.stderr.log"
+        }
+        if ([DateTimeOffset]::UtcNow -ge $minecraftDeadline) {
+            throw "Minecraft control service was not ready after 15 seconds. See var/logs/desktop-minecraft.stderr.log"
+        }
+        Start-Sleep -Milliseconds 200
+    }
+    Write-Host "[hina-desktop] Minecraft control service is ready and disconnected."
+
     & pnpm --filter @hina/desktop build
     if ($LASTEXITCODE -ne 0) {
         throw "Desktop build failed with exit code $LASTEXITCODE"
@@ -144,6 +211,16 @@ catch {
     throw
 }
 finally {
+    if ($startedMinecraftService -and $null -ne $minecraftProcess -and -not $minecraftProcess.HasExited) {
+        Stop-Process -Id $minecraftProcess.Id
+        $minecraftProcess.WaitForExit()
+    }
+    if ($null -eq $previousMinecraftToken) {
+        Remove-Item Env:HINA_MINECRAFT_CONTROL_TOKEN -ErrorAction SilentlyContinue
+    }
+    else {
+        $env:HINA_MINECRAFT_CONTROL_TOKEN = $previousMinecraftToken
+    }
     if ($startedControlPlane -and $null -ne $controlProcess -and -not $controlProcess.HasExited) {
         Stop-Process -Id $controlProcess.Id
         $controlProcess.WaitForExit()

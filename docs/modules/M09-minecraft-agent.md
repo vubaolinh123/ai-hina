@@ -3,85 +3,85 @@
 ## Trạng thái
 
 M09 đang ở fast-development write phase. M08 đã dừng write phase ở runnable
-candidate. Ngày 2026-07-29 owner chấp nhận dùng provider Vision Cloud hiện tại
-và hoãn bộ chấm 20 ảnh đa dạng cho tới khi gặp lỗi thực tế. Đây là quyết định
-chuyển module, không phải bằng chứng rằng ngưỡng chất lượng ≥85% đã được đo hoặc
-đã pass.
+candidate sau khi owner chọn tiếp tục dùng Vision Cloud và hoãn bộ chấm 20 ảnh
+cho tới khi gặp lỗi thực tế. Đây không phải tuyên bố Vision đã đo và đạt ≥85%.
 
-## Slice M09-S1
+M09-S1, S2 và S3 hiện là local runnable candidate. Chưa production-promote vì
+workspace chưa có Minecraft server test có thể reset để owner chạy acceptance.
 
-Mở nền kết nối Minecraft thật bằng Mineflayer trên server local/private có thể
-reset. Slice này chỉ sở hữu:
+## M09-S1 — Connection spine
 
-- cấu hình kết nối offline đã validate và chặn public server;
-- wrapper Mineflayer sau contract dữ liệu plain của Hina;
-- snapshot bounded cho player, inventory và entity gần;
-- status HTTP chỉ đọc trên `127.0.0.1`;
-- emergency stop idempotent, latched và không chờ server acknowledgement;
-- log lỗi có mã ổn định, không ghi chat/sign/book hoặc dữ liệu plugin.
+- Pin `mineflayer@4.37.1` theo npm integrity và upstream commit
+  `03eba44f3e9cb93a0f0bf69a75938246e174dc6f`; không copy source upstream.
+- Chỉ dùng offline auth tới localhost/private IP; public IP và DNS bị chặn.
+- Mineflayer/Prismarine type nằm sau internal port của Hina.
+- World snapshot bounded chỉ gồm player, inventory và entity gần. Không đưa
+  chat, sign, book, NBT, scoreboard hay plugin payload vào Hina.
+- Status HTTP read-only bind đúng `127.0.0.1`.
+- Emergency stop idempotent, latched và không chờ server acknowledgement.
 
-Chưa có LLM planner hoặc skill gameplay trong S1. Runtime không chạy code do
-model sinh ra, không dùng `eval`, không gọi shell và không có hành động phá
-world. Owner chỉ smoke bằng world/server test có thể reset.
+Fast evidence: adapter build + 13 tests, repository fast suite 270 tests. Audit
+dependency path Minecraft có 0 finding sau khi override transitive `uuid` lên
+11.1.1. Workspace còn advisory AJV có sẵn ngoài owned scope M09.
 
-## Lệnh sử dụng sau khi gate xanh
+## M09-S2 — Kỹ năng look.v1 có hậu kiểm
+
+- Registry tĩnh có đúng một skill `look.v1`, version 1,
+  `destructive=false`, một attempt, timeout 2.000 ms.
+- Exact-schema input giới hạn yaw/pitch; unknown skill, extra field, NaN và góc
+  ngoài range đều fail trước Mineflayer.
+- Adapter gọi `bot.look(yaw, pitch, true)` thật, nhưng promise resolve chưa phải
+  success. Normalized post-state phải khớp target trong tolerance 0,05 radian.
+- Busy, precondition, vendor error, timeout, postcondition mismatch và
+  emergency cancellation đều là bounded failure, không retry.
+
+Fast evidence: adapter build + 22 tests, repository fast suite 279 tests.
+
+## M09-S3 — Owner control trong Desktop
+
+- `pnpm start:desktop` build và tự khởi Minecraft control service ở trạng thái
+  disconnected trên đúng `127.0.0.1:8766`; không tự vào server game.
+- Launcher sinh secret 32 byte mới cho từng phiên bằng CSPRNG, chỉ truyền qua
+  environment của tiến trình con và thu hồi khi Desktop đóng. Secret, URL nội
+  bộ và object Mineflayer không đi qua preload/renderer, không được persist.
+- Status/health vẫn read-only. Connect, disconnect, `look.v1` và emergency stop
+  yêu cầu Bearer secret, `X-Hina-Source: owner.desktop`, JSON ≤8.192 byte, exact
+  schema và `ownerConfirmed=true`.
+- Electron main chỉ nhận lệnh từ operator main frame qua typed IPC. Widget bị
+  từ chối. POST không được replay/retry tự động.
+- Dashboard có page **Minecraft** riêng bằng tiếng Việt: owner nhập server
+  local/private, xem world state bounded, thử `look.v1`, ngắt kết nối hoặc dừng
+  khẩn cấp. Page chỉ presentation/intent; network và secret ở Electron main.
+- Disconnect thường hủy skill đang chạy nhưng cho phép reconnect. Emergency
+  stop hủy skill, nhả controls, ngắt bot và latch tới khi restart adapter.
+
+Fast evidence:
+
+- `pnpm test:minecraft`: build TypeScript và 26 tests pass.
+- `pnpm test:desktop`: production build và 64 tests pass.
+- `pnpm test:fast`: 283 tests pass.
+- Module brief, TypeScript typecheck, PowerShell parse và `git diff --check`
+  pass. Status-server tests dùng loopback TCP thật trên ephemeral port.
+- Chưa kết nối server Minecraft thật vì workspace không có resettable server.
+
+## Cách owner thử sau khi pull
+
+1. Chạy `pnpm start:desktop`.
+2. Mở page **Minecraft**. Dịch vụ phải báo “Chưa kết nối game”.
+3. Chạy một Minecraft test server offline mode ở localhost/LAN riêng.
+4. Nhập IP/port/username và bấm **Kết nối Hina**.
+5. Thử `look.v1`, xem góc yaw/pitch được hậu kiểm.
+6. Dùng **Ngắt kết nối** để có thể vào lại, hoặc **Dừng Minecraft ngay** để latch
+   toàn bộ adapter tới lần restart Desktop.
+
+Lệnh terminal cũ vẫn dùng được khi cần smoke riêng:
 
 ```powershell
 pnpm start:minecraft -- --host 127.0.0.1 --port 25565 --username Hina
 ```
 
-Minecraft server cần chạy offline mode trong môi trường test riêng. Trạng thái
-read-only mặc định sẽ ở `http://127.0.0.1:8766/v1/minecraft/status`. Nhấn
-`Ctrl+C` tại terminal adapter để kích hoạt emergency stop và ngắt bot.
-
 ## Slice kế tiếp
 
-M09-S3 sẽ nối skill controller vào một owner-only control boundary để owner có
-thể chạy hành động thật trên server test từ Dashboard. Boundary đó vẫn phải
-giữ fixed allowlist và không cho renderer hoặc model tự chọn code/action tùy ý.
-
-## Fast evidence M09-S1 (owner machine)
-
-- `mineflayer@4.37.1` được pin bằng npm integrity và upstream commit
-  `03eba44f3e9cb93a0f0bf69a75938246e174dc6f`; không copy source upstream.
-- `pnpm test:minecraft`: build TypeScript và 13 unit tests pass. Test bao phủ
-  private-target validation, public-target rejection, connection failure,
-  snapshot bounds, public type boundary, read-only loopback status và
-  emergency stop latched/idempotent.
-- `pnpm test:fast`: tổng 270 test pass trên các module đang có, gồm 13 test
-  Minecraft mới.
-- Production audit không còn finding nào trên dependency path
-  `adapters__minecraft` sau khi override hai transitive `uuid` lên `11.1.1`.
-  Workspace vẫn báo một advisory `moderate` có sẵn ở `packages/contracts>ajv`;
-  finding đó không thuộc dependency path hoặc owned scope của M09-S1.
-- License inventory của dependency tree chỉ báo các license permissive. SBOM
-  M00 được regenerate thành công.
-- Không có Minecraft server resettable đang chạy trong workspace, vì vậy chưa
-  có real-server smoke, chưa đo server acknowledgement và chưa tuyên bố
-  compatibility với world/version cụ thể. Candidate chỉ dành cho owner local
-  test.
-
-## Implemented in M09-S2
-
-- Registry tĩnh hiện chỉ có `look.v1`, version 1, `destructive=false`, tối đa
-  một attempt, timeout 2.000 ms và yaw/pitch tolerance 0,05 radian. Caller không
-  thể đăng ký callback, đổi budget hoặc gửi field ngoài schema.
-- `look.v1` chỉ chạy khi controller online, emergency stop chưa latch, player
-  state tồn tại và không có skill khác đang chạy.
-- Adapter gọi API `bot.look(yaw, pitch, true)` thật của Mineflayer. Promise
-  resolve không phải success evidence: normalized state sau action phải có yaw
-  và pitch khớp target trong tolerance thì result mới là `succeeded`.
-- Timeout, vendor error, busy, missing precondition, postcondition mismatch và
-  emergency cancellation đều trả mã lỗi bounded, không retry. Emergency stop
-  abort active skill trước khi clear controls và disconnect.
-- Không có movement/pathfinding, chat/sign/book, destructive action, LLM,
-  generated code, `eval`, shell hoặc mutating HTTP route.
-
-## Fast evidence M09-S2 (owner machine)
-
-- `pnpm test:minecraft`: build TypeScript và 22 test pass, gồm validation,
-  immutable registry, verified success, false-success rejection, vendor error,
-  fake-timer timeout, concurrency guard và emergency cancellation.
-- `pnpm test:fast`: tổng 279 test pass.
-- Module brief và `git diff --check` pass. Không gọi model/GPU/Cloud, không tạo
-  world/audio/image test và không chạy Minecraft server thật.
+M09-S4 sẽ mở một kỹ năng di chuyển ngắn theo hướng cố định với timeout, quãng
+đường tối đa và hậu kiểm vị trí. Kỹ năng vẫn chỉ dành cho server test có thể
+reset; chưa có pathfinder, planner LLM, phá block hay chiến đấu.

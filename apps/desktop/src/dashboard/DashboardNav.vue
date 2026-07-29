@@ -22,6 +22,7 @@ const items: ReadonlyArray<{
   { page: "avatar", title: "Avatar Stage", description: "Xem biểu cảm và lip-sync" },
   { page: "live2d", title: "Live2D / VTube Studio", description: "Hiyori hoặc model của bạn" },
   { page: "runtime", title: "Runtime & Safety", description: "Widget, mute và dừng khẩn cấp" },
+  { page: "minecraft", title: "Minecraft", description: "Kết nối và thử kỹ năng an toàn" },
 ];
 </script>
 

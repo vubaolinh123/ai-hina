@@ -12,6 +12,7 @@ import OverviewPage from "./dashboard/pages/OverviewPage.vue";
 import ChatPage from "./dashboard/pages/ChatPage.vue";
 import PerceptionPage from "./dashboard/pages/PerceptionPage.vue";
 import ResourcesPage from "./dashboard/pages/ResourcesPage.vue";
+import MinecraftPage from "./dashboard/pages/MinecraftPage.vue";
 import SpeechPage from "./dashboard/pages/SpeechPage.vue";
 import Live2DPage from "./dashboard/pages/Live2DPage.vue";
 import AvatarPage from "./dashboard/pages/AvatarPage.vue";
@@ -132,6 +133,9 @@ const resourceError = ref("");
 const resourcePending = ref(false);
 const resourceControlBusyId = ref<string | null>(null);
 const resourceControlMessage = ref("");
+const minecraftStatus = ref<MinecraftStatus | null>(null);
+const minecraftBusy = ref(false);
+const minecraftNotice = ref("");
 const resourceSamples = ref<Array<{
   sampledAt: number;
   usedVramMiB: number;
@@ -147,6 +151,7 @@ let chatPollTimer: number | null = null;
 let activeChatTurnId: string | null = null;
 let spoutTimer: number | null = null;
 let resourceTimer: number | null = null;
+let minecraftTimer: number | null = null;
 let lastResourceLoggedError = "";
 
 const selectedScreenCaptureSource = computed(
@@ -1148,6 +1153,135 @@ function stopResourcePolling(): void {
   }
 }
 
+async function refreshMinecraft(): Promise<void> {
+  if (
+    minecraftBusy.value ||
+    activePage.value !== "minecraft" ||
+    windowMode.value !== "operator"
+  ) {
+    return;
+  }
+  try {
+    minecraftStatus.value = await window.hinaDesktop.getMinecraftStatus();
+    if (minecraftNotice.value.startsWith("E_")) {
+      minecraftNotice.value = "";
+    }
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "E_DESKTOP_MINECRAFT_STATUS";
+    minecraftNotice.value = message;
+    console.error("[hina-minecraft-dashboard] E_DESKTOP_MINECRAFT_STATUS", message);
+  }
+}
+
+async function connectMinecraft(input: {
+  host: string;
+  port: number;
+  username: string;
+  version: string | null;
+}): Promise<void> {
+  if (minecraftBusy.value) return;
+  minecraftBusy.value = true;
+  minecraftNotice.value = "Đang kết nối Hina vào server đã chọn…";
+  try {
+    const result = await window.hinaDesktop.connectMinecraft(input);
+    minecraftStatus.value = result.minecraft;
+    minecraftNotice.value = "Hina đã kết nối. Bạn có thể thử kỹ năng xoay hướng nhìn.";
+  } catch (error) {
+    minecraftNotice.value =
+      error instanceof Error ? error.message : "E_DESKTOP_MINECRAFT_CONNECT";
+    console.error(
+      "[hina-minecraft-dashboard] E_DESKTOP_MINECRAFT_CONNECT",
+      minecraftNotice.value,
+    );
+  } finally {
+    minecraftBusy.value = false;
+    await refreshMinecraft();
+  }
+}
+
+async function disconnectMinecraft(): Promise<void> {
+  if (minecraftBusy.value) return;
+  minecraftBusy.value = true;
+  try {
+    const result = await window.hinaDesktop.disconnectMinecraft();
+    minecraftStatus.value = result.minecraft;
+    minecraftNotice.value = "Đã ngắt Hina khỏi server; dịch vụ điều khiển vẫn sẵn sàng.";
+  } catch (error) {
+    minecraftNotice.value =
+      error instanceof Error ? error.message : "E_DESKTOP_MINECRAFT_DISCONNECT";
+    console.error(
+      "[hina-minecraft-dashboard] E_DESKTOP_MINECRAFT_DISCONNECT",
+      minecraftNotice.value,
+    );
+  } finally {
+    minecraftBusy.value = false;
+    await refreshMinecraft();
+  }
+}
+
+async function lookMinecraft(input: {
+  yawRadians: number;
+  pitchRadians: number;
+}): Promise<void> {
+  if (minecraftBusy.value) return;
+  minecraftBusy.value = true;
+  try {
+    const result = await window.hinaDesktop.lookMinecraft(input);
+    minecraftStatus.value = result.minecraft;
+    minecraftNotice.value =
+      result.execution.status === "succeeded"
+        ? "Hina đã xoay đúng góc và hệ thống đã kiểm tra lại trạng thái trong game."
+        : `${result.execution.error?.code ?? "E_MINECRAFT_SKILL"}: ${
+            result.execution.error?.message ?? "Kỹ năng chưa đạt hậu kiểm."
+          }`;
+  } catch (error) {
+    minecraftNotice.value =
+      error instanceof Error ? error.message : "E_DESKTOP_MINECRAFT_LOOK";
+    console.error(
+      "[hina-minecraft-dashboard] E_DESKTOP_MINECRAFT_LOOK",
+      minecraftNotice.value,
+    );
+  } finally {
+    minecraftBusy.value = false;
+    await refreshMinecraft();
+  }
+}
+
+async function emergencyStopMinecraft(): Promise<void> {
+  minecraftBusy.value = true;
+  try {
+    const result = await window.hinaDesktop.emergencyStopMinecraft();
+    minecraftStatus.value = result.minecraft;
+    minecraftNotice.value =
+      "Minecraft đã dừng khẩn cấp và bị khóa tới khi khởi động lại Desktop.";
+  } catch (error) {
+    minecraftNotice.value =
+      error instanceof Error
+        ? error.message
+        : "E_DESKTOP_MINECRAFT_EMERGENCY_STOP";
+    console.error(
+      "[hina-minecraft-dashboard] E_DESKTOP_MINECRAFT_EMERGENCY_STOP",
+      minecraftNotice.value,
+    );
+  } finally {
+    minecraftBusy.value = false;
+  }
+}
+
+function startMinecraftPolling(): void {
+  if (minecraftTimer !== null || windowMode.value !== "operator") return;
+  void refreshMinecraft();
+  minecraftTimer = window.setInterval(() => void refreshMinecraft(), 1_000);
+}
+
+function stopMinecraftPolling(): void {
+  if (minecraftTimer !== null) {
+    window.clearInterval(minecraftTimer);
+    minecraftTimer = null;
+  }
+}
+
 async function refreshVTubeStudioStatus(
   refreshRemote = false,
 ): Promise<void> {
@@ -1252,6 +1386,7 @@ async function moveVTubeStudioModel(
 
 function stopPolling(): void {
   stopResourcePolling();
+  stopMinecraftPolling();
   stopAvatarRuntimePolling();
   if (spoutTimer !== null) {
     window.clearInterval(spoutTimer);
@@ -1277,6 +1412,11 @@ watch(activePage, (page) => {
     startResourcePolling();
   } else {
     stopResourcePolling();
+  }
+  if (page === "minecraft") {
+    startMinecraftPolling();
+  } else {
+    stopMinecraftPolling();
   }
 });
 
@@ -1317,7 +1457,7 @@ onBeforeUnmount(() => {
       <div class="brand">
         <div class="brand-mark">H</div>
         <div>
-          <p class="eyebrow">M08 / LOCAL OPERATOR DESKTOP</p>
+          <p class="eyebrow">M09 / LOCAL OPERATOR DESKTOP</p>
           <h1>Hina Avatar Stage</h1>
         </div>
       </div>
@@ -1458,6 +1598,18 @@ onBeforeUnmount(() => {
       :resource-largest-lease="resourceLargestLease"
       @refresh="refreshResources"
       @control-model="controlResourceModel($event.model, $event.action)"
+    />
+
+    <MinecraftPage
+      v-else-if="activePage === 'minecraft'"
+      :status="minecraftStatus"
+      :busy="minecraftBusy"
+      :notice="minecraftNotice"
+      @refresh="refreshMinecraft"
+      @connect="connectMinecraft"
+      @disconnect="disconnectMinecraft"
+      @look="lookMinecraft"
+      @emergency-stop="emergencyStopMinecraft"
     />
 
     <Live2DPage

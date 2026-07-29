@@ -1,0 +1,98 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M09-S3-desktop-owner-control",
+  "module_id": "M09",
+  "objective": "Make the real M09 adapter owner-testable from the Desktop Dashboard by running a disconnected Minecraft control service with an ephemeral launcher secret, exposing only fixed authenticated connect, disconnect, look.v1 and emergency-stop operations to operator-only typed Electron IPC.",
+  "non_goals": [
+    "Do not expose the control token, adapter URL, Mineflayer objects or network access to the renderer or widget.",
+    "Do not add LLM planning, model-selected actions, generated code, eval, shell, arbitrary plugins or runtime skill registration.",
+    "Do not add movement, pathfinding, collection, crafting, storage, eating, fleeing, combat, chat, sign, book or destructive actions.",
+    "Do not auto-connect to a Minecraft server when Desktop starts.",
+    "Do not bind outside 127.0.0.1, persist the control token, reuse it after process restart or accept unauthenticated mutations.",
+    "Do not claim real-server compatibility, action success rate or emergency-stop server acknowledgement without an owner-provided resettable server."
+  ],
+  "base_sha": "d45a398",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "adapters/minecraft/src/config.ts",
+    "adapters/minecraft/src/controller.ts",
+    "adapters/minecraft/src/status-server.ts",
+    "adapters/minecraft/src/service-cli.ts",
+    "adapters/minecraft/src/index.ts",
+    "adapters/minecraft/test/",
+    "adapters/minecraft/package.json",
+    "package.json",
+    "tools/dev/Start-HinaDesktop.ps1",
+    "apps/desktop/electron/minecraft-client.ts",
+    "apps/desktop/electron/main.ts",
+    "apps/desktop/electron/preload.ts",
+    "apps/desktop/test/minecraft-client.test.mjs",
+    "apps/desktop/src/env.d.ts",
+    "apps/desktop/src/App.vue",
+    "apps/desktop/src/dashboard/types.ts",
+    "apps/desktop/src/dashboard/DashboardNav.vue",
+    "apps/desktop/src/dashboard/pages/MinecraftPage.vue",
+    "apps/desktop/test/security.test.mjs",
+    "docs/modules/M09-S3-desktop-owner-control-module-brief.json",
+    "docs/modules/M09-minecraft-agent.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    ".gitnexus/",
+    ".claude/",
+    "CLAUDE.md",
+    "docs/research/deep-research-report.md",
+    "voice_demo/",
+    "assets/voices/",
+    "assets/avatars/",
+    "var/perception-sessions/",
+    "apps/desktop/dist/",
+    "apps/desktop/dist-electron/"
+  ],
+  "contracts": [
+    "Desktop launcher generates a fresh cryptographically random control token in memory, passes it only through child process environment, starts the adapter disconnected, and stops only the process it created.",
+    "Minecraft service binds exactly 127.0.0.1 and keeps health/status GET read-only; every mutation requires constant-time bearer-token verification plus X-Hina-Source owner.desktop.",
+    "Mutation bodies are bounded JSON with exact fields and ownerConfirmed=true; malformed, unauthenticated, oversized or unknown requests fail closed.",
+    "Connect targets keep the S1 localhost/private-IP and offline-auth restriction; Desktop does not auto-connect.",
+    "Disconnect cancels active skill work and permits a later reconnect; emergency stop cancels active skill work, clears controls, disconnects and remains latched until adapter process restart.",
+    "Only operator main-frame IPC can read Minecraft status or request connect, disconnect, look.v1 and emergency stop; the widget is rejected.",
+    "Renderer receives only normalized bounded status/result objects and never receives the token, adapter base URL, Mineflayer objects or vendor errors.",
+    "MinecraftPage is presentation and typed-intent only; App.vue owns polling and IPC orchestration, Electron main owns authority and network."
+  ],
+  "allowed_dependencies": [
+    "Node.js, Electron, Vue and Mineflayer dependencies already pinned in the workspace; no new dependency."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "Service tests prove authentication, exact schema, payload bounds, connect/disconnect/reconnect, verified look.v1, emergency latch and read-only unknown-route behavior.",
+    "Desktop client tests prove fixed numeric-loopback base URL, secret requirement, bounded response parsing and request validation before network I/O.",
+    "Electron security tests prove four Minecraft IPC paths are operator-only and the preload exposes only typed fixed operations.",
+    "Dashboard has a dedicated Vietnamese Minecraft page explaining when to use each control, showing connection/player/inventory/entity state and exposing only connect, disconnect, look and emergency-stop buttons.",
+    "start:desktop builds and launches the disconnected adapter service with an ephemeral token and cleans it up without persisting the token.",
+    "Minecraft tests, Desktop typecheck/build/tests, repository fast tests, module-brief validation, GitNexus scan and git diff check pass."
+  ],
+  "required_test_commands": [
+    "uv run --frozen python -c \"import json; from jsonschema import Draft202012Validator; schema=json.load(open('docs/schemas/module-brief.schema.json', encoding='utf-8')); brief=json.load(open('docs/modules/M09-S3-desktop-owner-control-module-brief.json', encoding='utf-8')); Draft202012Validator(schema).validate(brief)\"",
+    "pnpm test:minecraft",
+    "pnpm test:desktop",
+    "pnpm test:fast",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "service_bind_host": "127.0.0.1",
+    "default_service_port": 8766,
+    "minimum_control_token_bytes": 32,
+    "maximum_request_bytes": 8192,
+    "status_poll_milliseconds": 1000,
+    "automatic_connect": false,
+    "destructive_capability": false,
+    "model_calls": 0,
+    "additional_local_vram_mib": 0,
+    "raw_artifact_persistence": false
+  },
+  "output_artifact_dir": "artifacts/verification/M09/"
+}

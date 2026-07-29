@@ -4,6 +4,7 @@ export type DashboardPage =
   | "speech"
   | "perception"
   | "resources"
+  | "minecraft"
   | "avatar"
   | "live2d"
   | "runtime";

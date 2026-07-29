@@ -160,6 +160,50 @@ test("emergency stop rejects an in-flight connection instead of hanging", async 
   assert.equal(controller.getStatus().phase, "stopped");
 });
 
+test("owner disconnect is idempotent and permits reconnect", async () => {
+  const firstBot = new FakeBotPort();
+  const secondBot = new FakeBotPort();
+  const bots = [firstBot, secondBot];
+  const controller = new MinecraftController(() => bots.shift());
+
+  const firstConnection = controller.start(CONFIG);
+  firstBot.emit("spawn");
+  await firstConnection;
+  const first = await controller.disconnect();
+  const second = await controller.disconnect();
+
+  assert.equal(first.alreadyDisconnected, false);
+  assert.equal(second.alreadyDisconnected, true);
+  assert.equal(firstBot.clearCalls, 1);
+  assert.equal(firstBot.quitReason, "Hina owner disconnect");
+  assert.equal(controller.getStatus().phase, "disconnected");
+
+  const reconnected = controller.start(CONFIG);
+  secondBot.emit("spawn");
+  assert.equal((await reconnected).phase, "online");
+});
+
+test("owner disconnect cancels active look without latching emergency stop", async () => {
+  const fake = new FakeBotPort();
+  fake.lookImplementation = () => new Promise(() => {});
+  const controller = new MinecraftController(() => fake);
+  const connected = controller.start(CONFIG);
+  fake.emit("spawn");
+  await connected;
+
+  const active = controller.executeSkill({
+    skillId: "look.v1",
+    arguments: { yawRadians: 0.5, pitchRadians: 0.2 },
+  });
+  await Promise.resolve();
+  await controller.disconnect();
+  const result = await active;
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.error.code, "E_MINECRAFT_SKILL_CANCELLED");
+  assert.equal(controller.getStatus().emergencyStopped, false);
+});
+
 test("snapshot failure stays bounded and does not expose a vendor object", async () => {
   const fake = new FakeBotPort();
   fake.captureWorldState = () => {

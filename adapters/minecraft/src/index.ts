@@ -4,6 +4,7 @@ export {
   type EmergencyStopResult,
   type MinecraftConnectionConfig,
   type MinecraftControllerStatus,
+  type MinecraftDisconnectResult,
   type MinecraftLookSkillRequest,
   type MinecraftSkillDefinition,
   type MinecraftSkillExecutionResult,
@@ -13,6 +14,7 @@ export {
 } from "./contracts.js";
 export {
   parseMinecraftConnectionConfig,
+  validateMinecraftConnectionInput,
   validatePrivateMinecraftHost,
 } from "./config.js";
 export { MinecraftController } from "./controller.js";

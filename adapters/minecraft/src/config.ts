@@ -195,3 +195,59 @@ export function parseMinecraftConnectionConfig(
     ),
   };
 }
+
+export function validateMinecraftConnectionInput(
+  value: unknown,
+  statusPort: number,
+): MinecraftConnectionConfig {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    Array.isArray(value)
+  ) {
+    throw new MinecraftAdapterError(
+      "E_MINECRAFT_CONFIG",
+      "Minecraft connection must be an object",
+    );
+  }
+  const raw = value as Record<string, unknown>;
+  const expected = [
+    "host",
+    "ownerConfirmed",
+    "port",
+    "source",
+    "username",
+    "version",
+  ];
+  const actual = Object.keys(raw).sort();
+  if (
+    actual.length !== expected.length ||
+    actual.some((field, index) => field !== expected[index]) ||
+    raw.source !== "owner.desktop" ||
+    raw.ownerConfirmed !== true ||
+    typeof raw.host !== "string" ||
+    typeof raw.username !== "string" ||
+    typeof raw.port !== "number" ||
+    !Number.isInteger(raw.port) ||
+    (raw.version !== null && typeof raw.version !== "string")
+  ) {
+    throw new MinecraftAdapterError(
+      "E_MINECRAFT_CONFIG",
+      "Minecraft connection fields are invalid",
+    );
+  }
+  return parseMinecraftConnectionConfig(
+    [
+      "--host",
+      raw.host,
+      "--port",
+      String(raw.port),
+      "--username",
+      raw.username,
+      ...(raw.version === null ? [] : ["--version", raw.version]),
+      "--status-port",
+      String(statusPort),
+    ],
+    {},
+  );
+}

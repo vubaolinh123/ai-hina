@@ -447,6 +447,16 @@ interruption...) phối hợp memory/policy; không chỉ do system prompt ép c
 Legacy AIRI skill paths dưới `D:\ProjectAiri` mặc định ánh xạ sang repository
 hiện tại `D:\ProjectHinaAI`, trừ khi owner chỉ định workspace khác.
 
+M09-S3 thêm disconnected control service tự khởi cùng Desktop trên
+`127.0.0.1:8766`. Launcher tạo secret CSPRNG 32 byte theo phiên, chỉ truyền qua
+child environment và thu hồi khi đóng; Electron main giữ secret/network, widget
+bị chặn và renderer chỉ có typed owner IPC. Connect/disconnect/`look.v1`/
+emergency-stop dùng Bearer + `owner.desktop`, exact schema, body ≤8.192 byte và
+không replay POST. Dashboard có page Minecraft giải thích/hiển thị world state
+thật. Disconnect cho reconnect; e-stop latch tới restart. Minecraft 26 tests,
+Desktop build/64 tests và fast suite 283 tests xanh; chưa có real resettable
+server smoke nên chưa promotion.
+
 ## Orchestration
 
 - Primary orchestrator dùng `gpt-5.6-sol`.

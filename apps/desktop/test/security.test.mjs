@@ -13,6 +13,7 @@ const readOperatorRenderer = () => [
   read("src/dashboard/pages/ChatPage.vue"),
   read("src/dashboard/pages/PerceptionPage.vue"),
   read("src/dashboard/pages/ResourcesPage.vue"),
+  read("src/dashboard/pages/MinecraftPage.vue"),
   read("src/dashboard/pages/SpeechPage.vue"),
   read("src/dashboard/pages/Live2DPage.vue"),
   read("src/dashboard/pages/AvatarPage.vue"),
@@ -98,6 +99,11 @@ test("preload exposes named methods and never exposes raw ipcRenderer", () => {
     "clearVisionApiKey",
     "getResourceStatus",
     "controlResourceModel",
+    "getMinecraftStatus",
+    "connectMinecraft",
+    "disconnectMinecraft",
+    "lookMinecraft",
+    "emergencyStopMinecraft",
     "listScreenCaptureSources",
     "captureScreenSource",
     "onScreenCaptureProgress",
@@ -153,6 +159,7 @@ test("operator dashboard keeps page markup modular and chat input reachable", ()
   const chat = read("src/dashboard/pages/ChatPage.vue");
   const perception = read("src/dashboard/pages/PerceptionPage.vue");
   const resources = read("src/dashboard/pages/ResourcesPage.vue");
+  const minecraft = read("src/dashboard/pages/MinecraftPage.vue");
   const speech = read("src/dashboard/pages/SpeechPage.vue");
   const live2d = read("src/dashboard/pages/Live2DPage.vue");
   const avatar = read("src/dashboard/pages/AvatarPage.vue");
@@ -165,6 +172,7 @@ test("operator dashboard keeps page markup modular and chat input reachable", ()
   assert.match(app, /import ChatPage from "\.\/dashboard\/pages\/ChatPage\.vue"/);
   assert.match(app, /import PerceptionPage from "\.\/dashboard\/pages\/PerceptionPage\.vue"/);
   assert.match(app, /import ResourcesPage from "\.\/dashboard\/pages\/ResourcesPage\.vue"/);
+  assert.match(app, /import MinecraftPage from "\.\/dashboard\/pages\/MinecraftPage\.vue"/);
   assert.match(app, /import SpeechPage from "\.\/dashboard\/pages\/SpeechPage\.vue"/);
   assert.match(app, /import Live2DPage from "\.\/dashboard\/pages\/Live2DPage\.vue"/);
   assert.match(app, /import AvatarPage from "\.\/dashboard\/pages\/AvatarPage\.vue"/);
@@ -200,6 +208,12 @@ test("operator dashboard keeps page markup modular and chat input reachable", ()
   assert.match(resources, /Force load/);
   assert.match(resources, /emit\('controlModel'/);
   assert.doesNotMatch(resources, /window\.hinaDesktop|\bfetch\s*\(|from\s+["']electron["']/);
+  assert.match(minecraft, /look\.v1/);
+  assert.match(minecraft, /Đây không phải dữ liệu demo/);
+  assert.doesNotMatch(
+    minecraft,
+    /window\.hinaDesktop|\bfetch\s*\(|from\s+["']electron["']|process\.env/,
+  );
   assert.match(speech, /MIC → LOCAL STT REALTIME/);
   assert.match(speech, /TEXT → OMNIVOICE VIETNAMESE GPU/);
   assert.match(speech, /emit\('startMic'\)/);
@@ -246,6 +260,36 @@ test("resource telemetry and owner controls stay behind typed operator IPC", () 
   assert.match(monitor, /ModelTransitionTracker/);
   assert.match(monitor, /historyPersistence|transitionHistory/);
   assert.doesNotMatch(renderer, /child_process|nvidia-smi|process\.memoryUsage|node:os/);
+});
+
+test("Minecraft controls stay on numeric loopback behind ephemeral operator IPC", () => {
+  const main = read("electron/main.ts");
+  const preload = read("electron/preload.ts");
+  const client = read("electron/minecraft-client.ts");
+  const launcher = read("../../tools/dev/Start-HinaDesktop.ps1");
+
+  for (const channel of [
+    "minecraftStatus",
+    "minecraftConnect",
+    "minecraftDisconnect",
+    "minecraftLook",
+    "minecraftEmergencyStop",
+  ]) {
+    assert.match(main, new RegExp(`CHANNELS\\.${channel}`));
+    assert.match(preload, new RegExp(`${channel}:`));
+  }
+  assert.match(main, /E_DESKTOP_MINECRAFT_AUTHORITY: operator window required/);
+  assert.match(main, /\[hina-desktop:minecraft:ERROR\]/);
+  assert.match(client, /DEFAULT_BASE_URL = "http:\/\/127\.0\.0\.1:8766"/);
+  assert.match(client, /Authorization: `Bearer \$\{token\}`/);
+  assert.match(client, /"X-Hina-Source": SOURCE/);
+  assert.match(client, /ownerConfirmed: true/);
+  assert.doesNotMatch(client, /retry|setTimeout\(/i);
+  assert.match(launcher, /RandomNumberGenerator\]::Fill/);
+  assert.match(launcher, /\$env:HINA_MINECRAFT_CONTROL_TOKEN = New-HinaEphemeralToken/);
+  assert.match(launcher, /Remove-Item Env:HINA_MINECRAFT_CONTROL_TOKEN/);
+  assert.match(launcher, /Minecraft control service is ready and disconnected/);
+  assert.doesNotMatch(preload, /HINA_MINECRAFT_CONTROL_TOKEN|127\.0\.0\.1:8766/);
 });
 
 test("full-frame screen capture stays in Electron main behind one-use grants", () => {

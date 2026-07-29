@@ -1785,6 +1785,19 @@ Chơi Minecraft mức cơ bản bằng Mineflayer, LLM chỉ lập kế hoạch 
 - Debug/MCP/viewer chỉ loopback và off trong production profile.
 - World quan trọng không được dùng làm test target.
 
+### Cập nhật M09-S3 (2026-07-29)
+
+M09-S3 đưa adapter vào Desktop bằng một control service disconnected trên
+`127.0.0.1:8766`. Launcher sinh secret CSPRNG 32 byte mới cho mỗi phiên, chỉ
+truyền trong environment tiến trình con và thu hồi khi đóng; Electron main giữ
+secret/network, còn renderer chỉ có typed IPC owner-only. Các mutation
+connect/disconnect/`look.v1`/emergency-stop yêu cầu Bearer, nguồn
+`owner.desktop`, exact schema, payload tối đa 8.192 byte và không tự retry POST.
+Dashboard có page Minecraft riêng để owner kết nối server local/private và xem
+world state thật; không auto-connect, planner, pathfinder hay destructive
+action. Minecraft 26 tests, Desktop build/64 tests và fast suite 283 tests pass;
+real resettable-server acceptance vẫn chờ owner.
+
 ### Embodied Gate
 
 Chạy full voice + avatar + memory + Minecraft trong local server, kiểm:

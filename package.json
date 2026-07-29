@@ -26,6 +26,7 @@
     "start:dev-console": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Start-HinaDevConsole.ps1",
     "start:desktop": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Start-HinaDesktop.ps1",
     "start:minecraft": "pnpm --filter @hina/minecraft-adapter start",
+    "start:minecraft:service": "pnpm --filter @hina/minecraft-adapter service",
     "build:desktop": "pnpm --filter @hina/desktop build",
     "test:desktop": "pnpm --filter @hina/desktop test",
     "smoke:desktop": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Run-M07DesktopSmoke.ps1",
