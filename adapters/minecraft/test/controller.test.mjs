@@ -144,7 +144,61 @@ test("maps connection failures to a stable bounded error", async () => {
       error.code === "E_MINECRAFT_CONNECT" &&
       !error.message.includes("\u0000"),
   );
-  assert.equal(controller.getStatus().phase, "error");
+  assert.equal(controller.getStatus().phase, "disconnected");
+});
+
+test("releases a failed connection so the owner can retry without restarting", async () => {
+  const firstBot = new FakeBotPort();
+  const secondBot = new FakeBotPort();
+  const bots = [firstBot, secondBot];
+  const controller = new MinecraftController(() => bots.shift());
+
+  const failed = controller.start(CONFIG);
+  firstBot.emit("error", new Error("connect ECONNREFUSED 127.0.0.1:25565"));
+
+  await assert.rejects(
+    failed,
+    (error) =>
+      error instanceof MinecraftAdapterError &&
+      error.code === "E_MINECRAFT_CONNECT",
+  );
+  const failedStatus = controller.getStatus();
+  assert.equal(failedStatus.phase, "disconnected");
+  assert.deepEqual(failedStatus.lastError, {
+    code: "E_MINECRAFT_CONNECT",
+    message: "connect ECONNREFUSED 127.0.0.1:25565",
+  });
+  assert.equal(firstBot.quitReason, "Hina connection attempt failed");
+
+  const retried = controller.start(CONFIG);
+  firstBot.emit("end", "old socket finished");
+  secondBot.emit("spawn");
+
+  const retriedStatus = await retried;
+  assert.equal(retriedStatus.phase, "online");
+  assert.equal(controller.getStatus().phase, "online");
+});
+
+test("releases a lost online connection so the owner can reconnect", async () => {
+  const firstBot = new FakeBotPort();
+  const secondBot = new FakeBotPort();
+  const bots = [firstBot, secondBot];
+  const controller = new MinecraftController(() => bots.shift());
+
+  const firstConnection = controller.start(CONFIG);
+  firstBot.emit("spawn");
+  await firstConnection;
+
+  firstBot.emit("end", "socket closed");
+  assert.equal(controller.getStatus().phase, "disconnected");
+  assert.deepEqual(controller.getStatus().lastError, {
+    code: "E_MINECRAFT_ENDED",
+    message: "socket closed",
+  });
+
+  const secondConnection = controller.start(CONFIG);
+  secondBot.emit("spawn");
+  assert.equal((await secondConnection).phase, "online");
 });
 
 test("emergency stop is latched, idempotent and disconnects immediately", async () => {

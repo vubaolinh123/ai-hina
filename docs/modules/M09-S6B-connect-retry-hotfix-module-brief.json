@@ -1,0 +1,62 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M09-S6B-connect-retry-hotfix",
+  "module_id": "M09",
+  "objective": "Make a failed local Minecraft connection release its adapter session so the owner can correct the server or LAN port and reconnect without restarting Desktop.",
+  "non_goals": [
+    "Do not start, scan for, or expose a Minecraft server automatically.",
+    "Do not add automatic retry, public targets, pathfinding, combat, mining, model authority, or persistence.",
+    "Do not change the owner-only loopback control boundary, session-secret handling, or emergency-stop latch."
+  ],
+  "base_sha": "5a5c6058139530f6dc3f7b12da8fd60c7dcdf3f3",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "adapters/minecraft/src/controller.ts",
+    "adapters/minecraft/test/controller.test.mjs",
+    "apps/desktop/src/App.vue",
+    "apps/desktop/src/dashboard/pages/MinecraftPage.vue",
+    "docs/modules/M09-S6B-connect-retry-hotfix-module-brief.json",
+    "docs/modules/M09-minecraft-agent.md",
+    "AGENTS.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    ".gitnexus/",
+    ".claude/",
+    "CLAUDE.md",
+    "docs/research/deep-research-report.md",
+    "voice_demo/",
+    "assets/",
+    "var/"
+  ],
+  "contracts": [
+    "A pre-spawn error, kick, end, timeout, or factory failure leaves no resident bot or listener and exposes a bounded lastError.",
+    "After a non-emergency failed connection, the controller status is disconnected and an owner may start exactly one new connection attempt.",
+    "Stale callbacks from a released bot cannot alter a newer attempt.",
+    "The Desktop clearly distinguishes the Minecraft main menu from a listening server and explains that an Open-to-LAN world uses its displayed port, while 25565 is the usual dedicated-server default."
+  ],
+  "allowed_dependencies": [
+    "Existing workspace dependencies only; no new dependency."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "A simulated ECONNREFUSED error rejects as E_MINECRAFT_CONNECT, releases the first bot, preserves the bounded error, and permits a second injected bot to connect.",
+    "An old bot event after retry cannot disconnect or corrupt the current bot session.",
+    "The owner gets actionable LAN/server-port guidance without any automatic network discovery or retry.",
+    "Minecraft adapter tests, Desktop production tests, module-brief validation, GitNexus diff impact analysis, and git diff check pass."
+  ],
+  "required_test_commands": [
+    "uv run --frozen python -c \"import json; from jsonschema import Draft202012Validator; schema=json.load(open('docs/schemas/module-brief.schema.json', encoding='utf-8')); brief=json.load(open('docs/modules/M09-S6B-connect-retry-hotfix-module-brief.json', encoding='utf-8')); Draft202012Validator(schema).validate(brief)\"",
+    "pnpm test:minecraft",
+    "pnpm test:desktop",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "additional_local_vram_mib": 0,
+    "automatic_network_requests": 0,
+    "automatic_retries": 0,
+    "new_dependencies": 0
+  },
+  "output_artifact_dir": "artifacts/verification/M09/"
+}

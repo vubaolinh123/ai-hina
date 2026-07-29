@@ -105,12 +105,13 @@ export class MinecraftController {
     this.#config = { ...config };
     this.#phase = "connecting";
     this.#sequence += 1;
+    this.#connectedAt = null;
     this.#lastError = null;
 
     try {
       this.#bot = this.#factory(config);
     } catch (error) {
-      this.#phase = "error";
+      this.#phase = "disconnected";
       this.#lastError = errorView(
         "E_MINECRAFT_CONNECT",
         payloadMessage(error, "Mineflayer failed to initialize"),
@@ -124,20 +125,25 @@ export class MinecraftController {
       );
     }
 
+    const bot = this.#bot;
     this.#connectPromise = new Promise<MinecraftControllerStatus>(
       (resolve, reject) => {
         let settled = false;
         const settleFailure = (code: string, payload: unknown): void => {
+          if (settled || this.#bot !== bot) {
+            return;
+          }
           const message = payloadMessage(payload, "Minecraft connection failed");
           this.#lastError = errorView(code, message);
           this.#sequence += 1;
-          if (settled) {
-            return;
-          }
-          this.#phase = "error";
+          this.#phase = this.#emergencyStopped ? "stopped" : "disconnected";
           settled = true;
           clearTimeout(timeout);
           this.#cancelConnection = null;
+          this.#releaseBotAfterConnectionFailure(
+            bot,
+            "Hina connection attempt failed",
+          );
           reject(new MinecraftAdapterError(code, this.#lastError.message));
         };
         this.#cancelConnection = settleFailure;
@@ -147,13 +153,16 @@ export class MinecraftController {
             "E_MINECRAFT_CONNECT_TIMEOUT",
             `Minecraft did not spawn within ${config.connectTimeoutMs} ms`,
           );
-          void this.disconnect();
         }, config.connectTimeoutMs);
         timeout.unref();
 
         this.#eventUnsubscribers.push(
-          this.#bot!.on("spawn", () => {
-            if (this.#emergencyStopped) {
+          bot.on("spawn", () => {
+            if (
+              settled ||
+              this.#bot !== bot ||
+              this.#emergencyStopped
+            ) {
               return;
             }
             this.#phase = "online";
@@ -166,29 +175,50 @@ export class MinecraftController {
               resolve(this.getStatus());
             }
           }),
-          this.#bot!.on("error", (payload) => {
-            settleFailure("E_MINECRAFT_CONNECT", payload);
-          }),
-          this.#bot!.on("kicked", (payload) => {
-            if (settled) {
-              this.#lastError = errorView(
-                "E_MINECRAFT_KICKED",
-                payloadMessage(payload, "Minecraft server kicked the bot"),
-              );
-              this.#phase = "disconnected";
-              this.#sequence += 1;
+          bot.on("error", (payload) => {
+            if (this.#bot !== bot) {
               return;
             }
-            settleFailure("E_MINECRAFT_KICKED", payload);
-          }),
-          this.#bot!.on("end", (payload) => {
-            if (!this.#emergencyStopped) {
-              this.#phase = "disconnected";
-              this.#sequence += 1;
-              if (!settled) {
-                settleFailure("E_MINECRAFT_ENDED", payload);
-              }
+            if (!settled) {
+              settleFailure("E_MINECRAFT_CONNECT", payload);
+              return;
             }
+            this.#transitionDisconnectedBot(
+              bot,
+              "E_MINECRAFT_CONNECT",
+              payload,
+              "Minecraft connection was lost",
+            );
+          }),
+          bot.on("kicked", (payload) => {
+            if (this.#bot !== bot) {
+              return;
+            }
+            if (!settled) {
+              settleFailure("E_MINECRAFT_KICKED", payload);
+              return;
+            }
+            this.#transitionDisconnectedBot(
+              bot,
+              "E_MINECRAFT_KICKED",
+              payload,
+              "Minecraft server kicked Hina",
+            );
+          }),
+          bot.on("end", (payload) => {
+            if (this.#bot !== bot || this.#emergencyStopped) {
+              return;
+            }
+            if (!settled) {
+              settleFailure("E_MINECRAFT_ENDED", payload);
+              return;
+            }
+            this.#transitionDisconnectedBot(
+              bot,
+              "E_MINECRAFT_ENDED",
+              payload,
+              "Minecraft connection ended",
+            );
           }),
         );
       },
@@ -832,6 +862,52 @@ export class MinecraftController {
     const tolerance =
       LOOK_SKILL_DEFINITION.postcondition.toleranceRadians;
     return yawDelta <= tolerance && pitchDelta <= tolerance;
+  }
+
+  #transitionDisconnectedBot(
+    bot: MinecraftBotPort,
+    code: string,
+    payload: unknown,
+    quitReason: string,
+  ): void {
+    if (this.#bot !== bot) {
+      return;
+    }
+    this.#lastError = errorView(
+      code,
+      payloadMessage(payload, "Minecraft connection ended"),
+    );
+    this.#phase = "disconnected";
+    this.#sequence += 1;
+    this.#releaseBotAfterConnectionFailure(bot, quitReason);
+  }
+
+  #releaseBotAfterConnectionFailure(
+    bot: MinecraftBotPort,
+    quitReason: string,
+  ): void {
+    if (this.#bot !== bot) {
+      return;
+    }
+    this.#eventUnsubscribers.splice(0).forEach((unsubscribe) => {
+      try {
+        unsubscribe();
+      } catch {
+        // A vendor listener must not retain a failed connection attempt.
+      }
+    });
+    this.#bot = null;
+    this.#connectedAt = null;
+    try {
+      bot.clearControlStates();
+    } catch {
+      // The socket release below remains authoritative.
+    }
+    try {
+      bot.quit(quitReason);
+    } catch {
+      // The socket may already be closed after an error or kick.
+    }
   }
 
   async disconnect(): Promise<MinecraftDisconnectResult> {

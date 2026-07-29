@@ -1174,6 +1174,19 @@ async function refreshMinecraft(): Promise<void> {
   }
 }
 
+function describeMinecraftConnectError(error: unknown): string {
+  const message = error instanceof Error
+    ? error.message
+    : "E_DESKTOP_MINECRAFT_CONNECT";
+  if (message.includes("ECONNREFUSED")) {
+    return `${message} Minecraft ở màn hình chính chưa mở server. Hãy vào một world rồi Open to LAN và nhập cổng LAN vừa hiện, hoặc chạy dedicated server tại cổng đã chọn.`;
+  }
+  if (message.includes("E_MINECRAFT_ALREADY_STARTED")) {
+    return `${message} Hina đang có một attempt kết nối. Hãy chờ trạng thái cập nhật rồi thử lại; sau lỗi kết nối, bản Desktop mới sẽ tự giải phóng attempt cũ.`;
+  }
+  return message;
+}
+
 async function connectMinecraft(input: {
   host: string;
   port: number;
@@ -1188,8 +1201,7 @@ async function connectMinecraft(input: {
     minecraftStatus.value = result.minecraft;
     minecraftNotice.value = "Hina đã kết nối. Bạn có thể thử kỹ năng xoay hướng nhìn.";
   } catch (error) {
-    minecraftNotice.value =
-      error instanceof Error ? error.message : "E_DESKTOP_MINECRAFT_CONNECT";
+    minecraftNotice.value = describeMinecraftConnectError(error);
     console.error(
       "[hina-minecraft-dashboard] E_DESKTOP_MINECRAFT_CONNECT",
       minecraftNotice.value,

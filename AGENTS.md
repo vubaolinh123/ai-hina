@@ -489,6 +489,15 @@ dùng `RandomNumberGenerator.Create().GetBytes(...)` tương thích .NET Framewo
 và dispose generator trong `finally`. Regression test thực thi đúng helper bằng
 `powershell.exe`, kiểm decoded length mà không log secret. Desktop build/67 tests
 và same-launcher Electron smoke xanh.
+M09-S6B đóng lỗi retry sau `ECONNREFUSED`: Minecraft Java ở menu chính không mở
+server `127.0.0.1:25565`; owner phải vào world rồi **Open to LAN** và dùng cổng
+LAN game hiện, hoặc chạy dedicated server. Controller giải phóng đúng bot/listener
+của failed pre-spawn attempt (error/kick/end/timeout/factory), giữ `lastError`
+bounded nhưng trả status về `disconnected` để owner retry; stale callback không
+được ảnh hưởng attempt mới. Socket mất sau khi online cũng release bot để không
+kẹt `E_MINECRAFT_ALREADY_STARTED`. Không auto-retry, scan port hay mở capability
+mới. Minecraft build/48 tests và Desktop build/67 tests xanh; real-server
+acceptance vẫn do owner tự chạy.
 
 ## Orchestration
 

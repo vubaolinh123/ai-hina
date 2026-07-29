@@ -181,3 +181,25 @@ Fast evidence:
   `ready/disconnected` và Electron typed-IPC smoke đều hoàn tất.
 - Module brief và `git diff --check` pass; không thêm dependency hoặc artifact
   runtime mới.
+
+## M09-S6B — Kết nối thất bại có thể thử lại
+
+- Minecraft Java đang ở màn hình chính không mở một server tại `127.0.0.1:25565`.
+  Với single-player, owner phải vào world, chọn **Open to LAN** và dùng đúng cổng
+  LAN mà game hiện trong chat; `25565` là cổng thường dùng của dedicated server.
+- Controller nay giải phóng bot và listener của đúng attempt gặp pre-spawn error,
+  kick, end, timeout hoặc factory failure; status trở về `disconnected` nhưng giữ
+  `lastError` đã chuẩn hóa để Dashboard hiển thị. Không auto-retry hay scan mạng.
+- Callback cũ không thể tác động attempt mới. Khi socket mất sau lúc online,
+  controller cũng giải phóng bot để owner reconnect thay vì kẹt ở
+  `E_MINECRAFT_ALREADY_STARTED`.
+- Dashboard nhắc rõ khác biệt giữa menu chính, LAN world và dedicated server;
+  lỗi `ECONNREFUSED` kèm hướng dẫn ngắn ngay trong notice.
+
+Fast evidence:
+
+- `pnpm test:minecraft`: build và 48 tests pass, gồm retry sau ECONNREFUSED,
+  callback socket cũ và reconnect sau end.
+- `pnpm test:desktop`: production build và 67 tests pass.
+- Không khởi tạo server, không quét port, không thêm retry tự động, model/GPU hay
+  artifact runtime; real-server acceptance vẫn do owner thực hiện.

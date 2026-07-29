@@ -201,6 +201,12 @@ watch(
           Chỉ nhập <strong>localhost</strong> hoặc IP riêng trong LAN. Nút này
           dùng tài khoản offline để thử nghiệm; không gửi mật khẩu hay token game.
         </p>
+        <p class="minecraft-help">
+          <strong>Minecraft ở màn hình chính chưa phải là server.</strong> Nếu chơi
+          một mình, hãy vào world, nhấn <strong>Esc → Open to LAN → Start LAN World</strong>,
+          rồi nhập đúng cổng game vừa hiện trong chat (thường khác 25565). Cổng
+          <strong>25565</strong> thường chỉ dùng cho dedicated server tự chạy.
+        </p>
         <div class="minecraft-form-grid">
           <label>
             IP server
