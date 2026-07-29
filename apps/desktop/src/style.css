@@ -854,6 +854,72 @@ pre,
   margin: 0;
 }
 
+.vision-quality-review,
+.vision-quality-progress {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(240, 184, 95, 0.45);
+  background: rgba(240, 184, 95, 0.07);
+}
+
+.vision-quality-review h4,
+.vision-quality-review p,
+.vision-quality-progress h3,
+.vision-quality-progress p {
+  margin: 0;
+}
+
+.vision-quality-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.vision-quality-actions button.selected {
+  border-color: var(--success);
+  color: var(--success);
+  background: rgba(95, 221, 161, 0.12);
+}
+
+.vision-quality-message {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.vision-quality-progress-heading,
+.vision-quality-stats {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.vision-quality-progress-heading > strong {
+  color: var(--success);
+  font-size: 24px;
+}
+
+.vision-quality-meter {
+  height: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.vision-quality-meter span {
+  display: block;
+  height: 100%;
+  background: var(--success);
+}
+
+.vision-quality-stats span,
+.vision-quality-progress small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .vision-status-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

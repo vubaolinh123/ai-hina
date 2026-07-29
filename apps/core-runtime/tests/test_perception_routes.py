@@ -9,6 +9,7 @@ import zlib
 from http import HTTPStatus
 from pathlib import Path
 from urllib.parse import quote
+from uuid import uuid4
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -307,6 +308,87 @@ class PerceptionRouteTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertFalse(observation["vision"]["confidenceCalibrated"])
         self.assertFalse(observation["vision"]["decisionSupportEligible"])
+
+    async def test_owner_scene_qa_route_rates_and_rerates_real_observation(self) -> None:
+        await self._enable_perception_flag()
+        status, body = await _post_snapshot(
+            self.host,
+            self.port,
+            _png(),
+            analyze_with_vlm=True,
+        )
+        self.assertEqual(status, HTTPStatus.OK)
+        observation_id = body["observation"]["observationId"]
+
+        reviewed = await post_json(
+            self.host,
+            self.port,
+            "/v1/perception/vision/reviews",
+            {
+                "observationId": observation_id,
+                "rating": "correct",
+                "source": "owner.desktop",
+                "ownerConfirmed": True,
+            },
+        )
+        self.assertEqual(reviewed.status, HTTPStatus.OK)
+        self.assertFalse(reviewed.body["replaced"])
+        self.assertEqual(reviewed.body["qualityReview"]["ratedSamples"], 1)
+        self.assertEqual(
+            reviewed.body["qualityReview"]["weightedScorePercent"],
+            100.0,
+        )
+
+        rerated = await post_json(
+            self.host,
+            self.port,
+            "/v1/perception/vision/reviews",
+            {
+                "observationId": observation_id,
+                "rating": "partial",
+                "source": "owner.desktop",
+                "ownerConfirmed": True,
+            },
+        )
+        self.assertEqual(rerated.status, HTTPStatus.OK)
+        self.assertTrue(rerated.body["replaced"])
+        self.assertEqual(rerated.body["qualityReview"]["ratedSamples"], 1)
+        self.assertEqual(
+            rerated.body["qualityReview"]["weightedScorePercent"],
+            50.0,
+        )
+
+    async def test_owner_scene_qa_route_rejects_unknown_or_untrusted_review(self) -> None:
+        for payload in (
+            {
+                "observationId": str(uuid4()),
+                "rating": "correct",
+                "source": "viewer.chat",
+                "ownerConfirmed": True,
+            },
+            {
+                "observationId": str(uuid4()),
+                "rating": "mostly-correct",
+                "source": "owner.desktop",
+                "ownerConfirmed": True,
+            },
+            {
+                "observationId": str(uuid4()),
+                "rating": "correct",
+                "source": "owner.desktop",
+                "ownerConfirmed": True,
+            },
+        ):
+            rejected = await post_json(
+                self.host,
+                self.port,
+                "/v1/perception/vision/reviews",
+                payload,
+            )
+            self.assertIn(
+                rejected.status,
+                {HTTPStatus.BAD_REQUEST, HTTPStatus.FORBIDDEN},
+            )
 
     async def test_wrong_content_type_and_empty_body_are_rejected(self) -> None:
         await self._enable_perception_flag()

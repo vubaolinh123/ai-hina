@@ -342,6 +342,17 @@ context, memory, TTS hay decision support. Dashboard phân biệt ready/abstaine
 error, tắt nút hỏi ảnh cho abstained và đã dọn các nhánh OCR desktop còn sót.
 Fast gate: perception 55 test, core perception route 11 test, desktop typecheck
 + production build/56 test xanh; chưa claim ≥85% scene QA hay calibration.
+Ngày 2026-07-29 M08-S24 thêm owner Vision scene-QA thật trên Dashboard:
+observation `ready|abstained` có thể được owner chấm Đúng/Thiếu/Sai qua typed
+IPC và route fixed loopback yêu cầu `owner.desktop` + `ownerConfirmed=true`.
+Ledger giữ tối đa 100 record trong RAM, chỉ gồm UUID, provider/model, state,
+confidence chưa hiệu chuẩn và categorical rating; không giữ pixel, summary,
+prompt, label, chat, key hay correction. Chấm lại thay nhãn cũ, không tăng mẫu.
+Điểm phiên theo profile dùng Đúng=1/Thiếu=0,5/Sai=0; cần tối thiểu 20 ảnh thật
+và ≥85% mới hiện candidate, nhưng `promotionApproved=false` cho tới khi owner
+duyệt độ đa dạng và calibration. Fast gate: perception 60, route 13,
+`pnpm test:fast` 246, desktop typecheck + production build/57 test xanh; không
+chạy model/Cloud/capture thật và không tạo raw test artifact.
 Future M11 dùng post-trained Hugging Face `Qwen/Qwen3.5-4B` frozen làm QLoRA
 SFT base, sau đó DPO/ORPO từ dữ liệu owner-curated. Không train trực tiếp GGUF,
 không mặc định bắt đầu từ raw Base và Qwen3.5-9B chỉ benchmark/fallback thủ công,

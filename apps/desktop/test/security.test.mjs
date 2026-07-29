@@ -284,8 +284,34 @@ test("full-frame screen capture stays in Electron main behind one-use grants", (
   assert.match(renderer, /Hina chủ động không đoán/);
   assert.match(renderer, /confidenceCalibrated/);
   assert.match(renderer, /không được đưa vào Chat, memory, TTS hay quyết định game/);
+  assert.match(main, /CHANNELS\.visionReview/);
+  assert.match(main, /requestVisionReview/);
+  assert.match(preload, /reviewVisionObservation:/);
+  assert.match(client, /\/v1\/perception\/vision\/reviews/);
+  assert.match(client, /source:\s*"owner\.desktop"/);
+  assert.match(client, /ownerConfirmed:\s*true/);
+  assert.match(renderer, /OWNER SCENE QA/);
+  assert.match(renderer, /reviewLastVisionCapture/);
+  assert.match(renderer, /không lưu ảnh hay nội dung mô tả/);
   assert.match(renderer, /Chụp toàn bộ nguồn đã chọn và gửi Hina/);
   assert.doesNotMatch(renderer, /getDisplayMedia|desktopCapturer|sourceId/);
+});
+
+test("Vision scene-QA client rejects arbitrary ratings before network I/O", async () => {
+  await assert.rejects(
+    control.requestVisionReview({
+      observationId: "11111111-1111-4111-8111-111111111111",
+      rating: "looks-good",
+    }),
+    /E_DESKTOP_VISION_REVIEW/,
+  );
+  await assert.rejects(
+    control.requestVisionReview({
+      observationId: "not-a-uuid",
+      rating: "correct",
+    }),
+    /E_DESKTOP_VISION_REVIEW/,
+  );
 });
 
 test("VTube Studio stays in the main process behind operator-only typed IPC", () => {

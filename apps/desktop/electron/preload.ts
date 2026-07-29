@@ -29,6 +29,7 @@ const CHANNELS = Object.freeze({
   visionStatus: "hina:vision:status",
   visionDiscover: "hina:vision:discover",
   visionConfigure: "hina:vision:configure",
+  visionReview: "hina:vision:review",
   visionClearKey: "hina:vision:clear-key",
   resourcesStatus: "hina:resources:status",
   resourcesControl: "hina:resources:control",
@@ -121,6 +122,8 @@ const hinaDesktop = Object.freeze({
     ipcRenderer.invoke(CHANNELS.visionDiscover, input),
   configureVisionProvider: (input: unknown) =>
     ipcRenderer.invoke(CHANNELS.visionConfigure, input),
+  reviewVisionObservation: (input: unknown) =>
+    ipcRenderer.invoke(CHANNELS.visionReview, input),
   clearVisionApiKey: () => ipcRenderer.invoke(CHANNELS.visionClearKey),
   getResourceStatus: () => ipcRenderer.invoke(CHANNELS.resourcesStatus),
   controlResourceModel: (modelId: string, action: "load" | "unload") =>

@@ -1586,6 +1586,19 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
   separately and no longer carries stale OCR presentation branches. This closes
   the fail-closed abstain-state implementation, but the ≥85% owner scene-QA and
   calibration gates remain open.
+- M08-S24 owner Vision scene-QA (2026-07-29): each real `ready` or `abstained`
+  observation can be rated **Đúng / Thiếu / Sai** through an owner-confirmed
+  desktop-only route. The bounded 100-entry runtime ledger retains only UUID,
+  provider/model, state, uncalibrated confidence and categorical rating; it
+  never retains pixels, summaries, prompts, labels, chat text, keys or
+  corrections. Rerating replaces the old value. Dashboard reports per-profile
+  counts and a weighted session score (Đúng=1, Thiếu=0,5, Sai=0), with a
+  provisional target of at least 20 owner-rated images and ≥85%. Even when that
+  target is reached, `promotionApproved=false`: scene diversity, owner
+  acceptance and calibration remain explicit gates. Fast evidence passes 60
+  perception tests, 13 perception route tests, 246 repository fast tests and
+  desktop typecheck plus production build/57 tests; no model or real capture
+  was run in this slice.
 
 ### Test matrix
 

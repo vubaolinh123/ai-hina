@@ -122,6 +122,9 @@ const screenCaptureVisionQuestion = ref("");
 const screenCaptureBusy = ref(false);
 const screenCaptureMessage = ref("");
 const screenCaptureResult = ref<DesktopPerceptionCaptureResult | null>(null);
+const visionReviewBusy = ref(false);
+const visionReviewMessage = ref("");
+const visionReviewRating = ref<VisionQualityRating | null>(null);
 let screenCaptureVisionPreferenceTouched = false;
 let removeScreenCaptureProgressListener: (() => void) | null = null;
 const resourceStatus = ref<ResourceStatus | null>(null);
@@ -585,6 +588,8 @@ async function captureSelectedScreenSource(): Promise<void> {
   if (screenCaptureBusy.value || !listing || !source) return;
   screenCaptureBusy.value = true;
   screenCaptureResult.value = null;
+  visionReviewMessage.value = "";
+  visionReviewRating.value = null;
   screenCaptureMessage.value =
     `Đang chụp toàn bộ “${source.name}”, hạ cạnh dài xuống tối đa ${screenCaptureMaxSide.value} px…`;
   try {
@@ -662,6 +667,40 @@ async function askHinaAboutLastCapture(): Promise<void> {
   chatInput.value = screenCaptureVisionQuestion.value.trim()
     || "Dựa trên ảnh vừa chụp, hãy mô tả ngắn gọn điều đáng chú ý.";
   await sendDesktopChat();
+}
+
+async function reviewLastVisionCapture(rating: VisionQualityRating): Promise<void> {
+  const observation = screenCaptureResult.value?.observation;
+  if (
+    visionReviewBusy.value
+    || !observation
+    || !["ready", "abstained"].includes(observation.vision?.state ?? "")
+  ) {
+    return;
+  }
+  visionReviewBusy.value = true;
+  visionReviewMessage.value = "Đang ghi nhận đánh giá QA trong phiên hiện tại…";
+  try {
+    const result = await window.hinaDesktop.reviewVisionObservation({
+      observationId: observation.observationId,
+      rating,
+    });
+    visionReviewRating.value = result.rating;
+    visionReviewMessage.value = result.replaced
+      ? "Đã thay đánh giá cũ; số mẫu không bị cộng trùng."
+      : "Đã ghi nhận đánh giá cho ảnh này.";
+    await refreshVisionProviderStatus();
+  } catch (error) {
+    visionReviewMessage.value = error instanceof Error
+      ? error.message
+      : "E_DESKTOP_VISION_REVIEW";
+    console.error(
+      "[hina-vision-review] E_DESKTOP_VISION_REVIEW",
+      visionReviewMessage.value,
+    );
+  } finally {
+    visionReviewBusy.value = false;
+  }
 }
 
 function visionAnalysisErrorCode(
@@ -1330,6 +1369,9 @@ onBeforeUnmount(() => {
       :vision-busy="visionBusy"
       :vision-message="visionMessage"
       :vision-configuration-action-label="visionConfigurationActionLabel"
+      :vision-review-busy="visionReviewBusy"
+      :vision-review-message="visionReviewMessage"
+      :vision-review-rating="visionReviewRating"
       @update:screen-capture-source-token="screenCaptureSourceToken = $event"
       @update:screen-capture-max-side="screenCaptureMaxSide = $event"
       @update:screen-capture-label="screenCaptureLabel = $event"
@@ -1343,6 +1385,7 @@ onBeforeUnmount(() => {
       @list-screen-capture-sources="listScreenCaptureSources"
       @capture-selected-screen-source="captureSelectedScreenSource"
       @ask-hina-about-last-capture="askHinaAboutLastCapture"
+      @review-vision-capture="reviewLastVisionCapture"
       @discover-vision-models="discoverVisionModels"
       @apply-vision-provider="applyVisionProvider"
       @clear-vision-provider-key="clearVisionProviderKey"

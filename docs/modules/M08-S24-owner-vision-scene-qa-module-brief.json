@@ -1,0 +1,88 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M08-S24-owner-vision-scene-qa",
+  "module_id": "M08",
+  "objective": "Add a real owner-only Vision scene-QA workflow that lets the owner rate each successful or abstained screen description as correct, partial or incorrect and observe bounded per-provider/model acceptance metrics without persisting pixels, summaries or conversation data.",
+  "non_goals": [
+    "Do not claim the M08 scene-QA or Companion Gate B has passed from synthetic tests or fewer than the owner-approved sample set.",
+    "Do not persist raw images, Vision summaries, prompts, API keys, chat text or owner corrections.",
+    "Do not enable automatic capture, decision support, game control, training or model promotion.",
+    "Do not change Vision inference, confidence scoring, text brain, STT, TTS or VRAM budgets.",
+    "Do not run soak, repeated deep workflow or real Cloud/model benchmark."
+  ],
+  "base_sha": "bcaf7cbe3df769c5cdeeb7593fdfe4509b3f6fb9",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "workers/perception/src/hina_perception/vision_quality.py",
+    "workers/perception/src/hina_perception/service.py",
+    "workers/perception/tests/test_vision_quality.py",
+    "workers/perception/tests/test_perception.py",
+    "apps/core-runtime/src/hina_core/runtime/transport.py",
+    "apps/core-runtime/tests/test_perception_routes.py",
+    "apps/desktop/electron/control-client.ts",
+    "apps/desktop/electron/main.ts",
+    "apps/desktop/electron/preload.ts",
+    "apps/desktop/src/env.d.ts",
+    "apps/desktop/src/App.vue",
+    "apps/desktop/src/dashboard/pages/PerceptionPage.vue",
+    "apps/desktop/src/style.css",
+    "apps/desktop/test/security.test.mjs",
+    "apps/desktop/test/screen-capture.test.mjs",
+    "docs/modules/M08-S24-owner-vision-scene-qa-module-brief.json",
+    "docs/modules/M08-perception.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    ".gitnexus/",
+    ".claude/",
+    "CLAUDE.md",
+    "docs/research/deep-research-report.md",
+    "voice_demo/",
+    "assets/voices/",
+    "assets/avatars/",
+    "var/perception-sessions/",
+    "apps/desktop/dist/",
+    "apps/desktop/dist-electron/"
+  ],
+  "contracts": [
+    "Only an owner.desktop request with ownerConfirmed=true may create or replace a rating for a registered Vision observation.",
+    "The bounded ledger stores only observation UUID, provider/model profile, ready-or-abstained state, uncalibrated confidence and categorical rating; it never stores pixels, summaries, prompts, labels, chat text, API keys or corrections.",
+    "Ratings are correct, partial or incorrect; rerating the same observation replaces the previous rating instead of inflating the sample count.",
+    "Dashboard metrics are scoped to the currently configured provider/model, stay in RAM until runtime restart, cap retained candidates at 100 and clearly distinguish a session candidate score from final scene-QA promotion.",
+    "The UI exposes three plain-language rating buttons only for a real ready or abstained capture result and reports rated count, weighted score, target and minimum sample guidance.",
+    "Vision result confidence/abstention, fifteen-second fresh context, capture consent, archive behavior and decisionSupportEligible=false remain unchanged."
+  ],
+  "allowed_dependencies": [
+    "Python standard library, existing Vue/TypeScript/Electron stack and existing repository test tooling."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "A ready or abstained observation is registered without storing its summary and can be rated once or rerated through the owner-only route.",
+    "Unknown, invalid, unregistered, non-owner or unconfirmed ratings fail closed and do not change counters.",
+    "Per-profile aggregate counts and weighted score are deterministic, bounded and reset only with the runtime process.",
+    "Desktop typed IPC reaches only the fixed loopback review route and the renderer cannot supply source or ownerConfirmed fields.",
+    "PerceptionPage shows usable Đúng/Thiếu/Sai controls and session progress without claiming the ≥85% release gate is complete.",
+    "Perception/core route tests, desktop typecheck/build/tests, module-brief validation and git diff check pass."
+  ],
+  "required_test_commands": [
+    "uv run --frozen python -c \"import json; from jsonschema import Draft202012Validator; schema=json.load(open('docs/schemas/module-brief.schema.json', encoding='utf-8')); brief=json.load(open('docs/modules/M08-S24-owner-vision-scene-qa-module-brief.json', encoding='utf-8')); Draft202012Validator(schema).validate(brief)\"",
+    "uv run --frozen python -m unittest discover -s workers/perception/tests -p \"test_*.py\"",
+    "uv run --frozen python -m unittest discover -s apps/core-runtime/tests -p \"test_perception_routes.py\"",
+    "pnpm --filter @hina/desktop typecheck",
+    "pnpm --filter @hina/desktop test",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "ledger_capacity": 100,
+    "minimum_owner_rated_samples": 20,
+    "candidate_target_percent": 85,
+    "additional_model_calls": 0,
+    "additional_local_vram_mib": 0,
+    "raw_artifact_persistence": false
+  },
+  "output_artifact_dir": "artifacts/verification/M08/"
+}

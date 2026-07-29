@@ -23,6 +23,9 @@ const props = defineProps<{
   visionBusy: boolean;
   visionMessage: string;
   visionConfigurationActionLabel: string;
+  visionReviewBusy: boolean;
+  visionReviewMessage: string;
+  visionReviewRating: VisionQualityRating | null;
 }>();
 
 const emit = defineEmits<{
@@ -39,6 +42,7 @@ const emit = defineEmits<{
   listScreenCaptureSources: [];
   captureSelectedScreenSource: [];
   askHinaAboutLastCapture: [];
+  reviewVisionCapture: [rating: VisionQualityRating];
   discoverVisionModels: [];
   applyVisionProvider: [];
   clearVisionProviderKey: [];
@@ -59,6 +63,8 @@ const {
   visionBusy,
   visionMessage,
   visionConfigurationActionLabel,
+  visionReviewBusy,
+  visionReviewMessage,
 } = toRefs(props);
 
 const screenCaptureSourceToken = computed({
@@ -93,6 +99,19 @@ const visionModel = computed({
   get: () => props.visionModel,
   set: (value: string) => emit("update:visionModel", value),
 });
+const visionQualityReview = computed(
+  () => visionProviderStatus.value?.runtime.qualityReview ?? null,
+);
+const visionQualitySampleProgress = computed(() => {
+  const review = visionQualityReview.value;
+  if (!review || review.minimumRatedSamples <= 0) return 0;
+  return Math.min(100, review.ratedSamples / review.minimumRatedSamples * 100);
+});
+const visionQualityRatings: readonly VisionQualityRating[] = Object.freeze([
+  "correct",
+  "partial",
+  "incorrect",
+]);
 
 type VisionObservation = NonNullable<
   NonNullable<DesktopPerceptionCaptureResult["observation"]>["vision"]
@@ -124,6 +143,17 @@ function visionAbstentionReason(vision: VisionObservation): string {
       return "Mô tả chứa quá nhiều dấu hiệu không chắc chắn.";
     default:
       return "Kết quả chưa đạt ngưỡng an toàn để đưa vào hội thoại.";
+  }
+}
+
+function visionQualityRatingLabel(rating: VisionQualityRating): string {
+  switch (rating) {
+    case "correct":
+      return "Đúng";
+    case "partial":
+      return "Thiếu";
+    case "incorrect":
+      return "Sai";
   }
 }
 
@@ -377,7 +407,93 @@ function formatVisionModelSize(bytes: number | null): string {
             rồi tự hết hạn.
           </small>
         </div>
+        <section
+          v-if="
+            screenCaptureResult.observation?.vision?.state === 'ready'
+              || screenCaptureResult.observation?.vision?.state === 'abstained'
+          "
+          class="vision-quality-review"
+          aria-labelledby="visionQualityReviewTitle"
+        >
+          <div>
+            <p class="eyebrow">OWNER SCENE QA</p>
+            <h4 id="visionQualityReviewTitle">Mô tả vừa rồi đúng đến đâu?</h4>
+            <p>
+              <b>Đúng</b> khi các chi tiết quan trọng chính xác; <b>Thiếu</b> khi đúng nhưng
+              bỏ sót phần quan trọng; <b>Sai</b> khi nhận nhầm, bịa chi tiết hoặc từ chối
+              một ảnh thực tế vẫn nhìn rõ.
+            </p>
+          </div>
+          <div class="vision-quality-actions">
+            <button
+              v-for="rating in visionQualityRatings"
+              :key="rating"
+              type="button"
+              :class="{ selected: props.visionReviewRating === rating }"
+              :disabled="visionReviewBusy"
+              @click="emit('reviewVisionCapture', rating)"
+            >
+              {{ visionQualityRatingLabel(rating) }}
+            </button>
+          </div>
+          <p class="vision-quality-message" role="status">
+            {{
+              visionReviewMessage
+                || "Đánh giá chỉ lưu metadata trong RAM của phiên runtime; không lưu ảnh hay nội dung mô tả."
+            }}
+          </p>
+        </section>
       </div>
+    </section>
+
+    <section
+      v-if="visionQualityReview"
+      class="vision-quality-progress"
+      aria-labelledby="visionQualityProgressTitle"
+    >
+      <div class="vision-quality-progress-heading">
+        <div>
+          <p class="eyebrow">VISION ACCEPTANCE / PHIÊN HIỆN TẠI</p>
+          <h3 id="visionQualityProgressTitle">Tiến độ kiểm tra bằng ảnh thật của bạn</h3>
+        </div>
+        <strong>
+          {{
+            visionQualityReview.weightedScorePercent === null
+              ? "Chưa có điểm"
+              : `${visionQualityReview.weightedScorePercent.toFixed(1)}%`
+          }}
+        </strong>
+      </div>
+      <div
+        class="vision-quality-meter"
+        role="progressbar"
+        aria-label="Tiến độ đủ số mẫu Vision"
+        :aria-valuenow="visionQualityReview.ratedSamples"
+        aria-valuemin="0"
+        :aria-valuemax="visionQualityReview.minimumRatedSamples"
+      >
+        <span :style="{ width: `${visionQualitySampleProgress}%` }"></span>
+      </div>
+      <div class="vision-quality-stats">
+        <span><b>{{ visionQualityReview.ratedSamples }}</b> mẫu đã chấm</span>
+        <span><b>{{ visionQualityReview.ratings.correct }}</b> đúng</span>
+        <span><b>{{ visionQualityReview.ratings.partial }}</b> thiếu</span>
+        <span><b>{{ visionQualityReview.ratings.incorrect }}</b> sai</span>
+      </div>
+      <p>
+        Mốc theo dõi của phiên: ít nhất {{ visionQualityReview.minimumRatedSamples }} ảnh,
+        điểm có trọng số ≥{{ visionQualityReview.targetPercent.toFixed(0) }}%.
+        {{
+          visionQualityReview.candidateTargetMet
+            ? "Phiên này đã chạm mốc candidate, nhưng vẫn cần bạn duyệt độ đa dạng ảnh trước khi promotion."
+            : "Chưa đủ bằng chứng để coi model đã qua scene-QA."
+        }}
+      </p>
+      <small>
+        Chỉ tính provider/model hiện tại: {{ visionQualityReview.profile.provider || "chưa cấu hình" }}
+        / {{ visionQualityReview.profile.model || "chưa chọn" }}. Bộ đếm nằm trong RAM, tối đa
+        {{ visionQualityReview.capacity }} observation và sẽ reset khi runtime khởi động lại.
+      </small>
     </section>
 
     <div class="vision-status-grid">

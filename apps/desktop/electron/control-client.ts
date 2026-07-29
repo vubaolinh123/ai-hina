@@ -533,6 +533,32 @@ export async function requestVisionDisable(): Promise<JsonObject> {
   );
 }
 
+export async function requestVisionReview(raw: unknown): Promise<JsonObject> {
+  if (
+    !isObject(raw)
+    || Object.keys(raw).length !== 2
+    || !("observationId" in raw)
+    || !("rating" in raw)
+    || typeof raw.rating !== "string"
+    || !["correct", "partial", "incorrect"].includes(raw.rating)
+  ) {
+    throw new Error("E_DESKTOP_VISION_REVIEW: review fields are invalid");
+  }
+  return requestPath(
+    "POST",
+    "/v1/perception/vision/reviews",
+    {
+      observationId: validateUuid(
+        raw.observationId,
+        "E_DESKTOP_VISION_REVIEW",
+      ),
+      rating: raw.rating,
+      source: "owner.desktop",
+      ownerConfirmed: true,
+    },
+  );
+}
+
 export async function requestChatStart(raw: unknown): Promise<JsonObject> {
   if (!isObject(raw) || Object.keys(raw).some((key) => !["sessionId", "source", "text"].includes(key))
     || Object.keys(raw).length !== 3

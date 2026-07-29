@@ -24,7 +24,8 @@
   M08-S21 adaptive reasoning budgets and M08-S22 Qwen3.5 4B Q8_0 migration are
   runnable local candidates pending owner application acceptance; the refreshed
   all-on fast resource gate passed;
-  M08-S23 Vision confidence/abstention is a runnable candidate;
+  M08-S23 Vision confidence/abstention and M08-S24 owner Vision scene-QA are
+  runnable candidates;
   M08 remains active
 - Branch: `main` (fast-development mode)
 - Active slices: M08-S1 perception spine (owner-consented snapshot ingestion,
@@ -53,7 +54,9 @@
   M08-S22 replaces the retired 8B cache with one full-GPU Qwen3.5 4B Q8_0
   checkpoint while the independent Vision route remains unchanged; M08-S23
   adds an explicitly uncalibrated confidence heuristic and blocks uncertain
-  Vision summaries from fresh chat context
+  Vision summaries from fresh chat context; M08-S24 gives the owner a bounded,
+  session-only Đúng/Thiếu/Sai workflow for measuring real provider/model
+  descriptions without retaining pixels or summary text
 
 ## Runnable target
 
@@ -957,3 +960,46 @@ provenance before they may replace the pinned checkpoint.
   fixture, cache download or one-off script was created for this slice.
 - This slice does not claim the ≥85% scene-QA gate. Calibration and owner image
   acceptance remain required before any future decision-support promotion.
+
+## Implemented in M08-S24 (owner Vision scene-QA)
+
+- Every real `ready` or `abstained` Vision observation is registered in a
+  bounded in-memory ledger. Each entry contains only observation UUID,
+  provider/model, state, uncalibrated confidence and an optional owner rating;
+  it never contains pixels, summaries, prompts, labels, chat text, API keys or
+  correction text.
+- The fixed loopback route `POST /v1/perception/vision/reviews` accepts only
+  `owner.desktop` with `ownerConfirmed=true`. Ratings are exactly `correct`,
+  `partial` or `incorrect`; rating an observation again replaces the old value
+  instead of inflating the sample count. Invalid, unknown, expired-from-ledger
+  or untrusted requests fail closed.
+- The Dashboard **Quan sát** now shows plain-language **Đúng / Thiếu / Sai**
+  controls after a real ready/abstained capture. Session metrics are scoped to
+  the currently configured provider/model, retain at most 100 observations and
+  reset with the runtime process.
+- The provisional score weights Đúng=1, Thiếu=0,5 and Sai=0. A provider/model
+  profile reaches only a session candidate marker after at least 20 owner-rated
+  images and a weighted score of at least 85%; `promotionApproved` remains
+  hard-coded false because diversity review and owner acceptance are separate
+  gates.
+- This slice adds no provider call, no model residency and no local VRAM. It
+  does not change capture consent, the 15-second fresh-context TTL,
+  confidence/abstention, archive behavior or
+  `decisionSupportEligible=false`.
+
+## Fast evidence M08-S24 (owner machine)
+
+- Perception worker: 60 tests pass, including deterministic weighted scoring,
+  profile isolation, bounded eviction, rerating and malformed-input rejection.
+- Core perception routes: 13 tests pass, including owner-only review/rerate and
+  untrusted/unknown observation rejection.
+- `pnpm test:fast`: 246 tests pass across Safety, Text brain, Memory, Avatar,
+  Speech, Perception and Core Runtime.
+- Desktop: typecheck pass; production build + 57 tests pass, including the
+  fixed review IPC/route, renderer boundary and non-persistence copy.
+- No model, Cloud request, screen capture, image, audio, benchmark media,
+  download, one-off script or retained test artifact was created for this
+  slice.
+- The ≥85% scene-QA gate is still open until the owner rates at least 20
+  sufficiently varied real captures for the active provider/model and accepts
+  the observed failures. A passing session marker is not production promotion.

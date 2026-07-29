@@ -8,6 +8,7 @@ import tempfile
 import unittest
 import zlib
 from pathlib import Path
+from uuid import uuid4
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -534,6 +535,83 @@ class ServiceTests(unittest.TestCase):
                 service.fresh_context_for_turn(SESSION, source="owner.console")
             ),
         )
+
+    def test_owner_scene_qa_rates_real_observation_without_storing_summary(self) -> None:
+        summary = "Có một cửa sổ game, nhân vật và thanh trạng thái hiển thị rõ."
+
+        async def analyze(_image: bytes, _prompt: str) -> str:
+            return summary
+
+        service = _service(
+            _RecordingEvaluate("allow"),
+            vision_analyze=analyze,
+        )
+        result = asyncio.run(
+            service.ingest_snapshot(
+                encode_png(gradient()),
+                correlation_id=CORRELATION,
+                session_id=SESSION,
+                source="owner.desktop",
+                analyze_with_vlm=True,
+            )
+        )
+        observation_id = result["observation"]["observationId"]
+        initial = asyncio.run(service.status())["vision"]["qualityReview"]
+        self.assertEqual(initial["registeredSamples"], 1)
+        self.assertEqual(initial["ratedSamples"], 0)
+        self.assertNotIn(summary, str(initial))
+
+        reviewed = asyncio.run(
+            service.review_vision_observation(
+                observation_id=observation_id,
+                rating="correct",
+                source="owner.desktop",
+                owner_confirmed=True,
+            )
+        )
+        self.assertFalse(reviewed["replaced"])
+        self.assertEqual(reviewed["qualityReview"]["ratedSamples"], 1)
+        self.assertEqual(reviewed["qualityReview"]["weightedScorePercent"], 100.0)
+        self.assertFalse(reviewed["qualityReview"]["candidateTargetMet"])
+        self.assertFalse(reviewed["qualityReview"]["promotionApproved"])
+        self.assertNotIn(summary, str(reviewed))
+
+        rerated = asyncio.run(
+            service.review_vision_observation(
+                observation_id=observation_id,
+                rating="partial",
+                source="owner.desktop",
+                owner_confirmed=True,
+            )
+        )
+        self.assertTrue(rerated["replaced"])
+        self.assertEqual(rerated["qualityReview"]["ratedSamples"], 1)
+        self.assertEqual(rerated["qualityReview"]["weightedScorePercent"], 50.0)
+
+    def test_owner_scene_qa_rejects_untrusted_or_unknown_review(self) -> None:
+        service = _service(_RecordingEvaluate("allow"))
+        for source, owner_confirmed in (
+            ("viewer.chat", True),
+            ("owner.desktop", False),
+        ):
+            with self.assertRaises(PerceptionError):
+                asyncio.run(
+                    service.review_vision_observation(
+                        observation_id=str(uuid4()),
+                        rating="correct",
+                        source=source,
+                        owner_confirmed=owner_confirmed,
+                    )
+                )
+        with self.assertRaises(PerceptionError):
+            asyncio.run(
+                service.review_vision_observation(
+                    observation_id=str(uuid4()),
+                    rating="correct",
+                    source="owner.desktop",
+                    owner_confirmed=True,
+                )
+            )
 
     def test_fresh_chat_context_is_semantic_same_session_owner_only_and_expires(self) -> None:
         clock = FakeClock()

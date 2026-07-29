@@ -604,6 +604,24 @@ class ControlPlaneServer:
                 "disable_vision_provider",
                 source="owner.desktop",
             )
+        if path == "/v1/perception/vision/reviews":
+            if set(payload) != {
+                "observationId",
+                "rating",
+                "source",
+                "ownerConfirmed",
+            }:
+                raise PrimitiveError(
+                    RuntimeErrorCode.HTTP_BAD_REQUEST,
+                    "Vision scene-QA review fields are invalid",
+                )
+            return await self._perception_call(
+                "review_vision_observation",
+                observation_id=payload.get("observationId"),
+                rating=payload.get("rating"),
+                source=payload.get("source"),
+                owner_confirmed=payload.get("ownerConfirmed"),
+            )
         if path == "/v1/perception/archive/start":
             if set(payload) != {
                 "action",

@@ -14,6 +14,7 @@ from .errors import PerceptionError
 from .observation import OBSERVATION_KIND, OBSERVATION_TRUST_LEVEL, FreshnessLedger
 from .png import summarize_png
 from .vision import OllamaVisionProvider
+from .vision_quality import VisionQualityLedger
 
 
 _SOURCE = re.compile(r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$")
@@ -113,12 +114,25 @@ class PerceptionService:
         )
         self._duplicate_total = 0
         self._denied_total = 0
+        self._vision_quality = VisionQualityLedger()
         self._closed = False
 
     async def status(self) -> dict[str, Any]:
         counts = self._ledger.counts()
         archive_status = await self._archive_status()
         vision_status = await self._vision_status()
+        quality_status = self._vision_quality.status(
+            provider=(
+                vision_status.get("provider")
+                if isinstance(vision_status.get("provider"), str)
+                else None
+            ),
+            model=(
+                vision_status.get("model")
+                if isinstance(vision_status.get("model"), str)
+                else None
+            ),
+        )
         return {
             "schemaVersion": "1.0",
             "available": not self._closed,
@@ -158,6 +172,7 @@ class PerceptionService:
                 "confidenceSource": _VISION_CONFIDENCE_SOURCE,
                 "confidenceCalibrated": False,
                 "maxSummaryCharacters": _MAX_VISION_SUMMARY_CHARS,
+                "qualityReview": quality_status,
             },
             "retention": {
                 "snapshotPersistence": archive_status["active"],
@@ -271,8 +286,9 @@ class PerceptionService:
                 session_id=session_id,
                 pixel_retention_state=pixel_retention_state,
             )
+            observation_id = str(uuid4())
             observation = self._ledger.add(
-                str(uuid4()),
+                observation_id,
                 {
                     "source": source,
                     "label": normalized_label,
@@ -292,6 +308,18 @@ class PerceptionService:
                 },
                 snapshot_hash,
             )
+            if vision.get("state") in {"ready", "abstained"}:
+                self._vision_quality.register(
+                    observation_id,
+                    provider=str(vision.get("provider", "none")),
+                    model=(
+                        str(vision["model"])
+                        if isinstance(vision.get("model"), str)
+                        else None
+                    ),
+                    state=str(vision["state"]),
+                    confidence=float(vision["confidence"]),
+                )
             return {
                 "status": "observed",
                 "correlationId": correlation_id,
@@ -487,6 +515,49 @@ class PerceptionService:
             "expiredTotal": counts["expiredTotal"],
             "ttlSeconds": float(self.config.ttl_seconds),
             "expiryClock": "monotonic-elapsed",
+        }
+
+    async def review_vision_observation(
+        self,
+        *,
+        observation_id: str,
+        rating: str,
+        source: str,
+        owner_confirmed: bool,
+    ) -> dict[str, Any]:
+        if source != "owner.desktop":
+            raise PerceptionError(
+                "E_PERCEPTION_CONFIRMATION",
+                "Vision scene QA is available only from the owner desktop",
+            )
+        if owner_confirmed is not True:
+            raise PerceptionError(
+                "E_PERCEPTION_CONFIRMATION",
+                "Vision scene QA requires explicit owner confirmation",
+            )
+        if self._closed:
+            raise PerceptionError(
+                "E_PERCEPTION_UNAVAILABLE",
+                "perception service is closed",
+                retryable=True,
+            )
+        review = self._vision_quality.review(observation_id, rating)
+        vision_status = await self._vision_status()
+        return {
+            "status": "reviewed",
+            **review,
+            "qualityReview": self._vision_quality.status(
+                provider=(
+                    vision_status.get("provider")
+                    if isinstance(vision_status.get("provider"), str)
+                    else None
+                ),
+                model=(
+                    vision_status.get("model")
+                    if isinstance(vision_status.get("model"), str)
+                    else None
+                ),
+            ),
         }
 
     async def fresh_context_for_turn(

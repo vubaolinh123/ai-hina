@@ -277,6 +277,42 @@ type SpoutBridgeStatus = {
 };
 
 type VisionProviderChoice = "ollama_local" | "ollama_cloud";
+type VisionQualityRating = "correct" | "partial" | "incorrect";
+
+type VisionQualityReviewStatus = {
+  schemaVersion: "1.0";
+  storage: "memory-only";
+  persistsAfterRestart: false;
+  storesPixels: false;
+  storesSummaries: false;
+  capacity: number;
+  profile: {
+    provider: string | null;
+    model: string | null;
+  };
+  registeredSamples: number;
+  ratedSamples: number;
+  unratedSamples: number;
+  ratings: {
+    correct: number;
+    partial: number;
+    incorrect: number;
+  };
+  weightedScorePercent: number | null;
+  targetPercent: number;
+  minimumRatedSamples: number;
+  candidateTargetMet: boolean;
+  promotionApproved: false;
+  allProfilesRegisteredSamples: number;
+};
+
+type VisionQualityReviewResponse = {
+  status: "reviewed";
+  observationId: string;
+  rating: VisionQualityRating;
+  replaced: boolean;
+  qualityReview?: VisionQualityReviewStatus;
+};
 
 type VisionModelOption = {
   name: string;
@@ -301,6 +337,7 @@ type VisionProviderRuntimeStatus = {
   localGpuUsed: boolean;
   cloudImageUpload: boolean;
   lastErrorCode: string | null;
+  qualityReview: VisionQualityReviewStatus;
 };
 
 type VisionProviderDashboardStatus = {
@@ -480,6 +517,10 @@ type HinaDesktopApi = {
     runtime: VisionProviderRuntimeStatus;
     persistence: VisionProviderDashboardStatus["persistence"];
   }>;
+  reviewVisionObservation(input: {
+    observationId: string;
+    rating: VisionQualityRating;
+  }): Promise<VisionQualityReviewResponse>;
   clearVisionApiKey(): Promise<{
     apiKeyConfigured: false;
     persisted: false;
