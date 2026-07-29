@@ -1,0 +1,34 @@
+schema_version: "1.0"
+asset_id: hina.brain.qwen35-4b-q8-0.v1
+kind: model_weights_and_configuration
+upstream:
+  owner: Qwen
+  model_id: Qwen/Qwen3.5-4B
+  source_url: https://huggingface.co/Qwen/Qwen3.5-4B
+  revision: 851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a
+distribution:
+  kind: ollama_tag
+  locator: qwen3.5:4b-q8_0
+  source_url: https://ollama.com/library/qwen3.5:4b-q8_0
+  manifest_digest: sha256:8722f47c2791e6554c3244d2444b433c6241eed92d2093b53ef105626a6dcb36
+  weight_blob_sha256: acaad28d51b81c74cae813475866f274730f97e4e687464cdd0ac369ef20032c
+  quantization: Q8_0
+license:
+  code_spdx: Apache-2.0
+  weights_spdx: Apache-2.0
+  evidence_url: https://huggingface.co/Qwen/Qwen3.5-4B/blob/main/LICENSE
+use:
+  runtime_role: sole_local_text_brain
+  screen_vision_role: false
+  normal_conversation_weight_updates: false
+  future_training: owner-curated offline QLoRA SFT plus reviewed DPO/ORPO only
+  raw_public_chat_training: false
+local_state:
+  owner_download_authorized_at: "2026-07-29"
+  default_runtime: true
+  production_promoted: false
+  owner_application_acceptance_pending: true
+notes:
+  - No upstream source, prompt corpus or model weights are copied into Git.
+  - The Ollama cache is local machine state and is not a repository artifact.
+  - The former Qwen3-VL 8B cache was retired after this Q8_0 checkpoint passed the narrow GPU and latency smoke.

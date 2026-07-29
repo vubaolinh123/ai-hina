@@ -60,30 +60,30 @@ chat turn trả lỗi thật và ghi vào `var/logs/hina-runtime.jsonl`.
 ## Bật local model cho chat
 
 Gateway mặc định dùng Ollama tại `127.0.0.1:11434` với model
-[`qwen3-vl:8b-thinking-q4_K_M`](https://ollama.com/library/qwen3-vl:8b-thinking-q4_K_M).
-Đây là checkpoint Thinking duy nhất của **bộ não text**; Hina không nạp thêm
-bản Instruct. Đọc ảnh màn hình được tách sang provider vision cấu hình trong
-Dashboard desktop nên không buộc bộ não 8B phải đổi vai trò hoặc reload. Sau
-khi cài Ollama:
+[`qwen3.5:4b-q8_0`](https://ollama.com/library/qwen3.5:4b-q8_0).
+Đây là checkpoint Q8_0 duy nhất của **bộ não text**; Hina không nạp thêm model
+khác cho fast chat hay thinking. Đọc ảnh màn hình được tách sang provider
+vision cấu hình trong Dashboard desktop nên không buộc bộ não local phải đổi
+vai trò hoặc reload. Sau khi cài Ollama:
 
 ```powershell
-ollama pull qwen3-vl:8b-thinking-q4_K_M
+ollama pull qwen3.5:4b-q8_0
 ollama serve
 pnpm start:dev-console
 ```
 
 `pnpm start:desktop` tự tìm Ollama ở PATH hoặc thư mục cài Windows, khởi động
 server loopback ẩn nếu cần và kiểm tra model trước khi mở Electron. Nếu thiếu
-model, launcher tự chạy `ollama pull qwen3-vl:8b-thinking-q4_K_M`; log provider
-nằm ở `var/logs/ollama.*.log`. Câu text đơn giản dùng đường nhanh trên chính
-weight Thinking; câu text thật sự cần phân tích dùng reasoning ẩn có giới hạn.
+model, launcher tự chạy `ollama pull qwen3.5:4b-q8_0`; log provider nằm ở
+`var/logs/ollama.*.log`. Chat viewer, hội thoại cảm xúc và phân tích game dùng
+các ngân sách reasoning/output khác nhau nhưng vẫn trên đúng checkpoint này.
 Reasoning không được gửi ra UI. Admission tối đa 1 giây cộng inference
 tối đa 9 giây tạo deadline mặc định 10 giây.
 
-Persona `hina.prompt.v3` mặc định đi thẳng vào câu trả lời trong 1–2 câu,
-thường không quá 45 từ; chỉ mở rộng khi bạn yêu cầu rõ chi tiết, code, danh sách
-hoặc từng bước. Gateway dùng trần 192 output token để chặn câu trả lời lan man,
-nhưng có thể đổi bằng `HINA_MODEL_MAX_TOKENS` cho tác vụ dài.
+Persona `hina.prompt.v4` mặc định đi thẳng vào câu trả lời trong 1–2 câu,
+thường không quá 45 từ. Hina là companion giao tiếp/cảm xúc, còn yêu cầu
+code/tutorial được chuyển hướng ngắn trước provider. Trần output theo lượt nằm
+trong khoảng 96–192 token; reasoning riêng chỉ được bật khi loại lượt cần nó.
 
 Nếu Ollama app đã chạy nền thì không cần chạy thêm `ollama serve`. Có thể đổi
 provider/model trước khi start:

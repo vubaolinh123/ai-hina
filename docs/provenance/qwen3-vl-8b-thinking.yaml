@@ -25,3 +25,8 @@ modifications:
 model_manifest: ml/models/manifests/qwen3-vl-8b-thinking-q4-k-m.v1.json
 reviewed_by: primary_orchestrator
 approved_by: primary_orchestrator_for_local_owner_testing
+retirement:
+  retired_at: "2026-07-29"
+  reason: owner_selected_qwen35_4b_q8_0_for_lower_runtime_footprint_and_future_qlora_alignment
+  local_ollama_cache_present: false
+  default_runtime: false

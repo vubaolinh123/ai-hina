@@ -1,0 +1,121 @@
+{
+  "schema_version": "1.0",
+  "manifest_id": "hina.brain.qwen35-4b-q8-0.v1",
+  "artifact_kind": "ollama_gguf_model_weights_configuration_tokenizer_and_vision_encoder",
+  "model_id": "Qwen/Qwen3.5-4B",
+  "source_url": "https://huggingface.co/Qwen/Qwen3.5-4B",
+  "revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
+  "ollama_source_url": "https://ollama.com/library/qwen3.5:4b-q8_0",
+  "observed_at": "2026-07-29",
+  "distribution": {
+    "kind": "ollama_tag",
+    "locator": "qwen3.5:4b-q8_0",
+    "manifest_digest": "sha256:8722f47c2791e6554c3244d2444b433c6241eed92d2093b53ef105626a6dcb36",
+    "reported_size_bytes": 5279294453,
+    "weight_blob": {
+      "size_bytes": 5279282560,
+      "sha256": "acaad28d51b81c74cae813475866f274730f97e4e687464cdd0ac369ef20032c"
+    },
+    "format": "gguf",
+    "family": "qwen35",
+    "parameter_size": "4.7B",
+    "quantization": "Q8_0",
+    "declared_context_length": 262144
+  },
+  "licenses": {
+    "code_spdx": "Apache-2.0",
+    "weights_spdx": "Apache-2.0",
+    "license_url": "https://huggingface.co/Qwen/Qwen3.5-4B/blob/main/LICENSE",
+    "commercial_use_allowed_by_declared_license": true,
+    "redistribution_requires_separate_license_review": true
+  },
+  "lineage": {
+    "edition": "post-trained",
+    "declared_modalities": [
+      "text",
+      "image"
+    ],
+    "owner_data_included_in_weights": false,
+    "runtime_input_training": false,
+    "future_training_base": "Qwen/Qwen3.5-4B post-trained Hugging Face checkpoint; offline QLoRA only after M11 gates",
+    "note": "No Qwen source file, prompt corpus or model weight is copied into Git. Ollama owns the local cache outside the repository."
+  },
+  "runtime": {
+    "roles": [
+      "text_brain"
+    ],
+    "single_text_brain_weight_policy": true,
+    "screen_vision_provider": "separate_perception_provider",
+    "second_text_weight_loaded": false,
+    "simple_text_path": "same-weight raw prompt with a pre-closed private think block",
+    "complex_text_path": "bounded private scratchpad followed by a bounded final pass on the same checkpoint",
+    "reasoning_router": "deterministic latest-user-message classifier",
+    "runtime_context_tokens": 8192,
+    "generation_budgets": {
+      "viewer_fast": {
+        "reasoning_tokens": 0,
+        "output_tokens": 96
+      },
+      "viewer_reflective": {
+        "reasoning_tokens": 192,
+        "output_tokens": 128
+      },
+      "emotional_context": {
+        "reasoning_tokens": 256,
+        "output_tokens": 128
+      },
+      "game_analysis": {
+        "reasoning_tokens": 384,
+        "output_tokens": 160
+      },
+      "critical_game": {
+        "reasoning_tokens": 512,
+        "output_tokens": 192
+      }
+    },
+    "provider_timeout_seconds": 9,
+    "admission_timeout_seconds": 1,
+    "default_turn_deadline_seconds": 10,
+    "requested_gpu_layers": 999,
+    "keep_alive": 0,
+    "scheduler_reservation_vram_mib": 6144,
+    "scheduler_minimum_headroom_mib": 0
+  },
+  "measured_on_owner_gpu": {
+    "gpu": "NVIDIA GeForce RTX 5070 Ti 16 GB",
+    "physical_vram_total_mib": 16303,
+    "ambient_baseline_mib": 1984,
+    "loaded_total_physical_vram_mib": 7903,
+    "observed_physical_delta_mib": 5919,
+    "ollama_resident_model_bytes_on_gpu": 5184558201,
+    "ollama_context_length": 8192,
+    "cold_fast_text_seconds": 6.647,
+    "emotional_text_seconds": 4.533,
+    "game_analysis_seconds": 7.533,
+    "all_on_text_turn_seconds": 5.313,
+    "all_on_tts_request_seconds": 2.584,
+    "all_on_tts_first_chunk_seconds": 1.266,
+    "all_on_tts_processing_seconds": 2.188,
+    "all_on_peak_physical_vram_mib": 13990,
+    "all_on_minimum_free_vram_mib": 2006,
+    "all_on_peak_gpu_utilization_percent": 91,
+    "all_on_resident_models": [
+      "qwen3.5:4b-q8_0",
+      "Systran/faster-whisper-large-v3",
+      "k2-fsa/OmniVoice"
+    ],
+    "all_requests_full_gpu_offload_requested": true,
+    "all_on_stt_tts_brain_benchmark_status": "passed_fast_owner_gpu_gate"
+  },
+  "status": {
+    "download_authorized_by_owner": true,
+    "local_owner_testing_ready": true,
+    "default_text_brain": true,
+    "active_screen_vision_provider": false,
+    "latency_gate_under_10_seconds_passed_for_narrow_smoke": true,
+    "all_on_resource_gate_passed": true,
+    "quality_promoted": false,
+    "production_ready": false,
+    "requires_owner_application_testing": true
+  }
+}

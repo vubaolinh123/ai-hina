@@ -2,7 +2,7 @@
   "schema_version": "0.1",
   "status": "mixed_research_and_local_candidate",
   "frozen": false,
-  "observed_at": "2026-07-23",
+  "observed_at": "2026-07-29",
   "policy": {
     "download_or_promotion_authorized": false,
     "requires_exact_upstream_revision": true,
@@ -16,7 +16,7 @@
       "model_id": "Qwen/Qwen3.5-4B",
       "artifact_kind": "model_weights_and_configuration",
       "source_url": "https://huggingface.co/Qwen/Qwen3.5-4B",
-      "revision": null,
+      "revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
       "observed_revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
       "license": {
         "spdx": "Apache-2.0",
@@ -26,23 +26,36 @@
       "runtime_distribution_candidates": [
         {
           "kind": "ollama_tag",
-          "locator": "qwen3.5:4b",
-          "source_url": "https://ollama.com/library/qwen3.5:4b",
-          "digest": null,
-          "status": "unfrozen"
+          "locator": "qwen3.5:4b-q8_0",
+          "source_url": "https://ollama.com/library/qwen3.5:4b-q8_0",
+          "digest": "sha256:8722f47c2791e6554c3244d2444b433c6241eed92d2093b53ef105626a6dcb36",
+          "status": "pinned_local_candidate"
         }
       ],
       "constraints": {
+        "single_text_brain_weight": true,
+        "screen_vision_routed_to_separate_perception_provider": true,
         "base_frozen_during_normal_conversation": true,
+        "hidden_reasoning_exposed": false,
+        "default_turn_deadline_seconds": 10,
+        "scheduler_reservation_vram_mib": 6144,
         "production_ready": false,
         "training_labels_from_unreviewed_outputs_allowed": false
       },
+      "evidence": {
+        "manifest": "ml/models/manifests/qwen35-4b-q8-0.v1.json",
+        "cold_fast_seconds": 6.647,
+        "emotional_seconds": 4.533,
+        "game_analysis_seconds": 7.533,
+        "resident_model_bytes_on_gpu": 5184558201,
+        "all_on_peak_physical_vram_mib": 13990,
+        "all_on_minimum_free_vram_mib": 2006,
+        "all_on_text_turn_seconds": 5.313,
+        "all_on_tts_first_chunk_seconds": 1.266
+      },
       "freeze_blockers": [
-        "pin_huggingface_commit",
-        "record_every_weight_and_config_sha256",
-        "pin_ollama_digest_or_build_recipe",
-        "verify_chat_template_and_runtime_compatibility",
-        "pass_vietnamese_safety_latency_vram_eval"
+        "owner_application_quality_acceptance",
+        "deep_vietnamese_safety_latency_vram_eval_when_owner_requests_release_gate"
       ]
     },
     {
@@ -91,14 +104,14 @@
         "spdx": "Apache-2.0",
         "evidence_url": "https://github.com/QwenLM/Qwen3-VL/blob/main/LICENSE"
       },
-      "intended_role": "default_text_brain_only",
+      "intended_role": "retired_historical_text_brain_baseline",
       "runtime_distribution_candidates": [
         {
           "kind": "ollama_tag",
           "locator": "qwen3-vl:8b-thinking-q4_K_M",
           "source_url": "https://ollama.com/library/qwen3-vl:8b-thinking-q4_K_M",
           "digest": "sha256:901cae73216286ea8c5aba8b46d307ff7188f737285ec500c795a12f05225d28",
-          "status": "pinned_local_candidate"
+          "status": "retired_cache_removed"
         }
       ],
       "constraints": {
@@ -109,16 +122,19 @@
         "default_turn_deadline_seconds": 10,
         "minimum_vram_headroom_mib": 2048,
         "production_ready": false,
+        "default_runtime_allowed": false,
+        "automatic_fallback_allowed": false,
         "training_labels_from_unreviewed_outputs_allowed": false
       },
       "evidence": {
         "manifest": "ml/models/manifests/qwen3-vl-8b-thinking-q4-k-m.v1.json",
         "maximum_measured_total_vram_mib": 9975,
-        "maximum_measured_latency_seconds": 6.16
+        "maximum_measured_latency_seconds": 6.16,
+        "retired_at": "2026-07-29",
+        "local_ollama_cache_present": false
       },
       "freeze_blockers": [
-        "owner_application_quality_acceptance",
-        "deep_vietnamese_safety_and_multimodal_eval_when_owner_requests_release_gate"
+        "retired_by_owner_for_qwen35_4b_q8_0"
       ]
     }
   ]

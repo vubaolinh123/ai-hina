@@ -1101,6 +1101,13 @@ Hoàn thành vertical slice text-only có persona Hina, interruption/cancellatio
   cuối câu kiểu “Chú ý: đây chỉ là phản hồi giả định” bị bỏ, còn lời khuyên hành
   động an toàn vẫn giữ. Conversation status/turn context chỉ trả aggregate
   8.192-token window + byte-based token estimate, không lộ prompt/reasoning.
+- M08-S21/S22 (2026-07-29) supersede text-brain runtime bằng đúng một
+  `qwen3.5:4b-q8_0` pinned. Qwen3-VL 8B và bản Qwen3.5 4B Q4 dư thừa bị xóa khỏi
+  Ollama local; ảnh vẫn đi qua provider Vision tách biệt. Q8_0 giữ context
+  8.192, full-GPU request, scheduler reservation 6.144 MiB và deadline 10 giây.
+  Cùng checkpoint chọn ngân sách theo lượt: viewer thường 0–192 reasoning/
+  96–128 output, cảm xúc/ngữ cảnh 256/128, game 384–512/160–192. Hidden
+  reasoning không đi vào log, memory, UI hoặc TTS.
 
 ### Eval
 
@@ -1549,6 +1556,26 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
   Future conversation learning follows owner-curated offline QLoRA SFT and
   preference pairs documented in `docs/architecture/hina-conversation-learning.md`;
   live/public chat never changes weights.
+- M08-S21 adaptive conversation budget (2026-07-29): exactly one immutable
+  generation profile is selected from the latest user turn before provider I/O.
+  Routine viewer chat uses 0/96 or at most 192/128 reasoning/output tokens;
+  emotional/contextual turns use 256/128; game analysis uses 384/160 and only
+  explicit critical multi-step game decisions may use 512/192. Every path uses
+  the same checkpoint and private reasoning remains outside observable output.
+- M08-S22 Qwen3.5 runtime migration (2026-07-29): the sole text brain is now
+  pinned `qwen3.5:4b-q8_0` at Ollama manifest
+  `8722f47c2791e6554c3244d2444b433c6241eed92d2093b53ef105626a6dcb36`.
+  It requests full GPU offload, keeps active context 8.192, uses a 6.144 MiB
+  scheduler reservation and leaves screen understanding on Cloud/light local
+  Vision. Narrow owner-GPU smoke measured 5.184.558.201 resident model bytes on
+  GPU; cold fast/emotional/game turns completed in 6,647/4,533/7,533 seconds.
+  The former 8B and duplicate 4B Q4 Ollama caches were removed after this smoke.
+  Refreshed all-on Brain + Faster-Whisper + OmniVoice measured a 13.990 MiB
+  physical peak with 2.006 MiB minimum free. A real text turn completed in
+  5,313 seconds; real TTS returned its first audio chunk in 1,266 seconds and
+  completed the request in 2,584 seconds without writing benchmark audio to
+  disk. This is a runnable local candidate awaiting owner application
+  acceptance, not production promotion.
 
 ### Test matrix
 
@@ -1579,6 +1606,11 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
 - Profile M08-S20 đã đo Brain + Faster-Whisper + OmniVoice resident cùng lúc:
   peak physical 12.905 MiB, còn tối thiểu 3.091 MiB free. Cloud Vision thêm
   0 MiB model VRAM local. Provider/profile đổi thì phải đo lại toàn chuỗi.
+- M08-S22 đã đo lại Qwen3.5 4B Q8_0 + Faster-Whisper + OmniVoice resident:
+  peak physical 13.990 MiB, còn tối thiểu 2.006 MiB free, GPU utilization peak
+  91%. Text turn thật hoàn tất trong 5,313 giây; TTS thật có first chunk
+  1,266 giây, processing 2,188 giây và request 2,584 giây. Fast all-on resource
+  gate xanh; Companion Gate B vẫn chờ owner application/quality acceptance.
 - Owner dashboard cảnh báo khi physical used vượt 15.872 MiB; reservation luôn
   được ghi nhãn là admission budget, không cộng lần hai vào physical allocation.
 
@@ -1663,6 +1695,18 @@ Chạy full voice + avatar + memory + Minecraft trong local server, kiểm:
 - Pre-TTS và pre-send output moderation.
 - Operator queue, mute, disconnect, emergency scene.
 - AI disclosure và runbook vận hành.
+- Initiative planner chạy theo event/tick, không nằm trong system prompt:
+  normalize ít nhất `viewer_chat`, `donation`, `game_event`, `extended_silence`,
+  `interruption`, `recap_due` và `topic_decay` thành typed speech intent.
+- Bounded topic state và pending-thread ledger để Hina mở topic, quay lại chuyện
+  đang dở, recap hoặc hỏi ngược viewer mà không nhét toàn bộ transcript vào
+  context 8K.
+- Speech arbitration ưu tiên owner/mod/safety và interruption hơn monologue;
+  cooldown, repetition guard, daily/stream budget và `reply-only` operator mode
+  ngăn Hina độc thoại quá dày hoặc giẫm lời viewer.
+- Planner chỉ chọn high-level intent + attitude metadata; text brain tạo câu
+  cuối, output moderation kiểm tra, TTS/OBS mới được phép phát. Không cho model
+  tự tạo timer, tự gửi message hoặc bypass queue.
 
 `packages/safety-policy` là authority duy nhất cho content decision. Stream adapter chỉ normalize platform events, spam/rate-limit và enforce quyết định; không dựng moderation engine thứ hai.
 
@@ -1674,6 +1718,10 @@ Chạy full voice + avatar + memory + Minecraft trong local server, kiểm:
 - Token expiry, API/OBS disconnect.
 - Reconnect không replay response cũ.
 - PII/secret exfiltration.
+- Extended silence xen kẽ với viewer bắt đầu nói, barge-in và donation để chứng
+  minh monologue bị hủy đúng lúc.
+- Topic exhaustion, recap trùng, memory rỗng/stale và model timeout để chứng
+  minh planner có thể giữ im thay vì phát filler vô hạn.
 
 ### Gate
 
@@ -1684,6 +1732,13 @@ Chạy full voice + avatar + memory + Minecraft trong local server, kiểm:
 - Frozen `stream-safety-v1`: ≥500 critical must-block cases với 0 miss; ≥1.000 high-risk cases với recall point estimate ≥99% và CI 95%; ≥1.000 benign cases với FPR ≤5%.
 - Suite có Việt chuẩn, teencode, Anh, Unicode, quoted attack, multi-turn và tách khỏi development set.
 - Duplicate message không tạo duplicate response.
+- Proactive speech không cần viewer hỏi nhưng mọi lượt phải có typed trigger,
+  correlation ID, cooldown và policy decision; system prompt một mình không
+  được tự kích hoạt phát ngôn.
+- `reply-only`/mute/emergency stop chặn 100% monologue mới; barge-in cắt local
+  audio/outbound queue theo cùng SLO p95 ≤250 ms.
+- Replay ≥2 giờ không lặp cùng topic/punchline vượt ngưỡng preregistered, không
+  có hai speech intent chạy đồng thời và không để queue tăng không giới hạn.
 - Local audio/outbound queue cut p95 ≤250 ms; platform disconnect/API acknowledgement đo riêng với target ≤5 giây.
 - Private/unlisted supervised canary phải pass.
 - M10 không cấp quyền public livestream; public enablement chỉ có ở M12 Public Release Gate.
@@ -1710,6 +1765,14 @@ Không mở M11 nếu chưa có:
 
 M11 là nhánh tùy chọn, không chặn M12 hoặc v1 public release. Adapter candidate có promotion gate riêng.
 
+Checkpoint huấn luyện mặc định là **bản post-trained Hugging Face
+`Qwen/Qwen3.5-4B`**, giữ frozen và gắn QLoRA adapter. Không train trực tiếp
+GGUF/Ollama Q8_0. Không bắt đầu từ `Qwen3.5-4B-Base` trừ khi một research gate
+riêng chứng minh dataset đủ lớn để tự xây lại instruction following, safety và
+multi-turn alignment; dữ liệu owner hiện tại không được giả định đủ cho việc đó.
+`Qwen3.5-9B` chỉ là benchmark/fallback thủ công, không tự load, không làm teacher,
+không sinh nhãn và không là default training base.
+
 ### Style slice: Hina phản xạ ngắn và dí dỏm
 
 Mục tiêu hành vi được lấy ở mức đặc tính chung của một AI VTuber tương tác
@@ -1730,6 +1793,15 @@ nhanh, không bắt chước câu chữ hoặc identity của Neuro-sama:
   depth. Không dùng raw public chat hoặc transcript/dataset của Neuro-sama.
 - safety pairs: câu ngắn không được làm mất refusal, uncertainty hoặc capability
   boundary cần thiết.
+- lane `proactive_monologue`: mở topic/lấp khoảng lặng/recap ngắn theo typed
+  planner event, có điểm dừng và không giả rằng viewer vừa hỏi.
+- lane `topic_transition`: nối sang topic mới hoặc quay lại pending thread mà
+  không lặp nguyên câu trước.
+- lane `interruption`: dừng hoặc kết câu ngay khi viewer/barge-in/safety event
+  có ưu tiên cao hơn.
+- trajectory pairs: planner event → retrieved context → speech intent → câu nói
+  cuối; preference chấm timing, độ ngắn, khả năng nhường lời và tránh độc thoại
+  dài, không chỉ chấm văn phong.
 
 Label chỉ đến từ nội dung do repository/owner tự viết, dữ liệu synthetic đã
 review hoặc interaction được consent và curate. Không scrape stream, không
@@ -1759,6 +1831,11 @@ raw quarantine
 - Revocation lineage: tombstone, revoked dataset version và impacted adapter/model candidates.
 - Training scripts và reproducible environment.
 - Base model + adapter tách version.
+- QLoRA SFT trên post-trained `Qwen/Qwen3.5-4B`, sau đó DPO/ORPO từ
+  chosen/rejected pairs đã review; merge/export GGUF chỉ sau offline eval.
+- Dataset gồm multi-turn, event-conditioned response, proactive monologue,
+  topic transition, interruption và negative trajectory; không dùng raw public
+  engagement làm reward hoặc training label.
 - Eval comparison và blind A/B workflow.
 - Atomic promotion/rollback manifest.
 - Retain ít nhất ba last-known-good adapters.

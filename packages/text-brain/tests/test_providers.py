@@ -200,11 +200,11 @@ class ProviderAdapterTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(
             _ProviderHandler.received_body["options"]["num_gpu"],
-            32,
+            999,
         )
         self.assertEqual(
             _ProviderHandler.received_body["options"]["num_predict"],
-            128,
+            96,
         )
         self.assertEqual(
             _ProviderHandler.received_body["options"]["temperature"],
@@ -233,7 +233,7 @@ class ProviderAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["keep_alive"], -1)
         self.assertEqual(body["options"]["num_predict"], 1)
         self.assertEqual(body["options"]["num_ctx"], 8_192)
-        self.assertEqual(body["options"]["num_gpu"], 32)
+        self.assertEqual(body["options"]["num_gpu"], 999)
 
     async def test_ollama_residency_distinguishes_loaded_from_installed(self) -> None:
         provider = LocalHttpChatProvider(
@@ -275,18 +275,120 @@ class ProviderAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertIs(reasoning_body["think"], True)
         self.assertFalse(reasoning_body["stream"])
         self.assertEqual(reasoning_body["keep_alive"], -1)
-        self.assertEqual(reasoning_body["options"]["num_predict"], 256)
+        self.assertEqual(reasoning_body["options"]["num_predict"], 192)
+        self.assertIn("suy luận tối đa 60 từ", reasoning_body["messages"][0]["content"])
         self.assertEqual(reasoning_body["options"]["num_ctx"], 8_192)
-        self.assertEqual(reasoning_body["options"]["num_gpu"], 32)
+        self.assertEqual(reasoning_body["options"]["num_gpu"], 999)
         self.assertTrue(answer_body["stream"])
         self.assertTrue(answer_body["raw"])
         self.assertEqual(answer_body["keep_alive"], -1)
         self.assertEqual(answer_body["options"]["num_predict"], 128)
         self.assertIn("\n**Phân tích hành vi", answer_body["options"]["stop"])
         self.assertIn("\nPhân tích hành vi:", answer_body["options"]["stop"])
-        self.assertIn("<think>\nprivate reasoning must not be yielded\n</think>", answer_body["prompt"])
+        self.assertIn("<think>\nprivate reasoning must not be yielded\n", answer_body["prompt"])
+        self.assertIn("Ràng buộc câu trả lời cuối:", answer_body["prompt"])
         self.assertEqual(unload_body, {"model": "hina-local:4b", "keep_alive": 0})
         self.assertNotIn("private reasoning", "".join(tokens))
+
+    async def test_emotional_chat_uses_256_reasoning_and_128_output(self) -> None:
+        provider = LocalHttpChatProvider(
+            ModelGatewayConfig(base_url=self.base_url, model="hina-local:4b")
+        )
+        tokens = [
+            token
+            async for token in provider.stream_chat(
+                [
+                    {
+                        "role": "user",
+                        "content": "Mình vừa bị sếp mắng nên rất buồn. Hina tâm sự với mình nhé.",
+                    }
+                ]
+            )
+        ]
+        reasoning_body = _ProviderHandler.received_requests[0][1]
+        answer_body = _ProviderHandler.received_requests[1][1]
+        self.assertEqual(reasoning_body["options"]["num_predict"], 256)
+        self.assertEqual(answer_body["options"]["num_predict"], 128)
+        self.assertIn("suy luận tối đa 80 từ", reasoning_body["messages"][0]["content"])
+        self.assertEqual(
+            {body["model"] for _, body in _ProviderHandler.received_requests},
+            {"hina-local:4b"},
+        )
+        self.assertEqual("".join(tokens), "Xin chao")
+        self.assertNotIn("private reasoning", "".join(tokens))
+
+    async def test_game_analysis_uses_384_reasoning_and_160_output(self) -> None:
+        provider = LocalHttpChatProvider(
+            ModelGatewayConfig(base_url=self.base_url, model="hina-local:4b")
+        )
+        _ = [
+            token
+            async for token in provider.stream_chat(
+                [
+                    {
+                        "role": "user",
+                        "content": "Phân tích vì sao mình cứ thua ở vòng đấu này của game.",
+                    }
+                ]
+            )
+        ]
+        reasoning_body = _ProviderHandler.received_requests[0][1]
+        answer_body = _ProviderHandler.received_requests[1][1]
+        self.assertEqual(reasoning_body["options"]["num_predict"], 384)
+        self.assertEqual(answer_body["options"]["num_predict"], 160)
+        self.assertIn("suy luận tối đa 100 từ", reasoning_body["messages"][0]["content"])
+        self.assertEqual(reasoning_body["model"], answer_body["model"])
+
+    async def test_critical_game_analysis_uses_512_reasoning_and_192_output(self) -> None:
+        provider = LocalHttpChatProvider(
+            ModelGatewayConfig(base_url=self.base_url, model="hina-local:4b")
+        )
+        _ = [
+            token
+            async for token in provider.stream_chat(
+                [
+                    {
+                        "role": "user",
+                        "content": (
+                            "Lập kế hoạch nhiều bước để tối ưu build và đánh boss "
+                            "trong game mà không làm cả team bị hạ."
+                        ),
+                    }
+                ]
+            )
+        ]
+        reasoning_body = _ProviderHandler.received_requests[0][1]
+        answer_body = _ProviderHandler.received_requests[1][1]
+        self.assertEqual(reasoning_body["options"]["num_predict"], 512)
+        self.assertEqual(answer_body["options"]["num_predict"], 192)
+        self.assertIn("suy luận tối đa 120 từ", reasoning_body["messages"][0]["content"])
+        self.assertEqual(reasoning_body["model"], "hina-local:4b")
+        self.assertEqual(answer_body["model"], "hina-local:4b")
+
+    async def test_only_latest_user_message_selects_the_budget(self) -> None:
+        provider = LocalHttpChatProvider(
+            ModelGatewayConfig(base_url=self.base_url, model="hina-local:4b")
+        )
+        _ = [
+            token
+            async for token in provider.stream_chat(
+                [
+                    {
+                        "role": "user",
+                        "content": "Phân tích nhiều bước để đánh boss trong game.",
+                    },
+                    {"role": "assistant", "content": "Được, để Hina xem."},
+                    {"role": "user", "content": "Thôi, chào mọi người đi."},
+                ]
+            )
+        ]
+        self.assertEqual(
+            [path for path, _ in _ProviderHandler.received_requests],
+            ["/api/generate"],
+        )
+        body = _ProviderHandler.received_requests[0][1]
+        self.assertEqual(body["options"]["num_predict"], 96)
+        self.assertEqual(body["model"], "hina-local:4b")
 
     async def test_fast_prompt_neutralizes_untrusted_qwen_control_tokens(self) -> None:
         provider = LocalHttpChatProvider(
@@ -363,7 +465,7 @@ class ProviderAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertIs(body["think"], True)
         self.assertEqual(body["options"]["num_ctx"], 8_192)
         self.assertEqual(body["options"]["num_predict"], 256)
-        self.assertEqual(body["options"]["num_gpu"], 32)
+        self.assertEqual(body["options"]["num_gpu"], 999)
         self.assertEqual(
             body["messages"][1],
             {"role": "assistant", "content": "<think>\n\n</think>\n\n"},

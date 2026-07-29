@@ -1,6 +1,8 @@
 # M03 — Text brain
 
-- Status: M03-S4 concise-response maintenance is a fast candidate; owner manual acceptance remains authoritative
+- Status: M03-S4/S5 are historical fast candidates; M08-S21/S22 now own the
+  active Qwen3.5 4B Q8_0 runtime and adaptive conversation budgets; owner
+  manual acceptance remains authoritative
 - Branch: `main`
 - Base: `6c21754`
 - Completed slices: `M03-S1`, `M03-S2`, `M03-S3`, `M03-S4`
@@ -123,3 +125,17 @@ checks remain explicitly deferred by the owner's fast-development policy.
   M08 route. Highest observed total physical GPU use was 9.975 MiB of
   16.303 MiB. Exact distribution hashes and settings are in
   `ml/models/manifests/qwen3-vl-8b-thinking-q4-k-m.v1.json`.
+
+## M08-S21/S22 active runtime supersession (2026-07-29)
+
+- The sole default text checkpoint is pinned `qwen3.5:4b-q8_0`; the former
+  Qwen3-VL 8B and duplicate Qwen3.5 4B Q4 Ollama caches are absent.
+- One deterministic latest-turn router selects viewer, emotional/contextual or
+  game-analysis budgets on the same weight. Private reasoning never reaches
+  logs, memory, UI or TTS.
+- Active context remains 8,192 tokens. Runtime requests full GPU offload,
+  reserves 6,144 MiB and keeps the ten-second turn deadline. Explicit screen
+  analysis still uses the separate perception provider.
+- Refreshed all-on Brain + Faster-Whisper + OmniVoice peaked at 13,990 MiB
+  physical VRAM with 2,006 MiB minimum free. Owner application/quality
+  acceptance is still required before promotion.

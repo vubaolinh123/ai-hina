@@ -64,8 +64,8 @@ class _ModelGateway:
         return {
             "configured": {
                 "provider": "ollama",
-                "model": "qwen3-vl:8b-thinking-q4_K_M",
-                "modelVramMiB": 8_192,
+                "model": "qwen3.5:4b-q8_0",
+                "modelVramMiB": 6_144,
             },
             "provider": {
                 "reachable": True,
@@ -91,8 +91,8 @@ class _ModelGateway:
     async def resident_models(self) -> list[dict[str, object]]:
         return [
             {
-                "name": "qwen3-vl:8b-thinking-q4_K_M",
-                "sizeVramBytes": 7_516 * 1024 * 1024,
+                "name": "qwen3.5:4b-q8_0",
+                "sizeVramBytes": 5_184_558_201,
             }
         ]
 
@@ -203,7 +203,7 @@ class ResourceRouteTests(unittest.IsolatedAsyncioTestCase):
         self.assertLessEqual(len(body["models"]), 5)
         models = {item["id"]: item for item in body["models"]}
         self.assertEqual(models["brain.text"]["state"], "loaded")
-        self.assertEqual(models["brain.text"]["measuredVramMiB"], 7_516)
+        self.assertEqual(models["brain.text"]["measuredVramMiB"], 4_944)
         self.assertEqual(
             models["brain.text"]["measurementSource"],
             "ollama.api.ps.size_vram",

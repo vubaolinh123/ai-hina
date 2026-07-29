@@ -36,6 +36,31 @@ _REASONING_TERMS = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 _REASONING_MATH = re.compile(r"(?:\d[\d., ]*)\s*(?:%|[+\-*/=<>])")
+_EMOTIONAL_CONTEXT_TERMS = re.compile(
+    r"\b(?:"
+    r"an ủi|áp lực|buồn|cảm xúc|cảm thấy|cô đơn|đau lòng|ghét|hạnh phúc|"
+    r"khóc|lo lắng|mệt|nhớ|sợ|stress|tâm sự|thất vọng|thương|tổn thương|"
+    r"vui|yêu|"
+    r"chuyện lúc nãy|còn nhớ|dựa trên cuộc trò chuyện|ngữ cảnh|"
+    r"như mình đã nói|vừa rồi"
+    r")\b",
+    re.IGNORECASE,
+)
+_GAME_TERMS = re.compile(
+    r"\b(?:"
+    r"boss|build|combo|game|inventory|map|minecraft|rank|raid|skill|team|"
+    r"chiến thuật|chơi game|đánh trận|giao tranh|màn chơi|nhiệm vụ|"
+    r"thắng|thua|vòng đấu"
+    r")\b",
+    re.IGNORECASE,
+)
+_CRITICAL_GAME_TERMS = re.compile(
+    r"\b(?:"
+    r"boss|competitive|nhiều bước|quyết định quan trọng|rank|raid|"
+    r"sống còn|tối ưu build|chiến thuật tổng thể"
+    r")\b",
+    re.IGNORECASE,
+)
 _VISION_REASONING_TERMS = re.compile(
     r"\b(?:"
     r"analy[sz]e|compare|debug|evaluate|explain why|plan|prove|reason|strategy|"
@@ -69,6 +94,20 @@ class ProviderHealth:
 @dataclass(frozen=True, slots=True)
 class _StreamFailure:
     error: TextBrainError
+
+
+@dataclass(frozen=True, slots=True)
+class _GenerationBudget:
+    name: str
+    reasoning_tokens: int
+    output_tokens: int
+
+
+_VIEWER_FAST_BUDGET = _GenerationBudget("viewer-fast", 0, 96)
+_VIEWER_REFLECTIVE_BUDGET = _GenerationBudget("viewer-reflective", 192, 128)
+_EMOTIONAL_CONTEXT_BUDGET = _GenerationBudget("emotional-context", 256, 128)
+_GAME_ANALYSIS_BUDGET = _GenerationBudget("game-analysis", 384, 160)
+_CRITICAL_GAME_BUDGET = _GenerationBudget("critical-game", 512, 192)
 
 
 class LocalHttpChatProvider:
@@ -332,9 +371,10 @@ class LocalHttpChatProvider:
         connection_holder: dict[str, http.client.HTTPConnection],
     ) -> None:
         deadline = time.monotonic() + self.config.request_timeout_seconds
+        generation_budget = _select_generation_budget(messages)
         if (
             self.config.provider is ProviderKind.OLLAMA
-            and _requires_hidden_thinking(messages)
+            and generation_budget.reasoning_tokens > 0
         ):
             try:
                 self._stream_reasoned_ollama_sync(
@@ -343,6 +383,7 @@ class LocalHttpChatProvider:
                     stop,
                     connection_holder,
                     deadline,
+                    generation_budget,
                 )
             finally:
                 if not self._operator_pinned:
@@ -353,7 +394,10 @@ class LocalHttpChatProvider:
         connection_holder["connection"] = connection
         if self.config.provider is ProviderKind.OLLAMA:
             endpoint = self.config.endpoint_path("generate")
-            body = self._fast_generate_body(messages)
+            body = self._fast_generate_body(
+                messages,
+                output_tokens=generation_budget.output_tokens,
+            )
             stream_kind = "ollama-generate"
         else:
             endpoint = self.config.endpoint_path("chat")
@@ -422,13 +466,17 @@ class LocalHttpChatProvider:
         stop: threading.Event,
         connection_holder: dict[str, http.client.HTTPConnection],
         deadline: float,
+        generation_budget: _GenerationBudget,
     ) -> None:
         """Run a bounded private scratchpad, then stream only its final answer."""
 
         reasoning_connection = self._connection(self.config.request_timeout_seconds)
         connection_holder["connection"] = reasoning_connection
         try:
-            body = self._chat_body(messages)
+            body = self._chat_body(
+                messages,
+                generation_budget=generation_budget,
+            )
             reasoning_connection.request(
                 "POST",
                 self.config.endpoint_path("chat"),
@@ -462,10 +510,8 @@ class LocalHttpChatProvider:
             thinking = message.get("thinking", "")
             if not isinstance(content, str) or not isinstance(thinking, str):
                 raise ValueError
-            if content.strip() and payload.get("done_reason") != "length":
-                emit(content)
-                return
-            if not thinking.strip():
+            private_scratchpad = thinking.strip() or content.strip()
+            if not private_scratchpad:
                 raise TextBrainError(
                     "E_MODEL_EMPTY_RESPONSE",
                     "local model returned no private scratchpad or final answer",
@@ -500,7 +546,11 @@ class LocalHttpChatProvider:
 
         answer_connection = self._connection(self.config.request_timeout_seconds)
         connection_holder["connection"] = answer_connection
-        body = self._reasoned_generate_body(messages, thinking)
+        body = self._reasoned_generate_body(
+            messages,
+            private_scratchpad,
+            generation_budget=generation_budget,
+        )
         try:
             answer_connection.request(
                 "POST",
@@ -759,11 +809,23 @@ class LocalHttpChatProvider:
         finally:
             connection.close()
 
-    def _chat_body(self, messages: list[dict[str, str]]) -> bytes:
+    def _chat_body(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        generation_budget: _GenerationBudget | None = None,
+    ) -> bytes:
         if self.config.provider is ProviderKind.OLLAMA:
             payload: dict[str, Any] = {
                 "model": self.config.model,
-                "messages": messages,
+                "messages": (
+                    _with_private_reasoning_constraint(
+                        messages,
+                        generation_budget,
+                    )
+                    if generation_budget is not None
+                    else messages
+                ),
                 "stream": False,
                 # Keep the same resident checkpoint between the private
                 # scratchpad and final-answer pass. The second pass releases it
@@ -773,7 +835,11 @@ class LocalHttpChatProvider:
                 "options": {
                     "temperature": self.config.temperature,
                     "repeat_penalty": self.config.repeat_penalty,
-                    "num_predict": self.config.thinking_max_tokens,
+                    "num_predict": (
+                        generation_budget.reasoning_tokens
+                        if generation_budget is not None
+                        else self.config.thinking_max_tokens
+                    ),
                     "num_ctx": self.config.context_tokens,
                     "num_gpu": self.config.ollama_gpu_layers,
                     "stop": [
@@ -806,10 +872,16 @@ class LocalHttpChatProvider:
         self,
         messages: list[dict[str, str]],
         thinking: str,
+        *,
+        generation_budget: _GenerationBudget,
     ) -> bytes:
         payload = {
             "model": self.config.model,
-            "prompt": _qwen_reasoned_prompt(messages, thinking),
+            "prompt": _qwen_reasoned_prompt(
+                messages,
+                thinking,
+                generation_budget,
+            ),
             "raw": True,
             "stream": True,
             # The wrapper explicitly unloads non-pinned models after this
@@ -818,7 +890,7 @@ class LocalHttpChatProvider:
             "options": {
                 "temperature": self.config.temperature,
                 "repeat_penalty": self.config.repeat_penalty,
-                "num_predict": self.config.max_tokens,
+                "num_predict": generation_budget.output_tokens,
                 "num_ctx": self.config.context_tokens,
                 "num_gpu": self.config.ollama_gpu_layers,
                 "stop": [
@@ -839,7 +911,12 @@ class LocalHttpChatProvider:
             separators=(",", ":"),
         ).encode("utf-8")
 
-    def _fast_generate_body(self, messages: list[dict[str, str]]) -> bytes:
+    def _fast_generate_body(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        output_tokens: int,
+    ) -> bytes:
         if self.config.provider is not ProviderKind.OLLAMA:
             raise TextBrainError(
                 "E_MODEL_REQUEST",
@@ -854,7 +931,7 @@ class LocalHttpChatProvider:
             "options": {
                 "temperature": self.config.temperature,
                 "repeat_penalty": self.config.repeat_penalty,
-                "num_predict": self.config.max_tokens,
+                "num_predict": output_tokens,
                 "num_ctx": self.config.context_tokens,
                 "num_gpu": self.config.ollama_gpu_layers,
                 # If the thinking checkpoint tries to open another thought
@@ -951,7 +1028,9 @@ class LocalHttpChatProvider:
         return headers
 
 
-def _requires_hidden_thinking(messages: list[dict[str, str]]) -> bool:
+def _select_generation_budget(
+    messages: list[dict[str, str]],
+) -> _GenerationBudget:
     latest_user = next(
         (
             item["content"]
@@ -961,15 +1040,31 @@ def _requires_hidden_thinking(messages: list[dict[str, str]]) -> bool:
         "",
     )
     normalized = " ".join(latest_user.casefold().split())
-    if len(normalized) >= 220:
-        return True
-    if _REASONING_TERMS.search(normalized) is not None:
-        return True
-    if _REASONING_MATH.search(normalized) is not None:
-        return True
-    if "```" in latest_user or latest_user.count("\n") >= 3:
-        return True
-    return latest_user.count("?") + latest_user.count("？") >= 2
+    question_count = latest_user.count("?") + latest_user.count("？")
+    requires_reasoning = (
+        len(normalized) >= 220
+        or _REASONING_TERMS.search(normalized) is not None
+        or _REASONING_MATH.search(normalized) is not None
+        or "```" in latest_user
+        or latest_user.count("\n") >= 3
+        or question_count >= 2
+    )
+    if (
+        _GAME_TERMS.search(normalized) is not None
+        and requires_reasoning
+    ):
+        if (
+            _CRITICAL_GAME_TERMS.search(normalized) is not None
+            or len(normalized) >= 320
+            or question_count >= 3
+        ):
+            return _CRITICAL_GAME_BUDGET
+        return _GAME_ANALYSIS_BUDGET
+    if _EMOTIONAL_CONTEXT_TERMS.search(normalized) is not None:
+        return _EMOTIONAL_CONTEXT_BUDGET
+    if requires_reasoning:
+        return _VIEWER_REFLECTIVE_BUDGET
+    return _VIEWER_FAST_BUDGET
 
 
 def _requires_hidden_vision_thinking(prompt: str) -> bool:
@@ -989,16 +1084,44 @@ def _qwen_no_think_prompt(messages: list[dict[str, str]]) -> str:
         role = item["role"]
         content = _neutralize_qwen_control_tokens(item["content"])
         parts.append(f"<|im_start|>{role}\n{content}<|im_end|>\n")
-    # Qwen3-VL Thinking is a separate checkpoint rather than a hybrid switch.
-    # Closing the private block in the raw prompt gives simple text requests a
-    # same-weight fast path without loading a second Instruct checkpoint.
+    # Closing the private block gives routine text a same-weight fast path on
+    # Qwen3.5 4B Q8_0. More expensive profiles still use the bounded private
+    # scratchpad path without loading or swapping another checkpoint.
     parts.append("<|im_start|>assistant\n<think>\n\n</think>\n\n")
     return "".join(parts)
+
+
+def _with_private_reasoning_constraint(
+    messages: list[dict[str, str]],
+    generation_budget: _GenerationBudget,
+) -> list[dict[str, str]]:
+    word_limit = {
+        "viewer-reflective": 60,
+        "emotional-context": 80,
+        "game-analysis": 100,
+        "critical-game": 120,
+    }[generation_budget.name]
+    constraint = (
+        "[Ràng buộc runtime nội bộ: suy luận tối đa "
+        f"{word_limit} từ, dừng ngay khi đủ kết luận; không lặp lại đề bài.]"
+    )
+    bounded = [dict(item) for item in messages]
+    for index, item in enumerate(bounded):
+        if item["role"] == "system":
+            bounded[index] = {
+                "role": "system",
+                "content": f"{item['content']}\n\n{constraint}",
+            }
+            break
+    else:
+        bounded.insert(0, {"role": "system", "content": constraint})
+    return bounded
 
 
 def _qwen_reasoned_prompt(
     messages: list[dict[str, str]],
     thinking: str,
+    generation_budget: _GenerationBudget,
 ) -> str:
     parts: list[str] = []
     for item in messages:
@@ -1006,9 +1129,29 @@ def _qwen_reasoned_prompt(
         content = _neutralize_qwen_control_tokens(item["content"])
         parts.append(f"<|im_start|>{role}\n{content}<|im_end|>\n")
     private_scratchpad = _neutralize_qwen_control_tokens(thinking)
+    final_constraint = {
+        "viewer-reflective": (
+            "Trả lời cuối bằng 1–2 câu, tối đa 45 từ; không markdown, danh sách "
+            "hay emoji."
+        ),
+        "emotional-context": (
+            "Trả lời cuối bằng 2–3 câu tự nhiên, tối đa 60 từ; đồng cảm nhưng "
+            "không giảng đạo, không markdown, danh sách hay emoji."
+        ),
+        "game-analysis": (
+            "Trả lời cuối bằng 2–3 câu, tối đa 60 từ; chỉ nêu nguyên nhân chính "
+            "và một hành động hữu ích, không markdown, danh sách hay emoji."
+        ),
+        "critical-game": (
+            "Trả lời cuối bằng 3–4 câu, tối đa 80 từ; ưu tiên quyết định quan "
+            "trọng nhất, không markdown, danh sách hay emoji."
+        ),
+    }[generation_budget.name]
     parts.append(
         "<|im_start|>assistant\n"
-        f"<think>\n{private_scratchpad}\n</think>\n\n"
+        f"<think>\n{private_scratchpad}\n"
+        f"Ràng buộc câu trả lời cuối: {final_constraint}\n"
+        "</think>\n\n"
     )
     return "".join(parts)
 

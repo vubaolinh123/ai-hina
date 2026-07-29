@@ -80,13 +80,16 @@
   },
   "status": {
     "download_authorized_by_owner": true,
-    "local_owner_testing_ready": true,
-    "default_text_brain": true,
+    "local_owner_testing_ready": false,
+    "default_text_brain": false,
     "active_screen_vision_provider": false,
     "latency_gate_under_10_seconds_passed": true,
     "fourteen_gib_total_vram_ceiling_passed": true,
     "quality_promoted": false,
     "production_ready": false,
-    "requires_owner_application_testing": true
+    "requires_owner_application_testing": false,
+    "retired_at": "2026-07-29",
+    "local_ollama_cache_present": false,
+    "replacement_manifest": "ml/models/manifests/qwen35-4b-q8-0.v1.json"
   }
 }

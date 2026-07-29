@@ -10,7 +10,8 @@ Few-shot prompt examples can change behavior quickly, but they consume context
 and remain less stable than training.
 
 The future durable path is an offline adapter trained from owner-reviewed
-Vietnamese conversations:
+Vietnamese conversations on the post-trained Hugging Face
+`Qwen/Qwen3.5-4B` checkpoint:
 
 1. SFT/QLoRA teaches the shape of a good Hina answer.
 2. Chosen/rejected preference pairs teach which of two valid answers feels more
@@ -53,6 +54,13 @@ Required lanes:
 - `safety`: direct natural action without a trailing meta disclaimer;
 - `negative`: verbosity, tutorials, code blocks, repeated questions, generic
   disclaimers and fake capabilities.
+- `proactive_monologue`: open a topic, fill an eligible silence or recap from a
+  typed planner event without pretending a viewer asked first;
+- `topic_transition`: continue or close a pending thread without repeating the
+  previous line;
+- `interruption`: yield immediately to viewer speech, owner control or safety;
+- `trajectory`: planner event, bounded retrieved context, speech intent and
+  final utterance with timing/repetition labels.
 
 Store emotion and relationship as labels, not as hidden prose embedded in the
 answer. `chosen` must already have punctuation suitable for TTS.
@@ -85,10 +93,18 @@ and latency before training.
 
 ### Stage 2 — QLoRA SFT
 
-Freeze the 8B base and train only an adapter. Start with 4-bit training,
-gradient checkpointing, batch size 1, gradient accumulation and a short sequence
-length. Training is a dedicated offline session: runtime STT/TTS/vision are not
-loaded at the same time.
+Freeze the post-trained `Qwen/Qwen3.5-4B` checkpoint and train only an adapter.
+Do not train the runtime GGUF/Ollama Q8_0 artifact directly. Start with 4-bit
+NF4 QLoRA, gradient checkpointing, batch size 1, gradient accumulation and a
+short sequence length. Training is a dedicated offline session: runtime
+STT/TTS/vision are not loaded at the same time.
+
+The raw `Qwen3.5-4B-Base` checkpoint is not the default starting point. It
+would require a much larger instruction-following, multi-turn, tool, safety and
+preference corpus to rebuild post-training behavior. It may be reconsidered
+only behind a separate research/evaluation gate. `Qwen3.5-9B` is manual
+benchmark/fallback only and must never supply automatic labels or distillation
+targets.
 
 A 16 GB GPU may still require optimizer/adapter CPU offload depending on the
 trainer and sequence length. This is acceptable during training because the
@@ -100,7 +116,9 @@ into the training session.
 Create chosen/rejected pairs from owner edits and blind A/B results. DPO or ORPO
 can teach “natural and emotionally present” over “generic assistant,
 over-explained, disclaimer-heavy” without copying another character's identity.
-Do this only after SFT has a stable baseline.
+The preference rubric also scores proactive timing, topic continuity, yielding
+to interruptions and avoiding overlong/repeated monologue. Do this only after
+SFT has a stable baseline.
 
 ### Stage 4 — Frozen evaluation and promotion
 

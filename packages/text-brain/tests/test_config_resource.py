@@ -38,12 +38,12 @@ class MutableTelemetry:
 class ConfigTests(unittest.TestCase):
     def test_config_accepts_loopback_and_never_exposes_api_key(self) -> None:
         default = ModelGatewayConfig()
-        self.assertEqual(default.model, "qwen3-vl:8b-thinking-q4_K_M")
+        self.assertEqual(default.model, "qwen3.5:4b-q8_0")
         self.assertEqual(default.request_timeout_seconds, 9.0)
         self.assertEqual(default.warmup_timeout_seconds, 45.0)
         self.assertEqual(default.retry_attempts, 0)
-        self.assertEqual(default.model_vram_mib, 8_192)
-        self.assertEqual(default.ollama_gpu_layers, 32)
+        self.assertEqual(default.model_vram_mib, 6_144)
+        self.assertEqual(default.ollama_gpu_layers, 999)
         config = ModelGatewayConfig(
             provider=ProviderKind.OPENAI_COMPATIBLE,
             base_url="http://localhost:1234/v1",
@@ -70,7 +70,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(status["temperature"], 0.7)
         self.assertEqual(config.repeat_penalty, 1.15)
         self.assertEqual(status["repeatPenalty"], 1.15)
-        self.assertEqual(status["ollamaGpuLayers"], 32)
+        self.assertEqual(status["ollamaGpuLayers"], 999)
         self.assertEqual(status["reasoningPolicy"], "deterministic-auto")
         self.assertFalse(status["hiddenReasoningExposed"])
         self.assertEqual(config.endpoint_path("chat"), "/v1/chat/completions")

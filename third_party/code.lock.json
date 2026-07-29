@@ -121,14 +121,14 @@
       ]
     },
     {
-      "name": "qwen3-vl-8b-thinking",
-      "source_url": "https://github.com/QwenLM/Qwen3-VL",
-      "model_url": "https://huggingface.co/Qwen/Qwen3-VL-8B-Thinking",
-      "revision": "92f3c4b4feadd3a016ef468d103bb5f58b2a2c6b",
+      "name": "qwen35-4b-q8-0",
+      "source_url": "https://github.com/QwenLM/Qwen3.5",
+      "model_url": "https://huggingface.co/Qwen/Qwen3.5-4B",
+      "revision": "851bf6e806efd8d0a36b00ddf55e13ccb7b8cd0a",
       "license_spdx": "Apache-2.0",
       "model_license": "Apache-2.0",
-      "source_hash": "sha256:ed12a4674d727a74ac4816c906094ea9d3119fbea46ca93288c3ce4ffbe38c55",
-      "runtime_distribution": "ollama:qwen3-vl:8b-thinking-q4_K_M@sha256:901cae73216286ea8c5aba8b46d307ff7188f737285ec500c795a12f05225d28",
+      "source_hash": "sha256:acaad28d51b81c74cae813475866f274730f97e4e687464cdd0ac369ef20032c",
+      "runtime_distribution": "ollama:qwen3.5:4b-q8_0@sha256:8722f47c2791e6554c3244d2444b433c6241eed92d2093b53ef105626a6dcb36",
       "destination_paths": [
         "packages/text-brain/src/hina_text_brain/config.py",
         "packages/text-brain/src/hina_text_brain/providers.py",
@@ -136,8 +136,8 @@
       ],
       "modifications": [
         "No upstream source file, prompt corpus or model weight is copied into Git; Hina calls the pinned local Ollama distribution through its HTTP API.",
-        "One Thinking checkpoint serves text and explicit image analysis. Simple text and routine image description use same-weight pre-closed-thought paths; complex text/visual questions use bounded hidden thinking.",
-        "Hina requests full GPU offload, bounds context/output and deadline, sets keep_alive=0, and admits the model through the shared local resource scheduler."
+        "One Q8_0 checkpoint serves fast viewer chat, emotional/contextual turns and game analysis through bounded same-weight reasoning profiles; explicit screen understanding remains on the separate perception provider.",
+        "Hina requests full GPU offload, bounds context/output and deadline, sets keep_alive=0, and admits the model through a 6144 MiB shared scheduler reservation."
       ]
     },
     {

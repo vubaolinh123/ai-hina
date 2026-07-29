@@ -21,6 +21,9 @@
   M08-S20 desktop recovery/chat layout/partial-offload reasoning is a runnable
   candidate; the TTS replacement gate retained OmniVoice because tested public
   alternatives did not beat its Vietnamese owner-reference baseline;
+  M08-S21 adaptive reasoning budgets and M08-S22 Qwen3.5 4B Q8_0 migration are
+  runnable local candidates pending owner application acceptance; the refreshed
+  all-on fast resource gate passed;
   M08 remains active
 - Branch: `main` (fast-development mode)
 - Active slices: M08-S1 perception spine (owner-consented snapshot ingestion,
@@ -44,9 +47,10 @@
   the complete owner-facing Perception workflow into a dedicated page component
   while preserving the existing capture and secret boundaries; M08-S19 isolates
   consecutive images, retires local OCR and makes model VRAM sources explicit;
-  M08-S20 bounds desktop resource-control recovery, fixes the chat viewport,
-  offloads four Qwen text layers to RAM and keeps selective Thinking below the
-  ten-second owner deadline
+  M08-S20 bounds desktop resource-control recovery and fixes the chat viewport;
+  M08-S21 selects bounded viewer/emotional/game budgets on one checkpoint;
+  M08-S22 replaces the retired 8B cache with one full-GPU Qwen3.5 4B Q8_0
+  checkpoint while the independent Vision route remains unchanged
 
 ## Runnable target
 
@@ -882,3 +886,30 @@ provenance before they may replace the pinned checkpoint.
 - Text-brain provider/config tests: 21 pass. Desktop production build and 56
   security/contract tests pass; real Electron startup smoke reports runtime,
   local VRM, resource IPC and transparent widget ready.
+
+## Implemented in M08-S21/S22 (adaptive budgets and Qwen3.5 4B Q8_0)
+
+- The latest user message selects one immutable budget before provider I/O:
+  routine viewer `0/96`, reflective viewer `192/128`, emotional/contextual
+  `256/128`, game analysis `384/160`, and explicit critical multi-step game
+  analysis `512/192` reasoning/output tokens.
+- Every profile uses the same `qwen3.5:4b-q8_0` checkpoint. Private scratchpad
+  text never crosses into emitted tokens, logs, memory, desktop or TTS.
+- The Ollama distribution is pinned at manifest digest
+  `8722f47c2791e6554c3244d2444b433c6241eed92d2093b53ef105626a6dcb36`;
+  its 5,279,282,560-byte Q8_0 blob hashes to
+  `acaad28d51b81c74cae813475866f274730f97e4e687464cdd0ac369ef20032c`.
+- Runtime requests full GPU offload, active context 8,192, one parallel request,
+  `keep_alive=0` unless owner-pinned, and a 6,144 MiB scheduler reservation.
+  Screen image payloads still go only to the separate Cloud/light-local Vision
+  provider.
+- Narrow owner-GPU smoke reported 5,184,558,201 resident model bytes on GPU.
+  Cold fast, emotional and game-analysis turns completed in 6.647, 4.533 and
+  7.533 seconds. The former Qwen3-VL 8B tag and duplicate Qwen3.5 4B Q4 tag were
+  removed only after this smoke passed.
+- Refreshed all-on owner-GPU evidence kept Qwen3.5 Q8_0, Faster-Whisper and
+  OmniVoice resident together. A real text turn completed in 5.313 seconds.
+  A real TTS request returned its first chunk in 1.266 seconds and completed in
+  2.584 seconds. Physical VRAM peaked at 13,990 MiB with 2,006 MiB minimum free
+  and 91% peak GPU utilization. The fast resource gate passed; owner
+  application/quality acceptance is still required before promotion.

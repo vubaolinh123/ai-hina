@@ -1,0 +1,84 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M08-S22-qwen35-4b-q8-runtime-migration",
+  "module_id": "M08",
+  "objective": "Replace the retired Qwen3-VL 8B text-brain runtime with one pinned Qwen3.5 4B Q8_0 checkpoint, preserve M08-S21 adaptive reasoning on that same weight, reclaim unused Ollama model storage, and update the canonical runtime and future offline QLoRA plan without changing the separate Cloud/local Vision boundary.",
+  "non_goals": [
+    "Do not start M09 game control, M10 livestream adapters or M11 training in this slice.",
+    "Do not train or mutate model weights during normal conversation.",
+    "Do not load a second text-brain checkpoint automatically or route text turns to Cloud Vision.",
+    "Do not rewrite historical M08 evidence that accurately records the former 8B baseline."
+  ],
+  "base_sha": "7cb034f",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "packages/text-brain/src/hina_text_brain/config.py",
+    "packages/text-brain/src/hina_text_brain/providers.py",
+    "packages/text-brain/tests/test_config_resource.py",
+    "packages/text-brain/tests/test_providers.py",
+    "apps/core-runtime/tests/test_resource_routes.py",
+    "tools/dev/Start-HinaModelProvider.ps1",
+    "README.md",
+    "ml/models/manifests/",
+    "docs/provenance/",
+    "third_party/code.lock.json",
+    "third_party/THIRD_PARTY_NOTICES.md",
+    "docs/modules/M08-perception.md",
+    "docs/modules/M08-S21-adaptive-conversation-budget-module-brief.json",
+    "docs/modules/M08-S22-qwen35-4b-q8-runtime-migration-module-brief.json",
+    "docs/architecture/hina-conversation-learning.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    ".gitnexus/",
+    ".claude/",
+    "CLAUDE.md",
+    "voice_demo/",
+    "assets/voices/",
+    "assets/avatars/",
+    "var/perception-sessions/",
+    "apps/desktop/dist/",
+    "apps/desktop/dist-electron/"
+  ],
+  "contracts": [
+    "The only default local text checkpoint is qwen3.5:4b-q8_0 at the pinned Ollama manifest digest; Qwen3-VL 8B and the duplicate Qwen3.5 4B Q4 cache are absent after migration.",
+    "Qwen3.5 4B runs with an 8,192-token active context, full GPU offload request, a 6,144 MiB scheduler reservation, keep_alive=0 unless owner-pinned, and the existing ten-second turn deadline.",
+    "M08-S21 keeps ordinary viewer, emotional/contextual and game-analysis token budgets on this same checkpoint; private reasoning is never exposed to logs, memory, desktop or TTS.",
+    "Explicit screen understanding remains on the independently configured Cloud/light local Vision provider and contributes zero text-brain image payloads.",
+    "Future persona learning starts from the post-trained Hugging Face Qwen3.5-4B checkpoint with offline QLoRA SFT plus reviewed DPO/ORPO preference pairs; the Base checkpoint is not the default starting point and GGUF is never trained directly.",
+    "Proactive streamer behavior is planned as an event-driven initiative planner with bounded silence, recap, topic and interruption intents; it is not delegated to an always-proactive system prompt."
+  ],
+  "allowed_dependencies": [
+    "Existing Python standard-library text-brain stack, Ollama loopback runtime and repository documentation/provenance tooling."
+  ],
+  "oss_candidates": [
+    "Qwen3.5-4B — https://huggingface.co/Qwen/Qwen3.5-4B — Apache-2.0 — post-trained runtime and future owner-curated offline QLoRA base."
+  ],
+  "acceptance_criteria": [
+    "The pinned Q8_0 tag is installed, reports Q8_0/4.7B, loads at 8,192 context with all 5,184,558,201 resident model bytes on GPU, and completes fast, emotional and game turns under ten seconds in the narrow local smoke.",
+    "Default config, startup bootstrap, resource status tests, README, provenance, notices and candidate manifests all name qwen3.5:4b-q8_0 and no active runtime path names the retired 8B tag.",
+    "Ollama list contains neither qwen3-vl:8b-thinking-q4_K_M nor the unused qwen3.5:4b Q4 tag after successful Q8 verification.",
+    "M08-S21 adaptive-budget tests, text-brain tests, resource-route tests, module-brief validation and git diff check pass.",
+    "Master Plan records the runtime migration, initiative-planner roadmap, post-trained QLoRA/DPO path, 9B manual benchmark-only policy and rollback-by-repull semantics."
+  ],
+  "required_test_commands": [
+    "uv run --frozen python -c \"import json; from jsonschema import Draft202012Validator; schema=json.load(open('docs/schemas/module-brief.schema.json', encoding='utf-8')); brief=json.load(open('docs/modules/M08-S22-qwen35-4b-q8-runtime-migration-module-brief.json', encoding='utf-8')); Draft202012Validator(schema).validate(brief)\"",
+    "uv run --frozen python -m unittest discover -s packages/text-brain/tests -p \"test_*.py\"",
+    "uv run --frozen python -m unittest apps.core-runtime.tests.test_resource_routes",
+    "powershell -NoProfile -ExecutionPolicy Bypass -File tools/dev/Start-HinaModelProvider.ps1 -StartupCheck",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "text_brain_context_tokens": 8192,
+    "text_response_deadline_seconds": 10,
+    "text_brain_scheduler_reservation_mib": 6144,
+    "physical_vram_ceiling_mib": 15872,
+    "ollama_parallel_requests": 1,
+    "generated_benchmark_media_retained": false
+  },
+  "output_artifact_dir": "artifacts/verification/M08/"
+}

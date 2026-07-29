@@ -19,7 +19,7 @@ class ProviderKind(StrEnum):
 class ModelGatewayConfig:
     provider: ProviderKind = ProviderKind.OLLAMA
     base_url: str = "http://127.0.0.1:11434"
-    model: str = "qwen3-vl:8b-thinking-q4_K_M"
+    model: str = "qwen3.5:4b-q8_0"
     api_key: str | None = None
     health_timeout_seconds: float = 3.0
     warmup_timeout_seconds: float = 45.0
@@ -28,13 +28,13 @@ class ModelGatewayConfig:
     circuit_failure_threshold: int = 3
     circuit_reset_seconds: float = 30.0
     max_output_bytes: int = 1_048_576
-    model_vram_mib: int = 8_192
+    model_vram_mib: int = 6_144
     model_ram_mib: int = 2_048
     context_tokens: int = 8_192
-    # Keep four of Qwen3-VL's 36 text layers in system RAM.  On the owner's
-    # 16 GiB GPU this leaves enough live VRAM for Faster-Whisper and OmniVoice
-    # while preserving the same Q4_K_M weights and 8K context.
-    ollama_gpu_layers: int = 32
+    # Qwen3.5 4B Q8_0 is small enough to request complete GPU offload while
+    # preserving room for Faster-Whisper and OmniVoice on the owner's 16 GiB
+    # GPU. Ollama clamps this sentinel to the model's actual layer count.
+    ollama_gpu_layers: int = 999
     # Persona v4 normally answers in at most 45 words.  A 128-token ceiling
     # leaves room for Vietnamese punctuation while preventing a simple turn
     # from consuming the whole nine-second deadline with unwanted verbosity.
@@ -116,7 +116,7 @@ class ModelGatewayConfig:
         return cls(
             provider=provider,
             base_url=values.get("HINA_MODEL_BASE_URL", "http://127.0.0.1:11434"),
-            model=values.get("HINA_MODEL_NAME", "qwen3-vl:8b-thinking-q4_K_M"),
+            model=values.get("HINA_MODEL_NAME", "qwen3.5:4b-q8_0"),
             api_key=values.get("HINA_MODEL_API_KEY") or None,
             health_timeout_seconds=_env_float(values, "HINA_MODEL_HEALTH_TIMEOUT", 3.0),
             warmup_timeout_seconds=_env_float(values, "HINA_MODEL_WARMUP_TIMEOUT", 45.0),
@@ -124,10 +124,10 @@ class ModelGatewayConfig:
             retry_attempts=_env_int(values, "HINA_MODEL_RETRY_ATTEMPTS", 0),
             circuit_failure_threshold=_env_int(values, "HINA_MODEL_CIRCUIT_THRESHOLD", 3),
             circuit_reset_seconds=_env_float(values, "HINA_MODEL_CIRCUIT_RESET", 30.0),
-            model_vram_mib=_env_int(values, "HINA_MODEL_VRAM_MIB", 8_192),
+            model_vram_mib=_env_int(values, "HINA_MODEL_VRAM_MIB", 6_144),
             model_ram_mib=_env_int(values, "HINA_MODEL_RAM_MIB", 2_048),
             context_tokens=_env_int(values, "HINA_MODEL_CONTEXT_TOKENS", 8_192),
-            ollama_gpu_layers=_env_int(values, "HINA_MODEL_OLLAMA_GPU_LAYERS", 32),
+            ollama_gpu_layers=_env_int(values, "HINA_MODEL_OLLAMA_GPU_LAYERS", 999),
             max_tokens=_env_int(values, "HINA_MODEL_MAX_TOKENS", 128),
             vision_fast_max_tokens=_env_int(
                 values,

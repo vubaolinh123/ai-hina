@@ -1,6 +1,6 @@
 # ADR-0009: Separate screen vision and OS-encrypted Cloud key
 
-- Status: accepted
+- Status: accepted; text-checkpoint detail amended by M08-S22 on 2026-07-29
 - Date: 2026-07-28
 - Owners: primary orchestrator and project owner
 - Scope: M08-S4
@@ -21,8 +21,9 @@ also turn the provider feature into a server-side request primitive.
 
 ## Decision
 
-- The Qwen3-VL 8B Thinking gateway is the text brain only. Simple text uses its
-  same-weight fast path; complex text may use bounded hidden reasoning.
+- The local text gateway owns exactly one checkpoint. The original Qwen3-VL
+  8B choice was superseded by pinned `qwen3.5:4b-q8_0` in M08-S22; fast and
+  bounded hidden-reasoning paths still use that same weight.
 - M08 screen images go through a separate perception provider. Supported
   profiles are fixed-endpoint `https://ollama.com` Cloud and fixed-loopback
   `http://127.0.0.1:11434` local Ollama.

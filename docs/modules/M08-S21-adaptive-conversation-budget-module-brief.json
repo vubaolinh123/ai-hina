@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M08-S21-adaptive-conversation-budget",
+  "module_id": "M08",
+  "objective": "Route ordinary viewer chat, emotional/contextual conversation and important game analysis to bounded per-turn reasoning/output token budgets while using the same already configured Qwen checkpoint and preserving hidden-reasoning, latency, VRAM and TTS-clean output boundaries.",
+  "non_goals": [
+    "Do not load, swap, download or retain a second text model or checkpoint.",
+    "Do not expose hidden reasoning, audience text, prompts or classifier internals through logs, memory, desktop, TTS or public status.",
+    "Do not open livestream adapters, M09 game control or M11 training in this slice."
+  ],
+  "base_sha": "7cb034f",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "packages/text-brain/src/hina_text_brain/providers.py",
+    "packages/text-brain/tests/test_providers.py",
+    "docs/modules/M08-S21-adaptive-conversation-budget-module-brief.json",
+    "docs/modules/M08-perception.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    ".gitnexus/",
+    ".claude/",
+    "CLAUDE.md",
+    "voice_demo/",
+    "assets/voices/",
+    "assets/avatars/",
+    "var/perception-sessions/",
+    "apps/desktop/dist/",
+    "apps/desktop/dist-electron/"
+  ],
+  "contracts": [
+    "Every text turn selects exactly one immutable budget before provider I/O: ordinary viewer chat uses either 0 reasoning plus 96 output tokens or bounded light reasoning up to 192 plus 128 output tokens; emotional/contextual turns use 256 plus 128; game analysis uses 384 plus 160 and only explicitly critical multi-step game analysis may use 512 plus 192.",
+    "All profiles call the same configured model name and preserve one checkpoint between private-reasoning and final-answer passes; the policy never selects another model tag.",
+    "Only the latest user message is classified. System prompt, memory, earlier viewer text, fresh vision evidence and hidden reasoning cannot promote a later simple viewer message into a more expensive profile.",
+    "Private reasoning remains absent from emitted tokens, logs, memory, desktop and TTS. A non-reasoning viewer turn keeps the preclosed-thought path.",
+    "The existing absolute provider deadline, context window, GPU-layer split, scheduler lease and model residency behavior remain unchanged."
+  ],
+  "allowed_dependencies": [
+    "Python standard library and the existing text-brain provider/config/test stack."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "Unit tests assert the exact Ollama num_predict values and request sequence for fast viewer, reflective viewer, emotional/contextual, game-analysis and critical-game examples.",
+    "Tests prove all five examples use the same configured model name, only reasoning profiles perform two generation passes, and no private reasoning is emitted.",
+    "A real local smoke exercises at least one emotional and one game-analysis turn on the current checkpoint and records latency without creating retained raw prompt/audio artifacts.",
+    "Text-brain fast tests and git diff check pass; GitNexus impact precedes symbol edits and detect_changes validates scope before commit."
+  ],
+  "required_test_commands": [
+    "uv run --frozen python -c \"import json; from jsonschema import Draft202012Validator; schema=json.load(open('docs/schemas/module-brief.schema.json', encoding='utf-8')); brief=json.load(open('docs/modules/M08-S21-adaptive-conversation-budget-module-brief.json', encoding='utf-8')); Draft202012Validator(schema).validate(brief)\"",
+    "uv run --frozen python -m unittest packages.text-brain.tests.test_providers",
+    "pnpm test:fast",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "text_brain_context_tokens": 8192,
+    "text_response_deadline_seconds": 10,
+    "physical_vram_ceiling_mib": 15872,
+    "ollama_parallel_requests": 1,
+    "generated_benchmark_media_retained": false
+  },
+  "output_artifact_dir": "artifacts/verification/M08/"
+}

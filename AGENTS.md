@@ -317,6 +317,28 @@ Future style learning phải theo owner-curated offline QLoRA SFT + preference
 pairs trong `docs/architecture/hina-conversation-learning.md`, không online
 self-training từ live/public chat. Fast gate M08-S20: text-brain 21 test,
 desktop production build + 56 test và Electron startup smoke xanh.
+Ngày 2026-07-29 M08-S21 thêm adaptive conversation budget trên đúng một
+checkpoint: viewer thường 0–192 reasoning/96–128 output, cảm xúc/ngữ cảnh
+256/128, game 384–512/160–192; chỉ latest user message chọn profile và hidden
+reasoning không vào log/memory/UI/TTS.
+Ngày 2026-07-29 owner duyệt M08-S22: text brain mặc định chuyển sang pinned
+`qwen3.5:4b-q8_0` Q8_0, Ollama digest
+`8722f47c2791e6554c3244d2444b433c6241eed92d2093b53ef105626a6dcb36`.
+Runtime giữ context 8.192, full-GPU request (`num_gpu=999`), reservation
+6.144 MiB, một checkpoint và deadline 10 giây; explicit screen Vision vẫn tách
+Cloud/light-local. Narrow smoke đo 5.184.558.201 resident bytes trên GPU và
+cold fast/emotional/game 6,647/4,533/7,533 giây. Cache Qwen3-VL 8B cùng bản
+Qwen3.5 4B Q4 dư thừa đã bị xóa sau smoke. Refreshed all-on Brain +
+Faster-Whisper + OmniVoice đạt peak physical 13.990 MiB, minimum free
+2.006 MiB và peak GPU utilization 91%; text turn thật hoàn tất 5,313 giây,
+TTS first chunk 1,266 giây/request 2,584 giây. Fast resource gate xanh nhưng
+vẫn chờ owner application/quality acceptance trước promotion.
+Future M11 dùng post-trained Hugging Face `Qwen/Qwen3.5-4B` frozen làm QLoRA
+SFT base, sau đó DPO/ORPO từ dữ liệu owner-curated. Không train trực tiếp GGUF,
+không mặc định bắt đầu từ raw Base và Qwen3.5-9B chỉ benchmark/fallback thủ công,
+không làm teacher/label source. Proactive streamer behavior phải do bounded
+event-driven initiative planner (`extended_silence`, `recap_due`, `topic_decay`,
+interruption...) phối hợp memory/policy; không chỉ do system prompt ép chủ động.
 
 Legacy AIRI skill paths dưới `D:\ProjectAiri` mặc định ánh xạ sang repository
 hiện tại `D:\ProjectHinaAI`, trừ khi owner chỉ định workspace khác.
@@ -446,7 +468,7 @@ Agent result phải theo `docs/schemas/agent-result.schema.json` và gồm effec
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **ai-hina** (5675 symbols, 10917 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **ai-hina** (5768 symbols, 11044 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
@@ -478,7 +500,9 @@ This project is indexed by GitNexus as **ai-hina** (5675 symbols, 10917 relation
 ## Codex skills
 
 Use the installed `gitnexus:*` Codex skills for exploring, impact analysis,
-debugging, refactoring, review and CLI index maintenance. Do not copy generated
-GitNexus indexes or tool-specific skill caches into product source.
+debugging, refactoring, review and CLI index maintenance. Query/context should
+replace broad repository rereads; impact must precede symbol edits and
+`detect_changes` must precede each commit. Generated `.gitnexus` indexes and
+tool-specific skill caches are not product source artifacts.
 
 <!-- gitnexus:end -->
