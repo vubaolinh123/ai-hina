@@ -347,6 +347,12 @@ type VisionQualityReviewResponse = {
   qualityReview?: VisionQualityReviewStatus;
 };
 
+type VisionQualityResetResponse = {
+  status: "reset";
+  removedSamples: number;
+  qualityReview: VisionQualityReviewStatus;
+};
+
 type VisionModelOption = {
   name: string;
   sizeBytes: number | null;
@@ -554,6 +560,7 @@ type HinaDesktopApi = {
     observationId: string;
     rating: VisionQualityRating;
   }): Promise<VisionQualityReviewResponse>;
+  resetVisionQualitySession(): Promise<VisionQualityResetResponse>;
   clearVisionApiKey(): Promise<{
     apiKeyConfigured: false;
     persisted: false;

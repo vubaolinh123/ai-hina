@@ -43,6 +43,7 @@ const emit = defineEmits<{
   captureSelectedScreenSource: [];
   askHinaAboutLastCapture: [];
   reviewVisionCapture: [rating: VisionQualityRating];
+  resetVisionQualitySession: [];
   discoverVisionModels: [];
   applyVisionProvider: [];
   clearVisionProviderKey: [];
@@ -469,13 +470,22 @@ function formatVisionModelSize(bytes: number | null): string {
           <p class="eyebrow">VISION ACCEPTANCE / PHIÊN HIỆN TẠI</p>
           <h3 id="visionQualityProgressTitle">Tiến độ kiểm tra bằng ảnh thật của bạn</h3>
         </div>
-        <strong>
-          {{
-            visionQualityReview.weightedScorePercent === null
-              ? "Chưa có điểm"
-              : `${visionQualityReview.weightedScorePercent.toFixed(1)}%`
-          }}
-        </strong>
+        <div class="vision-quality-progress-actions">
+          <strong>
+            {{
+              visionQualityReview.weightedScorePercent === null
+                ? "Chưa có điểm"
+                : `${visionQualityReview.weightedScorePercent.toFixed(1)}%`
+            }}
+          </strong>
+          <button
+            type="button"
+            :disabled="visionReviewBusy || visionQualityReview.registeredSamples < 1"
+            @click="emit('resetVisionQualitySession')"
+          >
+            Chấm lại từ đầu
+          </button>
+        </div>
       </div>
       <div
         class="vision-quality-meter"
@@ -505,7 +515,8 @@ function formatVisionModelSize(bytes: number | null): string {
       <small>
         Chỉ tính provider/model hiện tại: {{ visionQualityReview.profile.provider || "chưa cấu hình" }}
         / {{ visionQualityReview.profile.model || "chưa chọn" }}. Bộ đếm nằm trong RAM, tối đa
-        {{ visionQualityReview.capacity }} observation và sẽ reset khi runtime khởi động lại.
+        {{ visionQualityReview.capacity }} observation. “Chấm lại từ đầu” chỉ xóa điểm QA trong
+        RAM của đúng profile này; không đổi provider/model, không xóa archive và luôn hỏi xác nhận.
       </small>
       <section
         v-if="visionCalibration"

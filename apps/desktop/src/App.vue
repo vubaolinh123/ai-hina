@@ -703,6 +703,47 @@ async function reviewLastVisionCapture(rating: VisionQualityRating): Promise<voi
   }
 }
 
+async function resetVisionQualitySession(): Promise<void> {
+  const quality = visionProviderStatus.value?.runtime.qualityReview;
+  if (
+    visionReviewBusy.value
+    || !quality
+    || quality.registeredSamples < 1
+  ) {
+    return;
+  }
+  const profile = [
+    quality.profile.provider || "provider chưa cấu hình",
+    quality.profile.model || "model chưa chọn",
+  ].join(" / ");
+  const confirmed = window.confirm(
+    `Xóa ${quality.registeredSamples} mẫu QA trong RAM của ${profile} và chấm lại từ đầu? Provider, model và ảnh đã lưu trong archive sẽ không bị thay đổi.`,
+  );
+  if (!confirmed) return;
+
+  visionReviewBusy.value = true;
+  visionReviewMessage.value = "Đang bắt đầu lượt chấm Vision mới…";
+  try {
+    const result = await window.hinaDesktop.resetVisionQualitySession();
+    visionReviewRating.value = null;
+    screenCaptureResult.value = null;
+    visionReviewMessage.value = result.removedSamples > 0
+      ? `Đã xóa ${result.removedSamples} mẫu QA trong RAM. Hãy chụp ảnh mới để bắt đầu lượt chấm.`
+      : "Phiên QA hiện tại đã trống; hãy chụp ảnh mới để bắt đầu.";
+    await refreshVisionProviderStatus();
+  } catch (error) {
+    visionReviewMessage.value = error instanceof Error
+      ? error.message
+      : "E_DESKTOP_VISION_QUALITY_RESET";
+    console.error(
+      "[hina-vision-quality-reset] E_DESKTOP_VISION_QUALITY_RESET",
+      visionReviewMessage.value,
+    );
+  } finally {
+    visionReviewBusy.value = false;
+  }
+}
+
 function visionAnalysisErrorCode(
   vision: NonNullable<
     NonNullable<DesktopPerceptionCaptureResult["observation"]>["vision"]
@@ -1386,6 +1427,7 @@ onBeforeUnmount(() => {
       @capture-selected-screen-source="captureSelectedScreenSource"
       @ask-hina-about-last-capture="askHinaAboutLastCapture"
       @review-vision-capture="reviewLastVisionCapture"
+      @reset-vision-quality-session="resetVisionQualitySession"
       @discover-vision-models="discoverVisionModels"
       @apply-vision-provider="applyVisionProvider"
       @clear-vision-provider-key="clearVisionProviderKey"

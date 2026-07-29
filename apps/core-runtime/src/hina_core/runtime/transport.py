@@ -622,6 +622,22 @@ class ControlPlaneServer:
                 source=payload.get("source"),
                 owner_confirmed=payload.get("ownerConfirmed"),
             )
+        if path == "/v1/perception/vision/quality/reset":
+            if (
+                set(payload) != {"action", "source", "ownerConfirmed"}
+                or payload.get("action") != "reset"
+                or payload.get("source") != "owner.desktop"
+                or payload.get("ownerConfirmed") is not True
+            ):
+                raise PrimitiveError(
+                    RuntimeErrorCode.HTTP_BAD_REQUEST,
+                    "Vision scene-QA reset request is invalid",
+                )
+            return await self._perception_call(
+                "reset_vision_quality_session",
+                source="owner.desktop",
+                owner_confirmed=True,
+            )
         if path == "/v1/perception/archive/start":
             if set(payload) != {
                 "action",

@@ -1,0 +1,86 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M08-S26-owner-vision-qa-session-reset",
+  "module_id": "M08",
+  "objective": "Let the owner start a clean Vision scene-QA run for the currently configured provider/model from the desktop Dashboard without restarting Hina, while keeping all ratings bounded, memory-only and incapable of approving promotion.",
+  "non_goals": [
+    "Do not reset another provider/model profile or clear every profile at once.",
+    "Do not persist, export or expose observation IDs, pixels, summaries, prompts, labels, chat text, API keys or per-observation ratings.",
+    "Do not reset automatically when the provider changes, a capture fails or a score is low.",
+    "Do not call a model, Cloud provider or capture API.",
+    "Do not change capture consent, fresh-context TTL, inference, text brain, STT, TTS, archive behavior, confidence thresholds or VRAM budgets."
+  ],
+  "base_sha": "3e9b862150cbc4451af3eca53b9c527eff0ae2b3",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "workers/perception/src/hina_perception/vision_quality.py",
+    "workers/perception/src/hina_perception/service.py",
+    "workers/perception/tests/test_vision_quality.py",
+    "workers/perception/tests/test_perception.py",
+    "apps/core-runtime/src/hina_core/runtime/transport.py",
+    "apps/core-runtime/tests/test_perception_routes.py",
+    "apps/desktop/electron/control-client.ts",
+    "apps/desktop/electron/main.ts",
+    "apps/desktop/electron/preload.ts",
+    "apps/desktop/src/env.d.ts",
+    "apps/desktop/src/App.vue",
+    "apps/desktop/src/dashboard/pages/PerceptionPage.vue",
+    "apps/desktop/src/style.css",
+    "apps/desktop/test/security.test.mjs",
+    "docs/modules/M08-S26-owner-vision-qa-session-reset-module-brief.json",
+    "docs/modules/M08-perception.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    ".gitnexus/",
+    ".claude/",
+    "CLAUDE.md",
+    "docs/research/deep-research-report.md",
+    "voice_demo/",
+    "assets/voices/",
+    "assets/avatars/",
+    "var/perception-sessions/",
+    "apps/desktop/dist/",
+    "apps/desktop/dist-electron/"
+  ],
+  "contracts": [
+    "Reset is available only through the trusted operator window and the runtime route requires the fixed owner.desktop source plus ownerConfirmed=true.",
+    "Reset removes only in-memory scene-QA samples whose provider and model exactly match the active Vision profile; samples for other profiles remain untouched.",
+    "The response exposes only the number removed and the same aggregate quality status; no observation-level record is returned.",
+    "The Dashboard asks for explicit confirmation, clears the renderer's last rating/capture result after success and requires a new capture before another rating.",
+    "Reset never changes the Vision provider, model, confidence threshold, capture archive, feature flag or promotionApproved=false invariant.",
+    "No new model call, persistence, image retention or local VRAM usage is introduced."
+  ],
+  "allowed_dependencies": [
+    "Python standard library, existing Electron/Vue/TypeScript stack and existing repository test tooling."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "Ledger tests prove exact-profile deletion, cross-profile isolation, empty-reset determinism and removal of both rated and unrated samples.",
+    "Service and route tests prove operator-only confirmation, strict fields and aggregate-only reset response.",
+    "Desktop typed IPC exposes a no-argument reset operation; renderer cannot choose source, owner confirmation or target profile.",
+    "Dashboard explains the destructive in-memory-only effect, confirms before reset and disables reset when the active profile has no samples.",
+    "Module-brief validation, perception tests, core route tests, desktop typecheck/build/tests, repository fast tests and git diff check pass."
+  ],
+  "required_test_commands": [
+    "uv run --frozen python -c \"import json; from jsonschema import Draft202012Validator; schema=json.load(open('docs/schemas/module-brief.schema.json', encoding='utf-8')); brief=json.load(open('docs/modules/M08-S26-owner-vision-qa-session-reset-module-brief.json', encoding='utf-8')); Draft202012Validator(schema).validate(brief)\"",
+    "uv run --frozen python -m unittest discover -s workers/perception/tests -p \"test_*.py\"",
+    "uv run --frozen python -m unittest discover -s apps/core-runtime/tests -p \"test_perception_routes.py\"",
+    "pnpm --filter @hina/desktop typecheck",
+    "pnpm --filter @hina/desktop build",
+    "pnpm --filter @hina/desktop test",
+    "pnpm test:fast",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "reset_target": "active-provider-model-only",
+    "additional_model_calls": 0,
+    "additional_local_vram_mib": 0,
+    "raw_artifact_persistence": false
+  },
+  "output_artifact_dir": "artifacts/verification/M08/"
+}

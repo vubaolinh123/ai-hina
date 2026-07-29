@@ -98,6 +98,34 @@ class VisionQualityLedger:
             "replaced": replaced,
         }
 
+    def reset_profile(
+        self,
+        *,
+        provider: str | None,
+        model: str | None,
+    ) -> dict[str, object]:
+        normalized_provider = (
+            _bounded_text(provider, "provider", 64)
+            if provider is not None
+            else None
+        )
+        normalized_model = (
+            _bounded_text(model, "model", 160) if model is not None else None
+        )
+        matching_ids = [
+            observation_id
+            for observation_id, sample in self._samples.items()
+            if (
+                sample.provider == normalized_provider
+                and sample.model == normalized_model
+            )
+        ]
+        for observation_id in matching_ids:
+            del self._samples[observation_id]
+        return {
+            "removedSamples": len(matching_ids),
+        }
+
     def status(
         self,
         *,

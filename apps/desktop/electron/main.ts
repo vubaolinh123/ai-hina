@@ -23,6 +23,7 @@ import {
   requestVisionConfigure,
   requestVisionDisable,
   requestVisionModelDiscovery,
+  requestVisionQualityReset,
   requestVisionReview,
   requestVisionStatus,
   validateVisionApiKey,
@@ -102,6 +103,7 @@ const CHANNELS = Object.freeze({
   visionDiscover: "hina:vision:discover",
   visionConfigure: "hina:vision:configure",
   visionReview: "hina:vision:review",
+  visionQualityReset: "hina:vision:quality:reset",
   visionClearKey: "hina:vision:clear-key",
   resourcesStatus: "hina:resources:status",
   resourcesControl: "hina:resources:control",
@@ -1018,6 +1020,12 @@ function registerIpcHandlers(): void {
       throw new Error("E_DESKTOP_VISION_AUTHORITY: operator window required");
     }
     return requestVisionReview(input);
+  });
+  ipcMain.handle(CHANNELS.visionQualityReset, (event) => {
+    if (assertTrustedSender(event) !== "operator") {
+      throw new Error("E_DESKTOP_VISION_AUTHORITY: operator window required");
+    }
+    return requestVisionQualityReset();
   });
   ipcMain.handle(CHANNELS.visionClearKey, async (event) => {
     if (assertTrustedSender(event) !== "operator") {

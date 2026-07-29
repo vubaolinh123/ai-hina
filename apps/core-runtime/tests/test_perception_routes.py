@@ -358,6 +358,23 @@ class PerceptionRouteTests(unittest.IsolatedAsyncioTestCase):
             50.0,
         )
 
+        reset = await post_json(
+            self.host,
+            self.port,
+            "/v1/perception/vision/quality/reset",
+            {
+                "action": "reset",
+                "source": "owner.desktop",
+                "ownerConfirmed": True,
+            },
+        )
+        self.assertEqual(reset.status, HTTPStatus.OK)
+        self.assertEqual(reset.body["status"], "reset")
+        self.assertEqual(reset.body["removedSamples"], 1)
+        self.assertEqual(reset.body["qualityReview"]["registeredSamples"], 0)
+        self.assertEqual(reset.body["qualityReview"]["ratedSamples"], 0)
+        self.assertNotIn(observation_id, str(reset.body))
+
     async def test_owner_scene_qa_route_rejects_unknown_or_untrusted_review(self) -> None:
         for payload in (
             {
@@ -389,6 +406,38 @@ class PerceptionRouteTests(unittest.IsolatedAsyncioTestCase):
                 rejected.status,
                 {HTTPStatus.BAD_REQUEST, HTTPStatus.FORBIDDEN},
             )
+
+    async def test_owner_scene_qa_reset_route_rejects_non_fixed_payload(self) -> None:
+        for payload in (
+            {
+                "action": "reset",
+                "source": "viewer.chat",
+                "ownerConfirmed": True,
+            },
+            {
+                "action": "reset",
+                "source": "owner.desktop",
+                "ownerConfirmed": False,
+            },
+            {
+                "action": "reset",
+                "source": "owner.desktop",
+                "ownerConfirmed": 1,
+            },
+            {
+                "action": "reset",
+                "source": "owner.desktop",
+                "ownerConfirmed": True,
+                "model": "another-profile",
+            },
+        ):
+            rejected = await post_json(
+                self.host,
+                self.port,
+                "/v1/perception/vision/quality/reset",
+                payload,
+            )
+            self.assertEqual(rejected.status, HTTPStatus.BAD_REQUEST)
 
     async def test_wrong_content_type_and_empty_body_are_rejected(self) -> None:
         await self._enable_perception_flag()

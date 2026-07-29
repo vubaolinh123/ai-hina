@@ -559,6 +559,18 @@ export async function requestVisionReview(raw: unknown): Promise<JsonObject> {
   );
 }
 
+export async function requestVisionQualityReset(): Promise<JsonObject> {
+  return requestPath(
+    "POST",
+    "/v1/perception/vision/quality/reset",
+    {
+      action: "reset",
+      source: "owner.desktop",
+      ownerConfirmed: true,
+    },
+  );
+}
+
 export async function requestChatStart(raw: unknown): Promise<JsonObject> {
   if (!isObject(raw) || Object.keys(raw).some((key) => !["sessionId", "source", "text"].includes(key))
     || Object.keys(raw).length !== 3

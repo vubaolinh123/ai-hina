@@ -362,6 +362,17 @@ chưa chấm không vào calibration math, chấm lại cập nhật tại chỗ
 `diagnosticOnly=true`, `calibrated=false`; đủ 20 mẫu cũng không tự đổi threshold
 0,60 hay promotion. Fast gate: perception 62, `pnpm test:fast` 248, desktop
 typecheck + production build/57 test xanh; không model/Cloud/capture/artifact.
+Ngày 2026-07-29 M08-S26 thêm reset phiên owner Vision scene-QA theo đúng
+provider/model đang active. Renderer chỉ có typed IPC không tham số; Electron
+main bắt buộc operator và tự gắn `owner.desktop` + `ownerConfirmed=true`; route
+loopback kiểm tra exact field/type. Reset chỉ xóa rated/unrated record trong RAM
+của profile hiện tại, giữ profile khác, provider/model, archive, threshold và
+`promotionApproved=false`; response chỉ có aggregate + số mẫu đã xóa. Dashboard
+hỏi xác nhận, disable khi profile trống và xóa last renderer result sau success
+để observation cũ không bị chấm lại. Fast gate: perception 64, route 14,
+`pnpm test:fast` 251, desktop typecheck + production build/57 test xanh; không
+model/Cloud/capture/artifact. Gate ≥85% vẫn chờ owner chấm ít nhất 20 ảnh thật
+đa dạng và duyệt lỗi quan sát.
 Future M11 dùng post-trained Hugging Face `Qwen/Qwen3.5-4B` frozen làm QLoRA
 SFT base, sau đó DPO/ORPO từ dữ liệu owner-curated. Không train trực tiếp GGUF,
 không mặc định bắt đầu từ raw Base và Qwen3.5-9B chỉ benchmark/fallback thủ công,

@@ -1037,3 +1037,39 @@ provenance before they may replace the pinned checkpoint.
 - No model, Cloud request, capture, image, audio, download, benchmark artifact
   or one-off script was created. Real calibration evidence remains owner work
   through the existing Dashboard capture-and-rate flow.
+
+## Implemented in M08-S26 (owner Vision QA session reset)
+
+- Dashboard **Quan sát** now lets the owner start a clean scene-QA run for the
+  active provider/model without restarting Hina. The button is disabled when
+  that profile has no registered samples and shows an explicit confirmation
+  before removing anything.
+- The renderer exposes no reset target or authority fields. A no-argument typed
+  preload IPC reaches an operator-only main-process handler, which posts the
+  fixed `owner.desktop` and `ownerConfirmed=true` request to
+  `POST /v1/perception/vision/quality/reset`.
+- Runtime deletes only rated and unrated samples whose provider and model
+  exactly match the current Vision profile. Other provider/model profiles
+  remain intact. Empty reset is deterministic and reports zero removed samples.
+- The response contains only `removedSamples` and the existing aggregate
+  quality status. It never returns observation IDs, pixels, summaries, prompts,
+  labels, chat, API keys, corrections or individual ratings.
+- After success, Desktop clears the last renderer-side rating and semantic
+  capture result so an observation removed from the ledger cannot be rated
+  again accidentally. Provider/model configuration, confidence threshold,
+  feature flag, capture archive and `promotionApproved=false` are unchanged.
+- This slice adds no model/Cloud/capture call, persistence or local VRAM.
+
+## Fast evidence M08-S26 (owner machine)
+
+- Perception worker: 64 tests pass, including exact-profile reset, cross-profile
+  isolation, rated/unrated removal, idempotence and owner-only service checks.
+- Core perception routes: 14 tests pass, including exact field/type validation;
+  numeric `1` is not accepted as the boolean owner confirmation.
+- `pnpm test:fast`: 251 tests pass across Safety, Text brain, Memory, Avatar,
+  Speech, Perception and Core Runtime.
+- Desktop: typecheck pass; production build + 57 tests pass, including fixed
+  no-argument reset IPC, operator authority and non-persistence UI copy.
+- No model, Cloud request, capture, image, audio, download, benchmark artifact
+  or one-off script was created. The ≥85% gate remains open until the owner
+  runs and accepts a sufficiently varied 20-image session.

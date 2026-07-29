@@ -286,8 +286,12 @@ test("full-frame screen capture stays in Electron main behind one-use grants", (
   assert.match(renderer, /không được đưa vào Chat, memory, TTS hay quyết định game/);
   assert.match(main, /CHANNELS\.visionReview/);
   assert.match(main, /requestVisionReview/);
+  assert.match(main, /CHANNELS\.visionQualityReset/);
+  assert.match(main, /requestVisionQualityReset/);
   assert.match(preload, /reviewVisionObservation:/);
+  assert.match(preload, /resetVisionQualitySession:/);
   assert.match(client, /\/v1\/perception\/vision\/reviews/);
+  assert.match(client, /\/v1\/perception\/vision\/quality\/reset/);
   assert.match(client, /source:\s*"owner\.desktop"/);
   assert.match(client, /ownerConfirmed:\s*true/);
   assert.match(renderer, /OWNER SCENE QA/);
@@ -295,6 +299,9 @@ test("full-frame screen capture stays in Electron main behind one-use grants", (
   assert.match(renderer, /không tự đổi ngưỡng 0,60/);
   assert.match(renderer, /không mở quyền điều khiển game/);
   assert.match(renderer, /reviewLastVisionCapture/);
+  assert.match(renderer, /resetVisionQualitySession/);
+  assert.match(renderer, /Chấm lại từ đầu/);
+  assert.match(renderer, /window\.confirm/);
   assert.match(renderer, /không lưu ảnh hay nội dung mô tả/);
   assert.match(renderer, /Chụp toàn bộ nguồn đã chọn và gửi Hina/);
   assert.doesNotMatch(renderer, /getDisplayMedia|desktopCapturer|sourceId/);

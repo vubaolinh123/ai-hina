@@ -560,6 +560,52 @@ class PerceptionService:
             ),
         }
 
+    async def reset_vision_quality_session(
+        self,
+        *,
+        source: str,
+        owner_confirmed: bool,
+    ) -> dict[str, Any]:
+        if source != "owner.desktop":
+            raise PerceptionError(
+                "E_PERCEPTION_CONFIRMATION",
+                "Vision scene-QA reset is available only from the owner desktop",
+            )
+        if owner_confirmed is not True:
+            raise PerceptionError(
+                "E_PERCEPTION_CONFIRMATION",
+                "Vision scene-QA reset requires explicit owner confirmation",
+            )
+        if self._closed:
+            raise PerceptionError(
+                "E_PERCEPTION_UNAVAILABLE",
+                "perception service is closed",
+                retryable=True,
+            )
+        vision_status = await self._vision_status()
+        provider = (
+            vision_status.get("provider")
+            if isinstance(vision_status.get("provider"), str)
+            else None
+        )
+        model = (
+            vision_status.get("model")
+            if isinstance(vision_status.get("model"), str)
+            else None
+        )
+        reset = self._vision_quality.reset_profile(
+            provider=provider,
+            model=model,
+        )
+        return {
+            "status": "reset",
+            **reset,
+            "qualityReview": self._vision_quality.status(
+                provider=provider,
+                model=model,
+            ),
+        }
+
     async def fresh_context_for_turn(
         self,
         session_id: str,

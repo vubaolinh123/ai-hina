@@ -613,6 +613,69 @@ class ServiceTests(unittest.TestCase):
                 )
             )
 
+    def test_owner_can_reset_only_current_scene_qa_profile(self) -> None:
+        summary = "Cửa sổ game có nhân vật và thanh trạng thái."
+
+        async def analyze(_image: bytes, _prompt: str) -> str:
+            return summary
+
+        service = _service(
+            _RecordingEvaluate("allow"),
+            vision_analyze=analyze,
+        )
+        result = asyncio.run(
+            service.ingest_snapshot(
+                encode_png(gradient()),
+                correlation_id=CORRELATION,
+                session_id=SESSION,
+                source="owner.desktop",
+                analyze_with_vlm=True,
+            )
+        )
+        observation_id = result["observation"]["observationId"]
+        asyncio.run(
+            service.review_vision_observation(
+                observation_id=observation_id,
+                rating="correct",
+                source="owner.desktop",
+                owner_confirmed=True,
+            )
+        )
+
+        reset = asyncio.run(
+            service.reset_vision_quality_session(
+                source="owner.desktop",
+                owner_confirmed=True,
+            )
+        )
+
+        self.assertEqual(reset["status"], "reset")
+        self.assertEqual(reset["removedSamples"], 1)
+        self.assertEqual(reset["qualityReview"]["registeredSamples"], 0)
+        self.assertEqual(reset["qualityReview"]["ratedSamples"], 0)
+        self.assertNotIn(observation_id, str(reset))
+        self.assertNotIn(summary, str(reset))
+        with self.assertRaises(PerceptionError):
+            asyncio.run(
+                service.review_vision_observation(
+                    observation_id=observation_id,
+                    rating="correct",
+                    source="owner.desktop",
+                    owner_confirmed=True,
+                )
+            )
+        for source, owner_confirmed in (
+            ("viewer.chat", True),
+            ("owner.desktop", False),
+        ):
+            with self.assertRaises(PerceptionError):
+                asyncio.run(
+                    service.reset_vision_quality_session(
+                        source=source,
+                        owner_confirmed=owner_confirmed,
+                    )
+                )
+
     def test_fresh_chat_context_is_semantic_same_session_owner_only_and_expires(self) -> None:
         clock = FakeClock()
 

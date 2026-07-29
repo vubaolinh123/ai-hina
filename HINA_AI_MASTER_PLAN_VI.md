@@ -1611,6 +1611,17 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
   `0,60` or approve promotion. Fast evidence passes 62 perception tests, 248
   repository fast tests and desktop typecheck plus production build/57 tests
   without any model, Cloud or capture call.
+- M08-S26 owner Vision QA session reset (2026-07-29): Dashboard can start a
+  clean 20-image scene-QA run for the active provider/model without restarting
+  Hina. A no-argument typed preload IPC reaches an operator-only handler and a
+  strict fixed loopback route; renderer input cannot select another profile or
+  supply authority fields. Reset removes only matching in-memory rated/unrated
+  samples, keeps other profiles and every provider/model/archive/threshold
+  setting, then clears the renderer's last result so an erased observation
+  cannot be rated again. Response remains aggregate-only and promotion remains
+  false. Fast evidence passes 64 perception tests, 14 route tests, 251
+  repository fast tests and desktop typecheck plus production build/57 tests;
+  no model, Cloud or capture call was made.
 
 ### Test matrix
 

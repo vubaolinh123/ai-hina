@@ -102,6 +102,54 @@ class VisionQualityLedgerTests(unittest.TestCase):
             1,
         )
 
+    def test_reset_profile_removes_only_exact_profile_and_is_idempotent(self) -> None:
+        ledger = VisionQualityLedger()
+        cloud_rated = str(uuid4())
+        cloud_unrated = str(uuid4())
+        local = str(uuid4())
+        for observation_id, provider, model in (
+            (cloud_rated, "ollama_cloud", "vision-a"),
+            (cloud_unrated, "ollama_cloud", "vision-a"),
+            (local, "ollama_local", "vision-a"),
+        ):
+            ledger.register(
+                observation_id,
+                provider=provider,
+                model=model,
+                state="ready",
+                confidence=0.8,
+            )
+        ledger.review(cloud_rated, "correct")
+        ledger.review(local, "partial")
+
+        reset = ledger.reset_profile(
+            provider="ollama_cloud",
+            model="vision-a",
+        )
+
+        self.assertEqual(reset, {"removedSamples": 2})
+        self.assertNotIn(cloud_rated, str(reset))
+        cloud_status = ledger.status(
+            provider="ollama_cloud",
+            model="vision-a",
+        )
+        self.assertEqual(cloud_status["registeredSamples"], 0)
+        self.assertEqual(cloud_status["ratedSamples"], 0)
+        local_status = ledger.status(
+            provider="ollama_local",
+            model="vision-a",
+        )
+        self.assertEqual(local_status["registeredSamples"], 1)
+        self.assertEqual(local_status["ratedSamples"], 1)
+        self.assertEqual(local_status["allProfilesRegisteredSamples"], 1)
+        self.assertEqual(
+            ledger.reset_profile(
+                provider="ollama_cloud",
+                model="vision-a",
+            ),
+            {"removedSamples": 0},
+        )
+
     def test_calibration_diagnostics_use_only_rated_current_profile_samples(self) -> None:
         ledger = VisionQualityLedger()
         samples = [
