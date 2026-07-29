@@ -1073,3 +1073,34 @@ provenance before they may replace the pinned checkpoint.
 - No model, Cloud request, capture, image, audio, download, benchmark artifact
   or one-off script was created. The ≥85% gate remains open until the owner
   runs and accepts a sufficiently varied 20-image session.
+
+## Implemented in M08-S27 (stale/historical replay freshness gate)
+
+- A deterministic service-level regression now creates one owner archive,
+  writes one PNG inside a temporary directory, explicitly stops the archive and
+  clears the live freshness ledger before replay begins.
+- The same stopped snapshot is reanalyzed 200 times through the real
+  `reanalyze_archive` service boundary with a fake deterministic Vision
+  callback. Every result must remain `historical=true`,
+  `currentObservation=false` and `decisionSupportEligible=false`.
+- After all 200 replays, both the current-observation list and same-session
+  owner fresh-chat context must remain empty. This closes the M08 deterministic
+  gate at 0 false current claims out of 200 stopped/historical replay cases.
+- The existing exact TTL test still covers T−ε, T and T+ε with monotonic time:
+  an observation is available immediately before 15 seconds and is removed
+  exactly at or after the deadline.
+- `TemporaryDirectory` removes the single test PNG automatically. No real
+  model, Cloud provider, desktop capture, replay output or evidence artifact is
+  retained.
+
+## Fast evidence M08-S27 (owner machine)
+
+- Perception worker: 65 tests pass in 0.249 seconds; the 200-case replay adds
+  about 0.13 seconds over the preceding focused run.
+- `pnpm test:fast`: 252 tests pass in 16.9 seconds across Safety, Text brain,
+  Memory, Avatar, Speech, Perception and Core Runtime.
+- No production runtime code, provider behavior, VRAM reservation, archive
+  retention or UI contract changed.
+- The owner Vision accuracy/diversity gate remains open: this replay result
+  proves freshness isolation, not that the model understands real scenes at
+  ≥85%.

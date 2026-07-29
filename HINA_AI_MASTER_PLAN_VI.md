@@ -1622,6 +1622,14 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
   false. Fast evidence passes 64 perception tests, 14 route tests, 251
   repository fast tests and desktop typecheck plus production build/57 tests;
   no model, Cloud or capture call was made.
+- M08-S27 stale/historical replay freshness gate (2026-07-29): one temporary
+  owner archive is stopped and the live ledger is cleared before its snapshot
+  is reanalyzed 200 times through the real service boundary. All 200 results
+  remain historical, non-current and ineligible for decision support; current
+  observations and same-session fresh chat context remain empty. Together with
+  the existing T−ε/T/T+ε monotonic TTL test, this closes the deterministic
+  0-false-current-claim gate without a real model/Cloud/capture call or retained
+  artifact. Perception 65 and repository fast suite 252 tests pass.
 
 ### Test matrix
 
@@ -1638,6 +1646,8 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
 - Default screen `Observation` TTL = 15 giây; từng type có exact max TTL trong schema; expiry nội bộ dùng monotonic elapsed time.
 - Test T−ε, T và T+ε; expired observation bị loại 100%.
 - 0 stale/current false claim trên ≥200 historical/stopped-capture replay cases.
+  M08-S27 đã đạt 0/200 trên replay deterministic sau khi archive dừng và live
+  ledger bị clear; owner accuracy/diversity scene-QA vẫn là gate riêng.
 - Local OCR không còn là release gate. Cloud/local Vision phải mô tả đúng nội
   dung đáng chú ý và chữ quan trọng trên bộ ảnh owner acceptance, không trộn ảnh
   trước vào ảnh hiện tại.

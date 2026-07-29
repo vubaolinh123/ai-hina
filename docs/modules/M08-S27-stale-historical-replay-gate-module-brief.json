@@ -1,0 +1,69 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M08-S27-stale-historical-replay-gate",
+  "module_id": "M08",
+  "objective": "Close the deterministic M08 freshness gate with at least 200 replay attempts against a stopped capture archive, proving that historical Vision analysis never becomes a current observation, fresh chat context or decision-support input.",
+  "non_goals": [
+    "Do not run a real Vision model, Cloud request, desktop capture, GPU benchmark, repeated workflow or soak test.",
+    "Do not change the 15-second TTL, archive retention, owner consent, provider/model configuration, confidence threshold or VRAM budgets.",
+    "Do not persist replay output, screenshots, summaries, logs or verification artifacts.",
+    "Do not claim the owner scene-QA accuracy gate, diversity acceptance or Companion Gate B."
+  ],
+  "base_sha": "4b2a05b0726260f6b8b1d11fb3fed02270d1f741",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "workers/perception/tests/test_perception.py",
+    "docs/modules/M08-S27-stale-historical-replay-gate-module-brief.json",
+    "docs/modules/M08-perception.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    ".gitnexus/",
+    ".claude/",
+    "CLAUDE.md",
+    "docs/research/deep-research-report.md",
+    "voice_demo/",
+    "assets/voices/",
+    "assets/avatars/",
+    "var/perception-sessions/",
+    "apps/desktop/dist/",
+    "apps/desktop/dist-electron/"
+  ],
+  "contracts": [
+    "The test uses one temporary owner archive and one deterministic fake Vision analyzer; it never calls a real model, Cloud provider or desktop capture API.",
+    "The archive is explicitly stopped and the live freshness ledger is explicitly cleared before any historical replay begins.",
+    "Every one of at least 200 reanalysis results must remain historical=true, currentObservation=false and decisionSupportEligible=false.",
+    "After every replay batch, current observations and owner chat fresh context remain empty.",
+    "The existing exact TTL boundary test at T-epsilon, T and T+epsilon remains part of the same fast suite.",
+    "Temporary PNG data is contained by TemporaryDirectory and no raw replay artifact survives the test."
+  ],
+  "allowed_dependencies": [
+    "Python standard library and existing repository test tooling."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "A deterministic test executes at least 200 historical reanalyses after archive stop and live-ledger clear.",
+    "Zero replay result claims to be current or decision-support eligible.",
+    "Zero replay result appears in the fresh observation route or same-session owner chat context.",
+    "Perception tests and repository fast tests pass without materially increasing runtime.",
+    "Module-brief validation, GitNexus change scan and git diff check pass."
+  ],
+  "required_test_commands": [
+    "uv run --frozen python -c \"import json; from jsonschema import Draft202012Validator; schema=json.load(open('docs/schemas/module-brief.schema.json', encoding='utf-8')); brief=json.load(open('docs/modules/M08-S27-stale-historical-replay-gate-module-brief.json', encoding='utf-8')); Draft202012Validator(schema).validate(brief)\"",
+    "uv run --frozen python -m unittest discover -s workers/perception/tests -p \"test_*.py\"",
+    "pnpm test:fast",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "minimum_replay_cases": 200,
+    "allowed_false_current_claims": 0,
+    "additional_model_calls": 0,
+    "additional_local_vram_mib": 0,
+    "raw_artifact_persistence": false
+  },
+  "output_artifact_dir": "artifacts/verification/M08/"
+}

@@ -373,6 +373,14 @@ hỏi xác nhận, disable khi profile trống và xóa last renderer result sau
 `pnpm test:fast` 251, desktop typecheck + production build/57 test xanh; không
 model/Cloud/capture/artifact. Gate ≥85% vẫn chờ owner chấm ít nhất 20 ảnh thật
 đa dạng và duyệt lỗi quan sát.
+Ngày 2026-07-29 M08-S27 đóng deterministic stale/historical replay gate:
+test tạo một owner archive tạm, ghi một PNG, stop archive và clear live ledger
+trước khi reanalyze cùng snapshot 200 lần qua service boundary. Kết quả 0/200
+false current claim: mọi response đều `historical=true`,
+`currentObservation=false`, `decisionSupportEligible=false`; observations và
+fresh owner chat context luôn rỗng. Exact TTL T−ε/T/T+ε vẫn xanh. Perception 65,
+`pnpm test:fast` 252; không đổi production code, không model/Cloud/capture thật
+và TemporaryDirectory không giữ artifact. Scene-QA ≥85% vẫn chờ owner.
 Future M11 dùng post-trained Hugging Face `Qwen/Qwen3.5-4B` frozen làm QLoRA
 SFT base, sau đó DPO/ORPO từ dữ liệu owner-curated. Không train trực tiếp GGUF,
 không mặc định bắt đầu từ raw Base và Qwen3.5-9B chỉ benchmark/fallback thủ công,

@@ -965,6 +965,76 @@ class ServiceTests(unittest.TestCase):
             self.assertEqual(asyncio.run(service.observations())["count"], 0)
             asyncio.run(service.close())
 
+    def test_two_hundred_stopped_archive_replays_never_claim_current(self) -> None:
+        replay_count = 200
+        analyze_calls = 0
+
+        async def analyze(_image: bytes, _prompt: str) -> str:
+            nonlocal analyze_calls
+            analyze_calls += 1
+            return "Ảnh lịch sử có một giao diện trò chơi và thanh trạng thái."
+
+        async def scenario(root: Path) -> None:
+            service = _service(
+                _RecordingEvaluate("allow"),
+                config=PerceptionConfig(
+                    archive_root=root / "perception-sessions",
+                ),
+                vision_analyze=analyze,
+            )
+            started = await service.start_archive(
+                correlation_id=CORRELATION,
+                session_id=SESSION,
+                source="owner.console",
+                owner_confirmed=True,
+            )
+            archive_session_id = started["archive"]["archiveSessionId"]
+            observed = await service.ingest_snapshot(
+                encode_png(gradient()),
+                correlation_id=CORRELATION,
+                session_id=SESSION,
+                source="owner.console",
+                owner_confirmed=True,
+                archive_session_id=archive_session_id,
+            )
+            snapshot_id = observed["archive"]["snapshotId"]
+            stopped = await service.stop_archive(
+                session_id=SESSION,
+                archive_session_id=archive_session_id,
+                source="owner.console",
+            )
+            self.assertFalse(stopped["archive"]["active"])
+            await service.clear(source="owner.console")
+
+            for _ in range(replay_count):
+                historical = await service.reanalyze_archive(
+                    correlation_id=CORRELATION,
+                    session_id=SESSION,
+                    archive_session_id=archive_session_id,
+                    snapshot_id=snapshot_id,
+                    source="owner.console",
+                    owner_confirmed=True,
+                    vision_question="Mô tả ảnh lịch sử này.",
+                )
+                self.assertTrue(historical["historical"])
+                self.assertFalse(historical["currentObservation"])
+                self.assertFalse(historical["decisionSupportEligible"])
+                self.assertEqual(historical["vision"]["state"], "ready")
+
+            self.assertEqual((await service.observations())["count"], 0)
+            self.assertEqual(
+                await service.fresh_context_for_turn(
+                    SESSION,
+                    source="owner.console",
+                ),
+                (),
+            )
+            await service.close()
+
+        with tempfile.TemporaryDirectory() as directory:
+            asyncio.run(scenario(Path(directory).resolve()))
+        self.assertEqual(analyze_calls, replay_count)
+
     def test_rate_limit_rejects_after_budget(self) -> None:
         clock = FakeClock()
         config = PerceptionConfig(rate_limit_per_minute=2, dedup_hamming_threshold=0)
