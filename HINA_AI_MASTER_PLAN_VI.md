@@ -1650,6 +1650,15 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
   typecheck, production build/58 tests and repository fast suite 253 pass
   without real capture/model/Cloud/VRAM or retained artifact; owner ≥85%
   scene-QA remains open.
+- M08-S30 VLM burst/resource-pressure gate (2026-07-29): local Ollama Vision
+  remains serialized across admission, bounded recovery and release. A
+  deterministic 32-request burst proves peak active `/api/chat` concurrency is
+  one and each transient scheduler lease is released exactly once. Scheduler
+  capacity denial and lease expiry now map to retryable
+  `E_PERCEPTION_VISION_CAPACITY` before any model call, with no CPU fallback.
+  Perception 68 and repository fast suite 256 tests pass without a real model,
+  Cloud request, capture, GPU allocation or retained artifact. This closes the
+  deterministic burst row; owner ≥85% varied scene-QA remains the open M08 gate.
 
 ### Test matrix
 

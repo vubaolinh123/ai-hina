@@ -1171,3 +1171,33 @@ provenance before they may replace the pinned checkpoint.
   dependency or retained test artifact is involved.
 - This closes the deterministic worker/drop failure path but does not replace
   the owner Vision ≥85% scene-accuracy/diversity acceptance run.
+
+## Implemented in M08-S30 (VLM burst/resource-pressure gate)
+
+- Local Ollama Vision still owns one provider-level inference lock across
+  scheduler admission, both bounded recovery attempts and transient lease
+  release. A deterministic 32-request burst now proves the provider never has
+  more than one active `/api/chat` call.
+- A transient lease is asserted active before any model request, asserted again
+  after each response and released exactly once in all successful burst cases.
+  The test completes all 32 tasks and retains no request queue or raw image
+  artifact.
+- Scheduler admission denial (`E_RESOURCE_CAPACITY`) and an already-expired
+  acquired lease (`E_RESOURCE_LEASE_EXPIRED`) are translated to the stable,
+  retryable `E_PERCEPTION_VISION_CAPACITY` boundary. Both paths stop before
+  `/api/chat`; there is no CPU fallback.
+- Cloud behavior, operator-pinned force-load semantics, model choice, context,
+  scheduler priority, VRAM reservation and the 15.5 GiB admission ceiling are
+  unchanged.
+
+## Fast evidence M08-S30 (owner machine)
+
+- Perception worker: 68 tests pass in 0.264 seconds, including the concurrent
+  32-request burst, scheduler-denial and expired-lease cases.
+- `pnpm test:fast`: 256 tests pass in 17.5 seconds across Safety, Text brain,
+  Memory, Avatar, Speech, Perception and Core Runtime.
+- No real model, Cloud request, desktop capture, GPU allocation, dependency,
+  image/audio file or retained test artifact is involved.
+- This closes the deterministic VLM-burst/resource-pressure row. The owner
+  Vision ≥85% scene-accuracy/diversity gate remains open and still blocks M08
+  promotion.

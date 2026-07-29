@@ -1,0 +1,73 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M08-S30-vlm-burst-resource-pressure",
+  "module_id": "M08",
+  "objective": "Close the M08 local-Vision burst and resource-pressure gate by proving concurrent explicit analyses remain serialized, every transient scheduler lease is released exactly once, and scheduler admission or lease-expiry failures become a stable retryable Vision capacity error without invoking Ollama or falling back to CPU.",
+  "non_goals": [
+    "Do not run a real Vision model, Cloud request, GPU benchmark, desktop capture, repeated workflow or soak test.",
+    "Do not change scheduler priority, the 15.5 GiB admission ceiling, model selection, quantization, context length or VRAM reservations.",
+    "Do not add CPU fallback, parallel local inference, automatic capture, persistence or another dependency.",
+    "Do not change owner force-load behavior or the shared resource scheduler implementation.",
+    "Do not open M09 or claim the owner scene-QA accuracy/diversity gate."
+  ],
+  "base_sha": "2a350e5dfe1ec5a6feee963957001fdcd71ec1de",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "workers/perception/src/hina_perception/vision.py",
+    "workers/perception/tests/test_vision_provider.py",
+    "docs/modules/M08-S30-vlm-burst-resource-pressure-module-brief.json",
+    "docs/modules/M08-perception.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    ".gitnexus/",
+    ".claude/",
+    "CLAUDE.md",
+    "docs/research/deep-research-report.md",
+    "voice_demo/",
+    "assets/voices/",
+    "assets/avatars/",
+    "var/perception-sessions/",
+    "apps/desktop/dist/",
+    "apps/desktop/dist-electron/"
+  ],
+  "contracts": [
+    "At most one local Ollama /api/chat request is active per provider even when 32 owner-confirmed analyses arrive concurrently.",
+    "Every successful transient local analysis owns exactly one scheduler lease and releases it exactly once after success or failure.",
+    "Scheduler E_RESOURCE_CAPACITY and E_RESOURCE_LEASE_EXPIRED failures are exposed as retryable E_PERCEPTION_VISION_CAPACITY.",
+    "A scheduler denial before inference sends no /api/chat request and cannot trigger CPU inference.",
+    "The existing operator-pinned lease, Cloud provider behavior, bounded recovery and unload synchronization remain unchanged.",
+    "The burst test retains no image, model, GPU, audio or benchmark artifact."
+  ],
+  "allowed_dependencies": [
+    "Python standard library and existing repository test tooling."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "A deterministic 32-request local burst test reports peak active /api/chat concurrency of exactly one and 32 successful results.",
+    "The burst test observes exactly 32 transient leases, each asserted active and released exactly once.",
+    "Capacity-denial and lease-expiry tests receive retryable E_PERCEPTION_VISION_CAPACITY and observe zero /api/chat calls.",
+    "All perception worker tests and repository fast tests pass.",
+    "Module-brief validation, GitNexus change scan and git diff check pass."
+  ],
+  "required_test_commands": [
+    "uv run --frozen python -c \"import json; from jsonschema import Draft202012Validator; schema=json.load(open('docs/schemas/module-brief.schema.json', encoding='utf-8')); brief=json.load(open('docs/modules/M08-S30-vlm-burst-resource-pressure-module-brief.json', encoding='utf-8')); Draft202012Validator(schema).validate(brief)\"",
+    "uv run --frozen python -m unittest discover -s workers/perception/tests -p \"test_*.py\"",
+    "pnpm test:fast",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "concurrent_test_requests": 32,
+    "maximum_active_local_inferences": 1,
+    "maximum_transient_leases_per_request": 1,
+    "maximum_lease_releases_per_request": 1,
+    "allowed_chat_calls_after_scheduler_denial": 0,
+    "additional_local_vram_mib": 0,
+    "raw_artifact_persistence": false
+  },
+  "output_artifact_dir": "artifacts/verification/M08/"
+}

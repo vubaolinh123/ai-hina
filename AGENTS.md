@@ -397,6 +397,13 @@ chat context; clear fail thì abort trước OS capture. Operation chỉ ở mai
 process, không lộ preload/renderer. Desktop typecheck/build + 58 tests và
 `pnpm test:fast` 253 xanh; không real capture/model/Cloud/VRAM/artifact.
 Scene-QA ≥85% vẫn chờ owner.
+Ngày 2026-07-29 M08-S30 đóng deterministic VLM burst/resource-pressure gate.
+Local Ollama Vision vẫn serialize admission/inference/recovery/release; burst 32
+request có peak active `/api/chat` bằng 1 và mỗi transient lease release đúng
+một lần. `E_RESOURCE_CAPACITY` hoặc `E_RESOURCE_LEASE_EXPIRED` được map thành
+retryable `E_PERCEPTION_VISION_CAPACITY` trước model call, không CPU fallback.
+Perception 68 và `pnpm test:fast` 256 xanh; không real model/Cloud/capture/GPU/
+artifact. Scene-QA ≥85% vẫn là gate owner cần chấm.
 Future M11 dùng post-trained Hugging Face `Qwen/Qwen3.5-4B` frozen làm QLoRA
 SFT base, sau đó DPO/ORPO từ dữ liệu owner-curated. Không train trực tiếp GGUF,
 không mặc định bắt đầu từ raw Base và Qwen3.5-9B chỉ benchmark/fallback thủ công,

@@ -135,6 +135,50 @@ RequestJson = Callable[
     [str, str, dict[str, object] | None, str | None, float, int],
     Awaitable[dict[str, Any]],
 ]
+_RESOURCE_PRESSURE_CODES = frozenset(
+    {
+        "E_RESOURCE_CAPACITY",
+        "E_RESOURCE_LEASE_EXPIRED",
+    }
+)
+
+
+def _vision_capacity_error(exc: Exception) -> PerceptionError | None:
+    if getattr(exc, "code", None) not in _RESOURCE_PRESSURE_CODES:
+        return None
+    return PerceptionError(
+        "E_PERCEPTION_VISION_CAPACITY",
+        "local vision scheduler has insufficient GPU capacity",
+        retryable=True,
+    )
+
+
+def _assert_vision_lease_active(lease: VisionLease) -> None:
+    try:
+        lease.assert_active()
+    except Exception as exc:
+        translated = _vision_capacity_error(exc)
+        if translated is not None:
+            raise translated from exc
+        raise
+
+
+async def _acquire_vision_lease(
+    factory: VisionLeaseFactory,
+    unload: Callable[[], Awaitable[None]],
+) -> VisionLease:
+    lease: VisionLease | None = None
+    try:
+        lease = await factory(unload)
+        _assert_vision_lease_active(lease)
+        return lease
+    except Exception as exc:
+        if lease is not None:
+            await lease.release()
+        translated = _vision_capacity_error(exc)
+        if translated is not None:
+            raise translated from exc
+        raise
 
 
 class OllamaVisionProvider:
@@ -451,12 +495,15 @@ class OllamaVisionProvider:
                     async with self._operator_condition:
                         operator = self._operator_lease
                         if operator is not None and getattr(operator, "state", "active") == "active":
-                            operator.assert_active()
+                            _assert_vision_lease_active(operator)
                             self._operator_users += 1
                             lease = operator
                             borrowed_operator = True
                     if lease is None:
-                        lease = await self._acquire_local_lease(self.unload)
+                        lease = await _acquire_vision_lease(
+                            self._acquire_local_lease,
+                            self.unload,
+                        )
                 for attempt_index, (attempt_prompt, token_limit) in enumerate(attempts):
                     body = _chat_body(
                         kind=kind,
@@ -476,7 +523,7 @@ class OllamaVisionProvider:
                         self.config.max_response_bytes,
                     )
                     if lease is not None:
-                        lease.assert_active()
+                        _assert_vision_lease_active(lease)
                     text, exhausted = _final_content(result, token_limit)
                     # Some Ollama Cloud models mark a response as ``length``
                     # exactly at the configured boundary even after emitting a

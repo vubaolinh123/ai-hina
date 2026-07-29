@@ -213,6 +213,61 @@ class _Lease:
         return True
 
 
+class _ResourcePressureError(Exception):
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
+
+
+class _ExpiredLease(_Lease):
+    def assert_active(self) -> None:
+        self.assert_count += 1
+        raise _ResourcePressureError("E_RESOURCE_LEASE_EXPIRED")
+
+
+class _BurstLocalChatOllama(_FakeOllama):
+    def __init__(self) -> None:
+        super().__init__()
+        self.active_chats = 0
+        self.peak_active_chats = 0
+
+    async def request(
+        self,
+        method: str,
+        url: str,
+        payload: dict[str, object] | None,
+        api_key: str | None,
+        timeout: float,
+        max_bytes: int,
+    ) -> dict[str, Any]:
+        if not url.endswith("/api/chat"):
+            return await super().request(
+                method,
+                url,
+                payload,
+                api_key,
+                timeout,
+                max_bytes,
+            )
+        self.calls.append(
+            {
+                "method": method,
+                "url": url,
+                "payload": payload,
+                "apiKey": api_key,
+                "timeout": timeout,
+                "maxBytes": max_bytes,
+            }
+        )
+        self.active_chats += 1
+        self.peak_active_chats = max(self.peak_active_chats, self.active_chats)
+        try:
+            await asyncio.sleep(0)
+            return {"message": {"content": "Ảnh hiển thị một cửa sổ game."}}
+        finally:
+            self.active_chats -= 1
+
+
 class _AuthFailureOllama(_FakeOllama):
     async def request(
         self,
@@ -627,8 +682,125 @@ class OllamaVisionProviderTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(result, "Ảnh hiển thị menu trò chơi.")
         self.assertEqual(len(leases), 1)
-        self.assertEqual(leases[0].assert_count, 2)
+        self.assertEqual(leases[0].assert_count, 3)
         self.assertEqual(leases[0].release_count, 1)
+
+    async def test_local_burst_serializes_inference_and_releases_every_lease(self) -> None:
+        fake = _BurstLocalChatOllama()
+        leases: list[_Lease] = []
+
+        async def acquire(_unload: Any) -> _Lease:
+            lease = _Lease()
+            leases.append(lease)
+            return lease
+
+        provider = OllamaVisionProvider(
+            VisionConfig(),
+            request_json=fake.request,
+            acquire_local_lease=acquire,
+        )
+        await provider.configure(
+            provider="ollama_local",
+            model="qwen3-vl:2b",
+            api_key=None,
+        )
+        requests = [
+            asyncio.create_task(
+                provider.analyze(
+                    b"\x89PNG\r\n\x1a\nowner-pixels",
+                    f"Mô tả ảnh {index}.",
+                )
+            )
+            for index in range(32)
+        ]
+
+        results = await asyncio.gather(*requests)
+
+        self.assertEqual(results, ["Ảnh hiển thị một cửa sổ game."] * 32)
+        self.assertEqual(fake.peak_active_chats, 1)
+        self.assertEqual(fake.active_chats, 0)
+        self.assertTrue(all(request.done() for request in requests))
+        self.assertEqual(len(leases), 32)
+        self.assertTrue(all(lease.assert_count == 2 for lease in leases))
+        self.assertTrue(all(lease.release_count == 1 for lease in leases))
+        chats = [call for call in fake.calls if call["url"].endswith("/api/chat")]
+        self.assertEqual(len(chats), 32)
+
+    async def test_scheduler_capacity_denial_never_calls_local_model(self) -> None:
+        fake = _BurstLocalChatOllama()
+
+        async def acquire(_unload: Any) -> _Lease:
+            raise _ResourcePressureError("E_RESOURCE_CAPACITY")
+
+        provider = OllamaVisionProvider(
+            VisionConfig(),
+            request_json=fake.request,
+            acquire_local_lease=acquire,
+        )
+        await provider.configure(
+            provider="ollama_local",
+            model="qwen3-vl:2b",
+            api_key=None,
+        )
+        requests = [
+            asyncio.create_task(
+                provider.analyze(
+                    b"\x89PNG\r\n\x1a\nowner-pixels",
+                    f"Mô tả ảnh {index}.",
+                )
+            )
+            for index in range(32)
+        ]
+
+        results = await asyncio.gather(*requests, return_exceptions=True)
+
+        self.assertTrue(all(request.done() for request in requests))
+        self.assertTrue(
+            all(
+                isinstance(result, PerceptionError)
+                and result.code == "E_PERCEPTION_VISION_CAPACITY"
+                and result.retryable
+                for result in results
+            )
+        )
+        self.assertFalse(
+            any(call["url"].endswith("/api/chat") for call in fake.calls)
+        )
+
+    async def test_expired_scheduler_lease_is_released_without_model_call(self) -> None:
+        fake = _BurstLocalChatOllama()
+        leases: list[_ExpiredLease] = []
+
+        async def acquire(_unload: Any) -> _ExpiredLease:
+            lease = _ExpiredLease()
+            leases.append(lease)
+            return lease
+
+        provider = OllamaVisionProvider(
+            VisionConfig(),
+            request_json=fake.request,
+            acquire_local_lease=acquire,
+        )
+        await provider.configure(
+            provider="ollama_local",
+            model="qwen3-vl:2b",
+            api_key=None,
+        )
+
+        with self.assertRaises(PerceptionError) as raised:
+            await provider.analyze(
+                b"\x89PNG\r\n\x1a\nowner-pixels",
+                "Mô tả ảnh.",
+            )
+
+        self.assertEqual(raised.exception.code, "E_PERCEPTION_VISION_CAPACITY")
+        self.assertTrue(raised.exception.retryable)
+        self.assertEqual(len(leases), 1)
+        self.assertEqual(leases[0].assert_count, 1)
+        self.assertEqual(leases[0].release_count, 1)
+        self.assertFalse(
+            any(call["url"].endswith("/api/chat") for call in fake.calls)
+        )
 
     async def test_manual_local_warmup_holds_one_lease_until_unload(self) -> None:
         fake = _FakeOllama()
