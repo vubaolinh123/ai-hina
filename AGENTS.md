@@ -353,6 +353,15 @@ và ≥85% mới hiện candidate, nhưng `promotionApproved=false` cho tới kh
 duyệt độ đa dạng và calibration. Fast gate: perception 60, route 13,
 `pnpm test:fast` 246, desktop typecheck + production build/57 test xanh; không
 chạy model/Cloud/capture thật và không tạo raw test artifact.
+Ngày 2026-07-29 M08-S25 bổ sung calibration diagnostics trên cùng ledger:
+theo profile hiện tại, status có ready/abstained count, abstention rate, mean
+confidence, mean observed owner score, mean absolute error, Brier score và năm
+reliability bin cố định. Mapping truth công khai Đúng=1/Thiếu=0,5/Sai=0; record
+chưa chấm không vào calibration math, chấm lại cập nhật tại chỗ. Empty giữ
+`null`, không giả 0; không trả UUID/per-sample data. Dashboard ghi rõ
+`diagnosticOnly=true`, `calibrated=false`; đủ 20 mẫu cũng không tự đổi threshold
+0,60 hay promotion. Fast gate: perception 62, `pnpm test:fast` 248, desktop
+typecheck + production build/57 test xanh; không model/Cloud/capture/artifact.
 Future M11 dùng post-trained Hugging Face `Qwen/Qwen3.5-4B` frozen làm QLoRA
 SFT base, sau đó DPO/ORPO từ dữ liệu owner-curated. Không train trực tiếp GGUF,
 không mặc định bắt đầu từ raw Base và Qwen3.5-9B chỉ benchmark/fallback thủ công,

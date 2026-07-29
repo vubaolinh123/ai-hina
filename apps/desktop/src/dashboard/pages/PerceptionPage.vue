@@ -107,6 +107,9 @@ const visionQualitySampleProgress = computed(() => {
   if (!review || review.minimumRatedSamples <= 0) return 0;
   return Math.min(100, review.ratedSamples / review.minimumRatedSamples * 100);
 });
+const visionCalibration = computed(
+  () => visionQualityReview.value?.calibration ?? null,
+);
 const visionQualityRatings: readonly VisionQualityRating[] = Object.freeze([
   "correct",
   "partial",
@@ -155,6 +158,16 @@ function visionQualityRatingLabel(rating: VisionQualityRating): string {
     case "incorrect":
       return "Sai";
   }
+}
+
+function formatDiagnosticPercent(value: number | null): string {
+  return value === null ? "Chưa đủ dữ liệu" : `${value.toFixed(1)}%`;
+}
+
+function visionCalibrationBinLabel(bin: VisionCalibrationBin): string {
+  const lower = Math.round(bin.lowerConfidence * 100);
+  const upper = Math.round(bin.upperConfidence * 100);
+  return `${lower}–${upper}%${bin.includesUpper ? " (gồm 100%)" : ""}`;
 }
 
 function formatVisionModelSize(bytes: number | null): string {
@@ -494,6 +507,75 @@ function formatVisionModelSize(bytes: number | null): string {
         / {{ visionQualityReview.profile.model || "chưa chọn" }}. Bộ đếm nằm trong RAM, tối đa
         {{ visionQualityReview.capacity }} observation và sẽ reset khi runtime khởi động lại.
       </small>
+      <section
+        v-if="visionCalibration"
+        class="vision-calibration-panel"
+        aria-labelledby="visionCalibrationTitle"
+      >
+        <div class="vision-calibration-heading">
+          <div>
+            <p class="eyebrow">CONFIDENCE CALIBRATION / CHẨN ĐOÁN</p>
+            <h4 id="visionCalibrationTitle">Hina tự tin có khớp với độ đúng thật không?</h4>
+          </div>
+          <span :data-sufficient="String(visionCalibration.sufficientEvidence)">
+            {{
+              visionCalibration.sufficientEvidence
+                ? "Đủ mẫu để xem chẩn đoán"
+                : `${visionCalibration.sampleCount}/${visionCalibration.minimumSamples} mẫu`
+            }}
+          </span>
+        </div>
+        <p>
+          Confidence là mức chắc chắn do heuristic tự chấm, còn “độ đúng quan sát” đến từ
+          đánh giá Đúng/Thiếu/Sai của bạn. Hai con số càng gần nhau thì confidence càng
+          phản ánh thực tế; đây vẫn chưa phải xác suất đã hiệu chuẩn.
+        </p>
+        <div class="vision-calibration-stats">
+          <span>
+            <small>Confidence trung bình</small>
+            <b>{{ formatDiagnosticPercent(visionCalibration.meanConfidencePercent) }}</b>
+          </span>
+          <span>
+            <small>Độ đúng quan sát</small>
+            <b>{{ formatDiagnosticPercent(visionCalibration.meanObservedScorePercent) }}</b>
+          </span>
+          <span>
+            <small>Sai lệch tuyệt đối</small>
+            <b>{{ formatDiagnosticPercent(visionCalibration.meanAbsoluteErrorPercent) }}</b>
+          </span>
+          <span>
+            <small>Brier score · 0 tốt nhất</small>
+            <b>
+              {{
+                visionCalibration.brierScore === null
+                  ? "Chưa đủ dữ liệu"
+                  : visionCalibration.brierScore.toFixed(4)
+              }}
+            </b>
+          </span>
+          <span>
+            <small>Tỷ lệ Hina chủ động không đoán</small>
+            <b>{{ formatDiagnosticPercent(visionQualityReview.abstentionRatePercent) }}</b>
+          </span>
+        </div>
+        <div class="vision-calibration-bins" aria-label="Nhóm confidence và độ đúng thực tế">
+          <div
+            v-for="bin in visionCalibration.reliabilityBins"
+            :key="bin.lowerConfidence"
+          >
+            <b>{{ visionCalibrationBinLabel(bin) }}</b>
+            <span>{{ bin.sampleCount }} mẫu</span>
+            <small>
+              Tin {{ formatDiagnosticPercent(bin.meanConfidencePercent) }}
+              · thực tế {{ formatDiagnosticPercent(bin.observedScorePercent) }}
+            </small>
+          </div>
+        </div>
+        <small>
+          Diagnostic này không tự đổi ngưỡng 0,60, không mở quyền điều khiển game và không
+          duyệt promotion. Cần ảnh đủ đa dạng cùng quyết định thủ công của bạn.
+        </small>
+      </section>
     </section>
 
     <div class="vision-status-grid">

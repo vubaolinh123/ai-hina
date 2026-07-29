@@ -279,6 +279,33 @@ type SpoutBridgeStatus = {
 type VisionProviderChoice = "ollama_local" | "ollama_cloud";
 type VisionQualityRating = "correct" | "partial" | "incorrect";
 
+type VisionCalibrationBin = {
+  lowerConfidence: number;
+  upperConfidence: number;
+  includesUpper: boolean;
+  sampleCount: number;
+  meanConfidencePercent: number | null;
+  observedScorePercent: number | null;
+};
+
+type VisionCalibrationStatus = {
+  calibrated: false;
+  diagnosticOnly: true;
+  sampleCount: number;
+  minimumSamples: number;
+  sufficientEvidence: boolean;
+  meanConfidencePercent: number | null;
+  meanObservedScorePercent: number | null;
+  meanAbsoluteErrorPercent: number | null;
+  brierScore: number | null;
+  ratingTruthMapping: {
+    correct: 1;
+    partial: 0.5;
+    incorrect: 0;
+  };
+  reliabilityBins: VisionCalibrationBin[];
+};
+
 type VisionQualityReviewStatus = {
   schemaVersion: "1.0";
   storage: "memory-only";
@@ -298,11 +325,17 @@ type VisionQualityReviewStatus = {
     partial: number;
     incorrect: number;
   };
+  states: {
+    ready: number;
+    abstained: number;
+  };
+  abstentionRatePercent: number | null;
   weightedScorePercent: number | null;
   targetPercent: number;
   minimumRatedSamples: number;
   candidateTargetMet: boolean;
   promotionApproved: false;
+  calibration: VisionCalibrationStatus;
   allProfilesRegisteredSamples: number;
 };
 

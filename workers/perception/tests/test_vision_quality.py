@@ -30,6 +30,15 @@ class VisionQualityLedgerTests(unittest.TestCase):
         reviewed = ledger.review(first, "correct")
         self.assertFalse(reviewed["replaced"])
         ledger.review(second, "partial")
+        before_rerate = ledger.status(
+            provider="ollama_cloud",
+            model="minimax-m3",
+        )
+        self.assertEqual(before_rerate["calibration"]["sampleCount"], 2)
+        self.assertEqual(
+            before_rerate["calibration"]["meanObservedScorePercent"],
+            75.0,
+        )
         rerated = ledger.review(second, "incorrect")
         self.assertTrue(rerated["replaced"])
 
@@ -41,6 +50,11 @@ class VisionQualityLedgerTests(unittest.TestCase):
             {"correct": 1, "partial": 0, "incorrect": 1},
         )
         self.assertEqual(status["weightedScorePercent"], 50.0)
+        self.assertEqual(status["calibration"]["sampleCount"], 2)
+        self.assertEqual(
+            status["calibration"]["meanObservedScorePercent"],
+            50.0,
+        )
         self.assertFalse(status["candidateTargetMet"])
         self.assertFalse(status["promotionApproved"])
         self.assertFalse(status["storesPixels"])
@@ -86,6 +100,92 @@ class VisionQualityLedgerTests(unittest.TestCase):
                 "registeredSamples"
             ],
             1,
+        )
+
+    def test_calibration_diagnostics_use_only_rated_current_profile_samples(self) -> None:
+        ledger = VisionQualityLedger()
+        samples = [
+            (0.9, "ready", "correct"),
+            (0.6, "ready", "partial"),
+            (0.2, "ready", "incorrect"),
+            (0.1, "abstained", None),
+        ]
+        observation_ids: list[str] = []
+        for confidence, state, rating in samples:
+            observation_id = str(uuid4())
+            observation_ids.append(observation_id)
+            ledger.register(
+                observation_id,
+                provider="ollama_cloud",
+                model="vision-a",
+                state=state,
+                confidence=confidence,
+            )
+            if rating is not None:
+                ledger.review(observation_id, rating)
+        other_profile = str(uuid4())
+        ledger.register(
+            other_profile,
+            provider="ollama_cloud",
+            model="vision-b",
+            state="ready",
+            confidence=1.0,
+        )
+        ledger.review(other_profile, "incorrect")
+
+        status = ledger.status(provider="ollama_cloud", model="vision-a")
+        self.assertEqual(status["states"], {"ready": 3, "abstained": 1})
+        self.assertEqual(status["abstentionRatePercent"], 25.0)
+        calibration = status["calibration"]
+        self.assertFalse(calibration["calibrated"])
+        self.assertTrue(calibration["diagnosticOnly"])
+        self.assertEqual(calibration["sampleCount"], 3)
+        self.assertFalse(calibration["sufficientEvidence"])
+        self.assertEqual(calibration["meanConfidencePercent"], 56.7)
+        self.assertEqual(calibration["meanObservedScorePercent"], 50.0)
+        self.assertEqual(calibration["meanAbsoluteErrorPercent"], 13.3)
+        self.assertEqual(calibration["brierScore"], 0.02)
+        self.assertEqual(
+            calibration["ratingTruthMapping"],
+            {"correct": 1.0, "partial": 0.5, "incorrect": 0.0},
+        )
+        self.assertEqual(len(calibration["reliabilityBins"]), 5)
+        self.assertEqual(
+            [item["sampleCount"] for item in calibration["reliabilityBins"]],
+            [0, 1, 0, 1, 1],
+        )
+        self.assertEqual(
+            calibration["reliabilityBins"][1]["observedScorePercent"],
+            0.0,
+        )
+        self.assertEqual(
+            calibration["reliabilityBins"][3]["observedScorePercent"],
+            50.0,
+        )
+        self.assertEqual(
+            calibration["reliabilityBins"][4]["observedScorePercent"],
+            100.0,
+        )
+        self.assertNotIn(observation_ids[0], str(status))
+        self.assertNotIn(other_profile, str(status))
+
+    def test_empty_calibration_metrics_are_unknown_not_zero(self) -> None:
+        ledger = VisionQualityLedger()
+        status = ledger.status(provider="ollama_cloud", model="vision-a")
+
+        self.assertIsNone(status["abstentionRatePercent"])
+        calibration = status["calibration"]
+        self.assertEqual(calibration["sampleCount"], 0)
+        self.assertIsNone(calibration["meanConfidencePercent"])
+        self.assertIsNone(calibration["meanObservedScorePercent"])
+        self.assertIsNone(calibration["meanAbsoluteErrorPercent"])
+        self.assertIsNone(calibration["brierScore"])
+        self.assertTrue(
+            all(
+                item["meanConfidencePercent"] is None
+                and item["observedScorePercent"] is None
+                for item in calibration["reliabilityBins"]
+            )
         )
 
     def test_invalid_registration_and_review_fail_closed(self) -> None:

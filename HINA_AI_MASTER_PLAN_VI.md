@@ -1599,6 +1599,18 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
   perception tests, 13 perception route tests, 246 repository fast tests and
   desktop typecheck plus production build/57 tests; no model or real capture
   was run in this slice.
+- M08-S25 Vision confidence calibration diagnostics (2026-07-29): the same
+  bounded owner-QA ledger now exposes aggregate ready/abstained counts,
+  abstention rate, mean heuristic confidence, mean observed score, mean
+  absolute error, Brier score and five fixed reliability bins for the active
+  provider/model. Truth mapping is explicit: Đúng=`1,0`, Thiếu=`0,5`,
+  Sai=`0,0`. Missing or empty metrics remain unknown, per-observation values
+  never leave the ledger, and rerating updates rather than duplicates evidence.
+  Dashboard labels the result `diagnosticOnly=true`, `calibrated=false`; 20
+  samples only mark diagnostic sufficiency and never auto-change threshold
+  `0,60` or approve promotion. Fast evidence passes 62 perception tests, 248
+  repository fast tests and desktop typecheck plus production build/57 tests
+  without any model, Cloud or capture call.
 
 ### Test matrix
 

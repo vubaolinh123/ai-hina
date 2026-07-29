@@ -24,8 +24,8 @@
   M08-S21 adaptive reasoning budgets and M08-S22 Qwen3.5 4B Q8_0 migration are
   runnable local candidates pending owner application acceptance; the refreshed
   all-on fast resource gate passed;
-  M08-S23 Vision confidence/abstention and M08-S24 owner Vision scene-QA are
-  runnable candidates;
+  M08-S23 Vision confidence/abstention, M08-S24 owner Vision scene-QA and
+  M08-S25 confidence-calibration diagnostics are runnable candidates;
   M08 remains active
 - Branch: `main` (fast-development mode)
 - Active slices: M08-S1 perception spine (owner-consented snapshot ingestion,
@@ -56,7 +56,9 @@
   adds an explicitly uncalibrated confidence heuristic and blocks uncertain
   Vision summaries from fresh chat context; M08-S24 gives the owner a bounded,
   session-only Đúng/Thiếu/Sai workflow for measuring real provider/model
-  descriptions without retaining pixels or summary text
+  descriptions without retaining pixels or summary text; M08-S25 derives
+  aggregate calibration diagnostics from those owner ratings without exposing
+  per-observation data or automatically changing the confidence threshold
 
 ## Runnable target
 
@@ -1003,3 +1005,35 @@ provenance before they may replace the pinned checkpoint.
 - The ≥85% scene-QA gate is still open until the owner rates at least 20
   sufficiently varied real captures for the active provider/model and accepts
   the observed failures. A passing session marker is not production promotion.
+
+## Implemented in M08-S25 (Vision confidence calibration diagnostics)
+
+- The same bounded scene-QA ledger now reports aggregate state counts,
+  abstention rate, mean heuristic confidence, mean observed owner score, mean
+  absolute calibration error and Brier score for the active provider/model.
+  Missing evidence remains `null`; it is never represented as a real zero.
+- Owner truth uses the declared mapping Đúng=`1,0`, Thiếu=`0,5`, Sai=`0,0`.
+  Five fixed confidence bins (`0–20`, `20–40`, `40–60`, `60–80`, `80–100%`)
+  compare average confidence with observed score. Empty bins stay empty and no
+  observation UUID or per-sample value leaves the ledger.
+- The Dashboard explains the metrics in plain Vietnamese, shows sample
+  sufficiency and keeps `calibrated=false`, `diagnosticOnly=true`.
+  At least 20 rated samples make the diagnostic less sparse but do not prove
+  semantic calibration, approve promotion or alter the fixed `0,60` threshold.
+- Rerating updates the diagnostics in place and does not increase sample count.
+  Unrated observations affect ready/abstained coverage but do not enter error
+  or Brier calculations.
+- This slice adds no provider/model call, persistence, pixel/summary retention,
+  local VRAM or game-control authority.
+
+## Fast evidence M08-S25 (owner machine)
+
+- Perception worker: 62 tests pass, including exact mixed-label calibration,
+  five reliability bins, profile isolation, rerating and null empty metrics.
+- `pnpm test:fast`: 248 tests pass across Safety, Text brain, Memory, Avatar,
+  Speech, Perception and Core Runtime.
+- Desktop: typecheck pass; production build + 57 tests pass, including
+  diagnostic-only UI copy and preserved renderer boundaries.
+- No model, Cloud request, capture, image, audio, download, benchmark artifact
+  or one-off script was created. Real calibration evidence remains owner work
+  through the existing Dashboard capture-and-rate flow.

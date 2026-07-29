@@ -1,0 +1,78 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M08-S25-vision-confidence-calibration",
+  "module_id": "M08",
+  "objective": "Turn the owner-only Vision scene-QA ratings into bounded, deterministic confidence-calibration diagnostics for the active provider/model so the owner can see whether the uncalibrated heuristic tracks real correctness before any decision-support promotion.",
+  "non_goals": [
+    "Do not recalibrate, tune or automatically change the Vision confidence threshold.",
+    "Do not claim semantic calibration or production promotion from a small session sample.",
+    "Do not persist pixels, summaries, prompts, labels, chat text, API keys, corrections or per-observation records in the Dashboard response.",
+    "Do not call a model, Cloud provider or capture API.",
+    "Do not change capture consent, fresh-context TTL, inference, text brain, STT, TTS, archive behavior or VRAM budgets."
+  ],
+  "base_sha": "bfb15497d456e95a8151fbdf36b51c94f7589228",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "workers/perception/src/hina_perception/vision_quality.py",
+    "workers/perception/tests/test_vision_quality.py",
+    "workers/perception/tests/test_perception.py",
+    "apps/desktop/src/env.d.ts",
+    "apps/desktop/src/dashboard/pages/PerceptionPage.vue",
+    "apps/desktop/src/style.css",
+    "apps/desktop/test/security.test.mjs",
+    "docs/modules/M08-S25-vision-confidence-calibration-module-brief.json",
+    "docs/modules/M08-perception.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    ".gitnexus/",
+    ".claude/",
+    "CLAUDE.md",
+    "docs/research/deep-research-report.md",
+    "voice_demo/",
+    "assets/voices/",
+    "assets/avatars/",
+    "var/perception-sessions/",
+    "apps/desktop/dist/",
+    "apps/desktop/dist-electron/"
+  ],
+  "contracts": [
+    "Calibration diagnostics are derived only from the bounded current-runtime scene-QA ledger and remain scoped to the selected provider/model.",
+    "Categorical owner truth maps correct to 1.0, partial to 0.5 and incorrect to 0.0; the same mapping used by the quality score is declared in status.",
+    "Status exposes aggregate state counts, abstention rate, mean confidence, mean observed score, mean absolute calibration error, Brier score and fixed reliability bins without exposing observation IDs or per-sample values.",
+    "Empty or insufficient evidence stays explicitly unavailable or insufficient; no missing value is represented as zero and calibrated remains false.",
+    "The Dashboard explains that diagnostics measure this runtime session only and cannot approve promotion or automatically change the 0.60 threshold.",
+    "No new model call, persistence, image retention or local VRAM usage is introduced."
+  ],
+  "allowed_dependencies": [
+    "Python standard library, existing Vue/TypeScript stack and existing repository test tooling."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "Deterministic tests verify exact aggregate calibration metrics and five confidence bins for mixed correct, partial and incorrect ratings.",
+    "Profiles do not mix, rerating updates calibration without increasing the sample count and an unrated sample does not enter calibration math.",
+    "No-rating status returns null metrics rather than misleading zero values.",
+    "Dashboard presents calibration evidence in plain Vietnamese with the active profile and sample sufficiency warning.",
+    "Perception tests, repository fast tests, desktop typecheck/build/tests, module-brief validation and git diff check pass."
+  ],
+  "required_test_commands": [
+    "uv run --frozen python -c \"import json; from jsonschema import Draft202012Validator; schema=json.load(open('docs/schemas/module-brief.schema.json', encoding='utf-8')); brief=json.load(open('docs/modules/M08-S25-vision-confidence-calibration-module-brief.json', encoding='utf-8')); Draft202012Validator(schema).validate(brief)\"",
+    "uv run --frozen python -m unittest discover -s workers/perception/tests -p \"test_*.py\"",
+    "pnpm --filter @hina/desktop typecheck",
+    "pnpm --filter @hina/desktop test",
+    "pnpm test:fast",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "reliability_bins": 5,
+    "minimum_diagnostic_samples": 20,
+    "additional_model_calls": 0,
+    "additional_local_vram_mib": 0,
+    "raw_artifact_persistence": false
+  },
+  "output_artifact_dir": "artifacts/verification/M08/"
+}

@@ -920,6 +920,68 @@ pre,
   font-size: 12px;
 }
 
+.vision-calibration-panel {
+  display: grid;
+  gap: 12px;
+  margin-top: 4px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.vision-calibration-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.vision-calibration-heading h4,
+.vision-calibration-heading p,
+.vision-calibration-panel > p {
+  margin: 0;
+}
+
+.vision-calibration-heading > span {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.vision-calibration-heading > span[data-sufficient="true"] {
+  border-color: rgba(95, 221, 161, 0.45);
+  color: var(--success);
+}
+
+.vision-calibration-stats,
+.vision-calibration-bins {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.vision-calibration-stats > span,
+.vision-calibration-bins > div {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.vision-calibration-stats small,
+.vision-calibration-bins span,
+.vision-calibration-bins small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.vision-calibration-stats b {
+  color: var(--text);
+  font-size: 16px;
+}
+
 .vision-status-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

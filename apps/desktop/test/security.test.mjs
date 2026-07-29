@@ -291,6 +291,9 @@ test("full-frame screen capture stays in Electron main behind one-use grants", (
   assert.match(client, /source:\s*"owner\.desktop"/);
   assert.match(client, /ownerConfirmed:\s*true/);
   assert.match(renderer, /OWNER SCENE QA/);
+  assert.match(renderer, /CONFIDENCE CALIBRATION \/ CHẨN ĐOÁN/);
+  assert.match(renderer, /không tự đổi ngưỡng 0,60/);
+  assert.match(renderer, /không mở quyền điều khiển game/);
   assert.match(renderer, /reviewLastVisionCapture/);
   assert.match(renderer, /không lưu ảnh hay nội dung mô tả/);
   assert.match(renderer, /Chụp toàn bộ nguồn đã chọn và gửi Hina/);

@@ -10,6 +10,7 @@ from .errors import PerceptionError
 VISION_QUALITY_CAPACITY = 100
 VISION_QUALITY_MINIMUM_RATED_SAMPLES = 20
 VISION_QUALITY_TARGET_PERCENT = 85.0
+VISION_QUALITY_RELIABILITY_BIN_COUNT = 5
 VISION_QUALITY_RATINGS = frozenset({"correct", "partial", "incorrect"})
 _RATING_WEIGHTS = {
     "correct": 1.0,
@@ -113,6 +114,10 @@ class VisionQualityLedger:
             rating: sum(1 for sample in rated if sample.rating == rating)
             for rating in ("correct", "partial", "incorrect")
         }
+        states = {
+            state: sum(1 for sample in profile_samples if sample.state == state)
+            for state in ("ready", "abstained")
+        }
         weighted = sum(_RATING_WEIGHTS.get(sample.rating or "", 0.0) for sample in rated)
         score = round(weighted / len(rated) * 100.0, 1) if rated else None
         candidate_ready = (
@@ -135,13 +140,134 @@ class VisionQualityLedger:
             "ratedSamples": len(rated),
             "unratedSamples": len(profile_samples) - len(rated),
             "ratings": ratings,
+            "states": states,
+            "abstentionRatePercent": (
+                round(states["abstained"] / len(profile_samples) * 100.0, 1)
+                if profile_samples
+                else None
+            ),
             "weightedScorePercent": score,
             "targetPercent": VISION_QUALITY_TARGET_PERCENT,
             "minimumRatedSamples": VISION_QUALITY_MINIMUM_RATED_SAMPLES,
             "candidateTargetMet": candidate_ready,
             "promotionApproved": False,
+            "calibration": _calibration_status(rated),
             "allProfilesRegisteredSamples": len(self._samples),
         }
+
+
+def _calibration_status(
+    rated: list[_VisionQualitySample],
+) -> dict[str, object]:
+    bins: list[list[_VisionQualitySample]] = [
+        [] for _ in range(VISION_QUALITY_RELIABILITY_BIN_COUNT)
+    ]
+    for sample in rated:
+        index = min(
+            VISION_QUALITY_RELIABILITY_BIN_COUNT - 1,
+            int(sample.confidence * VISION_QUALITY_RELIABILITY_BIN_COUNT),
+        )
+        bins[index].append(sample)
+
+    sample_count = len(rated)
+    mean_confidence = (
+        sum(sample.confidence for sample in rated) / sample_count
+        if sample_count
+        else None
+    )
+    observed = (
+        sum(_RATING_WEIGHTS[sample.rating or "incorrect"] for sample in rated)
+        / sample_count
+        if sample_count
+        else None
+    )
+    absolute_error = (
+        sum(
+            abs(sample.confidence - _RATING_WEIGHTS[sample.rating or "incorrect"])
+            for sample in rated
+        )
+        / sample_count
+        if sample_count
+        else None
+    )
+    brier = (
+        sum(
+            (
+                sample.confidence
+                - _RATING_WEIGHTS[sample.rating or "incorrect"]
+            )
+            ** 2
+            for sample in rated
+        )
+        / sample_count
+        if sample_count
+        else None
+    )
+    return {
+        "calibrated": False,
+        "diagnosticOnly": True,
+        "sampleCount": sample_count,
+        "minimumSamples": VISION_QUALITY_MINIMUM_RATED_SAMPLES,
+        "sufficientEvidence": (
+            sample_count >= VISION_QUALITY_MINIMUM_RATED_SAMPLES
+        ),
+        "meanConfidencePercent": (
+            round(mean_confidence * 100.0, 1)
+            if mean_confidence is not None
+            else None
+        ),
+        "meanObservedScorePercent": (
+            round(observed * 100.0, 1) if observed is not None else None
+        ),
+        "meanAbsoluteErrorPercent": (
+            round(absolute_error * 100.0, 1)
+            if absolute_error is not None
+            else None
+        ),
+        "brierScore": round(brier, 4) if brier is not None else None,
+        "ratingTruthMapping": {
+            "correct": 1.0,
+            "partial": 0.5,
+            "incorrect": 0.0,
+        },
+        "reliabilityBins": [
+            _reliability_bin_status(index, samples)
+            for index, samples in enumerate(bins)
+        ],
+    }
+
+
+def _reliability_bin_status(
+    index: int,
+    samples: list[_VisionQualitySample],
+) -> dict[str, object]:
+    lower = index / VISION_QUALITY_RELIABILITY_BIN_COUNT
+    upper = (index + 1) / VISION_QUALITY_RELIABILITY_BIN_COUNT
+    count = len(samples)
+    return {
+        "lowerConfidence": lower,
+        "upperConfidence": upper,
+        "includesUpper": index == VISION_QUALITY_RELIABILITY_BIN_COUNT - 1,
+        "sampleCount": count,
+        "meanConfidencePercent": (
+            round(sum(sample.confidence for sample in samples) / count * 100.0, 1)
+            if count
+            else None
+        ),
+        "observedScorePercent": (
+            round(
+                sum(
+                    _RATING_WEIGHTS[sample.rating or "incorrect"]
+                    for sample in samples
+                )
+                / count
+                * 100.0,
+                1,
+            )
+            if count
+            else None
+        ),
+    }
 
 
 def _validate_uuid(value: str) -> None:
