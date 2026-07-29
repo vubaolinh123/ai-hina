@@ -327,12 +327,14 @@ class PerceptionRouteTests(unittest.IsolatedAsyncioTestCase):
             {
                 "observationId": observation_id,
                 "rating": "correct",
+                "sceneTags": ["gameplay", "menu_hud"],
                 "source": "owner.desktop",
                 "ownerConfirmed": True,
             },
         )
         self.assertEqual(reviewed.status, HTTPStatus.OK)
         self.assertFalse(reviewed.body["replaced"])
+        self.assertEqual(reviewed.body["sceneTags"], ["gameplay", "menu_hud"])
         self.assertEqual(reviewed.body["qualityReview"]["ratedSamples"], 1)
         self.assertEqual(
             reviewed.body["qualityReview"]["weightedScorePercent"],
@@ -346,12 +348,14 @@ class PerceptionRouteTests(unittest.IsolatedAsyncioTestCase):
             {
                 "observationId": observation_id,
                 "rating": "partial",
+                "sceneTags": ["desktop_ui"],
                 "source": "owner.desktop",
                 "ownerConfirmed": True,
             },
         )
         self.assertEqual(rerated.status, HTTPStatus.OK)
         self.assertTrue(rerated.body["replaced"])
+        self.assertEqual(rerated.body["sceneTags"], ["desktop_ui"])
         self.assertEqual(rerated.body["qualityReview"]["ratedSamples"], 1)
         self.assertEqual(
             rerated.body["qualityReview"]["weightedScorePercent"],
@@ -380,18 +384,35 @@ class PerceptionRouteTests(unittest.IsolatedAsyncioTestCase):
             {
                 "observationId": str(uuid4()),
                 "rating": "correct",
+                "sceneTags": ["gameplay"],
                 "source": "viewer.chat",
                 "ownerConfirmed": True,
             },
             {
                 "observationId": str(uuid4()),
                 "rating": "mostly-correct",
+                "sceneTags": ["gameplay"],
                 "source": "owner.desktop",
                 "ownerConfirmed": True,
             },
             {
                 "observationId": str(uuid4()),
                 "rating": "correct",
+                "sceneTags": ["unknown_scene"],
+                "source": "owner.desktop",
+                "ownerConfirmed": True,
+            },
+            {
+                "observationId": str(uuid4()),
+                "rating": "correct",
+                "sceneTags": ["gameplay", "gameplay"],
+                "source": "owner.desktop",
+                "ownerConfirmed": True,
+            },
+            {
+                "observationId": str(uuid4()),
+                "rating": "correct",
+                "sceneTags": [],
                 "source": "owner.desktop",
                 "ownerConfirmed": True,
             },

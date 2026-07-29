@@ -522,6 +522,7 @@ class PerceptionService:
         *,
         observation_id: str,
         rating: str,
+        scene_tags: object,
         source: str,
         owner_confirmed: bool,
     ) -> dict[str, Any]:
@@ -541,7 +542,11 @@ class PerceptionService:
                 "perception service is closed",
                 retryable=True,
             )
-        review = self._vision_quality.review(observation_id, rating)
+        review = self._vision_quality.review(
+            observation_id,
+            rating,
+            scene_tags,
+        )
         vision_status = await self._vision_status()
         return {
             "status": "reviewed",

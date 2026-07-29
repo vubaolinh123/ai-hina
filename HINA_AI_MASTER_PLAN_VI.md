@@ -1659,6 +1659,16 @@ Cho Hina nhận biết màn hình hiện tại theo evidence mới, không tuyê
   Perception 68 and repository fast suite 256 tests pass without a real model,
   Cloud request, capture, GPU allocation or retained artifact. This closes the
   deterministic burst row; owner ≥85% varied scene-QA remains the open M08 gate.
+- M08-S31 owner scene-diversity QA (2026-07-29): each Đúng/Thiếu/Sai review
+  now requires one to three fixed owner-selected scene tags. The memory-only
+  ledger exposes aggregate tag counts only; arbitrary/duplicate/empty tags fail
+  closed and no pixels, summaries or free-form labels are retained. A category
+  counts as covered after two rated images. `candidateTargetMet` now requires
+  20 rated images, weighted score ≥85% and at least four covered categories;
+  `promotionApproved` remains false. Perception 69, route 14, Desktop
+  build/58 tests plus typecheck and repository fast suite 257 pass without a
+  real model, Cloud request, capture, GPU allocation or QA artifact. The owner
+  must still run and accept the real varied-scene session before M08 promotion.
 
 ### Test matrix
 

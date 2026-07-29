@@ -1,0 +1,90 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M08-S31-owner-scene-diversity-qa",
+  "module_id": "M08",
+  "objective": "Make the remaining owner Vision acceptance gate measurable by attaching one to three fixed owner-selected scene categories to each rating, reporting aggregate category coverage only, and requiring a provisional diversity target in addition to 20 rated images and an 85 percent weighted score.",
+  "non_goals": [
+    "Do not auto-classify scenes with a model or infer tags from image pixels, summaries, prompts or filenames.",
+    "Do not persist pixels, summaries, per-observation QA records, scene tags or aggregate QA status across runtime restart.",
+    "Do not auto-promote Vision, change the confidence threshold, enable decision support or waive owner acceptance.",
+    "Do not change the Vision provider, model, prompt, context, scheduler, VRAM reservation or capture lifecycle.",
+    "Do not run a real model, Cloud request, desktop capture, GPU benchmark, repeated workflow or soak test.",
+    "Do not open M09 before the owner completes and accepts the real varied-scene QA run."
+  ],
+  "base_sha": "50000d50c5dfa21efdd98935c7c1767634215966",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "workers/perception/src/hina_perception/vision_quality.py",
+    "workers/perception/src/hina_perception/service.py",
+    "workers/perception/tests/test_vision_quality.py",
+    "workers/perception/tests/test_perception.py",
+    "apps/core-runtime/src/hina_core/runtime/transport.py",
+    "apps/core-runtime/tests/test_perception_routes.py",
+    "apps/desktop/electron/control-client.ts",
+    "apps/desktop/src/env.d.ts",
+    "apps/desktop/src/App.vue",
+    "apps/desktop/src/style.css",
+    "apps/desktop/src/dashboard/pages/PerceptionPage.vue",
+    "apps/desktop/test/security.test.mjs",
+    "docs/modules/M08-S31-owner-scene-diversity-qa-module-brief.json",
+    "docs/modules/M08-perception.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "AGENTS.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    ".codex/",
+    ".gitnexus/",
+    ".claude/",
+    "CLAUDE.md",
+    "docs/research/deep-research-report.md",
+    "voice_demo/",
+    "assets/voices/",
+    "assets/avatars/",
+    "var/perception-sessions/",
+    "apps/desktop/dist/",
+    "apps/desktop/dist-electron/"
+  ],
+  "contracts": [
+    "Each review requires one to three unique tags from the fixed allowlist gameplay, menu_hud, chat_text, desktop_ui, motion_effects and dark_occluded.",
+    "Renderer input cannot introduce arbitrary tags, duplicate tags, an empty tag list or more than three tags.",
+    "The in-memory ledger stores only fixed tags beside existing bounded metadata and exposes aggregate per-tag counts, never observation IDs, summaries, pixels, prompts or filenames in status.",
+    "A scene category counts as covered only after at least two rated samples use that tag; provisional diversity requires at least four covered categories.",
+    "candidateTargetMet requires at least 20 rated samples, weighted score at least 85 percent and the provisional diversity target; promotionApproved remains false.",
+    "Rerating replaces both rating and tags without increasing the sample count; profile reset removes their aggregate contribution.",
+    "The Perception page remains presentation and typed intent only; App.vue retains typed IPC and error ownership."
+  ],
+  "allowed_dependencies": [
+    "Python and JavaScript standard libraries, Vue already installed in the workspace, and existing repository test tooling."
+  ],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "Ledger tests prove category counts, rerating replacement, profile isolation, fixed-tag validation and the combined 20-image/85-percent/four-category candidate rule.",
+    "Core route tests prove the exact sceneTags field is required and arbitrary or malformed tags fail closed.",
+    "Desktop control-client tests prove one-to-three unique allowlisted tags are validated before loopback network I/O.",
+    "Dashboard visibly asks the owner to classify every rated image and reports category counts, covered-category progress and the combined candidate status in plain Vietnamese.",
+    "Perception, route and desktop tests plus desktop typecheck/build and repository fast tests pass.",
+    "Module-brief validation, GitNexus change scan and git diff check pass."
+  ],
+  "required_test_commands": [
+    "uv run --frozen python -c \"import json; from jsonschema import Draft202012Validator; schema=json.load(open('docs/schemas/module-brief.schema.json', encoding='utf-8')); brief=json.load(open('docs/modules/M08-S31-owner-scene-diversity-qa-module-brief.json', encoding='utf-8')); Draft202012Validator(schema).validate(brief)\"",
+    "uv run --frozen python -m unittest discover -s workers/perception/tests -p \"test_*.py\"",
+    "uv run --frozen python -m unittest discover -s apps/core-runtime/tests -p \"test_perception_routes.py\"",
+    "pnpm test:desktop",
+    "pnpm test:fast",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "minimum_rated_images": 20,
+    "minimum_weighted_score_percent": 85,
+    "minimum_covered_scene_categories": 4,
+    "minimum_rated_samples_per_covered_category": 2,
+    "minimum_tags_per_review": 1,
+    "maximum_tags_per_review": 3,
+    "additional_model_calls": 0,
+    "additional_local_vram_mib": 0,
+    "raw_artifact_persistence": false
+  },
+  "output_artifact_dir": "artifacts/verification/M08/"
+}

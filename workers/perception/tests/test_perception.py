@@ -565,11 +565,13 @@ class ServiceTests(unittest.TestCase):
             service.review_vision_observation(
                 observation_id=observation_id,
                 rating="correct",
+                scene_tags=["gameplay", "menu_hud"],
                 source="owner.desktop",
                 owner_confirmed=True,
             )
         )
         self.assertFalse(reviewed["replaced"])
+        self.assertEqual(reviewed["sceneTags"], ["gameplay", "menu_hud"])
         self.assertEqual(reviewed["qualityReview"]["ratedSamples"], 1)
         self.assertEqual(reviewed["qualityReview"]["weightedScorePercent"], 100.0)
         self.assertFalse(reviewed["qualityReview"]["candidateTargetMet"])
@@ -580,11 +582,13 @@ class ServiceTests(unittest.TestCase):
             service.review_vision_observation(
                 observation_id=observation_id,
                 rating="partial",
+                scene_tags=["desktop_ui"],
                 source="owner.desktop",
                 owner_confirmed=True,
             )
         )
         self.assertTrue(rerated["replaced"])
+        self.assertEqual(rerated["sceneTags"], ["desktop_ui"])
         self.assertEqual(rerated["qualityReview"]["ratedSamples"], 1)
         self.assertEqual(rerated["qualityReview"]["weightedScorePercent"], 50.0)
 
@@ -599,6 +603,7 @@ class ServiceTests(unittest.TestCase):
                     service.review_vision_observation(
                         observation_id=str(uuid4()),
                         rating="correct",
+                        scene_tags=["gameplay"],
                         source=source,
                         owner_confirmed=owner_confirmed,
                     )
@@ -608,6 +613,7 @@ class ServiceTests(unittest.TestCase):
                 service.review_vision_observation(
                     observation_id=str(uuid4()),
                     rating="correct",
+                    scene_tags=["gameplay"],
                     source="owner.desktop",
                     owner_confirmed=True,
                 )
@@ -637,6 +643,7 @@ class ServiceTests(unittest.TestCase):
             service.review_vision_observation(
                 observation_id=observation_id,
                 rating="correct",
+                scene_tags=["gameplay"],
                 source="owner.desktop",
                 owner_confirmed=True,
             )
@@ -660,6 +667,7 @@ class ServiceTests(unittest.TestCase):
                 service.review_vision_observation(
                     observation_id=observation_id,
                     rating="correct",
+                    scene_tags=["gameplay"],
                     source="owner.desktop",
                     owner_confirmed=True,
                 )

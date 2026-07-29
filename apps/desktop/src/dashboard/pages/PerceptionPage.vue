@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, toRefs } from "vue";
+import { computed, ref, toRefs, watch } from "vue";
 
 const props = defineProps<{
   safetyAvailable: boolean;
@@ -42,7 +42,7 @@ const emit = defineEmits<{
   listScreenCaptureSources: [];
   captureSelectedScreenSource: [];
   askHinaAboutLastCapture: [];
-  reviewVisionCapture: [rating: VisionQualityRating];
+  reviewVisionCapture: [rating: VisionQualityRating, sceneTags: VisionSceneTag[]];
   resetVisionQualitySession: [];
   discoverVisionModels: [];
   applyVisionProvider: [];
@@ -116,6 +116,22 @@ const visionQualityRatings: readonly VisionQualityRating[] = Object.freeze([
   "partial",
   "incorrect",
 ]);
+const visionSceneTags: readonly VisionSceneTag[] = Object.freeze([
+  "gameplay",
+  "menu_hud",
+  "chat_text",
+  "desktop_ui",
+  "motion_effects",
+  "dark_occluded",
+]);
+const selectedVisionSceneTags = ref<VisionSceneTag[]>([]);
+const reviewObservationId = computed(
+  () => screenCaptureResult.value?.observation?.observationId ?? null,
+);
+
+watch(reviewObservationId, () => {
+  selectedVisionSceneTags.value = [];
+});
 
 type VisionObservation = NonNullable<
   NonNullable<DesktopPerceptionCaptureResult["observation"]>["vision"]
@@ -159,6 +175,34 @@ function visionQualityRatingLabel(rating: VisionQualityRating): string {
     case "incorrect":
       return "Sai";
   }
+}
+
+function visionSceneTagLabel(tag: VisionSceneTag): string {
+  switch (tag) {
+    case "gameplay":
+      return "Đang chơi game";
+    case "menu_hud":
+      return "Menu / HUD";
+    case "chat_text":
+      return "Chat / nhiều chữ";
+    case "desktop_ui":
+      return "Ứng dụng desktop";
+    case "motion_effects":
+      return "Chuyển động / hiệu ứng";
+    case "dark_occluded":
+      return "Tối / bị che";
+  }
+}
+
+function toggleVisionSceneTag(tag: VisionSceneTag): void {
+  if (selectedVisionSceneTags.value.includes(tag)) {
+    selectedVisionSceneTags.value = selectedVisionSceneTags.value.filter(
+      (selected) => selected !== tag,
+    );
+    return;
+  }
+  if (selectedVisionSceneTags.value.length >= 3) return;
+  selectedVisionSceneTags.value = [...selectedVisionSceneTags.value, tag];
 }
 
 function formatDiagnosticPercent(value: number | null): string {
@@ -438,14 +482,39 @@ function formatVisionModelSize(bytes: number | null): string {
               một ảnh thực tế vẫn nhìn rõ.
             </p>
           </div>
+          <fieldset class="vision-scene-tags">
+            <legend>
+              1. Ảnh này thuộc loại nào? Chọn 1–3 mục để đo độ đa dạng.
+            </legend>
+            <label
+              v-for="tag in visionSceneTags"
+              :key="tag"
+              :class="{ selected: selectedVisionSceneTags.includes(tag) }"
+            >
+              <input
+                type="checkbox"
+                :checked="selectedVisionSceneTags.includes(tag)"
+                :disabled="
+                  visionReviewBusy
+                    || (
+                      selectedVisionSceneTags.length >= 3
+                        && !selectedVisionSceneTags.includes(tag)
+                    )
+                "
+                @change="toggleVisionSceneTag(tag)"
+              >
+              {{ visionSceneTagLabel(tag) }}
+            </label>
+          </fieldset>
+          <p><b>2. Chấm độ chính xác của mô tả:</b></p>
           <div class="vision-quality-actions">
             <button
               v-for="rating in visionQualityRatings"
               :key="rating"
               type="button"
               :class="{ selected: props.visionReviewRating === rating }"
-              :disabled="visionReviewBusy"
-              @click="emit('reviewVisionCapture', rating)"
+              :disabled="visionReviewBusy || selectedVisionSceneTags.length < 1"
+              @click="emit('reviewVisionCapture', rating, [...selectedVisionSceneTags])"
             >
               {{ visionQualityRatingLabel(rating) }}
             </button>
@@ -453,7 +522,11 @@ function formatVisionModelSize(bytes: number | null): string {
           <p class="vision-quality-message" role="status">
             {{
               visionReviewMessage
-                || "Đánh giá chỉ lưu metadata trong RAM của phiên runtime; không lưu ảnh hay nội dung mô tả."
+                || (
+                  selectedVisionSceneTags.length < 1
+                    ? "Hãy chọn ít nhất một loại cảnh trước khi chấm Đúng / Thiếu / Sai."
+                    : "Đánh giá chỉ lưu metadata cố định trong RAM; không lưu ảnh hay nội dung mô tả."
+                )
             }}
           </p>
         </section>
@@ -503,12 +576,42 @@ function formatVisionModelSize(bytes: number | null): string {
         <span><b>{{ visionQualityReview.ratings.partial }}</b> thiếu</span>
         <span><b>{{ visionQualityReview.ratings.incorrect }}</b> sai</span>
       </div>
+      <section class="vision-scene-diversity" aria-labelledby="visionSceneDiversityTitle">
+        <div>
+          <p class="eyebrow">SCENE DIVERSITY / ĐỘ ĐA DẠNG</p>
+          <h4 id="visionSceneDiversityTitle">
+            {{ visionQualityReview.sceneDiversity.coveredTags }}
+            / {{ visionQualityReview.sceneDiversity.minimumCoveredTags }} nhóm đã đủ mẫu
+          </h4>
+          <p>
+            Một nhóm chỉ được tính khi có ít nhất
+            {{ visionQualityReview.sceneDiversity.minimumSamplesPerCoveredTag }} ảnh đã chấm.
+            Đây là metadata do bạn tự chọn, Hina không tự đoán loại cảnh.
+          </p>
+        </div>
+        <div class="vision-scene-diversity-grid">
+          <span
+            v-for="tag in visionQualityReview.sceneDiversity.fixedAllowlist"
+            :key="tag"
+            :data-covered="
+              String(
+                visionQualityReview.sceneDiversity.counts[tag]
+                  >= visionQualityReview.sceneDiversity.minimumSamplesPerCoveredTag,
+              )
+            "
+          >
+            <b>{{ visionSceneTagLabel(tag) }}</b>
+            <small>{{ visionQualityReview.sceneDiversity.counts[tag] }} ảnh</small>
+          </span>
+        </div>
+      </section>
       <p>
         Mốc theo dõi của phiên: ít nhất {{ visionQualityReview.minimumRatedSamples }} ảnh,
-        điểm có trọng số ≥{{ visionQualityReview.targetPercent.toFixed(0) }}%.
+        điểm có trọng số ≥{{ visionQualityReview.targetPercent.toFixed(0) }}% và ít nhất
+        {{ visionQualityReview.sceneDiversity.minimumCoveredTags }} nhóm cảnh đủ mẫu.
         {{
           visionQualityReview.candidateTargetMet
-            ? "Phiên này đã chạm mốc candidate, nhưng vẫn cần bạn duyệt độ đa dạng ảnh trước khi promotion."
+            ? "Phiên này đã chạm mốc candidate về số lượng, điểm và độ đa dạng; promotion vẫn cần bạn duyệt thủ công."
             : "Chưa đủ bằng chứng để coi model đã qua scene-QA."
         }}
       </p>

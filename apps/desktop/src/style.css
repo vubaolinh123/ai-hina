@@ -876,6 +876,38 @@ pre,
   gap: 8px;
 }
 
+.vision-scene-tags {
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+}
+
+.vision-scene-tags legend {
+  padding: 0 6px;
+  color: var(--muted);
+}
+
+.vision-scene-tags label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 5px 8px 5px 0;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.vision-scene-tags label.selected {
+  border-color: var(--success);
+  color: var(--success);
+  background: rgba(95, 221, 161, 0.12);
+}
+
+.vision-scene-tags label:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .vision-quality-actions button.selected {
   border-color: var(--success);
   color: var(--success);
@@ -925,6 +957,38 @@ pre,
 .vision-quality-progress small {
   color: var(--muted);
   font-size: 12px;
+}
+
+.vision-scene-diversity {
+  margin-top: 4px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  background: rgba(95, 221, 161, 0.05);
+}
+
+.vision-scene-diversity h4,
+.vision-scene-diversity p {
+  margin: 4px 0;
+}
+
+.vision-scene-diversity-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.vision-scene-diversity-grid > span {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid var(--border);
+}
+
+.vision-scene-diversity-grid > span[data-covered="true"] {
+  border-color: var(--success);
+  color: var(--success);
 }
 
 .vision-calibration-panel {

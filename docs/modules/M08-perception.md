@@ -1201,3 +1201,38 @@ provenance before they may replace the pinned checkpoint.
 - This closes the deterministic VLM-burst/resource-pressure row. The owner
   Vision ≥85% scene-accuracy/diversity gate remains open and still blocks M08
   promotion.
+
+## Implemented in M08-S31 (owner scene-diversity QA)
+
+- Every owner rating now includes one to three fixed scene tags:
+  `gameplay`, `menu_hud`, `chat_text`, `desktop_ui`, `motion_effects` or
+  `dark_occluded`. The desktop explains them in Vietnamese and disables the
+  Đúng/Thiếu/Sai buttons until at least one tag is selected.
+- The Electron client and runtime route reject missing, empty, duplicate,
+  arbitrary or more-than-three tags before the review can enter the ledger.
+  No free-form label, image-derived classification or model call is accepted.
+- The memory-only ledger stores the fixed tags alongside the existing bounded
+  metadata. Status exposes aggregate counts only. It still does not expose
+  per-observation records and never retains pixels, summaries, prompts,
+  filenames or owner corrections.
+- A category is provisionally covered after at least two rated images use it.
+  `candidateTargetMet` now requires all three conditions: at least 20 rated
+  images, weighted score at least 85% and at least four covered categories.
+  `promotionApproved` remains false and only the owner can accept the real run.
+- Rerating replaces both score and tags without incrementing the sample count.
+  Resetting the current provider/model profile removes the associated aggregate
+  category contribution together with the existing in-memory samples.
+
+## Fast evidence M08-S31 (owner machine)
+
+- Perception worker: 69 tests pass, including fixed-tag validation, rerating,
+  profile isolation and a deterministic comparison between a 20-image diverse
+  run and a 20-image single-category run.
+- Core Perception route: 14 tests pass. Desktop production build and all 58
+  Node tests pass; Vue/Node TypeScript typecheck passes separately.
+- `pnpm test:fast`: 257 tests pass in 17.8 seconds across Safety, Text brain,
+  Memory, Avatar, Speech, Perception and Core Runtime.
+- No real model, Cloud request, capture, GPU allocation, image/audio file,
+  dependency or retained QA artifact is involved. The Dashboard is now ready
+  to collect the owner-run evidence; M08 remains open until that real varied
+  run is completed and accepted.

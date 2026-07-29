@@ -27,9 +27,10 @@ class VisionQualityLedgerTests(unittest.TestCase):
             confidence=0.15,
         )
 
-        reviewed = ledger.review(first, "correct")
+        reviewed = ledger.review(first, "correct", ["gameplay"])
         self.assertFalse(reviewed["replaced"])
-        ledger.review(second, "partial")
+        self.assertEqual(reviewed["sceneTags"], ["gameplay"])
+        ledger.review(second, "partial", ["menu_hud"])
         before_rerate = ledger.status(
             provider="ollama_cloud",
             model="minimax-m3",
@@ -39,8 +40,9 @@ class VisionQualityLedgerTests(unittest.TestCase):
             before_rerate["calibration"]["meanObservedScorePercent"],
             75.0,
         )
-        rerated = ledger.review(second, "incorrect")
+        rerated = ledger.review(second, "incorrect", ["chat_text", "menu_hud"])
         self.assertTrue(rerated["replaced"])
+        self.assertEqual(rerated["sceneTags"], ["menu_hud", "chat_text"])
 
         status = ledger.status(provider="ollama_cloud", model="minimax-m3")
         self.assertEqual(status["registeredSamples"], 2)
@@ -59,6 +61,11 @@ class VisionQualityLedgerTests(unittest.TestCase):
         self.assertFalse(status["promotionApproved"])
         self.assertFalse(status["storesPixels"])
         self.assertFalse(status["storesSummaries"])
+        self.assertEqual(status["schemaVersion"], "1.1")
+        self.assertEqual(status["sceneDiversity"]["counts"]["gameplay"], 1)
+        self.assertEqual(status["sceneDiversity"]["counts"]["menu_hud"], 1)
+        self.assertEqual(status["sceneDiversity"]["counts"]["chat_text"], 1)
+        self.assertFalse(status["sceneDiversity"]["targetMet"])
 
     def test_capacity_evicts_oldest_and_profiles_do_not_mix(self) -> None:
         ledger = VisionQualityLedger(capacity=2)
@@ -88,7 +95,7 @@ class VisionQualityLedgerTests(unittest.TestCase):
         )
 
         with self.assertRaises(PerceptionError):
-            ledger.review(removed, "correct")
+            ledger.review(removed, "correct", ["gameplay"])
         self.assertEqual(
             ledger.status(provider="ollama_cloud", model="model-a")[
                 "registeredSamples"
@@ -119,8 +126,8 @@ class VisionQualityLedgerTests(unittest.TestCase):
                 state="ready",
                 confidence=0.8,
             )
-        ledger.review(cloud_rated, "correct")
-        ledger.review(local, "partial")
+        ledger.review(cloud_rated, "correct", ["desktop_ui"])
+        ledger.review(local, "partial", ["gameplay"])
 
         reset = ledger.reset_profile(
             provider="ollama_cloud",
@@ -170,7 +177,7 @@ class VisionQualityLedgerTests(unittest.TestCase):
                 confidence=confidence,
             )
             if rating is not None:
-                ledger.review(observation_id, rating)
+                ledger.review(observation_id, rating, ["gameplay"])
         other_profile = str(uuid4())
         ledger.register(
             other_profile,
@@ -179,7 +186,7 @@ class VisionQualityLedgerTests(unittest.TestCase):
             state="ready",
             confidence=1.0,
         )
-        ledger.review(other_profile, "incorrect")
+        ledger.review(other_profile, "incorrect", ["desktop_ui"])
 
         status = ledger.status(provider="ollama_cloud", model="vision-a")
         self.assertEqual(status["states"], {"ready": 3, "abstained": 1})
@@ -255,13 +262,74 @@ class VisionQualityLedgerTests(unittest.TestCase):
             confidence=0.8,
         )
         with self.assertRaises(PerceptionError):
-            ledger.review(observation_id, "mostly-correct")
+            ledger.review(observation_id, "mostly-correct", ["gameplay"])
         with self.assertRaises(PerceptionError):
-            ledger.review(observation_id, ["correct"])  # type: ignore[arg-type]
+            ledger.review(  # type: ignore[arg-type]
+                observation_id,
+                ["correct"],
+                ["gameplay"],
+            )
         with self.assertRaises(PerceptionError):
-            ledger.review(observation_id.upper(), "correct")
+            ledger.review(observation_id.upper(), "correct", ["gameplay"])
         with self.assertRaises(PerceptionError):
-            ledger.review(str(uuid4()), "correct")
+            ledger.review(str(uuid4()), "correct", ["gameplay"])
+        for invalid_tags in (
+            [],
+            ["gameplay", "gameplay"],
+            ["gameplay", "menu_hud", "chat_text", "desktop_ui"],
+            ["not-allowlisted"],
+            "gameplay",
+        ):
+            with self.assertRaises(PerceptionError):
+                ledger.review(observation_id, "correct", invalid_tags)
+
+    def test_candidate_requires_score_sample_count_and_scene_diversity(self) -> None:
+        diverse = VisionQualityLedger()
+        narrow = VisionQualityLedger()
+        coverage_tags = (
+            "gameplay",
+            "menu_hud",
+            "chat_text",
+            "desktop_ui",
+        )
+        for index in range(20):
+            diverse_id = str(uuid4())
+            narrow_id = str(uuid4())
+            for ledger, observation_id in (
+                (diverse, diverse_id),
+                (narrow, narrow_id),
+            ):
+                ledger.register(
+                    observation_id,
+                    provider="ollama_cloud",
+                    model="vision-a",
+                    state="ready",
+                    confidence=0.9,
+                )
+            diverse.review(
+                diverse_id,
+                "correct",
+                [coverage_tags[index % len(coverage_tags)]],
+            )
+            narrow.review(narrow_id, "correct", ["gameplay"])
+
+        diverse_status = diverse.status(
+            provider="ollama_cloud",
+            model="vision-a",
+        )
+        narrow_status = narrow.status(
+            provider="ollama_cloud",
+            model="vision-a",
+        )
+
+        self.assertEqual(diverse_status["weightedScorePercent"], 100.0)
+        self.assertEqual(diverse_status["sceneDiversity"]["coveredTags"], 4)
+        self.assertTrue(diverse_status["sceneDiversity"]["targetMet"])
+        self.assertTrue(diverse_status["candidateTargetMet"])
+        self.assertEqual(narrow_status["weightedScorePercent"], 100.0)
+        self.assertEqual(narrow_status["sceneDiversity"]["coveredTags"], 1)
+        self.assertFalse(narrow_status["sceneDiversity"]["targetMet"])
+        self.assertFalse(narrow_status["candidateTargetMet"])
 
 
 if __name__ == "__main__":

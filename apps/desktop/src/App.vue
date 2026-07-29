@@ -669,7 +669,10 @@ async function askHinaAboutLastCapture(): Promise<void> {
   await sendDesktopChat();
 }
 
-async function reviewLastVisionCapture(rating: VisionQualityRating): Promise<void> {
+async function reviewLastVisionCapture(
+  rating: VisionQualityRating,
+  sceneTags: VisionSceneTag[],
+): Promise<void> {
   const observation = screenCaptureResult.value?.observation;
   if (
     visionReviewBusy.value
@@ -684,6 +687,7 @@ async function reviewLastVisionCapture(rating: VisionQualityRating): Promise<voi
     const result = await window.hinaDesktop.reviewVisionObservation({
       observationId: observation.observationId,
       rating,
+      sceneTags,
     });
     visionReviewRating.value = result.rating;
     visionReviewMessage.value = result.replaced

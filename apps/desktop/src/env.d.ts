@@ -278,6 +278,13 @@ type SpoutBridgeStatus = {
 
 type VisionProviderChoice = "ollama_local" | "ollama_cloud";
 type VisionQualityRating = "correct" | "partial" | "incorrect";
+type VisionSceneTag =
+  | "gameplay"
+  | "menu_hud"
+  | "chat_text"
+  | "desktop_ui"
+  | "motion_effects"
+  | "dark_occluded";
 
 type VisionCalibrationBin = {
   lowerConfidence: number;
@@ -307,7 +314,7 @@ type VisionCalibrationStatus = {
 };
 
 type VisionQualityReviewStatus = {
-  schemaVersion: "1.0";
+  schemaVersion: "1.1";
   storage: "memory-only";
   persistsAfterRestart: false;
   storesPixels: false;
@@ -333,6 +340,15 @@ type VisionQualityReviewStatus = {
   weightedScorePercent: number | null;
   targetPercent: number;
   minimumRatedSamples: number;
+  sceneDiversity: {
+    fixedAllowlist: VisionSceneTag[];
+    counts: Record<VisionSceneTag, number>;
+    coveredTags: number;
+    minimumCoveredTags: number;
+    minimumSamplesPerCoveredTag: number;
+    targetMet: boolean;
+    aggregateOnly: true;
+  };
   candidateTargetMet: boolean;
   promotionApproved: false;
   calibration: VisionCalibrationStatus;
@@ -343,6 +359,7 @@ type VisionQualityReviewResponse = {
   status: "reviewed";
   observationId: string;
   rating: VisionQualityRating;
+  sceneTags: VisionSceneTag[];
   replaced: boolean;
   qualityReview?: VisionQualityReviewStatus;
 };
@@ -559,6 +576,7 @@ type HinaDesktopApi = {
   reviewVisionObservation(input: {
     observationId: string;
     rating: VisionQualityRating;
+    sceneTags: VisionSceneTag[];
   }): Promise<VisionQualityReviewResponse>;
   resetVisionQualitySession(): Promise<VisionQualityResetResponse>;
   clearVisionApiKey(): Promise<{

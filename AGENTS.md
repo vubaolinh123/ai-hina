@@ -404,6 +404,13 @@ một lần. `E_RESOURCE_CAPACITY` hoặc `E_RESOURCE_LEASE_EXPIRED` được ma
 retryable `E_PERCEPTION_VISION_CAPACITY` trước model call, không CPU fallback.
 Perception 68 và `pnpm test:fast` 256 xanh; không real model/Cloud/capture/GPU/
 artifact. Scene-QA ≥85% vẫn là gate owner cần chấm.
+Ngày 2026-07-29 M08-S31 làm gate scene-diversity đo được trên Dashboard. Mỗi
+rating cần 1–3 fixed scene tag; tag rỗng/trùng/lạ/quá ba fail closed. Ledger
+chỉ giữ metadata bounded trong RAM và trả aggregate counts. Một nhóm được phủ
+khi có ≥2 ảnh; `candidateTargetMet` cần đồng thời ≥20 ảnh, score ≥85% và ≥4
+nhóm được phủ, còn `promotionApproved=false`. Perception 69, route 14, Desktop
+build/58 + typecheck và `pnpm test:fast` 257 xanh; không model/Cloud/capture/
+GPU/artifact. Owner vẫn phải chấm và duyệt phiên ảnh thật trước M08 promotion.
 Future M11 dùng post-trained Hugging Face `Qwen/Qwen3.5-4B` frozen làm QLoRA
 SFT base, sau đó DPO/ORPO từ dữ liệu owner-curated. Không train trực tiếp GGUF,
 không mặc định bắt đầu từ raw Base và Qwen3.5-9B chỉ benchmark/fallback thủ công,

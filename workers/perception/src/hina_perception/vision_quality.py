@@ -12,6 +12,19 @@ VISION_QUALITY_MINIMUM_RATED_SAMPLES = 20
 VISION_QUALITY_TARGET_PERCENT = 85.0
 VISION_QUALITY_RELIABILITY_BIN_COUNT = 5
 VISION_QUALITY_RATINGS = frozenset({"correct", "partial", "incorrect"})
+VISION_SCENE_TAGS = (
+    "gameplay",
+    "menu_hud",
+    "chat_text",
+    "desktop_ui",
+    "motion_effects",
+    "dark_occluded",
+)
+VISION_SCENE_TAG_SET = frozenset(VISION_SCENE_TAGS)
+VISION_SCENE_MINIMUM_TAGS = 1
+VISION_SCENE_MAXIMUM_TAGS = 3
+VISION_SCENE_MINIMUM_COVERED_TAGS = 4
+VISION_SCENE_MINIMUM_SAMPLES_PER_TAG = 2
 _RATING_WEIGHTS = {
     "correct": 1.0,
     "partial": 0.5,
@@ -26,6 +39,7 @@ class _VisionQualitySample:
     state: str
     confidence: float
     rating: str | None = None
+    scene_tags: tuple[str, ...] = ()
 
 
 class VisionQualityLedger:
@@ -73,17 +87,24 @@ class VisionQualityLedger:
             state=state,
             confidence=float(confidence),
             rating=existing.rating if existing is not None else None,
+            scene_tags=existing.scene_tags if existing is not None else (),
         )
         while len(self._samples) > self._capacity:
             del self._samples[next(iter(self._samples))]
 
-    def review(self, observation_id: str, rating: str) -> dict[str, object]:
+    def review(
+        self,
+        observation_id: str,
+        rating: str,
+        scene_tags: object,
+    ) -> dict[str, object]:
         _validate_uuid(observation_id)
         if not isinstance(rating, str) or rating not in VISION_QUALITY_RATINGS:
             raise PerceptionError(
                 "E_PERCEPTION_REQUEST",
                 "Vision scene-QA rating must be correct, partial or incorrect",
             )
+        normalized_scene_tags = _normalize_scene_tags(scene_tags)
         sample = self._samples.get(observation_id)
         if sample is None:
             raise PerceptionError(
@@ -92,9 +113,11 @@ class VisionQualityLedger:
             )
         replaced = sample.rating is not None
         sample.rating = rating
+        sample.scene_tags = normalized_scene_tags
         return {
             "observationId": observation_id,
             "rating": rating,
+            "sceneTags": list(normalized_scene_tags),
             "replaced": replaced,
         }
 
@@ -146,15 +169,28 @@ class VisionQualityLedger:
             state: sum(1 for sample in profile_samples if sample.state == state)
             for state in ("ready", "abstained")
         }
+        scene_tag_counts = {
+            tag: sum(1 for sample in rated if tag in sample.scene_tags)
+            for tag in VISION_SCENE_TAGS
+        }
+        covered_scene_tags = sum(
+            1
+            for count in scene_tag_counts.values()
+            if count >= VISION_SCENE_MINIMUM_SAMPLES_PER_TAG
+        )
+        diversity_target_met = (
+            covered_scene_tags >= VISION_SCENE_MINIMUM_COVERED_TAGS
+        )
         weighted = sum(_RATING_WEIGHTS.get(sample.rating or "", 0.0) for sample in rated)
         score = round(weighted / len(rated) * 100.0, 1) if rated else None
         candidate_ready = (
             len(rated) >= VISION_QUALITY_MINIMUM_RATED_SAMPLES
             and score is not None
             and score >= VISION_QUALITY_TARGET_PERCENT
+            and diversity_target_met
         )
         return {
-            "schemaVersion": "1.0",
+            "schemaVersion": "1.1",
             "storage": "memory-only",
             "persistsAfterRestart": False,
             "storesPixels": False,
@@ -177,6 +213,15 @@ class VisionQualityLedger:
             "weightedScorePercent": score,
             "targetPercent": VISION_QUALITY_TARGET_PERCENT,
             "minimumRatedSamples": VISION_QUALITY_MINIMUM_RATED_SAMPLES,
+            "sceneDiversity": {
+                "fixedAllowlist": list(VISION_SCENE_TAGS),
+                "counts": scene_tag_counts,
+                "coveredTags": covered_scene_tags,
+                "minimumCoveredTags": VISION_SCENE_MINIMUM_COVERED_TAGS,
+                "minimumSamplesPerCoveredTag": VISION_SCENE_MINIMUM_SAMPLES_PER_TAG,
+                "targetMet": diversity_target_met,
+                "aggregateOnly": True,
+            },
             "candidateTargetMet": candidate_ready,
             "promotionApproved": False,
             "calibration": _calibration_status(rated),
@@ -311,6 +356,21 @@ def _validate_uuid(value: str) -> None:
             "E_PERCEPTION_REQUEST",
             "Vision observation ID must use canonical UUID form",
         )
+
+
+def _normalize_scene_tags(value: object) -> tuple[str, ...]:
+    if (
+        not isinstance(value, (list, tuple))
+        or not VISION_SCENE_MINIMUM_TAGS <= len(value) <= VISION_SCENE_MAXIMUM_TAGS
+        or any(not isinstance(tag, str) or tag not in VISION_SCENE_TAG_SET for tag in value)
+        or len(set(value)) != len(value)
+    ):
+        raise PerceptionError(
+            "E_PERCEPTION_REQUEST",
+            "Vision scene-QA requires one to three unique allowlisted scene tags",
+        )
+    selected = set(value)
+    return tuple(tag for tag in VISION_SCENE_TAGS if tag in selected)
 
 
 def _bounded_text(value: str, name: str, maximum: int) -> str:

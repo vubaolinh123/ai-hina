@@ -300,6 +300,12 @@ test("full-frame screen capture stays in Electron main behind one-use grants", (
   assert.match(client, /source:\s*"owner\.desktop"/);
   assert.match(client, /ownerConfirmed:\s*true/);
   assert.match(renderer, /OWNER SCENE QA/);
+  assert.match(renderer, /SCENE DIVERSITY \/ ĐỘ ĐA DẠNG/);
+  assert.match(renderer, /Chọn 1–3 mục để đo độ đa dạng/);
+  assert.match(renderer, /selectedVisionSceneTags/);
+  assert.match(client, /allowedSceneTags/);
+  assert.match(client, /raw\.sceneTags\.length > 3/);
+  assert.match(client, /new Set\(raw\.sceneTags\)\.size/);
   assert.match(renderer, /CONFIDENCE CALIBRATION \/ CHẨN ĐOÁN/);
   assert.match(renderer, /không tự đổi ngưỡng 0,60/);
   assert.match(renderer, /không mở quyền điều khiển game/);
@@ -332,6 +338,7 @@ test("Vision scene-QA client rejects arbitrary ratings before network I/O", asyn
     control.requestVisionReview({
       observationId: "11111111-1111-4111-8111-111111111111",
       rating: "looks-good",
+      sceneTags: ["gameplay"],
     }),
     /E_DESKTOP_VISION_REVIEW/,
   );
@@ -339,9 +346,26 @@ test("Vision scene-QA client rejects arbitrary ratings before network I/O", asyn
     control.requestVisionReview({
       observationId: "not-a-uuid",
       rating: "correct",
+      sceneTags: ["gameplay"],
     }),
     /E_DESKTOP_VISION_REVIEW/,
   );
+  for (const sceneTags of [
+    [],
+    ["gameplay", "gameplay"],
+    ["gameplay", "menu_hud", "chat_text", "desktop_ui"],
+    ["arbitrary"],
+    "gameplay",
+  ]) {
+    await assert.rejects(
+      control.requestVisionReview({
+        observationId: "11111111-1111-4111-8111-111111111111",
+        rating: "correct",
+        sceneTags,
+      }),
+      /E_DESKTOP_VISION_REVIEW/,
+    );
+  }
 });
 
 test("VTube Studio stays in the main process behind operator-only typed IPC", () => {

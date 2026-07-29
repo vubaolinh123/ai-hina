@@ -549,13 +549,29 @@ export async function requestVisionDisable(): Promise<JsonObject> {
 }
 
 export async function requestVisionReview(raw: unknown): Promise<JsonObject> {
+  const allowedSceneTags = new Set([
+    "gameplay",
+    "menu_hud",
+    "chat_text",
+    "desktop_ui",
+    "motion_effects",
+    "dark_occluded",
+  ]);
   if (
     !isObject(raw)
-    || Object.keys(raw).length !== 2
+    || Object.keys(raw).length !== 3
     || !("observationId" in raw)
     || !("rating" in raw)
+    || !("sceneTags" in raw)
     || typeof raw.rating !== "string"
     || !["correct", "partial", "incorrect"].includes(raw.rating)
+    || !Array.isArray(raw.sceneTags)
+    || raw.sceneTags.length < 1
+    || raw.sceneTags.length > 3
+    || raw.sceneTags.some(
+      (tag) => typeof tag !== "string" || !allowedSceneTags.has(tag),
+    )
+    || new Set(raw.sceneTags).size !== raw.sceneTags.length
   ) {
     throw new Error("E_DESKTOP_VISION_REVIEW: review fields are invalid");
   }
@@ -568,6 +584,7 @@ export async function requestVisionReview(raw: unknown): Promise<JsonObject> {
         "E_DESKTOP_VISION_REVIEW",
       ),
       rating: raw.rating,
+      sceneTags: raw.sceneTags,
       source: "owner.desktop",
       ownerConfirmed: true,
     },

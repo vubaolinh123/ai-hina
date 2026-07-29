@@ -608,6 +608,7 @@ class ControlPlaneServer:
             if set(payload) != {
                 "observationId",
                 "rating",
+                "sceneTags",
                 "source",
                 "ownerConfirmed",
             }:
@@ -619,6 +620,7 @@ class ControlPlaneServer:
                 "review_vision_observation",
                 observation_id=payload.get("observationId"),
                 rating=payload.get("rating"),
+                scene_tags=payload.get("sceneTags"),
                 source=payload.get("source"),
                 owner_confirmed=payload.get("ownerConfirmed"),
             )
