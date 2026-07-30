@@ -1,0 +1,62 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M09-S11-minecraft-workflow-trace",
+  "module_id": "M09",
+  "objective": "Make every owner-issued Minecraft goal visibly traceable beside the natural-language form: show bounded planner, allowlist, controller and postcondition stages with timings and final errors while preserving the existing deterministic gameplay authority.",
+  "non_goals": [
+    "Do not expose, persist or log hidden chain-of-thought, raw model output, the full system prompt, secrets, tokens, Mineflayer objects, raw inventory, coordinates, generated code or action sequences.",
+    "Do not add a new gameplay goal, manual action button, planner retry, controller retry, pathfinding, crafting, combat, viewer authority or widget authority.",
+    "Do not change the existing model, model parameters, Safety decision, action allowlist or Minecraft controller behavior."
+  ],
+  "base_sha": "dc5be310977d34f04b053a8380e40cbe24b1d20a",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "apps/desktop/electron/main.ts",
+    "apps/desktop/electron/preload.ts",
+    "apps/desktop/src/App.vue",
+    "apps/desktop/src/env.d.ts",
+    "apps/desktop/src/dashboard/pages/MinecraftPage.vue",
+    "apps/desktop/test",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "docs/modules/M09-minecraft-agent.md",
+    "docs/architecture/desktop-dashboard-modularity.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    "AGENTS.md",
+    ".claude",
+    "CLAUDE.md",
+    "docs/research/deep-research-report.md",
+    "var",
+    ".gitnexus",
+    "packages/text-brain/src/hina_text_brain/minecraft_goals.py",
+    "adapters/minecraft/src",
+    "package.json",
+    "pnpm-lock.yaml"
+  ],
+  "contracts": [
+    "Electron main emits only a fixed, validated workflow-event schema to the trusted operator renderer and logs the same bounded stages to the owner terminal.",
+    "The trace identifies the public planner profile/version, fixed output schema, selected allowlisted goal, controller start/result, durations and stable failure detail; it never claims to be raw model reasoning.",
+    "Renderer retention is memory-only, resets per owner submission and remains bounded; the trace is visible immediately beside the goal form so final controller failures cannot be hidden above the current scroll position."
+  ],
+  "allowed_dependencies": [],
+  "oss_candidates": [],
+  "acceptance_criteria": [
+    "Submitting a goal immediately shows request/planner progress, then selected-goal and controller/postcondition result or the exact bounded error beside the form.",
+    "The owner terminal receives one bounded structured line per workflow stage with a workflow ID and no raw prompt, hidden reasoning, secret or raw model output.",
+    "Preload rejects malformed or oversized progress events before invoking renderer code, and widget/non-operator surfaces still cannot issue or observe Minecraft workflows.",
+    "Existing Minecraft behavior, typed loopback boundaries, Safety feature gate and one-goal allowlist remain unchanged."
+  ],
+  "required_test_commands": [
+    "pnpm test:desktop",
+    "pnpm test:minecraft",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "event_overhead": "at most eight small in-memory progress records per request; no network request or model call is added",
+    "retention": "renderer memory and owner terminal only for the running session; no workflow trace file, prompt or model output persistence",
+    "privacy": "user-entered goal remains in the existing textarea; trace contains no prompt body, chain-of-thought, credentials or raw game state"
+  },
+  "output_artifact_dir": "artifacts/verification/M09/"
+}

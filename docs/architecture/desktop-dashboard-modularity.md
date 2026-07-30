@@ -115,3 +115,10 @@ pnpm test:desktop
   inventory and equip only a fixed-priority owned axe; when none is present it
   explicitly uses an empty hand. The page cannot show or choose a tool/slot.
   Recipe lookup, crafting and any tool retry remain unavailable.
+- Minecraft workflow observability stays presentation-only. Electron main emits a
+  fixed nine-field event for request/planner/allowlist/controller/postcondition
+  stages, preload validates it, and `MinecraftPage.vue` retains at most eight
+  entries in memory beside the goal form. The same bounded event is printed to
+  the owner terminal. Raw system prompts, model output, hidden chain-of-thought,
+  secrets, coordinates and action sequences are not trace fields and never
+  cross into the renderer.

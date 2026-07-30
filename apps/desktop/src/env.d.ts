@@ -140,6 +140,25 @@ type MinecraftGoalResponse = {
   minecraft: MinecraftStatus;
 };
 
+type MinecraftGoalProgress = {
+  schemaVersion: 1;
+  workflowId: string;
+  sequence: number;
+  occurredAt: string;
+  stage:
+    | "request.received"
+    | "planner.started"
+    | "planner.completed"
+    | "controller.started"
+    | "controller.completed"
+    | "postcondition.completed"
+    | "workflow.failed";
+  status: "running" | "succeeded" | "failed" | "unsupported";
+  title: string;
+  detail: string;
+  elapsedMs: number;
+};
+
 type ResourceTelemetry = {
   gpuName: string;
   totalVramMiB: number;
@@ -636,6 +655,9 @@ type HinaDesktopApi = {
     minecraft: MinecraftStatus;
   }>;
   runMinecraftGoal(input: string): Promise<MinecraftGoalResponse>;
+  onMinecraftGoalProgress(
+    listener: (progress: MinecraftGoalProgress) => void,
+  ): () => void;
   emergencyStopMinecraft(): Promise<{
     status: string;
     minecraft: MinecraftStatus;

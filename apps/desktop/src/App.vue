@@ -136,6 +136,8 @@ const resourceControlMessage = ref("");
 const minecraftStatus = ref<MinecraftStatus | null>(null);
 const minecraftBusy = ref(false);
 const minecraftNotice = ref("");
+const minecraftWorkflowTrace = ref<MinecraftGoalProgress[]>([]);
+let disposeMinecraftGoalProgress: (() => void) | null = null;
 const resourceSamples = ref<Array<{
   sampledAt: number;
   usedVramMiB: number;
@@ -1193,7 +1195,7 @@ async function refreshMinecraft(): Promise<void> {
   }
   try {
     minecraftStatus.value = await window.hinaDesktop.getMinecraftStatus();
-    if (minecraftNotice.value.startsWith("E_")) {
+    if (minecraftNotice.value.startsWith("E_DESKTOP_MINECRAFT_STATUS")) {
       minecraftNotice.value = "";
     }
   } catch (error) {
@@ -1265,6 +1267,7 @@ async function disconnectMinecraft(): Promise<void> {
 async function runMinecraftGoal(input: { text: string }): Promise<void> {
   if (minecraftBusy.value) return;
   minecraftBusy.value = true;
+  minecraftWorkflowTrace.value = [];
   minecraftNotice.value = "Hina đang phân tích mục tiêu theo allowlist an toàn…";
   try {
     const result = await window.hinaDesktop.runMinecraftGoal(input.text);
@@ -1289,6 +1292,24 @@ async function runMinecraftGoal(input: { text: string }): Promise<void> {
     minecraftBusy.value = false;
     await refreshMinecraft();
   }
+}
+
+function handleMinecraftGoalProgress(progress: MinecraftGoalProgress): void {
+  const previous =
+    minecraftWorkflowTrace.value[minecraftWorkflowTrace.value.length - 1] ?? null;
+  if (
+    progress.sequence === 1
+    || previous === null
+    || previous.workflowId !== progress.workflowId
+  ) {
+    minecraftWorkflowTrace.value = [progress];
+    return;
+  }
+  if (progress.sequence <= previous.sequence) return;
+  minecraftWorkflowTrace.value = [
+    ...minecraftWorkflowTrace.value,
+    progress,
+  ].slice(-8);
 }
 
 async function emergencyStopMinecraft(): Promise<void> {
@@ -1448,6 +1469,10 @@ function cleanupDesktop(): void {
     removeScreenCaptureProgressListener();
     removeScreenCaptureProgressListener = null;
   }
+  if (disposeMinecraftGoalProgress !== null) {
+    disposeMinecraftGoalProgress();
+    disposeMinecraftGoalProgress = null;
+  }
 }
 
 watch(activePage, (page) => {
@@ -1469,6 +1494,9 @@ onMounted(async () => {
   if (windowMode.value !== "operator") return;
   removeScreenCaptureProgressListener = window.hinaDesktop.onScreenCaptureProgress(
     handleScreenCaptureProgress,
+  );
+  disposeMinecraftGoalProgress = window.hinaDesktop.onMinecraftGoalProgress(
+    handleMinecraftGoalProgress,
   );
   await Promise.all([
     refreshAvatarRuntime(),
@@ -1648,6 +1676,7 @@ onBeforeUnmount(() => {
       :status="minecraftStatus"
       :busy="minecraftBusy"
       :notice="minecraftNotice"
+      :workflow-trace="minecraftWorkflowTrace"
       :game-action-enabled="minecraftGameActionEnabled"
       @refresh="refreshMinecraft"
       @connect="connectMinecraft"

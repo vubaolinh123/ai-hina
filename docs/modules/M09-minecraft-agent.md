@@ -323,3 +323,30 @@ Fast evidence:
 - `pnpm test:desktop` production build + 67 tests pass.
 - Không chạy LAN/server Minecraft thật, provider model thật hay deep/soak gate;
   owner vẫn kiểm tra chất lượng gameplay trong world thật.
+
+## M09-S11 — Decision trace của workflow Minecraft
+
+- Lỗi owner thấy “Sẵn sàng…” nhưng Hina đứng im có hai phần. Dòng đó chỉ là trạng
+  thái điều kiện của form, không phải kết quả model. Đồng thời `refreshMinecraft()`
+  trước đây xóa mọi notice bắt đầu bằng `E_` ngay sau request, nên lỗi controller
+  thật biến mất trước khi owner kịp đọc.
+- Desktop nay giữ lỗi planner/controller sau refresh và hiển thị decision trace ngay
+  cạnh ô nhập: nhận request, model phân loại, goal allowlist, controller, hậu kiểm
+  hoặc lỗi. Mỗi bước có workflow UUID, thứ tự và elapsed time; cùng trace bounded
+  được ghi ra terminal dưới prefix `[hina-desktop:minecraft:TRACE]`.
+- Event đi Electron main → typed preload → operator renderer bằng schema đúng chín
+  field, tối đa tám record trong RAM và reset mỗi request. Widget không nhận trace;
+  không có file trace, model call, network request hay quyền gameplay mới.
+- Dashboard công khai profile `minecraft.goal.v1`, hai JSON result hợp lệ và mô tả
+  policy để owner chỉnh workflow. Raw system prompt, raw model output và hidden
+  chain-of-thought không được render/log/persist; chúng không phải state evidence và
+  không được dùng để điều khiển Mineflayer.
+
+Fast evidence:
+
+- Module brief schema pass; Desktop production build + 69 tests pass, gồm parser
+  từ chối field `reasoning`, `prompt`, event dư field, sai UUID/bounds.
+- Minecraft build + 66 tests pass; controller/allowlist/Safety không đổi.
+- Audit thật trước fix xác nhận ba request owner ngày 2026-07-30 đều qua preflight
+  và consume `game.action`, nên planner đã chọn goal hợp lệ; lỗi thực thi bị UI xóa.
+  Không chạy lại LAN/model smoke trong slice này.

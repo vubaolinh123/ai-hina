@@ -1,4 +1,8 @@
 import { contextBridge, ipcRenderer } from "electron";
+import {
+  parseMinecraftGoalProgress,
+  type MinecraftGoalProgress,
+} from "./minecraft-workflow";
 
 const CHANNELS = Object.freeze({
   windowMode: "hina:window:mode",
@@ -38,6 +42,7 @@ const CHANNELS = Object.freeze({
   minecraftConnect: "hina:minecraft:connect",
   minecraftDisconnect: "hina:minecraft:disconnect",
   minecraftGoal: "hina:minecraft:goal",
+  minecraftGoalProgress: "hina:minecraft:goal:progress",
   minecraftEmergencyStop: "hina:minecraft:emergency-stop",
   captureSources: "hina:capture:sources",
   captureSubmit: "hina:capture:submit",
@@ -142,6 +147,21 @@ const hinaDesktop = Object.freeze({
   disconnectMinecraft: () => ipcRenderer.invoke(CHANNELS.minecraftDisconnect),
   runMinecraftGoal: (input: unknown) =>
     ipcRenderer.invoke(CHANNELS.minecraftGoal, input),
+  onMinecraftGoalProgress: (
+    listener: (progress: MinecraftGoalProgress) => void,
+  ) => {
+    const wrapped = (
+      _event: Electron.IpcRendererEvent,
+      progress: unknown,
+    ): void => {
+      const parsed = parseMinecraftGoalProgress(progress);
+      if (parsed !== null) listener(parsed);
+    };
+    ipcRenderer.on(CHANNELS.minecraftGoalProgress, wrapped);
+    return () => {
+      ipcRenderer.removeListener(CHANNELS.minecraftGoalProgress, wrapped);
+    };
+  },
   emergencyStopMinecraft: () =>
     ipcRenderer.invoke(CHANNELS.minecraftEmergencyStop),
   listScreenCaptureSources: () => ipcRenderer.invoke(CHANNELS.captureSources),

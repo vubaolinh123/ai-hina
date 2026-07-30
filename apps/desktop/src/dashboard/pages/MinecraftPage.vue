@@ -5,6 +5,7 @@ const props = defineProps<{
   status: MinecraftStatus | null;
   busy: boolean;
   notice: string;
+  workflowTrace: MinecraftGoalProgress[];
   gameActionEnabled: boolean;
 }>();
 
@@ -88,6 +89,13 @@ function submitGoal(): void {
 
 function formatNumber(value: number): string {
   return Number.isFinite(value) ? value.toFixed(2) : "—";
+}
+
+function traceStatusLabel(status: MinecraftGoalProgress["status"]): string {
+  if (status === "running") return "Đang chạy";
+  if (status === "succeeded") return "Đạt";
+  if (status === "unsupported") return "Chưa hỗ trợ";
+  return "Dừng";
 }
 </script>
 
@@ -253,8 +261,54 @@ function formatNumber(value: number): string {
           />
         </label>
         <p class="minecraft-goal-state" :data-ready="canRunGoal">
+          <strong>Điều kiện trước khi gửi</strong><br />
           {{ goalAvailabilityMessage }}
         </p>
+        <section class="minecraft-workflow" aria-live="polite">
+          <div class="minecraft-workflow__heading">
+            <div>
+              <p class="eyebrow">DECISION TRACE / KHÔNG PHẢI CHAIN-OF-THOUGHT</p>
+              <h3>Hina đang xử lý mục tiêu đến bước nào?</h3>
+            </div>
+            <span>{{ props.workflowTrace.length }}/8 bước tối đa</span>
+          </div>
+          <p v-if="props.workflowTrace.length === 0" class="minecraft-empty">
+            Chưa có workflow nào trong phiên này. Sau khi bấm nút, các bước model phân
+            loại, allowlist, controller và hậu kiểm sẽ xuất hiện ngay tại đây.
+          </p>
+          <ol v-else class="minecraft-workflow__steps">
+            <li
+              v-for="entry in props.workflowTrace"
+              :key="`${entry.workflowId}:${entry.sequence}`"
+              :data-status="entry.status"
+            >
+              <div>
+                <strong>{{ entry.sequence }}. {{ entry.title }}</strong>
+                <span>
+                  {{ traceStatusLabel(entry.status) }} · +{{ entry.elapsedMs.toFixed(1) }} ms
+                </span>
+              </div>
+              <p>{{ entry.detail }}</p>
+            </li>
+          </ol>
+          <p v-if="props.notice" class="minecraft-workflow__result">
+            <strong>Kết quả hiện tại:</strong> {{ props.notice }}
+          </p>
+          <details class="minecraft-workflow__policy">
+            <summary>Quy tắc planner công khai để bạn chỉnh workflow</summary>
+            <p>
+              Profile <code>minecraft.goal.v1</code> chỉ chấp nhận đúng hai kết quả:
+              <code>{"goalId":"harvest.nearby-log.v2"}</code> hoặc
+              <code>{"goalId":null}</code>. Câu lệnh của bạn chỉ là dữ liệu không tin cậy;
+              model không được trả tọa độ, code hay chuỗi nút bấm.
+            </p>
+            <p>
+              Trace hiển thị quyết định và bằng chứng thực thi thật. Raw prompt, raw model
+              output và hidden reasoning không được render hoặc lưu; chúng không phải log
+              đáng tin để điều khiển game.
+            </p>
+          </details>
+        </section>
         <div class="minecraft-actions">
           <button type="button" :disabled="!canRunGoal" @click="submitGoal">
             Giao mục tiêu cho Hina
@@ -520,6 +574,105 @@ function formatNumber(value: number): string {
 .minecraft-goal-state[data-ready="true"] {
   border-color: #4eaa7c;
   color: #b9dfca;
+}
+
+.minecraft-workflow {
+  background: #100e14;
+  border: 1px solid #413748;
+  display: grid;
+  gap: 14px;
+  margin: 16px 0;
+  padding: 16px;
+}
+
+.minecraft-workflow__heading {
+  align-items: flex-start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.minecraft-workflow__heading h3 {
+  margin: 5px 0 0;
+}
+
+.minecraft-workflow__heading > span {
+  color: #9d91a3;
+  font-family: monospace;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.minecraft-workflow__steps {
+  display: grid;
+  gap: 9px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.minecraft-workflow__steps li {
+  border-left: 3px solid #8a6547;
+  padding: 9px 11px;
+}
+
+.minecraft-workflow__steps li[data-status="succeeded"] {
+  border-color: #4eaa7c;
+}
+
+.minecraft-workflow__steps li[data-status="failed"] {
+  border-color: #db6e82;
+}
+
+.minecraft-workflow__steps li[data-status="unsupported"] {
+  border-color: #b9985f;
+}
+
+.minecraft-workflow__steps li > div {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  justify-content: space-between;
+}
+
+.minecraft-workflow__steps span {
+  color: #a99cab;
+  font-family: monospace;
+  font-size: 12px;
+}
+
+.minecraft-workflow__steps p,
+.minecraft-workflow__policy p {
+  color: #b8adba;
+  line-height: 1.5;
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.minecraft-workflow__result {
+  background: #211b25;
+  border-left: 3px solid #ff9475;
+  line-height: 1.5;
+  margin: 0;
+  overflow-wrap: anywhere;
+  padding: 10px 12px;
+}
+
+.minecraft-workflow__policy {
+  border-top: 1px solid #332d38;
+  padding-top: 12px;
+}
+
+.minecraft-workflow__policy summary {
+  color: #e7dbe4;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.minecraft-workflow__policy code {
+  color: #ffad93;
+  overflow-wrap: anywhere;
 }
 
 .minecraft-scope {

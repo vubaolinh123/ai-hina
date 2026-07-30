@@ -81,6 +81,7 @@ import {
   requestMinecraftGoal,
   requestMinecraftStatus,
 } from "./minecraft-client";
+import type { MinecraftGoalProgress } from "./minecraft-workflow";
 
 const CHANNELS = Object.freeze({
   windowMode: "hina:window:mode",
@@ -120,6 +121,7 @@ const CHANNELS = Object.freeze({
   minecraftConnect: "hina:minecraft:connect",
   minecraftDisconnect: "hina:minecraft:disconnect",
   minecraftGoal: "hina:minecraft:goal",
+  minecraftGoalProgress: "hina:minecraft:goal:progress",
   minecraftEmergencyStop: "hina:minecraft:emergency-stop",
   captureSources: "hina:capture:sources",
   captureSubmit: "hina:capture:submit",
@@ -204,6 +206,18 @@ function validateMinecraftGoalPlan(value: unknown): MinecraftGoalPlan {
     };
   }
   throw new Error("E_DESKTOP_MINECRAFT_GOAL: planner selected an invalid goal");
+}
+
+function emitMinecraftGoalProgress(
+  event: IpcMainInvokeEvent,
+  progress: MinecraftGoalProgress,
+): void {
+  if (!event.sender.isDestroyed()) {
+    event.sender.send(CHANNELS.minecraftGoalProgress, progress);
+  }
+  console.info(
+    `[hina-desktop:minecraft:TRACE] ${JSON.stringify(progress)}`,
+  );
 }
 
 function captureElapsedMilliseconds(startedAt: number): number {
@@ -954,8 +968,52 @@ function registerIpcHandlers(): void {
     if (assertTrustedSender(event) !== "operator") {
       throw new Error("E_DESKTOP_MINECRAFT_AUTHORITY: operator window required");
     }
+    const workflowId = crypto.randomUUID();
+    const workflowStartedAt = performance.now();
+    let traceSequence = 0;
+    const trace = (
+      stage: MinecraftGoalProgress["stage"],
+      status: MinecraftGoalProgress["status"],
+      title: string,
+      detail: string,
+    ): void => {
+      traceSequence += 1;
+      emitMinecraftGoalProgress(event, {
+        schemaVersion: 1,
+        workflowId,
+        sequence: traceSequence,
+        occurredAt: new Date().toISOString(),
+        stage,
+        status,
+        title: title.slice(0, 96),
+        detail: detail.slice(0, 384),
+        elapsedMs: captureElapsedMilliseconds(workflowStartedAt),
+      });
+    };
+    trace(
+      "request.received",
+      "running",
+      "Đã nhận mục tiêu",
+      "Nguồn owner.desktop đã qua typed IPC; chưa có hành động game nào được gửi.",
+    );
     try {
+      trace(
+        "planner.started",
+        "running",
+        "Model đang phân loại mục tiêu",
+        "Profile minecraft.goal.v1 chỉ được trả goalId tĩnh hoặc null; không được tạo tọa độ hay chuỗi thao tác.",
+      );
       const plan = validateMinecraftGoalPlan(await requestMinecraftGoalPlan(input));
+      trace(
+        "planner.completed",
+        plan.state === "ready" ? "succeeded" : "unsupported",
+        plan.state === "ready"
+          ? "Đã chọn goal trong allowlist"
+          : "Chưa có goal an toàn phù hợp",
+        plan.state === "ready"
+          ? `Model chọn ${plan.goalId}; schema và planVersion đã được xác minh.`
+          : "Model trả null; controller không được gọi.",
+      );
       if (plan.state === "unsupported") {
         return {
           status: "unsupported",
@@ -963,14 +1021,76 @@ function registerIpcHandlers(): void {
           minecraft: await requestMinecraftStatus(),
         };
       }
+      trace(
+        "controller.started",
+        "running",
+        "Controller deterministic đang chạy",
+        `${plan.goalId}: tìm target hợp lệ, kiểm tra physics/đường đi/tool rồi mới cho phép tối đa một lần chặt.`,
+      );
       const execution = await requestMinecraftGoal({ goalId: plan.goalId });
+      const rawExecution =
+        execution.execution
+        && typeof execution.execution === "object"
+        && !Array.isArray(execution.execution)
+          ? execution.execution as Record<string, unknown>
+          : null;
+      const executionSucceeded = rawExecution?.status === "succeeded";
+      const rawError =
+        rawExecution?.error
+        && typeof rawExecution.error === "object"
+        && !Array.isArray(rawExecution.error)
+          ? rawExecution.error as Record<string, unknown>
+          : null;
+      const errorCode =
+        typeof rawError?.code === "string"
+          ? rawError.code.slice(0, 96)
+          : "E_MINECRAFT_GOAL";
+      const errorMessage =
+        typeof rawError?.message === "string"
+          ? rawError.message.slice(0, 256)
+          : "Controller không trả về hậu kiểm thành công.";
+      trace(
+        "controller.completed",
+        executionSucceeded ? "succeeded" : "failed",
+        executionSucceeded
+          ? "Controller đã hoàn tất hành động"
+          : "Controller dừng an toàn",
+        executionSucceeded
+          ? "Mineflayer hoàn tất chuỗi deterministic trong giới hạn một attempt."
+          : `${errorCode}: ${errorMessage}`,
+      );
+      const rawPostcondition =
+        rawExecution?.postcondition
+        && typeof rawExecution.postcondition === "object"
+        && !Array.isArray(rawExecution.postcondition)
+          ? rawExecution.postcondition as Record<string, unknown>
+          : null;
+      const postconditionPassed = rawPostcondition?.passed === true;
+      trace(
+        "postcondition.completed",
+        postconditionPassed ? "succeeded" : "failed",
+        postconditionPassed
+          ? "Hậu kiểm game state đã đạt"
+          : "Hậu kiểm game state chưa đạt",
+        postconditionPassed
+          ? "Block gỗ mục tiêu không còn ở vị trí đã khóa."
+          : `${errorCode}: ${errorMessage}`,
+      );
       return { ...execution, plan };
     } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message.slice(0, 320)
+          : "Minecraft goal execution failed";
+      trace(
+        "workflow.failed",
+        "failed",
+        "Workflow gặp lỗi",
+        message,
+      );
       console.error(
         `[hina-desktop:minecraft:ERROR] ${
-          error instanceof Error
-            ? error.message.slice(0, 256)
-            : "Minecraft goal execution failed"
+          message
         }`,
       );
       throw error;

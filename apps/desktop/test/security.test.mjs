@@ -104,6 +104,7 @@ test("preload exposes named methods and never exposes raw ipcRenderer", () => {
     "connectMinecraft",
     "disconnectMinecraft",
     "runMinecraftGoal",
+    "onMinecraftGoalProgress",
     "emergencyStopMinecraft",
     "listScreenCaptureSources",
     "captureScreenSource",
@@ -295,6 +296,21 @@ test("Minecraft goal execution stays on numeric loopback behind ephemeral operat
   assert.match(client, /goalId: "harvest\.nearby-log\.v2"/);
   assert.match(main, /requestMinecraftGoalPlan/);
   assert.match(main, /validateMinecraftGoalPlan/);
+  assert.match(main, /CHANNELS\.minecraftGoalProgress/);
+  assert.match(main, /\[hina-desktop:minecraft:TRACE\]/);
+  assert.match(preload, /onMinecraftGoalProgress:/);
+  assert.match(preload, /parseMinecraftGoalProgress/);
+  assert.match(renderer, /handleMinecraftGoalProgress/);
+  assert.match(
+    renderer,
+    /minecraftNotice\.value\.startsWith\("E_DESKTOP_MINECRAFT_STATUS"\)/,
+  );
+  assert.doesNotMatch(
+    renderer,
+    /minecraftNotice\.value\.startsWith\("E_"\)/,
+  );
+  assert.match(minecraft, /DECISION TRACE \/ KHÔNG PHẢI CHAIN-OF-THOUGHT/);
+  assert.match(minecraft, /Kết quả hiện tại:/);
   assert.match(minecraft, /Giao mục tiêu cho Hina/);
   assert.match(minecraft, /MỤC TIÊU TỰ NHIÊN/);
   assert.match(minecraft, /Túi đồ của Hina/);

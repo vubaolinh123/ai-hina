@@ -1880,6 +1880,18 @@ recipe lookup, tool fallback/retry, UI tool/slot hay raw inventory/tool persiste
 Minecraft build/66 tests và Desktop production build/67 tests pass; chưa có real LAN/model
 smoke và owner acceptance vẫn pending.
 
+M09-S11 thêm owner-visible Minecraft decision trace mà không tăng action surface.
+Root cause của báo cáo “Sẵn sàng nhưng đứng im” là dòng Sẵn sàng chỉ mô tả precondition,
+trong khi `refreshMinecraft()` xóa mọi notice `E_*` ngay sau goal nên lỗi controller bị
+che. Desktop nay giữ lỗi đó và stream tối đa tám event typed/in-memory cạnh form:
+request, planner profile `minecraft.goal.v1`, goal allowlist, controller, postcondition
+và bounded error/timing; terminal in cùng event dưới prefix riêng. Public policy hiện
+hai JSON output hợp lệ để owner chỉnh workflow. Raw prompt/output/chain-of-thought,
+secret, tọa độ và action sequence vẫn không render/log/persist. Audit hiện hữu xác nhận
+ba request owner đều qua hai quyết định Safety allow (preflight + consume), tức model đã
+chọn goal trước khi controller fail. Desktop build/69 tests và Minecraft build/66 tests
+pass; không chạy lại LAN/model smoke.
+
 ### Embodied Gate
 
 Chạy full voice + avatar + memory + Minecraft trong local server, kiểm:
