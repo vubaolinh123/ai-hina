@@ -1,0 +1,77 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M09-S9-approach-harvest-goal",
+  "module_id": "M09",
+  "objective": "Extend the one owner-authorized natural-language Minecraft goal into a fixed deterministic approach-and-harvest state machine: discover one allowlisted log within a bounded radius, approach only on verified flat/reachable state, then dig exactly once and report game-state evidence.",
+  "non_goals": [
+    "Do not add Mineflayer pathfinder, collect-block, crafting, equipping, combat, jumping, sprinting, food use, storage, obstacle avoidance, retries, autonomous background play, or model-generated code.",
+    "Do not expose individual movement, yaw, coordinate, target-copy, inventory, or skill controls back to the Dashboard, preload, Electron IPC, or HTTP service.",
+    "Do not allow viewer chat, widget input, Minecraft chat/sign/book content, OCR, VLM, or arbitrary model output to request actions.",
+    "Do not persist raw goal text, model output, block scans, world coordinates, screenshots, or game artifacts after the request completes.",
+    "Do not add a new dependency or modify owner-provided files outside this brief."
+  ],
+  "base_sha": "16a9f0ec86b2beba3628984af8a3cf9a16528548",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "adapters/minecraft/src",
+    "adapters/minecraft/test",
+    "apps/core-runtime/src/hina_core/runtime",
+    "apps/core-runtime/tests",
+    "apps/desktop/electron",
+    "apps/desktop/src/App.vue",
+    "apps/desktop/src/dashboard/pages/MinecraftPage.vue",
+    "apps/desktop/src/env.d.ts",
+    "apps/desktop/test",
+    "packages/contracts/openapi/control-plane.v1.json",
+    "packages/text-brain/src/hina_text_brain",
+    "packages/text-brain/tests",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "docs/modules/M09-minecraft-agent.md",
+    "docs/architecture/desktop-dashboard-modularity.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    "AGENTS.md",
+    ".claude",
+    "CLAUDE.md",
+    "docs/research/deep-research-report.md",
+    "var",
+    ".gitnexus",
+    "package.json",
+    "pnpm-lock.yaml",
+    "third_party"
+  ],
+  "contracts": [
+    "The model still returns exact JSON containing one fixed goal ID or null and never returns an action sequence, coordinates, tool calls, code, or hidden reasoning.",
+    "The only executable goal identifier is the new versioned approach-and-harvest ID; the retired reach-only goal ID is rejected at every typed boundary.",
+    "The deterministic controller owns every state transition: discover, bounded approach, reach verification, single dig, and postcondition verification.",
+    "Every approach segment checks fresh physics state and on-ground player state; cancellation, disconnect, and emergency stop clear controls and stop digging before socket release."
+  ],
+  "allowed_dependencies": [],
+  "oss_candidates": [
+    "Mineflayer 4.37.1 already pinned in M09; use only documented block lookup, look, control-state and dig APIs behind Hina's existing port."
+  ],
+  "acceptance_criteria": [
+    "A natural owner request can choose only the approach-and-harvest goal; the old reach-only goal identifier and malformed model output fail closed before action.",
+    "The controller locates at most one normal allowlisted log within a fixed eight-block horizontal radius and rejects vertical/blocked/unreachable targets before dig.",
+    "The controller may perform at most three verified movement segments of no more than two blocks on fresh on-ground state, then performs at most one dig attempt.",
+    "Success requires both a verified approach state and a reread proving the exact target log is absent; blocked, stale, cancellation and postcondition failures report bounded evidence and never retry.",
+    "The Dashboard continues to offer one goal textarea only, accurately explains the bounded flat-ground capability, and exposes no manual gameplay controls.",
+    "Disconnect and emergency stop abort an in-flight approach or dig, clear controls, call stopDigging, and leave no action active."
+  ],
+  "required_test_commands": [
+    "pnpm test:minecraft",
+    "pnpm test:desktop",
+    "uv run --frozen python -m unittest discover -s packages/text-brain/tests -p test_minecraft_goals.py",
+    "uv run --frozen python -m unittest discover -s apps/core-runtime/tests -p test_minecraft_goal_routes.py",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "goal_planner_model_budget": "same local Qwen checkpoint, exact JSON final only, no exposed reasoning",
+    "approach": "at most three movement segments, each at most two blocks, total goal timeout no greater than 18 seconds",
+    "discovery_radius": "eight horizontal blocks; same-level target only",
+    "retention": "in-memory request/result only; no raw inputs, world scans, model plans, or evidence files"
+  },
+  "output_artifact_dir": "artifacts/verification/M09/"
+}

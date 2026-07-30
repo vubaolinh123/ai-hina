@@ -195,7 +195,7 @@ function exactGoalRequest(value: unknown): unknown {
     Object.keys(raw).sort().join(",") !== "goalId,ownerConfirmed,source" ||
     raw.source !== OWNER_SOURCE ||
     raw.ownerConfirmed !== true ||
-    raw.goalId !== "harvest.nearby-log.v1"
+    raw.goalId !== "harvest.nearby-log.v2"
   ) {
     throw new MinecraftAdapterError(
       "E_MINECRAFT_CONTROL_SCHEMA",

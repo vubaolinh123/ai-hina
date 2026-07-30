@@ -263,10 +263,12 @@ function formatNumber(value: number): string {
         <aside class="minecraft-scope">
           <strong>Khả năng chạy thật hiện tại</strong>
           <span>
-            Hina có thể chặt đúng một khúc gỗ allowlist ở trong tầm với, một lần, rồi xác minh
-            block đó đã biến mất. Chưa có tự đi tìm đường, chế rìu, trang bị rìu, lặp thu thập
-            hay thử lại khi thất bại. Những phần đó sẽ được thêm sau dưới dạng state machine
-            có kiểm chứng, không phải lời hứa từ model.
+            Hina có thể tìm đúng một khúc gỗ allowlist trong bán kính ngang tối đa 8 block,
+            chỉ tiến trên đoạn nền phẳng, trống đã kiểm chứng (tối đa 3 đoạn, mỗi đoạn tối đa
+            2 block), rồi chặt một lần và xác minh block đó đã biến mất. Hina không đi vòng
+            vật cản, không nhảy/sprint, không chế hay trang bị rìu, không lặp thu thập và không
+            thử lại khi thất bại. Những phần đó sẽ được thêm sau dưới dạng state machine có
+            kiểm chứng, không phải lời hứa từ model.
           </span>
         </aside>
       </article>

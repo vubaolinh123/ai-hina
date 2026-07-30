@@ -101,7 +101,7 @@ test("Minecraft mutations use fixed paths, authority headers and exact bodies", 
     { controlToken: TOKEN, fetchImpl },
   );
   await requestMinecraftGoal(
-    { goalId: "harvest.nearby-log.v1" },
+    { goalId: "harvest.nearby-log.v2" },
     { controlToken: TOKEN, fetchImpl },
   );
   await requestMinecraftDisconnect({ controlToken: TOKEN, fetchImpl });
@@ -123,7 +123,7 @@ test("Minecraft mutations use fixed paths, authority headers and exact bodies", 
     ),
   );
   assert.deepEqual(requests[1].body, {
-    goalId: "harvest.nearby-log.v1",
+    goalId: "harvest.nearby-log.v2",
     ownerConfirmed: true,
     source: "owner.desktop",
   });
@@ -153,8 +153,9 @@ test("Minecraft client rejects goal shape changes before network I/O", () => {
   for (const input of [
     null,
     {},
-    { goalId: "harvest.nearby-log.v1", pathfind: true },
-    { goalId: "harvest.nearby-log.v1", targetX: 0 },
+    { goalId: "harvest.nearby-log.v1" },
+    { goalId: "harvest.nearby-log.v2", pathfind: true },
+    { goalId: "harvest.nearby-log.v2", targetX: 0 },
   ]) {
     assert.throws(
       () =>

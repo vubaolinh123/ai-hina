@@ -54,6 +54,9 @@ class FakeBotPort {
   };
   harvestPresent = true;
   harvestCalls = [];
+  harvestApproachClear = true;
+  harvestApproachChecks = [];
+  harvestDiggable = true;
   worldFreshness = {
     physicsTickSequence: 1,
     ageMs: 0,
@@ -125,6 +128,19 @@ class FakeBotPort {
       return null;
     }
     return structuredClone(this.harvestTarget);
+  }
+
+  isHarvestApproachClear(target, destination) {
+    this.harvestApproachChecks.push({
+      from: structuredClone(this.world.player.position),
+      target: structuredClone(target),
+      destination: structuredClone(destination),
+    });
+    return this.harvestApproachClear;
+  }
+
+  isHarvestableLogDiggable(target) {
+    return this.harvestDiggable && this.isHarvestableLogPresent(target);
   }
 
   async digHarvestableLog(target) {
@@ -304,7 +320,7 @@ test("owner disconnect is idempotent and permits reconnect", async () => {
   assert.equal((await reconnected).phase, "online");
 });
 
-test("harvest.nearby-log.v1 digs one allowlisted nearby log and verifies it is absent", async () => {
+test("harvest.nearby-log.v2 approaches one allowlisted nearby log and verifies it is absent", async () => {
   const fake = new FakeBotPort();
   const controller = new MinecraftController(() => fake);
   const connected = controller.start(CONFIG);
@@ -312,11 +328,11 @@ test("harvest.nearby-log.v1 digs one allowlisted nearby log and verifies it is a
   await connected;
 
   const result = await controller.executeGoal({
-    goalId: "harvest.nearby-log.v1",
+    goalId: "harvest.nearby-log.v2",
   });
 
   assert.equal(result.status, "succeeded");
-  assert.equal(result.goalId, "harvest.nearby-log.v1");
+  assert.equal(result.goalId, "harvest.nearby-log.v2");
   assert.equal(result.attempts, 1);
   assert.deepEqual(result.target, fake.harvestTarget);
   assert.equal(result.precondition.passed, true);
@@ -327,7 +343,179 @@ test("harvest.nearby-log.v1 digs one allowlisted nearby log and verifies it is a
   assert.equal(fake.clearCalls, 1);
 });
 
-test("harvest.nearby-log.v1 fails before action when no allowlisted log is in reach", async () => {
+test("harvest.nearby-log.v2 composes no more than three verified flat approach segments before one dig", async () => {
+  const fake = new FakeBotPort();
+  fake.harvestTarget = {
+    name: "oak_log",
+    position: { x: 7, y: 64, z: 2 },
+    distanceBlocks: 6,
+  };
+  const controller = new MinecraftController(() => fake);
+  const connected = controller.start(CONFIG);
+  fake.emit("spawn");
+  await connected;
+
+  const result = await controller.executeGoal({
+    goalId: "harvest.nearby-log.v2",
+  });
+
+  assert.equal(result.status, "succeeded");
+  assert.equal(fake.harvestCalls.length, 1);
+  assert.equal(fake.harvestApproachChecks.length, 2);
+  assert.ok(fake.harvestApproachChecks.length <= 3);
+  assert.ok(
+    fake.harvestApproachChecks.every(({ from, destination }) => {
+      const distanceBlocks = Math.hypot(
+        destination.x - from.x,
+        destination.z - from.z,
+      );
+      return distanceBlocks >= 0.25 && distanceBlocks <= 2;
+    }),
+  );
+  assert.ok(fake.clearCalls >= 3);
+});
+
+test("harvest.nearby-log.v2 fails closed when the next approach segment is not clear flat ground", async () => {
+  const fake = new FakeBotPort();
+  fake.harvestTarget = {
+    name: "oak_log",
+    position: { x: 7, y: 64, z: 2 },
+    distanceBlocks: 6,
+  };
+  fake.harvestApproachClear = false;
+  const controller = new MinecraftController(() => fake);
+  const connected = controller.start(CONFIG);
+  fake.emit("spawn");
+  await connected;
+
+  const result = await controller.executeGoal({
+    goalId: "harvest.nearby-log.v2",
+  });
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.error.code, "E_MINECRAFT_GOAL_PRECONDITION");
+  assert.equal(fake.harvestApproachChecks.length, 1);
+  assert.equal(fake.harvestCalls.length, 0);
+  assert.equal(fake.forwardEnabled, false);
+});
+
+test("harvest.nearby-log.v2 does not dig when physics becomes stale during approach", async () => {
+  const fake = new FakeBotPort();
+  fake.harvestTarget = {
+    name: "oak_log",
+    position: { x: 7, y: 64, z: 2 },
+    distanceBlocks: 6,
+  };
+  const defaultPhysicsTick = fake.physicsTickImplementation;
+  fake.physicsTickImplementation = async (signal) => {
+    await defaultPhysicsTick(signal);
+    fake.worldFreshness = {
+      ...fake.worldFreshness,
+      ageMs: 1_001,
+      state: "stale",
+    };
+  };
+  const controller = new MinecraftController(() => fake);
+  const connected = controller.start(CONFIG);
+  fake.emit("spawn");
+  await connected;
+
+  const result = await controller.executeGoal({
+    goalId: "harvest.nearby-log.v2",
+  });
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.error.code, "E_MINECRAFT_GOAL_STALE_STATE");
+  assert.equal(fake.harvestCalls.length, 0);
+  assert.equal(fake.forwardEnabled, false);
+});
+
+test("harvest.nearby-log.v2 never digs when the exact target is no longer diggable", async () => {
+  const fake = new FakeBotPort();
+  fake.harvestDiggable = false;
+  const controller = new MinecraftController(() => fake);
+  const connected = controller.start(CONFIG);
+  fake.emit("spawn");
+  await connected;
+
+  const result = await controller.executeGoal({
+    goalId: "harvest.nearby-log.v2",
+  });
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.error.code, "E_MINECRAFT_GOAL_PRECONDITION");
+  assert.equal(fake.harvestCalls.length, 0);
+});
+
+test("harvest.nearby-log.v2 rejects targets outside the horizontal or same-level bounds", async () => {
+  for (const target of [
+    {
+      name: "oak_log",
+      position: { x: 10, y: 64, z: 2 },
+      distanceBlocks: 6,
+    },
+    {
+      name: "oak_log",
+      position: { x: 2, y: 65, z: 2 },
+      distanceBlocks: 1,
+    },
+  ]) {
+    const fake = new FakeBotPort();
+    fake.harvestTarget = target;
+    const controller = new MinecraftController(() => fake);
+    const connected = controller.start(CONFIG);
+    fake.emit("spawn");
+    await connected;
+
+    const result = await controller.executeGoal({
+      goalId: "harvest.nearby-log.v2",
+    });
+
+    assert.equal(result.status, "failed");
+    assert.equal(result.error.code, "E_MINECRAFT_GOAL_PRECONDITION");
+    assert.equal(fake.harvestCalls.length, 0);
+  }
+});
+
+test("emergency stop aborts an in-flight harvest approach before any dig", async () => {
+  const fake = new FakeBotPort();
+  fake.harvestTarget = {
+    name: "oak_log",
+    position: { x: 7, y: 64, z: 2 },
+    distanceBlocks: 6,
+  };
+  fake.physicsTickImplementation = (signal) => new Promise((_resolve, reject) => {
+    signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+  });
+  const controller = new MinecraftController(() => fake);
+  const connected = controller.start(CONFIG);
+  fake.emit("spawn");
+  await connected;
+
+  const active = controller.executeGoal({ goalId: "harvest.nearby-log.v2" });
+  await Promise.resolve();
+  await controller.emergencyStop();
+  const result = await active;
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.error.code, "E_MINECRAFT_SKILL_CANCELLED");
+  assert.equal(fake.harvestCalls.length, 0);
+  assert.ok(fake.clearCalls >= 2);
+  assert.ok(fake.stopDiggingCalls >= 2);
+});
+
+test("harvest.nearby-log.v2 rejects the retired reach-only goal identifier", async () => {
+  const controller = new MinecraftController(() => new FakeBotPort());
+
+  await assert.rejects(
+    controller.executeGoal({ goalId: "harvest.nearby-log.v1" }),
+    (error) =>
+      error instanceof MinecraftAdapterError
+      && error.code === "E_MINECRAFT_GOAL_UNKNOWN",
+  );
+});
+
+test("harvest.nearby-log.v2 fails before action when no allowlisted log is in range", async () => {
   const fake = new FakeBotPort();
   fake.harvestTarget = null;
   const controller = new MinecraftController(() => fake);
@@ -336,7 +524,7 @@ test("harvest.nearby-log.v1 fails before action when no allowlisted log is in re
   await connected;
 
   const result = await controller.executeGoal({
-    goalId: "harvest.nearby-log.v1",
+    goalId: "harvest.nearby-log.v2",
   });
 
   assert.equal(result.status, "failed");
@@ -346,7 +534,7 @@ test("harvest.nearby-log.v1 fails before action when no allowlisted log is in re
   assert.equal(fake.harvestCalls.length, 0);
 });
 
-test("harvest.nearby-log.v1 rejects an invalid adapter target before digging", async () => {
+test("harvest.nearby-log.v2 rejects an invalid adapter target before digging", async () => {
   const fake = new FakeBotPort();
   fake.harvestTarget = {
     name: "bedrock",
@@ -359,7 +547,7 @@ test("harvest.nearby-log.v1 rejects an invalid adapter target before digging", a
   await connected;
 
   const result = await controller.executeGoal({
-    goalId: "harvest.nearby-log.v1",
+    goalId: "harvest.nearby-log.v2",
   });
 
   assert.equal(result.status, "failed");
@@ -367,7 +555,7 @@ test("harvest.nearby-log.v1 rejects an invalid adapter target before digging", a
   assert.equal(fake.harvestCalls.length, 0);
 });
 
-test("harvest.nearby-log.v1 reports a failed postcondition after one bounded attempt", async () => {
+test("harvest.nearby-log.v2 reports a failed postcondition after one bounded attempt", async () => {
   const fake = new FakeBotPort();
   fake.digHarvestableLogImplementation = async () => {};
   const controller = new MinecraftController(() => fake);
@@ -376,7 +564,7 @@ test("harvest.nearby-log.v1 reports a failed postcondition after one bounded att
   await connected;
 
   const result = await controller.executeGoal({
-    goalId: "harvest.nearby-log.v1",
+    goalId: "harvest.nearby-log.v2",
   });
 
   assert.equal(result.status, "failed");
@@ -397,7 +585,7 @@ test("emergency stop cancels an active harvest goal and clears controller state"
   await connected;
 
   const active = controller.executeGoal({
-    goalId: "harvest.nearby-log.v1",
+    goalId: "harvest.nearby-log.v2",
   });
   await Promise.resolve();
   await controller.emergencyStop();

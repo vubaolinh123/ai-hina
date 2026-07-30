@@ -267,3 +267,38 @@ Fast evidence:
   suite đều pass.
 - Chưa kết nối LAN/server thật hoặc gọi provider model thật trong gate này;
   manual real-world acceptance vẫn do owner thực hiện.
+
+## M09-S9 — Tiếp cận log gần bằng state machine bị giới hạn
+
+- Goal cũ `harvest.nearby-log.v1` đã nghỉ hưu ở mọi typed boundary. Text brain chỉ
+  còn được chọn `harvest.nearby-log.v2` hoặc `unsupported`; model không tạo tọa độ,
+  chuỗi hành động, Mineflayer call, code hay reasoning hiển thị.
+- Controller tự tìm **một** log thường trong allowlist ở bán kính ngang tối đa 8 block.
+  Nó từ chối target lệch tầng, target sai khoảng cách, chunk/đường đi không rõ, nền
+  không phẳng/trống hoặc block không còn đào được. Không quét thay thế hay retry.
+- Với log ngoài tầm đào, controller chỉ đi thẳng tối đa 3 đoạn, từng đoạn không quá 2
+  block. Mỗi đoạn phải có physics state mới, player đứng trên đất, ground/feet/head
+  đã kiểm chứng qua Mineflayer, postcondition displacement và cleanup control. Sau đó
+  nó re-check target có thể đào, dig đúng một lần và reread chính block đó.
+- Không có pathfinder, tránh vật cản, jump/sprint, craft/equip rìu, combat, nhặt đồ,
+  loop nền hay gameplay control thủ công. Disconnect/emergency stop abort cả tiếp cận
+  lẫn đào, clear control và gọi `stopDigging` trước khi nhả socket.
+
+### Cách owner thử sau khi pull
+
+1. Mở LAN world/server và kết nối Hina như M09-S8; bật **Quyền giao mục tiêu
+   Minecraft** trong Runtime & Safety.
+2. Đặt Hina trên mặt đất phẳng, cùng tầng với một log bình thường; log có thể cách tối
+   đa 8 block theo mặt phẳng ngang và đường thẳng tới nó phải trống.
+3. Gửi: `Hina, chặt một khúc gỗ ở gần đi.` Hina có thể tiến tối đa 3 đoạn rồi đào một
+   block; nếu có vật cản, dốc, target lệch tầng hoặc không đào được, kết quả phải fail
+   an toàn thay vì tự tìm đường vòng.
+4. Chỉ chấp nhận thành công khi Dashboard báo hậu kiểm block mục tiêu đã biến mất.
+
+Fast evidence:
+
+- Module brief schema pass; `pnpm test:minecraft` build + 61 tests pass.
+- `pnpm test:desktop` production build + 67 tests pass.
+- Text goal planner 4 tests, core goal route 4 tests và contract suite đều pass.
+- Không chạy LAN/server Minecraft thật, provider model thật, GPU hay deep/soak gate;
+  owner vẫn là người xác nhận hành vi trong world thật.

@@ -22,6 +22,11 @@ export interface MinecraftBotPort {
   findNearestHarvestableLog(
     maximumDistanceBlocks: number,
   ): MinecraftHarvestTarget | null;
+  isHarvestApproachClear(
+    target: MinecraftHarvestTarget,
+    destination: { x: number; z: number },
+  ): boolean;
+  isHarvestableLogDiggable(target: MinecraftHarvestTarget): boolean;
   digHarvestableLog(target: MinecraftHarvestTarget): Promise<void>;
   isHarvestableLogPresent(target: MinecraftHarvestTarget): boolean;
   quit(reason: string): void;

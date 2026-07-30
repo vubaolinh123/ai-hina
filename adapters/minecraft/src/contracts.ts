@@ -4,7 +4,10 @@ export const MINECRAFT_SNAPSHOT_LIMITS = Object.freeze({
 });
 
 export const MINECRAFT_WORLD_FRESHNESS_MAX_AGE_MS = 1_000;
-export const MINECRAFT_HARVEST_MAX_DISTANCE_BLOCKS = 4.5;
+export const MINECRAFT_HARVEST_DISCOVERY_MAX_DISTANCE_BLOCKS = 8;
+export const MINECRAFT_HARVEST_APPROACH_MAX_SEGMENTS = 3;
+export const MINECRAFT_HARVEST_APPROACH_SEGMENT_MAX_DISTANCE_BLOCKS = 2;
+export const MINECRAFT_HARVEST_DIG_REACH_DISTANCE_BLOCKS = 3.25;
 
 export type MinecraftConnectionPhase =
   | "disconnected"
@@ -296,11 +299,11 @@ export type MinecraftSkillExecutionResult =
  * The model may choose only one of these identifiers; it never supplies
  * coordinates, Mineflayer calls, scripts, or an arbitrary action sequence.
  */
-export type MinecraftGoalId = "harvest.nearby-log.v1";
+export type MinecraftGoalId = "harvest.nearby-log.v2";
 
 export interface MinecraftGoalDefinition {
   id: MinecraftGoalId;
-  version: 1;
+  version: 2;
   description: string;
   preconditions: readonly string[];
   timeoutMs: number;
@@ -314,7 +317,7 @@ export interface MinecraftGoalDefinition {
 }
 
 export interface MinecraftGoalRequest {
-  goalId: "harvest.nearby-log.v1";
+  goalId: "harvest.nearby-log.v2";
 }
 
 export interface MinecraftHarvestTarget {

@@ -1270,9 +1270,9 @@ async function runMinecraftGoal(input: { text: string }): Promise<void> {
     const result = await window.hinaDesktop.runMinecraftGoal(input.text);
     minecraftStatus.value = result.minecraft;
     if (result.plan.state === "unsupported") {
-      minecraftNotice.value = "Hina hiểu đây là một mục tiêu Minecraft, nhưng kỹ năng an toàn tương ứng chưa được mở. Hiện Hina mới thực hiện thật được: chặt một khúc gỗ ở gần trong tầm với.";
+      minecraftNotice.value = "Hina hiểu đây là một mục tiêu Minecraft, nhưng kỹ năng an toàn tương ứng chưa được mở. Hiện Hina chỉ thực hiện thật được: tìm một khúc gỗ thường trong bán kính 8 block, đi tối đa 3 đoạn nền phẳng đã kiểm chứng rồi chặt một lần.";
     } else if (result.execution?.status === "succeeded") {
-      minecraftNotice.value = "Hina đã chặt một khúc gỗ ở gần và hậu kiểm xác nhận block mục tiêu không còn ở vị trí đó.";
+      minecraftNotice.value = "Hina đã hoàn tất chuỗi tiếp cận bị giới hạn và chặt một khúc gỗ; hậu kiểm xác nhận block mục tiêu không còn ở vị trí đó.";
     } else {
       minecraftNotice.value = `${result.execution?.error?.code ?? "E_MINECRAFT_GOAL"}: ${
         result.execution?.error?.message ?? "Mục tiêu chưa đạt hậu kiểm."

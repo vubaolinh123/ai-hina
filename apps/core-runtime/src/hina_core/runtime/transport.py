@@ -1579,7 +1579,7 @@ class ControlPlaneServer:
             return result
         if result != {
             "state": "ready",
-            "goalId": "harvest.nearby-log.v1",
+            "goalId": "harvest.nearby-log.v2",
             "label": "Chặt một khúc gỗ ở gần",
             "planVersion": "minecraft.goal.v1",
         }:

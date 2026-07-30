@@ -2026,7 +2026,7 @@
               "null"
             ],
             "enum": [
-              "harvest.nearby-log.v1",
+              "harvest.nearby-log.v2",
               null
             ]
           },

@@ -189,23 +189,85 @@ class MineflayerBotAdapter implements MinecraftBotPort {
     const block = this.#bot.findBlock({
       matching: (candidate) =>
         candidate !== null &&
-        isHarvestableLogName(candidate.name) &&
-        this.#bot.canDigBlock(candidate),
+        isHarvestableLogName(candidate.name),
       maxDistance: maximumDistanceBlocks,
     });
     if (block === null || !isHarvestableLogName(block.name)) {
       return null;
     }
+    const horizontalDistanceBlocks = Math.hypot(
+      this.#bot.entity.position.x - block.position.x,
+      this.#bot.entity.position.z - block.position.z,
+    );
+    if (horizontalDistanceBlocks > maximumDistanceBlocks) {
+      return null;
+    }
     return {
       name: block.name,
       position: vector(block.position),
-      distanceBlocks: rounded(this.#bot.entity.position.distanceTo(block.position)),
+      distanceBlocks: rounded(horizontalDistanceBlocks),
     };
+  }
+
+  isHarvestApproachClear(
+    target: MinecraftHarvestTarget,
+    destination: { x: number; z: number },
+  ): boolean {
+    const playerPosition = this.#bot.entity?.position;
+    if (
+      playerPosition === undefined ||
+      !Number.isFinite(target.position.x) ||
+      !Number.isFinite(target.position.y) ||
+      !Number.isFinite(target.position.z) ||
+      !Number.isFinite(destination.x) ||
+      !Number.isFinite(destination.z) ||
+      target.position.y !== Math.floor(playerPosition.y)
+    ) {
+      return false;
+    }
+    const deltaX = destination.x - playerPosition.x;
+    const deltaZ = destination.z - playerPosition.z;
+    const distanceBlocks = Math.hypot(deltaX, deltaZ);
+    if (distanceBlocks < 0.25 || distanceBlocks > 2) {
+      return false;
+    }
+    const origin = playerPosition.floored();
+    const sampleCount = Math.max(1, Math.ceil(distanceBlocks * 2));
+    for (let index = 1; index <= sampleCount; index += 1) {
+      const fraction = index / sampleCount;
+      const x = Math.floor(playerPosition.x + deltaX * fraction);
+      const z = Math.floor(playerPosition.z + deltaZ * fraction);
+      const feet = this.#bot.blockAt(
+        origin.offset(x - origin.x, 0, z - origin.z),
+      );
+      const head = this.#bot.blockAt(
+        origin.offset(x - origin.x, 1, z - origin.z),
+      );
+      const ground = this.#bot.blockAt(
+        origin.offset(x - origin.x, -1, z - origin.z),
+      );
+      if (
+        feet === null ||
+        head === null ||
+        ground === null ||
+        feet.boundingBox !== "empty" ||
+        head.boundingBox !== "empty" ||
+        ground.boundingBox !== "block"
+      ) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  isHarvestableLogDiggable(target: MinecraftHarvestTarget): boolean {
+    const block = this.#findExactHarvestableLog(target);
+    return block !== null && this.#bot.canDigBlock(block);
   }
 
   async digHarvestableLog(target: MinecraftHarvestTarget): Promise<void> {
     const block = this.#findExactHarvestableLog(target);
-    if (block === null || !this.#bot.canDigBlock(block)) {
+    if (block === null || !this.isHarvestableLogDiggable(target)) {
       throw new Error("Targeted allowlisted log is no longer diggable");
     }
     await this.#bot.dig(block, true);

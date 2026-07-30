@@ -1857,6 +1857,20 @@ Desktop production build/67 tests + typecheck, text-goal 4 tests, core goal-rout
 4 tests, Safety 22 tests và contracts pass. Chưa có real-server/model smoke;
 owner acceptance trên LAN/resettable server vẫn pending.
 
+M09-S9 nâng goal tự nhiên đầu tiên thành `harvest.nearby-log.v2`. Goal cũ
+`harvest.nearby-log.v1` bị reject ở text planner, core, Electron, HTTP service và
+adapter. LLM vẫn chỉ chọn một ID tĩnh hoặc `unsupported`; controller deterministic mới
+được phép tìm một normal log trong bán kính ngang 8 block, từ chối target khác tầng/sai
+khoảng cách và chỉ tiến thẳng qua đoạn mặt đất phẳng, trống đã kiểm chứng. Hành trình bị
+giới hạn ba segment, mỗi segment ≤2 block, cần fresh physics + on-ground state trước/sau
+và displacement postcondition; sau đó controller re-check diggable, dig một lần và
+re-read exact target. Không pathfinder, né vật cản, jump/sprint, craft/equip, combat,
+collect, retry hay autonomy nền. Disconnect/emergency stop abort cả approach/dig và
+clear controls/stopDigging. Dashboard vẫn là một textarea natural goal, không trả lại
+manual micro-controls. Gate hẹp pass: Minecraft build/61 tests, Desktop build/67 tests,
+text goal 4 tests, core route 4 tests và contracts pass. Chưa có real LAN/model smoke;
+owner acceptance trong resettable LAN/server vẫn pending.
+
 ### Embodied Gate
 
 Chạy full voice + avatar + memory + Minecraft trong local server, kiểm:

@@ -46,7 +46,7 @@ function createControllerStub() {
       return {
         schemaVersion: 1,
         executionId: 1,
-        goalId: "harvest.nearby-log.v1",
+        goalId: "harvest.nearby-log.v2",
         status: "succeeded",
         startedAt: "2026-07-29T00:00:00.000Z",
         finishedAt: "2026-07-29T00:00:00.001Z",
@@ -149,7 +149,7 @@ test("serves bounded read-only status on loopback without control authority", as
   const mutation = await request(server, "/v1/minecraft/goals/execute", {
     method: "POST",
     body: {
-      goalId: "harvest.nearby-log.v1",
+      goalId: "harvest.nearby-log.v2",
       ownerConfirmed: true,
       source: "owner.desktop",
     },
@@ -189,7 +189,7 @@ test("authenticated service exposes only fixed owner operations and one static g
     method: "POST",
     token: TOKEN,
     body: {
-      goalId: "harvest.nearby-log.v1",
+      goalId: "harvest.nearby-log.v2",
       ownerConfirmed: true,
       source: "owner.desktop",
     },
@@ -198,7 +198,7 @@ test("authenticated service exposes only fixed owner operations and one static g
   assert.equal(goal.body.status, "succeeded");
   assert.deepEqual(controller.calls[1], {
     action: "goal",
-    request: { goalId: "harvest.nearby-log.v1" },
+    request: { goalId: "harvest.nearby-log.v2" },
   });
 
   const disconnect = await request(server, "/v1/minecraft/disconnect", {
@@ -240,7 +240,7 @@ test("goal mutations reject bad authority, schema and retired manual routes", as
     method: "POST",
     token: `${TOKEN}x`,
     body: {
-      goalId: "harvest.nearby-log.v1",
+      goalId: "harvest.nearby-log.v2",
       ownerConfirmed: true,
       source: "owner.desktop",
     },
@@ -251,7 +251,7 @@ test("goal mutations reject bad authority, schema and retired manual routes", as
     method: "POST",
     token: TOKEN,
     body: {
-      goalId: "harvest.nearby-log.v1",
+      goalId: "harvest.nearby-log.v2",
       ownerConfirmed: true,
       source: "owner.desktop",
       injected: true,
@@ -272,11 +272,23 @@ test("goal mutations reject bad authority, schema and retired manual routes", as
   assert.equal(unknownGoal.status, 400);
   assert.equal(unknownGoal.body.errorCode, "E_MINECRAFT_CONTROL_SCHEMA");
 
-  const retiredManualRoute = await request(server, "/v1/minecraft/skills/move-step", {
+  const retiredGoal = await request(server, "/v1/minecraft/goals/execute", {
     method: "POST",
     token: TOKEN,
     body: {
       goalId: "harvest.nearby-log.v1",
+      ownerConfirmed: true,
+      source: "owner.desktop",
+    },
+  });
+  assert.equal(retiredGoal.status, 400);
+  assert.equal(retiredGoal.body.errorCode, "E_MINECRAFT_CONTROL_SCHEMA");
+
+  const retiredManualRoute = await request(server, "/v1/minecraft/skills/move-step", {
+    method: "POST",
+    token: TOKEN,
+    body: {
+      goalId: "harvest.nearby-log.v2",
       ownerConfirmed: true,
       source: "owner.desktop",
     },

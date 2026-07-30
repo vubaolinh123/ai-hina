@@ -2,7 +2,10 @@ import { performance } from "node:perf_hooks";
 
 import {
   MinecraftAdapterError,
-  MINECRAFT_HARVEST_MAX_DISTANCE_BLOCKS,
+  MINECRAFT_HARVEST_APPROACH_MAX_SEGMENTS,
+  MINECRAFT_HARVEST_APPROACH_SEGMENT_MAX_DISTANCE_BLOCKS,
+  MINECRAFT_HARVEST_DIG_REACH_DISTANCE_BLOCKS,
+  MINECRAFT_HARVEST_DISCOVERY_MAX_DISTANCE_BLOCKS,
   MINECRAFT_WORLD_FRESHNESS_MAX_AGE_MS,
   type EmergencyStopResult,
   type MinecraftAdapterErrorView,
@@ -67,16 +70,56 @@ function payloadMessage(payload: unknown, fallback: string): string {
   return fallback;
 }
 
-function isBoundedHarvestTarget(value: MinecraftHarvestTarget): boolean {
+function isBoundedHarvestTarget(
+  value: MinecraftHarvestTarget,
+  player: NonNullable<MinecraftWorldState["player"]>,
+): boolean {
+  const position = value?.position;
+  if (
+    position === null ||
+    position === undefined ||
+    !Number.isFinite(position.x) ||
+    !Number.isFinite(position.y) ||
+    !Number.isFinite(position.z)
+  ) {
+    return false;
+  }
+  const horizontalDistanceBlocks = Math.hypot(
+    position.x - player.position.x,
+    position.z - player.position.z,
+  );
   return (
     isHarvestableLogName(value.name)
     && Number.isFinite(value.distanceBlocks)
     && value.distanceBlocks >= 0
-    && value.distanceBlocks <= MINECRAFT_HARVEST_MAX_DISTANCE_BLOCKS
-    && Number.isFinite(value.position.x)
-    && Number.isFinite(value.position.y)
-    && Number.isFinite(value.position.z)
+    && value.distanceBlocks <= MINECRAFT_HARVEST_DISCOVERY_MAX_DISTANCE_BLOCKS
+    && horizontalDistanceBlocks <= MINECRAFT_HARVEST_DISCOVERY_MAX_DISTANCE_BLOCKS
+    && Math.abs(value.distanceBlocks - horizontalDistanceBlocks) <= 0.01
+    && position.y === Math.floor(player.position.y)
   );
+}
+
+function harvestApproachSegmentCount(
+  player: NonNullable<MinecraftWorldState["player"]>,
+  target: MinecraftHarvestTarget,
+): number | null {
+  const deltaX = target.position.x - player.position.x;
+  const deltaZ = target.position.z - player.position.z;
+  const horizontalDistanceBlocks = Math.hypot(deltaX, deltaZ);
+  if (!Number.isFinite(horizontalDistanceBlocks) || horizontalDistanceBlocks < 0) {
+    return null;
+  }
+  const approachDistanceBlocks = Math.max(
+    0,
+    horizontalDistanceBlocks - MINECRAFT_HARVEST_DIG_REACH_DISTANCE_BLOCKS,
+  );
+  const segmentCount = Math.ceil(
+    approachDistanceBlocks / MINECRAFT_HARVEST_APPROACH_SEGMENT_MAX_DISTANCE_BLOCKS,
+  );
+  if (segmentCount > MINECRAFT_HARVEST_APPROACH_MAX_SEGMENTS) {
+    return null;
+  }
+  return segmentCount;
 }
 
 export class MinecraftController {
@@ -604,7 +647,7 @@ export class MinecraftController {
         null,
         errorView(
           "E_MINECRAFT_GOAL_PRECONDITION",
-          "harvest.nearby-log.v1 requires an on-ground player state",
+          "harvest.nearby-log.v2 requires an on-ground player state",
         ),
       );
     }
@@ -612,7 +655,7 @@ export class MinecraftController {
     let target: MinecraftHarvestTarget | null;
     try {
       target = bot.findNearestHarvestableLog(
-        MINECRAFT_HARVEST_MAX_DISTANCE_BLOCKS,
+        MINECRAFT_HARVEST_DISCOVERY_MAX_DISTANCE_BLOCKS,
       );
     } catch (error) {
       return finish(
@@ -638,7 +681,7 @@ export class MinecraftController {
         ),
       );
     }
-    if (!isBoundedHarvestTarget(target)) {
+    if (!isBoundedHarvestTarget(target, before.player)) {
       return finish(
         "failed",
         false,
@@ -646,7 +689,7 @@ export class MinecraftController {
         null,
         errorView(
           "E_MINECRAFT_GOAL_PRECONDITION",
-          "Harvest target is outside the fixed allowlist or reach bound",
+          "Harvest target is outside the allowlist, eight-block horizontal bound or same-level approach limit",
         ),
       );
     }
@@ -661,7 +704,7 @@ export class MinecraftController {
         timeout = setTimeout(() => {
           const error = new MinecraftAdapterError(
             "E_MINECRAFT_GOAL_TIMEOUT",
-            `harvest.nearby-log.v1 exceeded ${HARVEST_NEARBY_LOG_GOAL_DEFINITION.timeoutMs} ms`,
+            `harvest.nearby-log.v2 exceeded ${HARVEST_NEARBY_LOG_GOAL_DEFINITION.timeoutMs} ms`,
           );
           abortController.abort(error);
           reject(error);
@@ -676,7 +719,7 @@ export class MinecraftController {
               ? reason
               : new MinecraftAdapterError(
                   "E_MINECRAFT_GOAL_CANCELLED",
-                  "harvest.nearby-log.v1 was cancelled",
+                  "harvest.nearby-log.v2 was cancelled",
                 ),
           );
         };
@@ -685,7 +728,7 @@ export class MinecraftController {
           abortController.signal.removeEventListener("abort", onAbort);
       });
       await Promise.race([
-        bot.digHarvestableLog(target),
+        this.#executeApproachAndHarvest(bot, target, abortController.signal),
         timeoutPromise,
         abortPromise,
       ]);
@@ -749,6 +792,171 @@ export class MinecraftController {
       );
     }
     return finish("succeeded", true, target, false, null);
+  }
+
+  async #executeApproachAndHarvest(
+    bot: MinecraftBotPort,
+    target: MinecraftHarvestTarget,
+    signal: AbortSignal,
+  ): Promise<void> {
+    let initial: MinecraftWorldState;
+    try {
+      initial = bot.captureWorldState();
+    } catch (error) {
+      throw new MinecraftAdapterError(
+        "E_MINECRAFT_GOAL_PRECONDITION",
+        payloadMessage(error, "Player state is unavailable before approach"),
+      );
+    }
+    if (initial.player === null || !initial.player.onGround) {
+      throw new MinecraftAdapterError(
+        "E_MINECRAFT_GOAL_PRECONDITION",
+        "harvest.nearby-log.v2 requires an on-ground player state before approach",
+      );
+    }
+    const maximumSegments = harvestApproachSegmentCount(initial.player, target);
+    if (maximumSegments === null) {
+      throw new MinecraftAdapterError(
+        "E_MINECRAFT_GOAL_PRECONDITION",
+        "Harvest target exceeds the bounded three-segment approach budget",
+      );
+    }
+
+    for (let segment = 0; segment < maximumSegments; segment += 1) {
+      if (signal.aborted) {
+        throw signal.reason;
+      }
+      const freshness = this.#readWorldFreshness(bot);
+      if (freshness.state !== "fresh") {
+        throw new MinecraftAdapterError(
+          "E_MINECRAFT_GOAL_STALE_STATE",
+          this.#staleWorldStateError(freshness).message,
+        );
+      }
+      let before: MinecraftWorldState;
+      try {
+        before = bot.captureWorldState();
+      } catch (error) {
+        throw new MinecraftAdapterError(
+          "E_MINECRAFT_GOAL_PRECONDITION",
+          payloadMessage(error, "Player state is unavailable during approach"),
+        );
+      }
+      if (
+        before.player === null ||
+        !before.player.onGround ||
+        target.position.y !== Math.floor(before.player.position.y)
+      ) {
+        throw new MinecraftAdapterError(
+          "E_MINECRAFT_GOAL_PRECONDITION",
+          "Harvest approach requires a same-level on-ground player state",
+        );
+      }
+      const deltaX = target.position.x - before.player.position.x;
+      const deltaZ = target.position.z - before.player.position.z;
+      const targetDistanceBlocks = Math.hypot(deltaX, deltaZ);
+      const remainingApproachBlocks = Math.max(
+        0,
+        targetDistanceBlocks - MINECRAFT_HARVEST_DIG_REACH_DISTANCE_BLOCKS,
+      );
+      if (remainingApproachBlocks < 0.25) {
+        break;
+      }
+      const stepDistanceBlocks = Math.min(
+        remainingApproachBlocks,
+        MINECRAFT_HARVEST_APPROACH_SEGMENT_MAX_DISTANCE_BLOCKS,
+      );
+      const destination = {
+        x: before.player.position.x + (deltaX / targetDistanceBlocks) * stepDistanceBlocks,
+        z: before.player.position.z + (deltaZ / targetDistanceBlocks) * stepDistanceBlocks,
+      };
+      const movementPlan = createMovementPlan(
+        {
+          skillId: "move.to.v1",
+          arguments: {
+            targetX: destination.x,
+            targetZ: destination.z,
+          },
+        },
+        before,
+      );
+      if (
+        !bot.isHarvestApproachClear(target, {
+          x: movementPlan.targetX,
+          z: movementPlan.targetZ,
+        })
+      ) {
+        throw new MinecraftAdapterError(
+          "E_MINECRAFT_GOAL_PRECONDITION",
+          "Harvest approach is not a verified clear flat-ground segment",
+        );
+      }
+      const progress = createMovementProgressTracker();
+      try {
+        await executeMoveStep(bot, movementPlan, before, signal, progress);
+      } finally {
+        try {
+          bot.clearControlStates();
+        } catch {
+          // Goal teardown still clears controls again at the outer boundary.
+        }
+      }
+      const afterFreshness = this.#readWorldFreshness(bot);
+      if (afterFreshness.state !== "fresh") {
+        throw new MinecraftAdapterError(
+          "E_MINECRAFT_GOAL_STALE_STATE",
+          this.#staleWorldStateError(afterFreshness).message,
+        );
+      }
+      let after: MinecraftWorldState;
+      try {
+        after = bot.captureWorldState();
+      } catch (error) {
+        throw new MinecraftAdapterError(
+          "E_MINECRAFT_GOAL_POSTCONDITION",
+          payloadMessage(error, "Player state is unavailable after approach"),
+        );
+      }
+      if (
+        after.player === null ||
+        !after.player.onGround ||
+        target.position.y !== Math.floor(after.player.position.y)
+      ) {
+        throw new MinecraftAdapterError(
+          "E_MINECRAFT_GOAL_POSTCONDITION",
+          "Harvest approach did not end on the verified same-level ground state",
+        );
+      }
+      const evidence = movementEvidence(
+        movementPlan,
+        before.player.position,
+        after.player.position,
+        progress,
+      );
+      if (
+        !movementMatches(
+          evidence,
+          movementPlan.distanceBlocks,
+          MOVE_TO_SKILL_DEFINITION.postcondition,
+        )
+      ) {
+        throw new MinecraftAdapterError(
+          "E_MINECRAFT_GOAL_POSTCONDITION",
+          "Harvest approach movement did not match its bounded target",
+        );
+      }
+    }
+
+    if (signal.aborted) {
+      throw signal.reason;
+    }
+    if (!bot.isHarvestableLogDiggable(target)) {
+      throw new MinecraftAdapterError(
+        "E_MINECRAFT_GOAL_PRECONDITION",
+        "Targeted allowlisted log is not diggable after the verified approach",
+      );
+    }
+    await bot.digHarvestableLog(target);
   }
 
   async #executeMoveStepSkill(

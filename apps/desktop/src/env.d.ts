@@ -120,7 +120,7 @@ type MinecraftGoalResponse = {
   status: string;
   plan: {
     state: "ready" | "unsupported";
-    goalId: "harvest.nearby-log.v1" | null;
+    goalId: "harvest.nearby-log.v2" | null;
     label: string;
     planVersion: "minecraft.goal.v1";
   };

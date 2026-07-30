@@ -1,26 +1,31 @@
 import {
   MinecraftAdapterError,
-  MINECRAFT_HARVEST_MAX_DISTANCE_BLOCKS,
+  MINECRAFT_HARVEST_APPROACH_MAX_SEGMENTS,
+  MINECRAFT_HARVEST_APPROACH_SEGMENT_MAX_DISTANCE_BLOCKS,
+  MINECRAFT_HARVEST_DISCOVERY_MAX_DISTANCE_BLOCKS,
   type MinecraftGoalDefinition,
   type MinecraftGoalRequest,
 } from "./contracts.js";
 
 export const HARVEST_NEARBY_LOG_GOAL_DEFINITION: MinecraftGoalDefinition =
   Object.freeze({
-    id: "harvest.nearby-log.v1",
-    version: 1,
+    id: "harvest.nearby-log.v2",
+    version: 2,
     description:
-      "Harvest exactly one nearby allowlisted log after fresh-state checks and postcondition verification.",
+      "Approach and harvest exactly one nearby allowlisted log on a verified clear, same-level path after fresh-state checks.",
     preconditions: Object.freeze([
       "controller_online",
       "emergency_stop_not_latched",
       "fresh_physics_state",
       "player_state_available",
       "player_on_ground",
-      `allowlisted_log_within_${MINECRAFT_HARVEST_MAX_DISTANCE_BLOCKS}_blocks`,
+      `allowlisted_log_within_${MINECRAFT_HARVEST_DISCOVERY_MAX_DISTANCE_BLOCKS}_horizontal_blocks`,
+      "same_level_log_target",
+      "verified_flat_clear_approach",
+      `at_most_${MINECRAFT_HARVEST_APPROACH_MAX_SEGMENTS}_segments_at_most_${MINECRAFT_HARVEST_APPROACH_SEGMENT_MAX_DISTANCE_BLOCKS}_blocks_each`,
       "no_other_action_active",
     ]),
-    timeoutMs: 12_000,
+    timeoutMs: 18_000,
     budget: Object.freeze({
       maximumAttempts: 1,
     }),

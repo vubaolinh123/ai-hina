@@ -159,7 +159,7 @@ type CaptureProgress = {
 type MinecraftGoalPlan =
   | {
     state: "ready";
-    goalId: "harvest.nearby-log.v1";
+    goalId: "harvest.nearby-log.v2";
     label: "Chặt một khúc gỗ ở gần";
     planVersion: "minecraft.goal.v1";
   }
@@ -177,14 +177,14 @@ function validateMinecraftGoalPlan(value: unknown): MinecraftGoalPlan {
   const raw = value as Record<string, unknown>;
   if (
     raw.state === "ready"
-    && raw.goalId === "harvest.nearby-log.v1"
+    && raw.goalId === "harvest.nearby-log.v2"
     && raw.label === "Chặt một khúc gỗ ở gần"
     && raw.planVersion === "minecraft.goal.v1"
     && Object.keys(raw).length === 4
   ) {
     return {
       state: "ready",
-      goalId: "harvest.nearby-log.v1",
+      goalId: "harvest.nearby-log.v2",
       label: "Chặt một khúc gỗ ở gần",
       planVersion: "minecraft.goal.v1",
     };
