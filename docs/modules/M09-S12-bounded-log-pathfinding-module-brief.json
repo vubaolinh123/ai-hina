@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M09-S12-bounded-log-pathfinding",
+  "module_id": "M09",
+  "objective": "Replace the reach-only harvest approach with one deterministic, cancellable and permission-bounded path to a loaded nearby allowlisted log, then equip a fixed-priority axe or empty hand, dig exactly once and verify the exact target disappeared.",
+  "non_goals": [
+    "Do not let the model, renderer, HTTP caller or viewer choose coordinates, routes, movement primitives, tools, Mineflayer methods, code or action sequences.",
+    "Do not let pathfinding dig, place blocks, scaffold, tower, open doors, sprint, parkour, enter liquids, retry, explore unloaded chunks or continue after emergency stop.",
+    "Do not add crafting, recipe lookup, collection loops, combat, food use, storage, background autonomy, public authority, widget authority or manual gameplay controls."
+  ],
+  "base_sha": "956812a792433eb7ffd6e64b803cf403d4886bd3",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "adapters/minecraft/package.json",
+    "adapters/minecraft/src",
+    "adapters/minecraft/test",
+    "apps/core-runtime/src/hina_core/runtime/transport.py",
+    "apps/core-runtime/tests/test_minecraft_goal_routes.py",
+    "apps/desktop/electron/main.ts",
+    "apps/desktop/electron/minecraft-client.ts",
+    "apps/desktop/src/dashboard/pages/MinecraftPage.vue",
+    "apps/desktop/src/env.d.ts",
+    "apps/desktop/test",
+    "packages/contracts/openapi/control-plane.v1.json",
+    "packages/text-brain/src/hina_text_brain/minecraft_goals.py",
+    "packages/text-brain/tests/test_minecraft_goals.py",
+    "pnpm-lock.yaml",
+    "third_party/code.lock.json",
+    "third_party/candidates.json",
+    "third_party/THIRD_PARTY_NOTICES.md",
+    "tests/governance/test_provenance.py",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "docs/modules/M09-minecraft-agent.md",
+    "docs/architecture/desktop-dashboard-modularity.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    "AGENTS.md",
+    ".claude",
+    "CLAUDE.md",
+    "docs/research/deep-research-report.md",
+    "var",
+    ".gitnexus"
+  ],
+  "contracts": [
+    "The text model can return only harvest.nearby-log.v3 or unsupported; the controller alone selects one loaded log from the fixed block allowlist.",
+    "The pathfinder uses one fixed GoalLookAtBlock and repository-owned movement policy with no block mutation, unsafe traversal or retries; disconnect, timeout and emergency stop cancel the active route.",
+    "After navigation the controller re-reads physics freshness, on-ground state and exact target diggability, selects only the fixed-priority owned axe or empty hand, digs once and reports success only when the exact target is absent.",
+    "Every typed boundary rejects retired v1/v2 goals, arbitrary arguments, coordinates, routes and generated action plans."
+  ],
+  "allowed_dependencies": [
+    "mineflayer-pathfinder 2.4.5, MIT, exact npm dependency used only for one bounded controller-owned A* route to visible digging range."
+  ],
+  "oss_candidates": [
+    "PrismarineJS/mineflayer-pathfinder: exact runtime dependency at npm 2.4.5 / ca35a00ec18e7d3095280ffe2dc194e7c81b55eb; no upstream source copied."
+  ],
+  "acceptance_criteria": [
+    "A loaded allowlisted log up to 32 horizontal and eight vertical blocks away can be approached through one bounded path and harvested exactly once.",
+    "No route, stale state, changed target, timeout, disconnect or emergency stop fails closed before the dig or aborts the active operation and clears controls.",
+    "Pathfinder placement/digging/scaffolding/towering/doors/sprinting/parkour/liquid traversal are disabled and the search radius is bounded to 40 blocks.",
+    "Desktop trace tells the owner that bounded A* is running and preserves the exact stable controller error or postcondition result."
+  ],
+  "required_test_commands": [
+    "pnpm test:minecraft",
+    "pnpm test:text-brain",
+    "pnpm test:contracts",
+    "pnpm test:desktop",
+    "pnpm test:fast",
+    "pnpm smoke:desktop",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "path_search": "one attempt; 40-block A* search radius; 5,000 ms planning budget per search; 30,000 ms total controller deadline",
+    "target_scope": "one loaded allowlisted log within 32 horizontal and eight vertical blocks",
+    "side_effect": "at most one exact log dig; no pathfinder block mutation or retry"
+  },
+  "output_artifact_dir": "artifacts/verification/M09/"
+}

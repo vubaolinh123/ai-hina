@@ -4,7 +4,7 @@ const DEFAULT_BASE_URL = "http://127.0.0.1:8766";
 const MAX_RESPONSE_BYTES = 65_536;
 const DEFAULT_TIMEOUT_MILLISECONDS = 5_000;
 const CONNECT_TIMEOUT_MILLISECONDS = 125_000;
-const GOAL_TIMEOUT_MILLISECONDS = 20_000;
+const GOAL_TIMEOUT_MILLISECONDS = 35_000;
 const SOURCE = "owner.desktop";
 
 type JsonObject = Record<string, unknown>;
@@ -142,12 +142,12 @@ export function validateMinecraftGoalInput(value: unknown): JsonObject {
   if (
     !isObject(value) ||
     Object.keys(value).sort().join(",") !== "goalId" ||
-    value.goalId !== "harvest.nearby-log.v2"
+    value.goalId !== "harvest.nearby-log.v3"
   ) {
     throw new Error("E_DESKTOP_MINECRAFT_GOAL: goal is not in the fixed allowlist");
   }
   return {
-    goalId: "harvest.nearby-log.v2",
+    goalId: "harvest.nearby-log.v3",
     ownerConfirmed: true,
     source: SOURCE,
   };

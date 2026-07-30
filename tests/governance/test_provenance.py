@@ -47,7 +47,7 @@ class ProvenanceTests(unittest.TestCase):
         self.assertTrue(
             any("no upstream source" in item.lower() for item in qdrant["modifications"])
         )
-        desktop_dependencies = {
+        pinned_npm_dependencies = {
             "electron": ("MIT", "npm:electron@43.2.0"),
             "vue": ("MIT", "npm:vue@3.5.40"),
             "vite": ("MIT", "npm:vite@8.1.5"),
@@ -58,8 +58,16 @@ class ProvenanceTests(unittest.TestCase):
             "three": ("MIT", "npm:three@0.185.1"),
             "@pixiv/three-vrm": ("MIT", "npm:@pixiv/three-vrm@3.5.5"),
             "@types/three": ("MIT", "npm:@types/three@0.185.1"),
+            "mineflayer": (
+                "MIT",
+                "npm:mineflayer@4.37.1@03eba44f3e9cb93a0f0bf69a75938246e174dc6f",
+            ),
+            "mineflayer-pathfinder": (
+                "MIT",
+                "npm:mineflayer-pathfinder@2.4.5@ca35a00ec18e7d3095280ffe2dc194e7c81b55eb",
+            ),
         }
-        for name, (license_spdx, revision) in desktop_dependencies.items():
+        for name, (license_spdx, revision) in pinned_npm_dependencies.items():
             component = by_name[name]
             self.assertEqual(license_spdx, component["license_spdx"])
             self.assertEqual(revision, component["revision"])

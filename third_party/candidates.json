@@ -133,7 +133,7 @@
         "minecraft_low_level_bot_state_and_actions"
       ],
       "freeze_blockers": [
-        "audit_pathfinder_and_other_plugins_separately_before_import",
+        "audit_other_plugins_separately_before_import",
         "run_real_owner_resettable_server_smoke_before_candidate_promotion"
       ]
     },

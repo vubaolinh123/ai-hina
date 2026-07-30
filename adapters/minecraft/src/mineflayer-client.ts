@@ -1,8 +1,12 @@
 import { performance } from "node:perf_hooks";
 
 import { createBot, type Bot, type BotOptions } from "mineflayer";
+import pathfinderRuntime from "mineflayer-pathfinder";
 
 import {
+  MINECRAFT_HARVEST_DIG_REACH_DISTANCE_BLOCKS,
+  MINECRAFT_HARVEST_DISCOVERY_MAX_DISTANCE_BLOCKS,
+  MINECRAFT_HARVEST_PATHFINDER_POLICY,
   MINECRAFT_SNAPSHOT_LIMITS,
   MINECRAFT_WORLD_FRESHNESS_MAX_AGE_MS,
   type MinecraftConnectionConfig,
@@ -17,6 +21,8 @@ import type {
   MinecraftBotPort,
 } from "./ports.js";
 import { isHarvestableLogName } from "./goal-registry.js";
+
+const { Movements, goals, pathfinder } = pathfinderRuntime;
 
 const HARVEST_TOOL_PRIORITY = Object.freeze([
   "netherite_axe",
@@ -129,11 +135,23 @@ export class PhysicsFreshnessTracker {
 class MineflayerBotAdapter implements MinecraftBotPort {
   readonly #bot: Bot;
   readonly #freshness = new PhysicsFreshnessTracker();
+  #pathfinderReady = false;
+  #pathfinderInitializationError: Error | null = null;
 
   constructor(bot: Bot) {
     this.#bot = bot;
     this.#bot.on("physicsTick", () => {
       this.#freshness.recordTick();
+    });
+    this.#bot.once("spawn", () => {
+      try {
+        this.#initializeBoundedPathfinder();
+      } catch (error) {
+        this.#pathfinderInitializationError =
+          error instanceof Error
+            ? error
+            : new Error("Mineflayer pathfinder initialization failed");
+      }
     });
   }
 
@@ -230,55 +248,45 @@ class MineflayerBotAdapter implements MinecraftBotPort {
     };
   }
 
-  isHarvestApproachClear(
+  async navigateToHarvestTarget(
     target: MinecraftHarvestTarget,
-    destination: { x: number; z: number },
-  ): boolean {
-    const playerPosition = this.#bot.entity?.position;
-    if (
-      playerPosition === undefined ||
-      !Number.isFinite(target.position.x) ||
-      !Number.isFinite(target.position.y) ||
-      !Number.isFinite(target.position.z) ||
-      !Number.isFinite(destination.x) ||
-      !Number.isFinite(destination.z) ||
-      target.position.y !== Math.floor(playerPosition.y)
-    ) {
-      return false;
+    signal: AbortSignal,
+  ): Promise<void> {
+    if (signal.aborted) {
+      throw signal.reason instanceof Error
+        ? signal.reason
+        : new Error("Harvest pathfinding was cancelled");
     }
-    const deltaX = destination.x - playerPosition.x;
-    const deltaZ = destination.z - playerPosition.z;
-    const distanceBlocks = Math.hypot(deltaX, deltaZ);
-    if (distanceBlocks < 0.25 || distanceBlocks > 2) {
-      return false;
+    if (!this.#pathfinderReady) {
+      throw this.#pathfinderInitializationError
+        ?? new Error("Mineflayer pathfinder is not ready");
     }
-    const origin = playerPosition.floored();
-    const sampleCount = Math.max(1, Math.ceil(distanceBlocks * 2));
-    for (let index = 1; index <= sampleCount; index += 1) {
-      const fraction = index / sampleCount;
-      const x = Math.floor(playerPosition.x + deltaX * fraction);
-      const z = Math.floor(playerPosition.z + deltaZ * fraction);
-      const feet = this.#bot.blockAt(
-        origin.offset(x - origin.x, 0, z - origin.z),
-      );
-      const head = this.#bot.blockAt(
-        origin.offset(x - origin.x, 1, z - origin.z),
-      );
-      const ground = this.#bot.blockAt(
-        origin.offset(x - origin.x, -1, z - origin.z),
-      );
-      if (
-        feet === null ||
-        head === null ||
-        ground === null ||
-        feet.boundingBox !== "empty" ||
-        head.boundingBox !== "empty" ||
-        ground.boundingBox !== "block"
-      ) {
-        return false;
+    const block = this.#findExactHarvestableLog(target);
+    if (block === null) {
+      throw new Error("The selected allowlisted log is no longer loaded");
+    }
+    const goal = new goals.GoalLookAtBlock(
+      block.position,
+      this.#bot.world,
+      { reach: MINECRAFT_HARVEST_DIG_REACH_DISTANCE_BLOCKS },
+    );
+    const onAbort = (): void => {
+      this.#bot.pathfinder.setGoal(null);
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    try {
+      await this.#bot.pathfinder.goto(goal);
+      if (signal.aborted) {
+        throw signal.reason instanceof Error
+          ? signal.reason
+          : new Error("Harvest pathfinding was cancelled");
+      }
+    } finally {
+      signal.removeEventListener("abort", onAbort);
+      if (this.#bot.pathfinder.goal === goal) {
+        this.#bot.pathfinder.setGoal(null);
       }
     }
-    return true;
   }
 
   async equipBestHarvestTool(): Promise<void> {
@@ -330,9 +338,57 @@ class MineflayerBotAdapter implements MinecraftBotPort {
         candidate.position.x === target.position.x &&
         candidate.position.y === target.position.y &&
         candidate.position.z === target.position.z,
-      maxDistance: 5,
+      maxDistance: MINECRAFT_HARVEST_DISCOVERY_MAX_DISTANCE_BLOCKS,
     });
     return block ?? null;
+  }
+
+  #initializeBoundedPathfinder(): void {
+    if (this.#pathfinderReady) return;
+    this.#bot.loadPlugin(pathfinder);
+    const movements = new Movements(this.#bot);
+    movements.canDig = MINECRAFT_HARVEST_PATHFINDER_POLICY.canDig;
+    movements.canOpenDoors = MINECRAFT_HARVEST_PATHFINDER_POLICY.canOpenDoors;
+    movements.allow1by1towers =
+      MINECRAFT_HARVEST_PATHFINDER_POLICY.allowTowering;
+    movements.allowFreeMotion = false;
+    movements.allowParkour = MINECRAFT_HARVEST_PATHFINDER_POLICY.allowParkour;
+    movements.allowSprinting =
+      MINECRAFT_HARVEST_PATHFINDER_POLICY.allowSprinting;
+    movements.allowEntityDetection =
+      MINECRAFT_HARVEST_PATHFINDER_POLICY.allowEntityDetection;
+    if (!MINECRAFT_HARVEST_PATHFINDER_POLICY.canPlace) {
+      movements.scafoldingBlocks = [];
+    }
+    movements.maxDropDown =
+      MINECRAFT_HARVEST_PATHFINDER_POLICY.maximumDropDownBlocks;
+    movements.infiniteLiquidDropdownDistance =
+      !MINECRAFT_HARVEST_PATHFINDER_POLICY.avoidLiquids;
+    for (const name of [
+      "water",
+      "lava",
+      "fire",
+      "soul_fire",
+      "cactus",
+      "sweet_berry_bush",
+      "powder_snow",
+      "magma_block",
+    ]) {
+      const block = this.#bot.registry.blocksByName[name];
+      if (block !== undefined) movements.blocksToAvoid.add(block.id);
+    }
+    this.#bot.pathfinder.setMovements(movements);
+    this.#bot.pathfinder.thinkTimeout =
+      MINECRAFT_HARVEST_PATHFINDER_POLICY.thinkTimeoutMs;
+    this.#bot.pathfinder.tickTimeout =
+      MINECRAFT_HARVEST_PATHFINDER_POLICY.tickTimeoutMs;
+    (
+      this.#bot.pathfinder as unknown as {
+        searchRadius: number;
+      }
+    ).searchRadius = MINECRAFT_HARVEST_PATHFINDER_POLICY.searchRadiusBlocks;
+    this.#pathfinderReady = true;
+    this.#pathfinderInitializationError = null;
   }
 
   quit(reason: string): void {

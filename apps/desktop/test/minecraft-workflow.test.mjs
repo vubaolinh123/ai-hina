@@ -14,7 +14,7 @@ const VALID = Object.freeze({
   stage: "planner.completed",
   status: "succeeded",
   title: "Đã chọn goal trong allowlist",
-  detail: "Model chọn harvest.nearby-log.v2; schema đã được xác minh.",
+  detail: "Model chọn harvest.nearby-log.v3; schema đã được xác minh.",
   elapsedMs: 4210.4,
 });
 

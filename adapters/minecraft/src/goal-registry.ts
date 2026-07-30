@@ -1,18 +1,18 @@
 import {
   MinecraftAdapterError,
-  MINECRAFT_HARVEST_APPROACH_MAX_SEGMENTS,
-  MINECRAFT_HARVEST_APPROACH_SEGMENT_MAX_DISTANCE_BLOCKS,
   MINECRAFT_HARVEST_DISCOVERY_MAX_DISTANCE_BLOCKS,
+  MINECRAFT_HARVEST_PATH_SEARCH_RADIUS_BLOCKS,
+  MINECRAFT_HARVEST_VERTICAL_MAX_DISTANCE_BLOCKS,
   type MinecraftGoalDefinition,
   type MinecraftGoalRequest,
 } from "./contracts.js";
 
 export const HARVEST_NEARBY_LOG_GOAL_DEFINITION: MinecraftGoalDefinition =
   Object.freeze({
-    id: "harvest.nearby-log.v2",
-    version: 2,
+    id: "harvest.nearby-log.v3",
+    version: 3,
     description:
-      "Approach and harvest exactly one nearby allowlisted log on a verified clear, same-level path after fresh-state checks.",
+      "Find, safely path to and harvest exactly one loaded allowlisted log after fresh-state checks.",
     preconditions: Object.freeze([
       "controller_online",
       "emergency_stop_not_latched",
@@ -20,12 +20,12 @@ export const HARVEST_NEARBY_LOG_GOAL_DEFINITION: MinecraftGoalDefinition =
       "player_state_available",
       "player_on_ground",
       `allowlisted_log_within_${MINECRAFT_HARVEST_DISCOVERY_MAX_DISTANCE_BLOCKS}_horizontal_blocks`,
-      "same_level_log_target",
-      "verified_flat_clear_approach",
-      `at_most_${MINECRAFT_HARVEST_APPROACH_MAX_SEGMENTS}_segments_at_most_${MINECRAFT_HARVEST_APPROACH_SEGMENT_MAX_DISTANCE_BLOCKS}_blocks_each`,
+      `vertical_offset_at_most_${MINECRAFT_HARVEST_VERTICAL_MAX_DISTANCE_BLOCKS}_blocks`,
+      `bounded_path_search_radius_${MINECRAFT_HARVEST_PATH_SEARCH_RADIUS_BLOCKS}_blocks`,
+      "pathfinder_cannot_dig_place_sprint_parkour_or_enter_liquids",
       "no_other_action_active",
     ]),
-    timeoutMs: 18_000,
+    timeoutMs: 30_000,
     budget: Object.freeze({
       maximumAttempts: 1,
     }),

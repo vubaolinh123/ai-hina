@@ -154,9 +154,26 @@
       "modifications": [
         "Used as an exact npm runtime dependency behind Hina's repository-owned MinecraftBotPort; no upstream source file or snippet was copied.",
         "The initial adapter uses offline authentication only, accepts localhost or private IP targets, excludes chat/book/sign/plugin payloads from its bounded snapshot and exposes no Mineflayer or Prismarine type from the package public entrypoint.",
-        "The transitive license inventory contains permissive MIT, Apache-2.0, BSD, ISC, CC0-1.0 and 0BSD packages; pathfinding and every future plugin remain separately gated and are not installed in M09-S1.",
+        "The transitive license inventory contains permissive MIT, Apache-2.0, BSD, ISC, CC0-1.0 and 0BSD packages; every plugin is separately gated before import.",
         "Workspace overrides move the transitive uuid 8.3.2 and 10.0.0 nodes to patched uuid 11.1.1. The only observed upstream consumers call the compatible v4 API, and adapter build/unit plus production audit guard the override.",
         "M09-S2 calls the official bot.look(yaw, pitch, true) API only through a fixed look.v1 registry entry with one attempt, timeout, emergency cancellation and repository-owned normalized state verification."
+      ]
+    },
+    {
+      "name": "mineflayer-pathfinder",
+      "source_url": "https://github.com/PrismarineJS/mineflayer-pathfinder",
+      "revision": "npm:mineflayer-pathfinder@2.4.5@ca35a00ec18e7d3095280ffe2dc194e7c81b55eb",
+      "license_spdx": "MIT",
+      "source_hash": "sha512-Jh3JnUgRLwhMh2Dugo4SPza68C41y+NPP5sdsgxRu35ydndo70i1JJGxauVWbXrpNwIxYNztUw78aFyb7icw8g==",
+      "destination_paths": [
+        "pnpm-lock.yaml",
+        "adapters/minecraft/package.json",
+        "adapters/minecraft/src/mineflayer-client.ts"
+      ],
+      "modifications": [
+        "Used as an exact npm runtime dependency behind Hina's repository-owned MinecraftBotPort; no upstream source file or snippet was copied.",
+        "M09-S12 invokes one GoalLookAtBlock path through the deterministic controller. The model and renderer never receive coordinates, routes, movement primitives or the pathfinder API.",
+        "Repository-owned movement policy disables pathfinder digging, placement, scaffolding, towering, door opening, sprinting, parkour and liquid traversal; it bounds drop height, search radius, planning time, one goal deadline and emergency cancellation."
       ]
     },
     {

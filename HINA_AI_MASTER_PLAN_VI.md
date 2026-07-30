@@ -1900,6 +1900,18 @@ tự chứa tại preload, còn type import bị xóa khỏi JavaScript build. T
 IPC và không còn chuỗi lỗi preload → `window.hinaDesktop` undefined → `getWindowMode`.
 Không đổi controller, goal allowlist, Safety hay quyền gameplay.
 
+M09-S12 thay reach-only approach bằng `harvest.nearby-log.v3`: controller tìm đúng một
+log allowlist đã load trong 32 block ngang/8 block dọc rồi dùng
+`mineflayer-pathfinder` 2.4.5 qua một A* bị giới hạn để tới tầm chặt. Model vẫn chỉ trả
+goal ID tĩnh hoặc `unsupported`; tọa độ, route, primitive và tool không qua model/UI.
+Movement policy cấm đào/đặt block, scaffold/tower, mở cửa, sprint, parkour và chất
+lỏng; giới hạn rơi một block, search radius 40 block, planning 5 giây, toàn goal 30
+giây, một attempt và abort khi timeout/disconnect/emergency stop. Sau navigation,
+controller re-check fresh physics/on-ground/exact target, chọn rìu allowlist hoặc tay
+không, chặt đúng một lần và chỉ success nếu exact block biến mất. Chưa có khám phá
+chunk chưa load, craft, collect loop, combat hoặc retry; owner real-LAN acceptance
+vẫn pending.
+
 ### Embodied Gate
 
 Chạy full voice + avatar + memory + Minecraft trong local server, kiểm:

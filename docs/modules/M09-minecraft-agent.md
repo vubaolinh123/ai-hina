@@ -364,3 +364,42 @@ Fast evidence:
   `require("./minecraft-workflow")`. Desktop production build + 69 tests pass; smoke
   qua đúng launcher `start:desktop` xác nhận Operator/Widget cùng tải local renderer
   với typed IPC, không còn lỗi preload/module/getWindowMode.
+
+## M09-S12 — Tự tìm đường có giới hạn tới một khúc gỗ đã load
+
+- Trace thực tế của owner chứng minh model đã chọn đúng goal nhưng
+  `harvest.nearby-log.v2` chỉ cho đi thẳng ngắn và từ chối khi log chưa ở trong
+  tầm tay. Bản mới `harvest.nearby-log.v3` mở vùng tìm mục tiêu tới 32 block
+  ngang và 8 block dọc, nhưng model vẫn chỉ được trả đúng một goal ID tĩnh hoặc
+  `unsupported`; model không thấy tọa độ, route hay primitive điều khiển.
+- Controller dùng `mineflayer-pathfinder` 2.4.5 để chạy đúng một A* bị giới hạn
+  tới tầm nhìn/chặt của một log allowlist đã load. Policy cố định không cho
+  pathfinder đào, đặt block, scaffold, tower, mở cửa, sprint, parkour hoặc đi
+  vào chất lỏng; độ rơi tối đa một block, search radius 40 block, planning
+  deadline 5 giây và toàn goal tối đa 30 giây.
+- Sau khi đi tới, controller đọc lại physics freshness, `onGround` và exact
+  target diggable; sau đó mới chọn rìu theo priority cố định hoặc tay không,
+  chặt đúng một lần và xác minh chính block đó đã biến mất. Timeout, disconnect,
+  emergency stop, target đổi hoặc không có route đều dừng và clear controls.
+- Đây chưa phải workflow “tự đi khám phá, lấy nhiều gỗ và craft rìu”. Hina chỉ
+  tìm trong chunk/vùng đang load, không retry mục tiêu khác và không thu gom
+  theo loop. Các năng lực đó phải là goal deterministic được review riêng.
+
+### Cách owner thử
+
+1. Khởi động lại Desktop và kết nối lại LAN world để adapter nạp dependency mới.
+2. Bật quyền Minecraft trong **Runtime & Safety**, bảo đảm Hina đứng trên đất và
+   có một cây trong vùng đã load, cách không quá 32 block.
+3. Gửi `Hina, chặt một khúc gỗ ở gần đi.` Trace phải hiện
+   `harvest.nearby-log.v3` rồi bước A* giới hạn; Hina đi tới và chặt đúng một log.
+4. Thử ngăn đường hoàn toàn hoặc bật emergency stop: goal phải dừng, không đào
+   hay đặt block để vượt qua và không tự retry.
+
+Fast evidence:
+
+- `pnpm test:minecraft`: build + 66 tests pass; gồm path success, no-route,
+  stale-state, exact-target, timeout/emergency cancellation và retired goal.
+- Text brain 58 tests, contracts 41 tests, Desktop production build + 69 tests,
+  toàn bộ `pnpm test:fast` và startup `pnpm smoke:desktop` đều pass.
+- Chưa chạy goal trên LAN world thật trong gate tự động; owner vẫn xác nhận
+  navigation/chặt cây trong world thật sau khi khởi động lại Desktop.

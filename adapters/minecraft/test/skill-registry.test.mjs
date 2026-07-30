@@ -10,6 +10,7 @@ import {
   validateMinecraftSkillRequest,
   getMinecraftGoalRegistry,
   HARVEST_NEARBY_LOG_GOAL_DEFINITION,
+  MINECRAFT_HARVEST_PATHFINDER_POLICY,
   validateMinecraftGoalRequest,
 } from "../dist/index.js";
 
@@ -18,23 +19,23 @@ test("goal registry exposes exactly one model-selectable verified harvest goal",
   assert.equal(registry.length, 1);
   assert.equal(registry[0], HARVEST_NEARBY_LOG_GOAL_DEFINITION);
   assert.deepEqual(registry[0], {
-    id: "harvest.nearby-log.v2",
-    version: 2,
+    id: "harvest.nearby-log.v3",
+    version: 3,
     description:
-      "Approach and harvest exactly one nearby allowlisted log on a verified clear, same-level path after fresh-state checks.",
+      "Find, safely path to and harvest exactly one loaded allowlisted log after fresh-state checks.",
     preconditions: [
       "controller_online",
       "emergency_stop_not_latched",
       "fresh_physics_state",
       "player_state_available",
       "player_on_ground",
-      "allowlisted_log_within_8_horizontal_blocks",
-      "same_level_log_target",
-      "verified_flat_clear_approach",
-      "at_most_3_segments_at_most_2_blocks_each",
+      "allowlisted_log_within_32_horizontal_blocks",
+      "vertical_offset_at_most_8_blocks",
+      "bounded_path_search_radius_40_blocks",
+      "pathfinder_cannot_dig_place_sprint_parkour_or_enter_liquids",
       "no_other_action_active",
     ],
-    timeoutMs: 18_000,
+    timeoutMs: 30_000,
     budget: { maximumAttempts: 1 },
     destructive: true,
     postcondition: { kind: "targeted_allowlisted_log_absent" },
@@ -43,16 +44,32 @@ test("goal registry exposes exactly one model-selectable verified harvest goal",
   assert.throws(() => {
     registry[0].budget.maximumAttempts = 3;
   });
+  assert.deepEqual(MINECRAFT_HARVEST_PATHFINDER_POLICY, {
+    canDig: false,
+    canPlace: false,
+    canOpenDoors: false,
+    allowTowering: false,
+    allowParkour: false,
+    allowSprinting: false,
+    allowEntityDetection: true,
+    avoidLiquids: true,
+    maximumDropDownBlocks: 1,
+    searchRadiusBlocks: 40,
+    thinkTimeoutMs: 5_000,
+    tickTimeoutMs: 20,
+  });
+  assert.equal(Object.isFrozen(MINECRAFT_HARVEST_PATHFINDER_POLICY), true);
   assert.deepEqual(
-    validateMinecraftGoalRequest({ goalId: "harvest.nearby-log.v2" }),
-    { goalId: "harvest.nearby-log.v2" },
+    validateMinecraftGoalRequest({ goalId: "harvest.nearby-log.v3" }),
+    { goalId: "harvest.nearby-log.v3" },
   );
   for (const value of [
     null,
     {},
     { goalId: "move.to.v1" },
     { goalId: "harvest.nearby-log.v1" },
-    { goalId: "harvest.nearby-log.v2", targetX: 2 },
+    { goalId: "harvest.nearby-log.v2" },
+    { goalId: "harvest.nearby-log.v3", targetX: 2 },
   ]) {
     assert.throws(
       () => validateMinecraftGoalRequest(value),

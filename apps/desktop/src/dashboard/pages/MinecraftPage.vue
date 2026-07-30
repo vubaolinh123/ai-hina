@@ -298,7 +298,7 @@ function traceStatusLabel(status: MinecraftGoalProgress["status"]): string {
             <summary>Quy tắc planner công khai để bạn chỉnh workflow</summary>
             <p>
               Profile <code>minecraft.goal.v1</code> chỉ chấp nhận đúng hai kết quả:
-              <code>{"goalId":"harvest.nearby-log.v2"}</code> hoặc
+              <code>{"goalId":"harvest.nearby-log.v3"}</code> hoặc
               <code>{"goalId":null}</code>. Câu lệnh của bạn chỉ là dữ liệu không tin cậy;
               model không được trả tọa độ, code hay chuỗi nút bấm.
             </p>
@@ -317,13 +317,11 @@ function traceStatusLabel(status: MinecraftGoalProgress["status"]): string {
         <aside class="minecraft-scope">
           <strong>Khả năng chạy thật hiện tại</strong>
           <span>
-            Hina có thể tìm đúng một khúc gỗ allowlist trong bán kính ngang tối đa 8 block,
-            chỉ tiến trên đoạn nền phẳng, trống đã kiểm chứng (tối đa 3 đoạn, mỗi đoạn tối đa
-            2 block), tự cầm rìu hợp lệ có ưu tiên cao nhất nếu đang có trong túi (nếu không sẽ dùng tay),
-            rồi chặt một lần và xác minh block đó đã biến mất. Hina không đi vòng vật cản, không
-            nhảy/sprint, không chế rìu, không lặp thu thập và không thử lại khi thất bại. Những
-            phần đó sẽ được thêm sau dưới dạng state machine có kiểm chứng, không phải lời hứa
-            từ model.
+            Hina có thể tìm đúng một khúc gỗ allowlist đã được tải trong bán kính ngang tối
+            đa 32 block, dùng A* bị giới hạn để đi tới tầm chặt, tự cầm rìu hợp lệ có ưu tiên
+            cao nhất nếu đang có trong túi (nếu không sẽ dùng tay), rồi chặt một lần và xác
+            minh block đó đã biến mất. Pathfinder không được phá/đặt block, sprint, parkour,
+            đi vào chất lỏng hay thử lại. Craft và vòng lặp thu thập dài vẫn là workflow sau.
           </span>
         </aside>
       </article>

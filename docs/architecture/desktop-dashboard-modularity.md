@@ -87,7 +87,7 @@ pnpm --filter @hina/desktop typecheck
 pnpm test:desktop
 ```
 
-## Minecraft goal boundary (M09-S8/S9)
+## Minecraft goal boundary (M09-S8/S9/S12)
 
 - `pages/MinecraftPage.vue` is a presentation/intent page. It can collect one
   bounded natural-language owner goal and display a bounded status/world snapshot,
@@ -104,13 +104,17 @@ pnpm test:desktop
 - New Minecraft capability must add a reviewed goal/state-machine module with
   typed preconditions, cancellation, bounded attempt/timeout and game-state
   postcondition evidence. Do not rebuild manual UI controls as a shortcut.
-- The current `harvest.nearby-log.v2` state machine may discover one same-level
-  allowlisted log within eight horizontal blocks, then compose at most three
-  verified flat/clear segments of at most two blocks before one dig. The page may
-  describe that scope, but it never receives a target coordinate, route, movement
-  primitive, raw model output or action sequence. Obstacles, jumps, pathfinding,
-  crafting, arbitrary tool selection, retries and autonomous play remain unavailable until a
-  separately reviewed deterministic goal adds them.
+- The current `harvest.nearby-log.v3` state machine may discover one loaded
+  allowlisted log within 32 horizontal blocks and eight vertical blocks. A
+  controller-owned, bounded A* pathfinder may navigate to visible digging range
+  before one dig. The renderer and model never receive or choose the target
+  coordinate, route, movement primitive or action sequence.
+- Pathfinder movements are fixed in repository code: no digging, block placement,
+  scaffolding, towering, door opening, sprinting, parkour or liquid traversal;
+  maximum drop is one block, search radius is 40 blocks, one attempt is bounded by
+  the goal deadline and disconnect/emergency stop cancels it. Exploration of
+  unloaded chunks, crafting, collection loops, combat and retries remain
+  unavailable until separately reviewed deterministic goals add them.
 - Before that one dig, controller-owned code may inspect Mineflayer's local
   inventory and equip only a fixed-priority owned axe; when none is present it
   explicitly uses an empty hand. The page cannot show or choose a tool/slot.

@@ -113,6 +113,21 @@ No qdrant-client source file or snippet is copied into this repository. Hina
 uses the pinned local-mode API behind its own derived-index boundary. SQLite
 remains authoritative and the Qdrant collection can be reconciled or rebuilt.
 
+## M09 Minecraft runtime
+
+- Mineflayer 4.37.1 — MIT —
+  https://github.com/PrismarineJS/mineflayer
+- mineflayer-pathfinder 2.4.5 — MIT —
+  https://github.com/PrismarineJS/mineflayer-pathfinder
+
+Both packages are exact npm runtime dependencies pinned by registry integrity
+in `pnpm-lock.yaml` and commit/integrity evidence in
+`third_party/code.lock.json`. No upstream source file or snippet is copied into
+Hina. The pathfinder is accessible only through the repository-owned
+deterministic Minecraft controller; its movement policy disables digging,
+placement, scaffolding, towering, door opening, sprinting, parkour and liquid
+traversal.
+
 ## M07 desktop build stack
 
 The local operator desktop uses these exact npm packages:

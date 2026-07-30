@@ -45,7 +45,7 @@ class MinecraftGoalRouteTests(unittest.IsolatedAsyncioTestCase):
             CapabilityManifest.load(MANIFEST_PATH),
             AuditTrail(directory / "audit.jsonl", build_commit="minecraft-goal-test"),
         )
-        self.gateway = _GoalGateway(json.dumps({"goalId": "harvest.nearby-log.v2"}))
+        self.gateway = _GoalGateway(json.dumps({"goalId": "harvest.nearby-log.v3"}))
         self.server = ControlPlaneServer(
             TransportConfig(port=0),
             safety_policy=self.safety,
@@ -107,7 +107,7 @@ class MinecraftGoalRouteTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(response.status, HTTPStatus.OK)
         self.assertEqual(response.body["state"], "ready")
-        self.assertEqual(response.body["goalId"], "harvest.nearby-log.v2")
+        self.assertEqual(response.body["goalId"], "harvest.nearby-log.v3")
         self.assertEqual(response.body["planVersion"], "minecraft.goal.v1")
         self.assertEqual(len(self.gateway.calls), 1)
         messages = self.gateway.calls[0]
