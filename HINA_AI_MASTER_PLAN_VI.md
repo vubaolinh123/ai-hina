@@ -1912,6 +1912,18 @@ không, chặt đúng một lần và chỉ success nếu exact block biến m�
 chunk chưa load, craft, collect loop, combat hoặc retry; owner real-LAN acceptance
 vẫn pending.
 
+M09-S12A đóng lỗi live LAN `Cannot read properties of null (reading 'x')`.
+Stack thật xác định exact-target matcher đã đọc tọa độ từ block mẫu palette có
+`position=null`. Lookup nay dùng contract hai tầng của Mineflayer: `matching`
+chỉ lọc tên allowlist, `useExtraInfo` mới kiểm tra finite position/tọa độ block
+thật. Goal `GoalLookAtBlock`, connect/spawn và movement policy được giữ nguyên;
+model vẫn không nhận tọa độ/route/primitive.
+Controller vẫn giữ policy không đào/đặt block khi tìm đường, exact-target
+`canDigBlock`, tool allowlist, tối đa một dig, postcondition và cancellation.
+Minecraft build + 67 tests pass; real LAN adapter pass một attempt trong
+3.530,749 ms với exact-target postcondition thành công. Lỗi provider thật được
+log bounded ra owner terminal thay vì chỉ mất stack sau stable error.
+
 ### Embodied Gate
 
 Chạy full voice + avatar + memory + Minecraft trong local server, kiểm:

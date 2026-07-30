@@ -172,7 +172,7 @@
       ],
       "modifications": [
         "Used as an exact npm runtime dependency behind Hina's repository-owned MinecraftBotPort; no upstream source file or snippet was copied.",
-        "M09-S12 invokes one GoalLookAtBlock path through the deterministic controller. The model and renderer never receive coordinates, routes, movement primitives or the pathfinder API.",
+        "M09-S12/S12A invokes one GoalLookAtBlock path through the deterministic controller and uses Mineflayer's two-stage findBlock contract so the palette matcher checks only block identity while useExtraInfo checks the real finite position. The model and renderer never receive coordinates, routes, movement primitives or the pathfinder API.",
         "Repository-owned movement policy disables pathfinder digging, placement, scaffolding, towering, door opening, sprinting, parkour and liquid traversal; it bounds drop height, search radius, planning time, one goal deadline and emergency cancellation."
       ]
     },

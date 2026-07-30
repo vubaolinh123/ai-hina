@@ -1,0 +1,63 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M09-S12A-exact-target-lookup-hotfix",
+  "module_id": "M09",
+  "objective": "Close the live LAN harvest failure caused by reading coordinates from Mineflayer's positionless palette-probe block while preserving the existing single bounded deterministic harvest action.",
+  "non_goals": [
+    "Do not add a new model-selectable goal, generated route, coordinate authority, retry loop, exploration, crafting, collection loop, combat or manual gameplay control.",
+    "Do not let the model, renderer, HTTP caller or viewer call Mineflayer or mineflayer-pathfinder APIs directly.",
+    "Do not weaken exact-target diggability, physics freshness, tool selection, one-dig, postcondition, timeout, disconnect or emergency-stop checks."
+  ],
+  "base_sha": "7b006a875a2df2938a1e54890214dbc01e9c9c6a",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "adapters/minecraft/src/mineflayer-client.ts",
+    "adapters/minecraft/test/public-boundary.test.mjs",
+    "docs/modules/M09-S12-bounded-log-pathfinding-module-brief.json",
+    "docs/modules/M09-S12A-exact-target-lookup-hotfix-module-brief.json",
+    "docs/modules/M09-minecraft-agent.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "third_party/code.lock.json",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    "AGENTS.md",
+    ".claude",
+    "CLAUDE.md",
+    "docs/research/deep-research-report.md",
+    "var",
+    ".gitnexus"
+  ],
+  "contracts": [
+    "Exact-target lookup uses Mineflayer's two-stage findBlock contract: the palette-safe matching callback checks only the allowlisted block name, while useExtraInfo alone checks the finite real-world position.",
+    "Harvest navigation retains the existing fixed GoalLookAtBlock, bounded movement policy, deadline and cancellation behavior.",
+    "A target-lookup, goal-construction or pathfinder failure emits one bounded owner-terminal diagnostic, then preserves the existing stable controller failure and performs no dig.",
+    "After navigation the deterministic controller still rechecks physics freshness, on-ground state and exact target diggability, selects only the fixed axe allowlist or empty hand, digs at most once and verifies the exact target disappeared."
+  ],
+  "allowed_dependencies": [
+    "Existing pinned mineflayer 4.37.1 two-stage findBlock/useExtraInfo API and mineflayer-pathfinder 2.4.5 GoalLookAtBlock API; no new dependency."
+  ],
+  "oss_candidates": [
+    "PrismarineJS/mineflayer and PrismarineJS/mineflayer-pathfinder official pinned packages; no upstream source copied."
+  ],
+  "acceptance_criteria": [
+    "Mineflayer palette prefilter blocks with null position cannot reach a coordinate dereference or abort the deterministic goal.",
+    "The live LAN command can pathfind to and harvest one loaded allowlisted log without the null-position exact-target failure.",
+    "No-route, stale state, changed target, timeout, disconnect and emergency stop remain fail-closed before any unauthorized block mutation.",
+    "Minecraft adapter tests, module-brief validation, provenance guard, Desktop startup smoke and git diff check pass."
+  ],
+  "required_test_commands": [
+    "uv run --frozen python -c \"import json; from jsonschema import Draft202012Validator; schema=json.load(open('docs/schemas/module-brief.schema.json', encoding='utf-8')); brief=json.load(open('docs/modules/M09-S12A-exact-target-lookup-hotfix-module-brief.json', encoding='utf-8')); Draft202012Validator(schema).validate(brief)\"",
+    "pnpm test:minecraft",
+    "uv run --frozen python -m unittest tests.governance.test_provenance.ProvenanceTests.test_runtime_dependencies_are_pinned_without_untracked_source_copy",
+    "pnpm smoke:desktop",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "target_lookup": "one two-stage palette-safe lookup using the already loaded world",
+    "path_search": "one existing GoalLookAtBlock attempt; 40-block search radius and 30,000 ms controller deadline",
+    "side_effect": "at most one exact allowlisted log dig; no pathfinder block mutation or retry"
+  },
+  "output_artifact_dir": "artifacts/verification/M09/"
+}

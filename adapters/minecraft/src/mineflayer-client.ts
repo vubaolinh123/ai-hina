@@ -53,6 +53,29 @@ function rounded(value: unknown): number {
   return Math.round(finiteNumber(value) * 1_000) / 1_000;
 }
 
+function hasFinitePosition(
+  value: unknown,
+): value is { x: number; y: number; z: number } {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as { x?: unknown; y?: unknown; z?: unknown };
+  return (
+    typeof candidate.x === "number"
+    && Number.isFinite(candidate.x)
+    && typeof candidate.y === "number"
+    && Number.isFinite(candidate.y)
+    && typeof candidate.z === "number"
+    && Number.isFinite(candidate.z)
+  );
+}
+
+function boundedPathfinderDiagnostic(error: unknown): string {
+  const raw =
+    error instanceof Error
+      ? (error.stack ?? `${error.name}: ${error.message}`)
+      : String(error);
+  return raw.replaceAll("\u0000", "").slice(0, 2_048);
+}
+
 function vector(value: unknown): MinecraftVector {
   const candidate = value as
     | { x?: unknown; y?: unknown; z?: unknown }
@@ -261,31 +284,40 @@ class MineflayerBotAdapter implements MinecraftBotPort {
       throw this.#pathfinderInitializationError
         ?? new Error("Mineflayer pathfinder is not ready");
     }
-    const block = this.#findExactHarvestableLog(target);
-    if (block === null) {
-      throw new Error("The selected allowlisted log is no longer loaded");
-    }
-    const goal = new goals.GoalLookAtBlock(
-      block.position,
-      this.#bot.world,
-      { reach: MINECRAFT_HARVEST_DIG_REACH_DISTANCE_BLOCKS },
-    );
-    const onAbort = (): void => {
-      this.#bot.pathfinder.setGoal(null);
-    };
-    signal.addEventListener("abort", onAbort, { once: true });
     try {
-      await this.#bot.pathfinder.goto(goal);
-      if (signal.aborted) {
-        throw signal.reason instanceof Error
-          ? signal.reason
-          : new Error("Harvest pathfinding was cancelled");
+      const block = this.#findExactHarvestableLog(target);
+      if (block === null) {
+        throw new Error("The selected allowlisted log is no longer loaded");
       }
-    } finally {
-      signal.removeEventListener("abort", onAbort);
-      if (this.#bot.pathfinder.goal === goal) {
+      const goal = new goals.GoalLookAtBlock(
+        block.position,
+        this.#bot.world,
+        { reach: MINECRAFT_HARVEST_DIG_REACH_DISTANCE_BLOCKS },
+      );
+      const onAbort = (): void => {
         this.#bot.pathfinder.setGoal(null);
+      };
+      signal.addEventListener("abort", onAbort, { once: true });
+      try {
+        await this.#bot.pathfinder.goto(goal);
+        if (signal.aborted) {
+          throw signal.reason instanceof Error
+            ? signal.reason
+            : new Error("Harvest pathfinding was cancelled");
+        }
+      } finally {
+        signal.removeEventListener("abort", onAbort);
+        if (this.#bot.pathfinder.goal === goal) {
+          this.#bot.pathfinder.setGoal(null);
+        }
       }
+    } catch (error) {
+      if (!signal.aborted) {
+        console.error(
+          `[hina-minecraft:path:ERROR] ${boundedPathfinderDiagnostic(error)}`,
+        );
+      }
+      throw error;
     }
   }
 
@@ -334,7 +366,10 @@ class MineflayerBotAdapter implements MinecraftBotPort {
       matching: (candidate) =>
         candidate !== null &&
         candidate.name === target.name &&
-        isHarvestableLogName(candidate.name) &&
+        isHarvestableLogName(candidate.name),
+      useExtraInfo: (candidate) =>
+        candidate !== null &&
+        hasFinitePosition(candidate.position) &&
         candidate.position.x === target.position.x &&
         candidate.position.y === target.position.y &&
         candidate.position.z === target.position.z,

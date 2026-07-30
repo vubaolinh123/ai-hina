@@ -403,3 +403,29 @@ Fast evidence:
   toàn bộ `pnpm test:fast` và startup `pnpm smoke:desktop` đều pass.
 - Chưa chạy goal trên LAN world thật trong gate tự động; owner vẫn xác nhận
   navigation/chặt cây trong world thật sau khi khởi động lại Desktop.
+
+## M09-S12A — Sửa exact-target lookup với block palette không có position
+
+- Trace LAN của owner đã đi qua model và allowlist đúng, nhưng controller dừng tại
+  `Cannot read properties of null (reading 'x')`. Live stack xác định lỗi ở
+  callback `matching` của `findBlock`: Mineflayer dùng callback này để lọc
+  palette bằng block mẫu có `position=null`, trong khi code exact-target cũ đọc
+  `position.x` ngay ở pha đó.
+- Exact-target lookup nay dùng đúng contract hai tầng của Mineflayer:
+  `matching` chỉ so tên log allowlist và `useExtraInfo` mới kiểm tra finite
+  position/tọa độ của block thật. Vì vậy palette probe không còn chạm vào tọa độ.
+- Goal `GoalLookAtBlock`, movement policy và hành vi connect/spawn được giữ
+  nguyên; hotfix không thêm capability, retry hay quyền điều khiển mới.
+- Lỗi target lookup/goal/pathfinder thật được ghi một stack bounded tối đa 2.048 ký tự ra terminal
+  với prefix `[hina-minecraft:path:ERROR]`; prompt, model reasoning, route và
+  tọa độ không được đưa vào Desktop hay persistence.
+
+Fast evidence:
+
+- `pnpm test:minecraft`: build + 67 tests pass, gồm regression bắt buộc
+  `matching` không đọc position trước boundary `useExtraInfo`.
+- Real LAN acceptance bằng chính adapter production pass: online/world ready,
+  một goal thành công trong 3.530,749 ms, đúng một attempt và postcondition xác
+  nhận exact target không còn. Không dùng route/action script giả lập.
+- Desktop production build + 69 tests, module-brief schema, provenance guard,
+  `git diff --check` và startup smoke qua đúng launcher đều pass.
