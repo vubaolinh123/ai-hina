@@ -122,3 +122,8 @@ pnpm test:desktop
   the owner terminal. Raw system prompts, model output, hidden chain-of-thought,
   secrets, coordinates and action sequences are not trace fields and never
   cross into the renderer.
+- A sandboxed Electron preload must remain runtime self-contained. It may import
+  `electron` and local TypeScript types that are erased at build time, but it must
+  not emit a relative `require(...)` unless the preload is explicitly bundled.
+  Desktop tests inspect the compiled preload, and the same-launcher Electron smoke
+  is required whenever a new preload dependency or event parser is introduced.

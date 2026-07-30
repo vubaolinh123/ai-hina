@@ -1892,6 +1892,14 @@ ba request owner đều qua hai quyết định Safety allow (preflight + consum
 chọn goal trước khi controller fail. Desktop build/69 tests và Minecraft build/66 tests
 pass; không chạy lại LAN/model smoke.
 
+M09-S11A sửa startup regression của decision trace: sandboxed Electron preload không
+được runtime-import file tương đối dù artifact có tồn tại. Parser schema chín field nay
+tự chứa tại preload, còn type import bị xóa khỏi JavaScript build. Test hồi quy kiểm
+`dist-electron/preload.js` không có `require("./minecraft-workflow")`; production build
+69 tests và smoke qua đúng launcher `start:desktop` đều pass, Operator/Widget nhận typed
+IPC và không còn chuỗi lỗi preload → `window.hinaDesktop` undefined → `getWindowMode`.
+Không đổi controller, goal allowlist, Safety hay quyền gameplay.
+
 ### Embodied Gate
 
 Chạy full voice + avatar + memory + Minecraft trong local server, kiểm:

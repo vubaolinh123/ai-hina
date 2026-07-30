@@ -1,8 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import {
-  parseMinecraftGoalProgress,
-  type MinecraftGoalProgress,
-} from "./minecraft-workflow";
+import type { MinecraftGoalProgress } from "./minecraft-workflow";
 
 const CHANNELS = Object.freeze({
   windowMode: "hina:window:mode",
@@ -83,6 +80,72 @@ function parseCaptureProgress(value: unknown): CaptureProgress | null {
     ...(typeof raw.width === "number" ? { width: raw.width } : {}),
     ...(typeof raw.height === "number" ? { height: raw.height } : {}),
     ...(typeof raw.bytes === "number" ? { bytes: raw.bytes } : {}),
+  };
+}
+
+// Electron sandboxed preload scripts can only load a restricted set of modules.
+// Keep this boundary parser self-contained instead of importing runtime code from
+// another compiled file. The shared type import above is erased by TypeScript.
+const MINECRAFT_WORKFLOW_TRACE_MAX_ENTRIES = 8;
+const MINECRAFT_PROGRESS_STAGES = new Set<MinecraftGoalProgress["stage"]>([
+  "request.received",
+  "planner.started",
+  "planner.completed",
+  "controller.started",
+  "controller.completed",
+  "postcondition.completed",
+  "workflow.failed",
+]);
+const MINECRAFT_PROGRESS_STATUSES = new Set<MinecraftGoalProgress["status"]>([
+  "running",
+  "succeeded",
+  "failed",
+  "unsupported",
+]);
+
+function parseMinecraftGoalProgress(
+  value: unknown,
+): MinecraftGoalProgress | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  if (
+    Object.keys(raw).length !== 9
+    || raw.schemaVersion !== 1
+    || typeof raw.workflowId !== "string"
+    || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(raw.workflowId)
+    || typeof raw.sequence !== "number"
+    || !Number.isInteger(raw.sequence)
+    || raw.sequence < 1
+    || raw.sequence > MINECRAFT_WORKFLOW_TRACE_MAX_ENTRIES
+    || typeof raw.occurredAt !== "string"
+    || raw.occurredAt.length > 40
+    || !Number.isFinite(Date.parse(raw.occurredAt))
+    || typeof raw.stage !== "string"
+    || !MINECRAFT_PROGRESS_STAGES.has(raw.stage as MinecraftGoalProgress["stage"])
+    || typeof raw.status !== "string"
+    || !MINECRAFT_PROGRESS_STATUSES.has(raw.status as MinecraftGoalProgress["status"])
+    || typeof raw.title !== "string"
+    || raw.title.length < 1
+    || raw.title.length > 96
+    || typeof raw.detail !== "string"
+    || raw.detail.length > 384
+    || typeof raw.elapsedMs !== "number"
+    || !Number.isFinite(raw.elapsedMs)
+    || raw.elapsedMs < 0
+    || raw.elapsedMs > 120_000
+  ) {
+    return null;
+  }
+  return {
+    schemaVersion: 1,
+    workflowId: raw.workflowId,
+    sequence: raw.sequence,
+    occurredAt: raw.occurredAt,
+    stage: raw.stage as MinecraftGoalProgress["stage"],
+    status: raw.status as MinecraftGoalProgress["status"],
+    title: raw.title,
+    detail: raw.detail,
+    elapsedMs: raw.elapsedMs,
   };
 }
 

@@ -72,10 +72,15 @@ test("BrowserWindow keeps renderer sandboxed and blocks navigation surfaces", ()
 
 test("preload exposes named methods and never exposes raw ipcRenderer", () => {
   const preload = read("electron/preload.ts");
+  const compiledPreload = read("dist-electron/preload.js");
   assert.match(preload, /exposeInMainWorld\("hinaDesktop", hinaDesktop\)/);
   assert.doesNotMatch(preload, /exposeInMainWorld\([^,]+,\s*ipcRenderer/);
   assert.doesNotMatch(preload, /\bsend\s*:/);
   assert.doesNotMatch(preload, /shell|readFile|writeFile|exec\(/);
+  assert.doesNotMatch(
+    compiledPreload,
+    /require\(["']\.\/minecraft-workflow["']\)/,
+  );
   for (const method of [
     "getWindowMode",
     "getWidgetStatus",

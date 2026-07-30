@@ -350,3 +350,17 @@ Fast evidence:
 - Audit thật trước fix xác nhận ba request owner ngày 2026-07-30 đều qua preflight
   và consume `game.action`, nên planner đã chọn goal hợp lệ; lỗi thực thi bị UI xóa.
   Không chạy lại LAN/model smoke trong slice này.
+
+## M09-S11A — Sandboxed preload startup hotfix
+
+- Desktop từng không khởi động vì sandboxed Electron preload cố tải runtime module
+  tương đối `./minecraft-workflow`. File build có tồn tại nhưng sandbox preload chỉ
+  cho phép tập module giới hạn, nên bridge `window.hinaDesktop` không được tạo và
+  `getWindowMode` lỗi theo sau.
+- Parser event Minecraft nay tự chứa trong preload; import chung chỉ còn `type` và
+  bị TypeScript loại khỏi JavaScript build. Schema chín field và giới hạn tám event
+  không đổi, không mở thêm IPC/quyền gameplay hay dữ liệu cho renderer.
+- Regression test đọc chính `dist-electron/preload.js` và chặn
+  `require("./minecraft-workflow")`. Desktop production build + 69 tests pass; smoke
+  qua đúng launcher `start:desktop` xác nhận Operator/Widget cùng tải local renderer
+  với typed IPC, không còn lỗi preload/module/getWindowMode.
