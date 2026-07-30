@@ -9,6 +9,7 @@ import {
   evaluateWorldStateFreshness,
   normalizeMineflayerWorldState,
   PhysicsFreshnessTracker,
+  selectNewMatchingHarvestDrop,
   selectBestHarvestTool,
 } from "../dist/mineflayer-client.js";
 
@@ -22,6 +23,61 @@ function point(x, y, z) {
     },
   };
 }
+
+test("harvest drop selection accepts only a new matching drop near the exact target", () => {
+  const target = {
+    name: "oak_log",
+    position: { x: 10, y: 64, z: 10 },
+    distanceBlocks: 4,
+  };
+  const preexisting = {
+    id: 1,
+    itemName: "oak_log",
+    isValid: true,
+    position: { x: 10, y: 64, z: 10 },
+  };
+  const wrongItem = {
+    id: 2,
+    itemName: "birch_log",
+    isValid: true,
+    position: { x: 10, y: 64, z: 10 },
+  };
+  const tooFar = {
+    id: 3,
+    itemName: "oak_log",
+    isValid: true,
+    position: { x: 13, y: 64, z: 10 },
+  };
+  const invalid = {
+    id: 4,
+    itemName: "oak_log",
+    isValid: false,
+    position: { x: 10, y: 64, z: 10 },
+  };
+  const matching = {
+    id: 5,
+    itemName: "oak_log",
+    isValid: true,
+    position: { x: 10.5, y: 64, z: 10 },
+  };
+
+  assert.equal(
+    selectNewMatchingHarvestDrop(
+      [preexisting, wrongItem, tooFar, invalid, matching],
+      target,
+      new Set([preexisting.id]),
+    ),
+    matching,
+  );
+  assert.equal(
+    selectNewMatchingHarvestDrop(
+      [preexisting, wrongItem, tooFar, invalid],
+      target,
+      new Set([preexisting.id]),
+    ),
+    null,
+  );
+});
 
 test("normalizes and bounds Mineflayer state without chat or plugin payloads", () => {
   const player = {

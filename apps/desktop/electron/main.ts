@@ -161,8 +161,8 @@ type CaptureProgress = {
 type MinecraftGoalPlan =
   | {
     state: "ready";
-    goalId: "harvest.nearby-log.v3";
-    label: "Chặt một khúc gỗ ở gần";
+    goalId: "gather.nearby-log.v1";
+    label: "Thu thập một khúc gỗ ở gần";
     planVersion: "minecraft.goal.v1";
   }
   | {
@@ -179,15 +179,15 @@ function validateMinecraftGoalPlan(value: unknown): MinecraftGoalPlan {
   const raw = value as Record<string, unknown>;
   if (
     raw.state === "ready"
-    && raw.goalId === "harvest.nearby-log.v3"
-    && raw.label === "Chặt một khúc gỗ ở gần"
+    && raw.goalId === "gather.nearby-log.v1"
+    && raw.label === "Thu thập một khúc gỗ ở gần"
     && raw.planVersion === "minecraft.goal.v1"
     && Object.keys(raw).length === 4
   ) {
     return {
       state: "ready",
-      goalId: "harvest.nearby-log.v3",
-      label: "Chặt một khúc gỗ ở gần",
+      goalId: "gather.nearby-log.v1",
+      label: "Thu thập một khúc gỗ ở gần",
       planVersion: "minecraft.goal.v1",
     };
   }
@@ -1025,7 +1025,7 @@ function registerIpcHandlers(): void {
         "controller.started",
         "running",
         "Controller deterministic đang chạy",
-        `${plan.goalId}: tìm một log đã load trong 32 block, pathfind A* giới hạn quyền, kiểm tra physics/tool rồi mới cho phép tối đa một lần chặt.`,
+        `${plan.goalId}: tìm một log đã load trong 32 block, pathfind A* giới hạn quyền, kiểm tra physics/tool, chặt một lần rồi chỉ nhặt drop mới khớp mục tiêu.`,
       );
       const execution = await requestMinecraftGoal({ goalId: plan.goalId });
       const rawExecution =
@@ -1056,7 +1056,7 @@ function registerIpcHandlers(): void {
           ? "Controller đã hoàn tất hành động"
           : "Controller dừng an toàn",
         executionSucceeded
-          ? "Mineflayer hoàn tất chuỗi deterministic trong giới hạn một attempt."
+          ? "Mineflayer hoàn tất chuỗi tìm, đi tới, chặt và nhặt trong giới hạn một attempt."
           : `${errorCode}: ${errorMessage}`,
       );
       const rawPostcondition =
@@ -1073,7 +1073,7 @@ function registerIpcHandlers(): void {
           ? "Hậu kiểm game state đã đạt"
           : "Hậu kiểm game state chưa đạt",
         postconditionPassed
-          ? "Block gỗ mục tiêu không còn ở vị trí đã khóa."
+          ? "Block gỗ mục tiêu đã biến mất và số log cùng loại trong inventory đã tăng."
           : `${errorCode}: ${errorMessage}`,
       );
       return { ...execution, plan };

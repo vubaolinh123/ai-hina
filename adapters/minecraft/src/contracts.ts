@@ -8,6 +8,9 @@ export const MINECRAFT_HARVEST_DISCOVERY_MAX_DISTANCE_BLOCKS = 32;
 export const MINECRAFT_HARVEST_PATH_SEARCH_RADIUS_BLOCKS = 40;
 export const MINECRAFT_HARVEST_VERTICAL_MAX_DISTANCE_BLOCKS = 8;
 export const MINECRAFT_HARVEST_DIG_REACH_DISTANCE_BLOCKS = 3.25;
+export const MINECRAFT_HARVEST_DROP_MATCH_DISTANCE_BLOCKS = 2.5;
+export const MINECRAFT_HARVEST_COLLECTION_VERIFY_TICKS = 40;
+export const MINECRAFT_HARVEST_ENTITY_BASELINE_LIMIT = 512;
 export const MINECRAFT_HARVEST_PATHFINDER_POLICY = Object.freeze({
   canDig: false,
   canPlace: false,
@@ -313,11 +316,11 @@ export type MinecraftSkillExecutionResult =
  * The model may choose only one of these identifiers; it never supplies
  * coordinates, Mineflayer calls, scripts, or an arbitrary action sequence.
  */
-export type MinecraftGoalId = "harvest.nearby-log.v3";
+export type MinecraftGoalId = "gather.nearby-log.v1";
 
 export interface MinecraftGoalDefinition {
   id: MinecraftGoalId;
-  version: 3;
+  version: 1;
   description: string;
   preconditions: readonly string[];
   timeoutMs: number;
@@ -326,18 +329,24 @@ export interface MinecraftGoalDefinition {
   };
   destructive: true;
   postcondition: {
-    kind: "targeted_allowlisted_log_absent";
+    kind: "targeted_allowlisted_log_collected";
   };
 }
 
 export interface MinecraftGoalRequest {
-  goalId: "harvest.nearby-log.v3";
+  goalId: "gather.nearby-log.v1";
 }
 
 export interface MinecraftHarvestTarget {
   name: string;
   position: MinecraftVector;
   distanceBlocks: number;
+}
+
+export interface MinecraftHarvestCollectionBaseline {
+  itemName: string;
+  inventoryCount: number;
+  preexistingEntityIds: readonly number[];
 }
 
 export interface MinecraftGoalExecutionResult {
@@ -355,8 +364,11 @@ export interface MinecraftGoalExecutionResult {
   target: MinecraftHarvestTarget | null;
   postcondition: {
     passed: boolean;
-    kind: "targeted_allowlisted_log_absent";
+    kind: "targeted_allowlisted_log_collected";
     targetStillPresent: boolean | null;
+    inventoryItemName: string | null;
+    inventoryCountBefore: number | null;
+    inventoryCountAfter: number | null;
   };
   error: MinecraftAdapterErrorView | null;
 }

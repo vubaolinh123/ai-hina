@@ -142,12 +142,12 @@ export function validateMinecraftGoalInput(value: unknown): JsonObject {
   if (
     !isObject(value) ||
     Object.keys(value).sort().join(",") !== "goalId" ||
-    value.goalId !== "harvest.nearby-log.v3"
+    value.goalId !== "gather.nearby-log.v1"
   ) {
     throw new Error("E_DESKTOP_MINECRAFT_GOAL: goal is not in the fixed allowlist");
   }
   return {
-    goalId: "harvest.nearby-log.v3",
+    goalId: "gather.nearby-log.v1",
     ownerConfirmed: true,
     source: SOURCE,
   };

@@ -9,20 +9,20 @@ import {
   MinecraftAdapterError,
   validateMinecraftSkillRequest,
   getMinecraftGoalRegistry,
-  HARVEST_NEARBY_LOG_GOAL_DEFINITION,
+  GATHER_NEARBY_LOG_GOAL_DEFINITION,
   MINECRAFT_HARVEST_PATHFINDER_POLICY,
   validateMinecraftGoalRequest,
 } from "../dist/index.js";
 
-test("goal registry exposes exactly one model-selectable verified harvest goal", () => {
+test("goal registry exposes exactly one model-selectable verified gather goal", () => {
   const registry = getMinecraftGoalRegistry();
   assert.equal(registry.length, 1);
-  assert.equal(registry[0], HARVEST_NEARBY_LOG_GOAL_DEFINITION);
+  assert.equal(registry[0], GATHER_NEARBY_LOG_GOAL_DEFINITION);
   assert.deepEqual(registry[0], {
-    id: "harvest.nearby-log.v3",
-    version: 3,
+    id: "gather.nearby-log.v1",
+    version: 1,
     description:
-      "Find, safely path to and harvest exactly one loaded allowlisted log after fresh-state checks.",
+      "Find, safely path to, harvest and collect exactly one loaded allowlisted log after fresh-state checks.",
     preconditions: [
       "controller_online",
       "emergency_stop_not_latched",
@@ -33,12 +33,14 @@ test("goal registry exposes exactly one model-selectable verified harvest goal",
       "vertical_offset_at_most_8_blocks",
       "bounded_path_search_radius_40_blocks",
       "pathfinder_cannot_dig_place_sprint_parkour_or_enter_liquids",
+      "new_matching_drop_within_2.5_blocks_of_target",
+      "preexisting_entity_snapshot_at_most_512",
       "no_other_action_active",
     ],
     timeoutMs: 30_000,
     budget: { maximumAttempts: 1 },
     destructive: true,
-    postcondition: { kind: "targeted_allowlisted_log_absent" },
+    postcondition: { kind: "targeted_allowlisted_log_collected" },
   });
   assert.throws(() => registry.push({}));
   assert.throws(() => {
@@ -60,8 +62,8 @@ test("goal registry exposes exactly one model-selectable verified harvest goal",
   });
   assert.equal(Object.isFrozen(MINECRAFT_HARVEST_PATHFINDER_POLICY), true);
   assert.deepEqual(
-    validateMinecraftGoalRequest({ goalId: "harvest.nearby-log.v3" }),
-    { goalId: "harvest.nearby-log.v3" },
+    validateMinecraftGoalRequest({ goalId: "gather.nearby-log.v1" }),
+    { goalId: "gather.nearby-log.v1" },
   );
   for (const value of [
     null,
@@ -69,7 +71,8 @@ test("goal registry exposes exactly one model-selectable verified harvest goal",
     { goalId: "move.to.v1" },
     { goalId: "harvest.nearby-log.v1" },
     { goalId: "harvest.nearby-log.v2" },
-    { goalId: "harvest.nearby-log.v3", targetX: 2 },
+    { goalId: "harvest.nearby-log.v3" },
+    { goalId: "gather.nearby-log.v1", targetX: 2 },
   ]) {
     assert.throws(
       () => validateMinecraftGoalRequest(value),

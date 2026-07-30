@@ -298,7 +298,7 @@ test("Minecraft goal execution stays on numeric loopback behind ephemeral operat
   assert.match(client, /"X-Hina-Source": SOURCE/);
   assert.match(client, /ownerConfirmed: true/);
   assert.match(client, /\/v1\/minecraft\/goals\/execute/);
-  assert.match(client, /goalId: "harvest\.nearby-log\.v3"/);
+  assert.match(client, /goalId: "gather\.nearby-log\.v1"/);
   assert.match(client, /GOAL_TIMEOUT_MILLISECONDS = 35_000/);
   assert.match(main, /requestMinecraftGoalPlan/);
   assert.match(main, /validateMinecraftGoalPlan/);

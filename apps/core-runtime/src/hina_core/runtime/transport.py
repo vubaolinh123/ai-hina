@@ -1579,8 +1579,8 @@ class ControlPlaneServer:
             return result
         if result != {
             "state": "ready",
-            "goalId": "harvest.nearby-log.v3",
-            "label": "Chặt một khúc gỗ ở gần",
+            "goalId": "gather.nearby-log.v1",
+            "label": "Thu thập một khúc gỗ ở gần",
             "planVersion": "minecraft.goal.v1",
         }:
             raise PrimitiveError(

@@ -30,13 +30,13 @@ class ScriptedGateway:
 
 class MinecraftGoalPlannerTests(unittest.IsolatedAsyncioTestCase):
     async def test_ready_goal_is_selected_only_as_a_static_identifier(self) -> None:
-        gateway = ScriptedGateway([["{\"goalId\":", "\"harvest.nearby-log.v3\"}"]])
+        gateway = ScriptedGateway([["{\"goalId\":", "\"gather.nearby-log.v1\"}"]])
         planner = MinecraftGoalPlanner(gateway)
 
         result = await planner.plan("Hina, chặt một khúc gỗ ở gần đi.")
 
         self.assertEqual(result["state"], "ready")
-        self.assertEqual(result["goalId"], "harvest.nearby-log.v3")
+        self.assertEqual(result["goalId"], "gather.nearby-log.v1")
         self.assertEqual(result["planVersion"], "minecraft.goal.v1")
         self.assertEqual(len(gateway.messages), 1)
         system, user = gateway.messages[0]
@@ -59,7 +59,8 @@ class MinecraftGoalPlannerTests(unittest.IsolatedAsyncioTestCase):
     async def test_hidden_reasoning_and_schema_changes_fail_closed(self) -> None:
         for output in [
             "<think>do not expose this</think>{\"goalId\":null}",
-            "{\"goalId\":\"harvest.nearby-log.v3\",\"targetX\":1}",
+            "{\"goalId\":\"gather.nearby-log.v1\",\"targetX\":1}",
+            "{\"goalId\":\"harvest.nearby-log.v3\"}",
             "{\"goalId\":\"move.to.v1\"}",
             "not json",
         ]:

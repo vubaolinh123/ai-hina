@@ -120,7 +120,7 @@ type MinecraftGoalResponse = {
   status: string;
   plan: {
     state: "ready" | "unsupported";
-    goalId: "harvest.nearby-log.v3" | null;
+    goalId: "gather.nearby-log.v1" | null;
     label: string;
     planVersion: "minecraft.goal.v1";
   };
@@ -135,6 +135,9 @@ type MinecraftGoalResponse = {
     postcondition?: {
       passed: boolean;
       targetStillPresent: boolean | null;
+      inventoryItemName: string | null;
+      inventoryCountBefore: number | null;
+      inventoryCountAfter: number | null;
     };
   };
   minecraft: MinecraftStatus;

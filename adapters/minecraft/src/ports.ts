@@ -1,5 +1,6 @@
 import type {
   MinecraftConnectionConfig,
+  MinecraftHarvestCollectionBaseline,
   MinecraftHarvestTarget,
   MinecraftWorldFreshness,
   MinecraftWorldState,
@@ -27,8 +28,17 @@ export interface MinecraftBotPort {
     signal: AbortSignal,
   ): Promise<void>;
   equipBestHarvestTool(): Promise<void>;
+  captureHarvestCollectionBaseline(
+    itemName: string,
+  ): MinecraftHarvestCollectionBaseline;
   isHarvestableLogDiggable(target: MinecraftHarvestTarget): boolean;
   digHarvestableLog(target: MinecraftHarvestTarget): Promise<void>;
+  collectNewHarvestDrop(
+    target: MinecraftHarvestTarget,
+    baseline: MinecraftHarvestCollectionBaseline,
+    signal: AbortSignal,
+  ): Promise<void>;
+  getInventoryItemCount(itemName: string): number;
   isHarvestableLogPresent(target: MinecraftHarvestTarget): boolean;
   quit(reason: string): void;
 }

@@ -429,3 +429,36 @@ Fast evidence:
   nhận exact target không còn. Không dùng route/action script giả lập.
 - Desktop production build + 69 tests, module-brief schema, provenance guard,
   `git diff --check` và startup smoke qua đúng launcher đều pass.
+
+## M09-S13 — Goal cấp cao chặt và nhặt một khúc gỗ
+
+- Goal model-selectable hiện tại là `gather.nearby-log.v1`; toàn bộ
+  `harvest.nearby-log.v1/v2/v3` đã nghỉ hưu ở typed planner, core, Electron,
+  HTTP service và adapter. Model vẫn chỉ trả một ID tĩnh hoặc `null`, không trả
+  tọa độ, route, tool, entity ID hay chuỗi thao tác.
+- Một câu tự nhiên như `Hina, chặt một khúc gỗ ở gần đi.` nay chạy một
+  state-machine controller duy nhất: tìm log allowlist đã load, A* có giới hạn,
+  chọn rìu/tay theo policy, chặt đúng một lần, nhận diện drop mới cùng loại trong
+  phạm vi 2,5 block quanh exact target và đi nhặt bằng tối đa một `GoalNear`.
+  Các micro-step không xuất hiện thành nút UI hoặc model tool.
+- Trước khi chặt, controller khóa inventory count cùng toàn bộ entity ID đã tồn
+  tại. Drop cũ, item sai loại, entity invalid hoặc item ở ngoài vùng exact target
+  không được chọn. Sau hành động, success cần đồng thời exact block biến mất và
+  inventory count của đúng loại log tăng; lời mô tả hoặc việc `dig()` resolve
+  không đủ để báo thành công.
+- Pickup có tối đa 40 physics tick để quan sát sau khi chặt, chỉ một path attempt
+  và vẫn nằm trong deadline toàn goal 30 giây. Timeout, disconnect và emergency
+  stop hủy cả path/dig/pickup; không thử cây khác, không explore chunk chưa load,
+  không craft và không chạy background.
+- Dashboard vẫn chỉ có form mục tiêu tự nhiên. Trace owner nay mô tả chuỗi
+  tìm/đi/chặt/nhặt và hậu kiểm block + inventory; hidden reasoning, raw prompt,
+  tọa độ, route và entity ID vẫn không render hoặc persist.
+
+Fast evidence:
+
+- `pnpm test:minecraft`: build + 72 tests pass; có success, inventory delta,
+  drop cũ/sai/xa, không nhặt được, false-success và emergency cancellation.
+- Text-brain 58 tests, core Minecraft route 4 tests và Desktop production
+  build + 69 tests pass. Module brief, toàn bộ `pnpm test:fast` và startup
+  `pnpm smoke:desktop` đều xanh; chưa chạy destructive LAN goal tự động trong
+  slice này, owner sẽ thử world thật.

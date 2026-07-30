@@ -5,11 +5,15 @@ import pathfinderRuntime from "mineflayer-pathfinder";
 
 import {
   MINECRAFT_HARVEST_DIG_REACH_DISTANCE_BLOCKS,
+  MINECRAFT_HARVEST_COLLECTION_VERIFY_TICKS,
   MINECRAFT_HARVEST_DISCOVERY_MAX_DISTANCE_BLOCKS,
+  MINECRAFT_HARVEST_DROP_MATCH_DISTANCE_BLOCKS,
+  MINECRAFT_HARVEST_ENTITY_BASELINE_LIMIT,
   MINECRAFT_HARVEST_PATHFINDER_POLICY,
   MINECRAFT_SNAPSHOT_LIMITS,
   MINECRAFT_WORLD_FRESHNESS_MAX_AGE_MS,
   type MinecraftConnectionConfig,
+  type MinecraftHarvestCollectionBaseline,
   type MinecraftHarvestTarget,
   type MinecraftNearbyEntity,
   type MinecraftVector,
@@ -32,6 +36,50 @@ const HARVEST_TOOL_PRIORITY = Object.freeze([
   "stone_axe",
   "wooden_axe",
 ]);
+
+export interface MinecraftHarvestDropCandidate {
+  id: number;
+  itemName: string | null;
+  isValid: boolean;
+  position: MinecraftVector;
+}
+
+export function selectNewMatchingHarvestDrop<
+  T extends MinecraftHarvestDropCandidate,
+>(
+  candidates: readonly T[],
+  target: MinecraftHarvestTarget,
+  excludedEntityIds: ReadonlySet<number>,
+): T | null {
+  const matching = candidates
+    .filter(
+      (candidate) =>
+        !excludedEntityIds.has(candidate.id)
+        && candidate.isValid
+        && Number.isSafeInteger(candidate.id)
+        && candidate.id >= 0
+        && hasFinitePosition(candidate.position)
+        && candidate.itemName === target.name,
+    )
+    .map((candidate) => ({
+      candidate,
+      distance: Math.hypot(
+        candidate.position.x - target.position.x,
+        candidate.position.y - target.position.y,
+        candidate.position.z - target.position.z,
+      ),
+    }))
+    .filter(
+      ({ distance }) =>
+        distance <= MINECRAFT_HARVEST_DROP_MATCH_DISTANCE_BLOCKS,
+    )
+    .sort(
+      (left, right) =>
+        left.distance - right.distance
+        || left.candidate.id - right.candidate.id,
+    );
+  return matching[0]?.candidate ?? null;
+}
 
 export function selectBestHarvestTool<T extends { name?: string | null }>(
   slots: readonly (T | null | undefined)[],
@@ -336,6 +384,26 @@ class MineflayerBotAdapter implements MinecraftBotPort {
     }
   }
 
+  captureHarvestCollectionBaseline(
+    itemName: string,
+  ): MinecraftHarvestCollectionBaseline {
+    if (!isHarvestableLogName(itemName)) {
+      throw new Error("Harvest collection item is outside the fixed log allowlist");
+    }
+    const entities = Object.values(this.#bot.entities);
+    if (entities.length > MINECRAFT_HARVEST_ENTITY_BASELINE_LIMIT) {
+      throw new Error("Loaded entity count exceeds the harvest baseline limit");
+    }
+    return {
+      itemName,
+      inventoryCount: this.getInventoryItemCount(itemName),
+      preexistingEntityIds: entities
+        .map((entity) => entity.id)
+        .filter((entityId) => Number.isSafeInteger(entityId) && entityId >= 0)
+        .sort((left, right) => left - right),
+    };
+  }
+
   isHarvestableLogDiggable(target: MinecraftHarvestTarget): boolean {
     const block = this.#findExactHarvestableLog(target);
     return block !== null && this.#bot.canDigBlock(block);
@@ -349,8 +417,150 @@ class MineflayerBotAdapter implements MinecraftBotPort {
     await this.#bot.dig(block, true);
   }
 
+  async collectNewHarvestDrop(
+    target: MinecraftHarvestTarget,
+    baseline: MinecraftHarvestCollectionBaseline,
+    signal: AbortSignal,
+  ): Promise<void> {
+    if (
+      !isHarvestableLogName(target.name)
+      || baseline.itemName !== target.name
+      || !Number.isSafeInteger(baseline.inventoryCount)
+      || baseline.inventoryCount < 0
+    ) {
+      throw new Error("Harvest collection baseline does not match the target");
+    }
+    const excludedEntityIds = new Set(baseline.preexistingEntityIds);
+    let pickupPathAttempted = false;
+    for (
+      let tick = 0;
+      tick < MINECRAFT_HARVEST_COLLECTION_VERIFY_TICKS;
+      tick += 1
+    ) {
+      if (signal.aborted) {
+        throw signal.reason instanceof Error
+          ? signal.reason
+          : new Error("Harvest collection was cancelled");
+      }
+      if (
+        this.getInventoryItemCount(target.name) > baseline.inventoryCount
+      ) {
+        return;
+      }
+      const drop = this.#findNewMatchingHarvestDrop(
+        target,
+        excludedEntityIds,
+      );
+      if (drop !== null && !pickupPathAttempted) {
+        pickupPathAttempted = true;
+        try {
+          await this.#navigateToHarvestDrop(drop.position, signal);
+        } catch (error) {
+          if (
+            this.getInventoryItemCount(target.name) > baseline.inventoryCount
+          ) {
+            return;
+          }
+          throw error;
+        }
+      }
+      await this.waitForPhysicsTick(signal);
+    }
+    if (this.getInventoryItemCount(target.name) > baseline.inventoryCount) {
+      return;
+    }
+    throw new Error(
+      pickupPathAttempted
+        ? "Matching harvested log drop did not enter inventory"
+        : "No new matching harvested log drop appeared near the target",
+    );
+  }
+
+  getInventoryItemCount(itemName: string): number {
+    if (!isHarvestableLogName(itemName)) {
+      throw new Error("Inventory item is outside the fixed log allowlist");
+    }
+    return this.#bot.inventory
+      .items()
+      .filter((item) => item.name === itemName)
+      .reduce(
+        (total, item) =>
+          total
+          + (Number.isSafeInteger(item.count) && item.count > 0
+            ? item.count
+            : 0),
+        0,
+      );
+  }
+
   isHarvestableLogPresent(target: MinecraftHarvestTarget): boolean {
     return this.#findExactHarvestableLog(target) !== null;
+  }
+
+  #droppedItemName(
+    entity: Bot["entities"][number],
+  ): string | null {
+    try {
+      return entity.getDroppedItem()?.name ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  #findNewMatchingHarvestDrop(
+    target: MinecraftHarvestTarget,
+    excludedEntityIds: ReadonlySet<number>,
+  ): Bot["entities"][number] | null {
+    const candidates = Object.values(this.#bot.entities).map((entity) => ({
+      id: entity.id,
+      itemName: this.#droppedItemName(entity),
+      isValid: entity.isValid !== false,
+      position: vector(entity.position),
+      entity,
+    }));
+    return selectNewMatchingHarvestDrop(
+      candidates,
+      target,
+      excludedEntityIds,
+    )?.entity ?? null;
+  }
+
+  async #navigateToHarvestDrop(
+    position: { x: number; y: number; z: number },
+    signal: AbortSignal,
+  ): Promise<void> {
+    if (signal.aborted) {
+      throw signal.reason instanceof Error
+        ? signal.reason
+        : new Error("Harvest collection pathfinding was cancelled");
+    }
+    if (!this.#pathfinderReady) {
+      throw this.#pathfinderInitializationError
+        ?? new Error("Mineflayer pathfinder is not ready");
+    }
+    const goal = new goals.GoalNear(
+      position.x,
+      position.y,
+      position.z,
+      1,
+    );
+    const onAbort = (): void => {
+      this.#bot.pathfinder.setGoal(null);
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    try {
+      await this.#bot.pathfinder.goto(goal);
+      if (signal.aborted) {
+        throw signal.reason instanceof Error
+          ? signal.reason
+          : new Error("Harvest collection pathfinding was cancelled");
+      }
+    } finally {
+      signal.removeEventListener("abort", onAbort);
+      if (this.#bot.pathfinder.goal === goal) {
+        this.#bot.pathfinder.setGoal(null);
+      }
+    }
   }
 
   #findExactHarvestableLog(target: MinecraftHarvestTarget) {

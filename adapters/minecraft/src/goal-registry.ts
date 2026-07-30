@@ -1,18 +1,20 @@
 import {
   MinecraftAdapterError,
   MINECRAFT_HARVEST_DISCOVERY_MAX_DISTANCE_BLOCKS,
+  MINECRAFT_HARVEST_DROP_MATCH_DISTANCE_BLOCKS,
+  MINECRAFT_HARVEST_ENTITY_BASELINE_LIMIT,
   MINECRAFT_HARVEST_PATH_SEARCH_RADIUS_BLOCKS,
   MINECRAFT_HARVEST_VERTICAL_MAX_DISTANCE_BLOCKS,
   type MinecraftGoalDefinition,
   type MinecraftGoalRequest,
 } from "./contracts.js";
 
-export const HARVEST_NEARBY_LOG_GOAL_DEFINITION: MinecraftGoalDefinition =
+export const GATHER_NEARBY_LOG_GOAL_DEFINITION: MinecraftGoalDefinition =
   Object.freeze({
-    id: "harvest.nearby-log.v3",
-    version: 3,
+    id: "gather.nearby-log.v1",
+    version: 1,
     description:
-      "Find, safely path to and harvest exactly one loaded allowlisted log after fresh-state checks.",
+      "Find, safely path to, harvest and collect exactly one loaded allowlisted log after fresh-state checks.",
     preconditions: Object.freeze([
       "controller_online",
       "emergency_stop_not_latched",
@@ -23,6 +25,8 @@ export const HARVEST_NEARBY_LOG_GOAL_DEFINITION: MinecraftGoalDefinition =
       `vertical_offset_at_most_${MINECRAFT_HARVEST_VERTICAL_MAX_DISTANCE_BLOCKS}_blocks`,
       `bounded_path_search_radius_${MINECRAFT_HARVEST_PATH_SEARCH_RADIUS_BLOCKS}_blocks`,
       "pathfinder_cannot_dig_place_sprint_parkour_or_enter_liquids",
+      `new_matching_drop_within_${MINECRAFT_HARVEST_DROP_MATCH_DISTANCE_BLOCKS}_blocks_of_target`,
+      `preexisting_entity_snapshot_at_most_${MINECRAFT_HARVEST_ENTITY_BASELINE_LIMIT}`,
       "no_other_action_active",
     ]),
     timeoutMs: 30_000,
@@ -31,11 +35,11 @@ export const HARVEST_NEARBY_LOG_GOAL_DEFINITION: MinecraftGoalDefinition =
     }),
     destructive: true,
     postcondition: Object.freeze({
-      kind: "targeted_allowlisted_log_absent",
+      kind: "targeted_allowlisted_log_collected",
     }),
   });
 
-const GOAL_REGISTRY = Object.freeze([HARVEST_NEARBY_LOG_GOAL_DEFINITION]);
+const GOAL_REGISTRY = Object.freeze([GATHER_NEARBY_LOG_GOAL_DEFINITION]);
 const HARVESTABLE_LOG_NAMES = new Set([
   "oak_log",
   "spruce_log",
@@ -67,11 +71,11 @@ export function validateMinecraftGoalRequest(value: unknown): MinecraftGoalReque
       "Goal request must contain exactly goalId",
     );
   }
-  if (value.goalId !== HARVEST_NEARBY_LOG_GOAL_DEFINITION.id) {
+  if (value.goalId !== GATHER_NEARBY_LOG_GOAL_DEFINITION.id) {
     throw new MinecraftAdapterError(
       "E_MINECRAFT_GOAL_UNKNOWN",
       "Minecraft goal is not in the fixed allowlist",
     );
   }
-  return { goalId: HARVEST_NEARBY_LOG_GOAL_DEFINITION.id };
+  return { goalId: GATHER_NEARBY_LOG_GOAL_DEFINITION.id };
 }

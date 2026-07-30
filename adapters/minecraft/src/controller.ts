@@ -3,6 +3,7 @@ import { performance } from "node:perf_hooks";
 import {
   MinecraftAdapterError,
   MINECRAFT_HARVEST_DISCOVERY_MAX_DISTANCE_BLOCKS,
+  MINECRAFT_HARVEST_ENTITY_BASELINE_LIMIT,
   MINECRAFT_HARVEST_VERTICAL_MAX_DISTANCE_BLOCKS,
   MINECRAFT_WORLD_FRESHNESS_MAX_AGE_MS,
   type EmergencyStopResult,
@@ -12,6 +13,7 @@ import {
   type MinecraftDisconnectResult,
   type MinecraftGoalExecutionResult,
   type MinecraftGoalRequest,
+  type MinecraftHarvestCollectionBaseline,
   type MinecraftHarvestTarget,
   type MinecraftLookSkillRequest,
   type MinecraftMovementSkillExecutionResult,
@@ -41,7 +43,7 @@ import {
   validateMinecraftSkillRequest,
 } from "./skill-registry.js";
 import {
-  HARVEST_NEARBY_LOG_GOAL_DEFINITION,
+  GATHER_NEARBY_LOG_GOAL_DEFINITION,
   isHarvestableLogName,
   validateMinecraftGoalRequest,
 } from "./goal-registry.js";
@@ -542,6 +544,8 @@ export class MinecraftController {
       target: MinecraftHarvestTarget | null,
       targetStillPresent: boolean | null,
       error: MinecraftAdapterErrorView | null,
+      collectionBaseline: MinecraftHarvestCollectionBaseline | null = null,
+      inventoryCountAfter: number | null = null,
     ): MinecraftGoalExecutionResult => ({
       schemaVersion: 1,
       executionId,
@@ -554,9 +558,16 @@ export class MinecraftController {
       precondition: { passed: preconditionPassed },
       target,
       postcondition: {
-        kind: "targeted_allowlisted_log_absent",
-        passed: targetStillPresent === false,
+        kind: "targeted_allowlisted_log_collected",
+        passed:
+          targetStillPresent === false
+          && collectionBaseline !== null
+          && inventoryCountAfter !== null
+          && inventoryCountAfter > collectionBaseline.inventoryCount,
         targetStillPresent,
+        inventoryItemName: collectionBaseline?.itemName ?? null,
+        inventoryCountBefore: collectionBaseline?.inventoryCount ?? null,
+        inventoryCountAfter,
       },
       error,
     });
@@ -625,7 +636,7 @@ export class MinecraftController {
         null,
         errorView(
           "E_MINECRAFT_GOAL_PRECONDITION",
-          "harvest.nearby-log.v3 requires an on-ground player state",
+          "gather.nearby-log.v1 requires an on-ground player state",
         ),
       );
     }
@@ -677,16 +688,17 @@ export class MinecraftController {
     let timeout: NodeJS.Timeout | null = null;
     let removeAbortListener = (): void => {};
     let failed = false;
+    let collectionBaseline: MinecraftHarvestCollectionBaseline | null = null;
     try {
       const timeoutPromise = new Promise<never>((_resolve, reject) => {
         timeout = setTimeout(() => {
           const error = new MinecraftAdapterError(
             "E_MINECRAFT_GOAL_TIMEOUT",
-            `harvest.nearby-log.v3 exceeded ${HARVEST_NEARBY_LOG_GOAL_DEFINITION.timeoutMs} ms`,
+            `gather.nearby-log.v1 exceeded ${GATHER_NEARBY_LOG_GOAL_DEFINITION.timeoutMs} ms`,
           );
           abortController.abort(error);
           reject(error);
-        }, HARVEST_NEARBY_LOG_GOAL_DEFINITION.timeoutMs);
+        }, GATHER_NEARBY_LOG_GOAL_DEFINITION.timeoutMs);
         timeout.unref();
       });
       const abortPromise = new Promise<never>((_resolve, reject) => {
@@ -697,7 +709,7 @@ export class MinecraftController {
               ? reason
               : new MinecraftAdapterError(
                   "E_MINECRAFT_GOAL_CANCELLED",
-                  "harvest.nearby-log.v3 was cancelled",
+                  "gather.nearby-log.v1 was cancelled",
                 ),
           );
         };
@@ -705,8 +717,12 @@ export class MinecraftController {
         removeAbortListener = () =>
           abortController.signal.removeEventListener("abort", onAbort);
       });
-      await Promise.race([
-        this.#executeApproachAndHarvest(bot, target, abortController.signal),
+      collectionBaseline = await Promise.race([
+        this.#executeApproachHarvestAndCollect(
+          bot,
+          target,
+          abortController.signal,
+        ),
         timeoutPromise,
         abortPromise,
       ]);
@@ -717,7 +733,7 @@ export class MinecraftController {
           ? errorView(error.code, error.message)
           : errorView(
               "E_MINECRAFT_GOAL_ACTION",
-              payloadMessage(error, "Mineflayer harvest action failed"),
+              payloadMessage(error, "Mineflayer gather action failed"),
             );
       return finish("failed", true, target, null, view);
     } finally {
@@ -743,8 +759,10 @@ export class MinecraftController {
     }
 
     let targetStillPresent: boolean;
+    let inventoryCountAfter: number;
     try {
       targetStillPresent = bot.isHarvestableLogPresent(target);
+      inventoryCountAfter = bot.getInventoryItemCount(target.name);
     } catch (error) {
       return finish(
         "failed",
@@ -753,30 +771,46 @@ export class MinecraftController {
         null,
         errorView(
           "E_MINECRAFT_GOAL_POSTCONDITION",
-          payloadMessage(error, "Could not verify the targeted log after harvesting"),
+          payloadMessage(error, "Could not verify the targeted log collection"),
         ),
       );
     }
-    if (targetStillPresent) {
+    if (
+      targetStillPresent
+      || collectionBaseline === null
+      || inventoryCountAfter <= collectionBaseline.inventoryCount
+    ) {
       return finish(
         "failed",
         true,
         target,
-        true,
+        targetStillPresent,
         errorView(
           "E_MINECRAFT_GOAL_POSTCONDITION",
-          "Targeted log is still present after one bounded harvest attempt",
+          targetStillPresent
+            ? "Targeted log is still present after one bounded gather attempt"
+            : "Matching log item count did not increase after one bounded gather attempt",
         ),
+        collectionBaseline,
+        inventoryCountAfter,
       );
     }
-    return finish("succeeded", true, target, false, null);
+    return finish(
+      "succeeded",
+      true,
+      target,
+      false,
+      null,
+      collectionBaseline,
+      inventoryCountAfter,
+    );
   }
 
-  async #executeApproachAndHarvest(
+  async #executeApproachHarvestAndCollect(
     bot: MinecraftBotPort,
     target: MinecraftHarvestTarget,
     signal: AbortSignal,
-  ): Promise<void> {
+  ): Promise<MinecraftHarvestCollectionBaseline> {
     let initial: MinecraftWorldState;
     try {
       initial = bot.captureWorldState();
@@ -789,7 +823,7 @@ export class MinecraftController {
     if (initial.player === null || !initial.player.onGround) {
       throw new MinecraftAdapterError(
         "E_MINECRAFT_GOAL_PRECONDITION",
-        "harvest.nearby-log.v3 requires an on-ground player state before pathfinding",
+        "gather.nearby-log.v1 requires an on-ground player state before pathfinding",
       );
     }
     if (signal.aborted) {
@@ -856,7 +890,41 @@ export class MinecraftController {
         "Targeted allowlisted log is no longer diggable after tool selection",
       );
     }
+    const collectionBaseline =
+      bot.captureHarvestCollectionBaseline(target.name);
+    if (
+      collectionBaseline.itemName !== target.name
+      || !Number.isSafeInteger(collectionBaseline.inventoryCount)
+      || collectionBaseline.inventoryCount < 0
+      || !Array.isArray(collectionBaseline.preexistingEntityIds)
+      || collectionBaseline.preexistingEntityIds.length
+        > MINECRAFT_HARVEST_ENTITY_BASELINE_LIMIT
+      || collectionBaseline.preexistingEntityIds.some(
+        (entityId) => !Number.isSafeInteger(entityId) || entityId < 0,
+      )
+    ) {
+      throw new MinecraftAdapterError(
+        "E_MINECRAFT_GOAL_PRECONDITION",
+        "Harvest collection baseline is invalid",
+      );
+    }
     await bot.digHarvestableLog(target);
+    if (signal.aborted) {
+      throw signal.reason;
+    }
+    try {
+      await bot.collectNewHarvestDrop(target, collectionBaseline, signal);
+    } catch (error) {
+      if (signal.aborted) {
+        throw signal.reason;
+      }
+      throw new MinecraftAdapterError(
+        "E_MINECRAFT_GOAL_COLLECTION",
+        payloadMessage(error, "Matching harvested log item was not collected"),
+        { cause: error },
+      );
+    }
+    return collectionBaseline;
   }
 
   async #executeMoveStepSkill(

@@ -1,0 +1,75 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M09-S13-gather-log-collection",
+  "module_id": "M09",
+  "objective": "Promote the owner-facing wood command to one high-level deterministic gather goal that finds and reaches one loaded allowlisted log, harvests it once, collects only the newly dropped matching item, and succeeds only when the exact block is absent and the matching inventory count increased.",
+  "non_goals": [
+    "Do not expose movement, digging, pickup, coordinates, routes, Mineflayer calls or action-sequence buttons to the owner, viewer or language model.",
+    "Do not add free-form planning, generated code, shell, eval, arbitrary tool calls, retries across trees, unloaded-chunk exploration, combat, storage, food use or background autonomy.",
+    "Do not craft an axe or crafting table in this slice; reliable collect is the prerequisite primitive for the next bounded high-level crafting goal."
+  ],
+  "base_sha": "ce30447ce0276ffd0ea27ee1f41d99734c4bc4bf",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "adapters/minecraft/src",
+    "adapters/minecraft/test",
+    "apps/core-runtime/src/hina_core/runtime/transport.py",
+    "apps/core-runtime/tests/test_minecraft_goal_routes.py",
+    "apps/desktop/electron/main.ts",
+    "apps/desktop/electron/minecraft-client.ts",
+    "apps/desktop/src/dashboard/pages/MinecraftPage.vue",
+    "apps/desktop/src/env.d.ts",
+    "apps/desktop/test",
+    "packages/contracts/openapi/control-plane.v1.json",
+    "packages/text-brain/src/hina_text_brain/minecraft_goals.py",
+    "packages/text-brain/tests/test_minecraft_goals.py",
+    "docs/modules/M09-S13-gather-log-collection-module-brief.json",
+    "docs/modules/M09-minecraft-agent.md",
+    "docs/architecture/desktop-dashboard-modularity.md",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    "AGENTS.md",
+    ".claude",
+    "CLAUDE.md",
+    "docs/research/deep-research-report.md",
+    "var",
+    ".gitnexus"
+  ],
+  "contracts": [
+    "The model may return only gather.nearby-log.v1 or unsupported; it never returns coordinates, a route, a tool, an entity identifier or an action sequence.",
+    "The controller alone composes target discovery, bounded pathfinding, fixed tool selection, one exact dig, one matching-drop pickup path and explicit postcondition verification.",
+    "Only a newly observed dropped item whose item name matches the targeted allowlisted log and whose spawn position is bounded around that exact block may be approached; the pre-existing entity baseline is fail-closed at 512 entries.",
+    "Success requires both the exact targeted log to be absent and the matching inventory count to be greater than its pre-dig baseline; timeout, disconnect and emergency stop cancel the entire goal."
+  ],
+  "allowed_dependencies": [
+    "Existing pinned mineflayer 4.37.1 and mineflayer-pathfinder 2.4.5 only; use their documented item entity, inventory and bounded GoalNear surfaces without adding a package."
+  ],
+  "oss_candidates": [
+    "PrismarineJS/mineflayer 4.37.1 playerCollect/itemDrop/getDroppedItem and inventory APIs, MIT; referenced from the installed pinned package, no source copied.",
+    "PrismarineJS/mineflayer-pathfinder 2.4.5 GoalNear and existing restricted Movements policy, MIT; no source copied."
+  ],
+  "acceptance_criteria": [
+    "One natural-language owner request for nearby wood maps to gather.nearby-log.v1 and performs the internal reach, tool, dig and pickup stages without exposing micro-controls.",
+    "A successful execution proves the exact block disappeared and the target log item count increased from its captured pre-dig value.",
+    "A pre-existing drop, wrong item, missing drop, full/unchanged inventory, stale state, path error, timeout, disconnect or emergency stop cannot produce success.",
+    "Every typed boundary rejects retired harvest.nearby-log.v1/v2/v3 identifiers and any extra field, coordinate, route or generated action plan."
+  ],
+  "required_test_commands": [
+    "pnpm test:minecraft",
+    "pnpm test:text-brain",
+    "pnpm test:contracts",
+    "pnpm test:desktop",
+    "pnpm test:fast",
+    "pnpm smoke:desktop",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "goal": "one total attempt under the existing 30,000 ms controller deadline",
+    "collection": "at most one bounded pickup path to one newly observed matching drop; no alternate-tree retry",
+    "side_effect": "at most one exact log dig and one matching item pickup"
+  },
+  "output_artifact_dir": "artifacts/verification/M09/"
+}

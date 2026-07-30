@@ -2,7 +2,10 @@ export {
   MinecraftAdapterError,
   MINECRAFT_SNAPSHOT_LIMITS,
   MINECRAFT_HARVEST_DIG_REACH_DISTANCE_BLOCKS,
+  MINECRAFT_HARVEST_COLLECTION_VERIFY_TICKS,
   MINECRAFT_HARVEST_DISCOVERY_MAX_DISTANCE_BLOCKS,
+  MINECRAFT_HARVEST_DROP_MATCH_DISTANCE_BLOCKS,
+  MINECRAFT_HARVEST_ENTITY_BASELINE_LIMIT,
   MINECRAFT_HARVEST_PATHFINDER_POLICY,
   MINECRAFT_HARVEST_PATH_SEARCH_RADIUS_BLOCKS,
   MINECRAFT_HARVEST_VERTICAL_MAX_DISTANCE_BLOCKS,
@@ -16,6 +19,7 @@ export {
   type MinecraftGoalExecutionResult,
   type MinecraftGoalId,
   type MinecraftGoalRequest,
+  type MinecraftHarvestCollectionBaseline,
   type MinecraftHarvestTarget,
   type MinecraftLookSkillRequest,
   type MinecraftMoveSkillRequest,
@@ -36,7 +40,7 @@ export {
 export { MinecraftController } from "./controller.js";
 export {
   getMinecraftGoalRegistry,
-  HARVEST_NEARBY_LOG_GOAL_DEFINITION,
+  GATHER_NEARBY_LOG_GOAL_DEFINITION,
   isHarvestableLogName,
   validateMinecraftGoalRequest,
 } from "./goal-registry.js";

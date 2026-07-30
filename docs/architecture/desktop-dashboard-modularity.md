@@ -87,7 +87,7 @@ pnpm --filter @hina/desktop typecheck
 pnpm test:desktop
 ```
 
-## Minecraft goal boundary (M09-S8/S9/S12)
+## Minecraft goal boundary (M09-S8/S9/S12/S13)
 
 - `pages/MinecraftPage.vue` is a presentation/intent page. It can collect one
   bounded natural-language owner goal and display a bounded status/world snapshot,
@@ -104,17 +104,21 @@ pnpm test:desktop
 - New Minecraft capability must add a reviewed goal/state-machine module with
   typed preconditions, cancellation, bounded attempt/timeout and game-state
   postcondition evidence. Do not rebuild manual UI controls as a shortcut.
-- The current `harvest.nearby-log.v3` state machine may discover one loaded
+- The current `gather.nearby-log.v1` state machine may discover one loaded
   allowlisted log within 32 horizontal blocks and eight vertical blocks. A
-  controller-owned, bounded A* pathfinder may navigate to visible digging range
-  before one dig. The renderer and model never receive or choose the target
-  coordinate, route, movement primitive or action sequence.
+  controller-owned, bounded A* pathfinder may navigate to visible digging range,
+  select an owned allowlisted axe or empty hand, dig once and approach at most
+  one newly observed matching drop. The renderer and model never receive or
+  choose the target coordinate, route, tool, entity identifier, movement
+  primitive or action sequence.
 - Pathfinder movements are fixed in repository code: no digging, block placement,
   scaffolding, towering, door opening, sprinting, parkour or liquid traversal;
   maximum drop is one block, search radius is 40 blocks, one attempt is bounded by
-  the goal deadline and disconnect/emergency stop cancels it. Exploration of
-  unloaded chunks, crafting, collection loops, combat and retries remain
-  unavailable until separately reviewed deterministic goals add them.
+  the goal deadline and disconnect/emergency stop cancels it. A successful gather
+  additionally requires the exact block to be absent and the matching inventory
+  count to increase from its pre-dig baseline. Exploration of unloaded chunks,
+  crafting, multi-item collection loops, combat and retries remain unavailable
+  until separately reviewed deterministic goals add them.
 - Before that one dig, controller-owned code may inspect Mineflayer's local
   inventory and equip only a fixed-priority owned axe; when none is present it
   explicitly uses an empty hand. The page cannot show or choose a tool/slot.

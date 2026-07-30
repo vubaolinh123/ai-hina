@@ -1924,6 +1924,18 @@ Minecraft build + 67 tests pass; real LAN adapter pass một attempt trong
 3.530,749 ms với exact-target postcondition thành công. Lỗi provider thật được
 log bounded ra owner terminal thay vì chỉ mất stack sau stable error.
 
+M09-S13 thay goal chặt-only bằng `gather.nearby-log.v1`, vẫn giữ đúng một ID tĩnh
+ở model boundary. Controller tự compose tìm log đã load → A* giới hạn → chọn
+rìu/tay → một dig → nhặt đúng drop log mới bằng tối đa một `GoalNear`; model/UI
+không nhận tọa độ, route, tool, entity ID hay action sequence. Baseline trước dig
+khóa inventory count và entity ID đã tồn tại, nên drop cũ, item sai/xa/invalid
+không được chọn. Success cần cả exact block biến mất và inventory đúng loại tăng;
+timeout/disconnect/emergency stop hủy toàn workflow. Chưa có retry cây khác,
+explore chunk chưa load, craft rìu, collect loop hay background autonomy.
+Minecraft build + 72 tests, text-brain 58, core route 4 và Desktop production
+build + 69 tests, workspace fast gate và same-launcher Desktop smoke pass; LAN
+destructive acceptance để owner tự chạy.
+
 ### Embodied Gate
 
 Chạy full voice + avatar + memory + Minecraft trong local server, kiểm:
