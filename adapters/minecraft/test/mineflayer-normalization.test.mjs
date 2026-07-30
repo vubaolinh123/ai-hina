@@ -9,6 +9,7 @@ import {
   evaluateWorldStateFreshness,
   normalizeMineflayerWorldState,
   PhysicsFreshnessTracker,
+  selectBestHarvestTool,
 } from "../dist/mineflayer-client.js";
 
 function point(x, y, z) {
@@ -127,4 +128,26 @@ test("physics freshness tracker advances only on recorded ticks", () => {
     maximumAgeMs: MINECRAFT_WORLD_FRESHNESS_MAX_AGE_MS,
     state: "stale",
   });
+});
+
+test("harvest tool selection chooses the fixed highest-priority owned axe only", () => {
+  const wooden = { name: "wooden_axe", marker: "wood" };
+  const iron = { name: "iron_axe", marker: "iron" };
+  const netherite = { name: "netherite_axe", marker: "netherite" };
+
+  assert.equal(
+    selectBestHarvestTool([
+      null,
+      { name: "diamond_pickaxe" },
+      wooden,
+      iron,
+      { name: "stick" },
+      netherite,
+    ]),
+    netherite,
+  );
+  assert.equal(
+    selectBestHarvestTool([{ name: "diamond_pickaxe" }, { name: "stick" }]),
+    null,
+  );
 });

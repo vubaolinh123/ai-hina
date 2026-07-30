@@ -57,6 +57,10 @@ class FakeBotPort {
   harvestApproachClear = true;
   harvestApproachChecks = [];
   harvestDiggable = true;
+  harvestAxeAvailable = false;
+  harvestToolCalls = [];
+  operationLog = [];
+  equipBestHarvestToolImplementation = async () => {};
   worldFreshness = {
     physicsTickSequence: 1,
     ageMs: 0,
@@ -143,8 +147,16 @@ class FakeBotPort {
     return this.harvestDiggable && this.isHarvestableLogPresent(target);
   }
 
+  async equipBestHarvestTool() {
+    const tool = this.harvestAxeAvailable ? "axe" : "hand";
+    this.harvestToolCalls.push(tool);
+    this.operationLog.push(`equip:${tool}`);
+    await this.equipBestHarvestToolImplementation();
+  }
+
   async digHarvestableLog(target) {
     this.harvestCalls.push(structuredClone(target));
+    this.operationLog.push("dig");
     await this.digHarvestableLogImplementation(target);
   }
 
@@ -447,6 +459,84 @@ test("harvest.nearby-log.v2 never digs when the exact target is no longer diggab
   assert.equal(fake.harvestCalls.length, 0);
 });
 
+test("harvest.nearby-log.v2 equips one owned axe before the one dig", async () => {
+  const fake = new FakeBotPort();
+  fake.harvestAxeAvailable = true;
+  const controller = new MinecraftController(() => fake);
+  const connected = controller.start(CONFIG);
+  fake.emit("spawn");
+  await connected;
+
+  const result = await controller.executeGoal({
+    goalId: "harvest.nearby-log.v2",
+  });
+
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(fake.harvestToolCalls, ["axe"]);
+  assert.deepEqual(fake.operationLog, ["equip:axe", "dig"]);
+  assert.equal(fake.harvestCalls.length, 1);
+});
+
+test("harvest.nearby-log.v2 explicitly uses hand when no allowlisted axe is owned", async () => {
+  const fake = new FakeBotPort();
+  const controller = new MinecraftController(() => fake);
+  const connected = controller.start(CONFIG);
+  fake.emit("spawn");
+  await connected;
+
+  const result = await controller.executeGoal({
+    goalId: "harvest.nearby-log.v2",
+  });
+
+  assert.equal(result.status, "succeeded");
+  assert.deepEqual(fake.harvestToolCalls, ["hand"]);
+  assert.deepEqual(fake.operationLog, ["equip:hand", "dig"]);
+});
+
+test("harvest.nearby-log.v2 fails before dig when deterministic tool selection fails", async () => {
+  const fake = new FakeBotPort();
+  fake.harvestAxeAvailable = true;
+  fake.equipBestHarvestToolImplementation = async () => {
+    throw new Error("inventory changed");
+  };
+  const controller = new MinecraftController(() => fake);
+  const connected = controller.start(CONFIG);
+  fake.emit("spawn");
+  await connected;
+
+  const result = await controller.executeGoal({
+    goalId: "harvest.nearby-log.v2",
+  });
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.error.code, "E_MINECRAFT_GOAL_ACTION");
+  assert.deepEqual(fake.harvestToolCalls, ["axe"]);
+  assert.equal(fake.harvestCalls.length, 0);
+});
+
+test("emergency stop during tool selection prevents a later dig", async () => {
+  const fake = new FakeBotPort();
+  let releaseToolSelection = null;
+  fake.equipBestHarvestToolImplementation = () => new Promise((resolve) => {
+    releaseToolSelection = resolve;
+  });
+  const controller = new MinecraftController(() => fake);
+  const connected = controller.start(CONFIG);
+  fake.emit("spawn");
+  await connected;
+
+  const active = controller.executeGoal({ goalId: "harvest.nearby-log.v2" });
+  await Promise.resolve();
+  await controller.emergencyStop();
+  const result = await active;
+  releaseToolSelection?.();
+  await Promise.resolve();
+
+  assert.equal(result.status, "failed");
+  assert.equal(result.error.code, "E_MINECRAFT_SKILL_CANCELLED");
+  assert.equal(fake.harvestCalls.length, 0);
+});
+
 test("harvest.nearby-log.v2 rejects targets outside the horizontal or same-level bounds", async () => {
   for (const target of [
     {
@@ -587,7 +677,10 @@ test("emergency stop cancels an active harvest goal and clears controller state"
   const active = controller.executeGoal({
     goalId: "harvest.nearby-log.v2",
   });
-  await Promise.resolve();
+  for (let turn = 0; turn < 4 && fake.harvestCalls.length === 0; turn += 1) {
+    await Promise.resolve();
+  }
+  assert.equal(fake.harvestCalls.length, 1);
   await controller.emergencyStop();
   const result = await active;
 

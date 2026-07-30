@@ -1,0 +1,62 @@
+{
+  "schema_version": "1.0",
+  "task_id": "M09-S10-deterministic-harvest-tool",
+  "module_id": "M09",
+  "objective": "Improve the existing natural-language nearby-log goal without expanding its reachable action surface: after a verified approach and before the one allowed dig, controller code deterministically equips one owned allowlisted axe or explicitly uses an empty hand.",
+  "non_goals": [
+    "Do not add crafting, recipe lookup, wood gathering loops, tool repair, tool swapping after the request, pathfinding, obstacle avoidance, jumping, sprinting, combat, storage, pickup automation, retries, background autonomy, or manual gameplay controls.",
+    "Do not add an LLM-selectable tool, inventory slot, item name, command, code, action sequence, viewer action path, widget action path, game-text action path, or persistence of raw inventory/tool data.",
+    "Do not add a dependency or modify owner-provided files outside this brief."
+  ],
+  "base_sha": "d4b99b4bbf60a39be1334c2984b37ac6ee709f83",
+  "branch": "main",
+  "worktree": "D:/ProjectHinaAI",
+  "owned_paths": [
+    "adapters/minecraft/src",
+    "adapters/minecraft/test",
+    "apps/desktop/src/App.vue",
+    "apps/desktop/src/dashboard/pages/MinecraftPage.vue",
+    "apps/desktop/test",
+    "HINA_AI_MASTER_PLAN_VI.md",
+    "docs/modules/M09-minecraft-agent.md",
+    "docs/architecture/desktop-dashboard-modularity.md",
+    "C:/Users/Admin/.codex/skills/build-airi-local-companion/references/project-state.md"
+  ],
+  "forbidden_paths": [
+    "AGENTS.md",
+    ".claude",
+    "CLAUDE.md",
+    "docs/research/deep-research-report.md",
+    "var",
+    ".gitnexus",
+    "package.json",
+    "pnpm-lock.yaml",
+    "third_party"
+  ],
+  "contracts": [
+    "The model still emits only harvest.nearby-log.v2 or null; it never selects a tool, slot, coordinate, action sequence, code or hidden reasoning.",
+    "Only controller-owned deterministic code may inspect bounded Mineflayer inventory slots, choose from a fixed axe-name priority, call equip/unequip, and then issue the existing one dig attempt.",
+    "A failed equip, invalid held-item verification, cancellation or stale/non-diggable target is a bounded failure before dig; no retry or fallback tool attempt is allowed."
+  ],
+  "allowed_dependencies": [],
+  "oss_candidates": [
+    "Mineflayer 4.37.1 already pinned in M09; use only its documented inventory slots, equip, unequip, heldItem and dig APIs behind the existing port."
+  ],
+  "acceptance_criteria": [
+    "With an owned allowlisted axe, controller equips exactly the deterministic highest-priority candidate, verifies heldItem, then performs at most one existing dig.",
+    "With no allowlisted axe, controller explicitly clears the hand and performs at most one existing dig by hand.",
+    "Unexpected equip/unequip state, cancellation, stale state or a target that becomes non-diggable prevents dig and returns a bounded failure without retry.",
+    "Dashboard remains one natural-language goal textarea with no manual tool, item, slot, equip or craft controls, and accurately explains the automatic current scope."
+  ],
+  "required_test_commands": [
+    "pnpm test:minecraft",
+    "pnpm test:desktop",
+    "git diff --check"
+  ],
+  "latency_or_quality_budget": {
+    "goal_planner_model_budget": "unchanged same local Qwen checkpoint and exact JSON final only",
+    "tool_selection": "one fixed priority scan, at most one equip or one unequip, no retry",
+    "retention": "in-memory request/result only; no raw inventory snapshots, tool selections, screenshots or game artifacts after the request completes"
+  },
+  "output_artifact_dir": "artifacts/verification/M09/"
+}

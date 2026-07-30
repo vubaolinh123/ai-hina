@@ -265,10 +265,11 @@ function formatNumber(value: number): string {
           <span>
             Hina có thể tìm đúng một khúc gỗ allowlist trong bán kính ngang tối đa 8 block,
             chỉ tiến trên đoạn nền phẳng, trống đã kiểm chứng (tối đa 3 đoạn, mỗi đoạn tối đa
-            2 block), rồi chặt một lần và xác minh block đó đã biến mất. Hina không đi vòng
-            vật cản, không nhảy/sprint, không chế hay trang bị rìu, không lặp thu thập và không
-            thử lại khi thất bại. Những phần đó sẽ được thêm sau dưới dạng state machine có
-            kiểm chứng, không phải lời hứa từ model.
+            2 block), tự cầm rìu hợp lệ có ưu tiên cao nhất nếu đang có trong túi (nếu không sẽ dùng tay),
+            rồi chặt một lần và xác minh block đó đã biến mất. Hina không đi vòng vật cản, không
+            nhảy/sprint, không chế rìu, không lặp thu thập và không thử lại khi thất bại. Những
+            phần đó sẽ được thêm sau dưới dạng state machine có kiểm chứng, không phải lời hứa
+            từ model.
           </span>
         </aside>
       </article>

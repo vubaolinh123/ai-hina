@@ -302,3 +302,24 @@ Fast evidence:
 - Text goal planner 4 tests, core goal route 4 tests và contract suite đều pass.
 - Không chạy LAN/server Minecraft thật, provider model thật, GPU hay deep/soak gate;
   owner vẫn là người xác nhận hành vi trong world thật.
+
+## M09-S10 — Tự chọn rìu đang có trước khi chặt
+
+- `harvest.nearby-log.v2` giữ nguyên một goal natural-language và không tăng bề mặt
+  quyền. Model không biết hoặc chọn tool/slot; chỉ controller deterministic mới đọc
+  inventory Mineflayer cục bộ sau khi approach đã pass.
+- Controller quét đúng một priority cố định: netherite, diamond, iron, golden, stone,
+  wooden axe. Nếu tìm thấy, nó equip đúng một rìu và kiểm chứng `heldItem`; nếu không
+  có rìu allowlist, nó unequip để dùng tay trống. Không craft, recipe lookup, đổi tool
+  lần hai hay fallback thử lại.
+- Sau tool selection controller lại kiểm tra cancellation, physics freshness và exact
+  target diggable trước một dig duy nhất. Equip/unequip không xác minh được, target
+  đổi state hoặc emergency stop đều fail an toàn trước dig; raw inventory/tool không
+  được persist hay đưa vào model/UI.
+
+Fast evidence:
+
+- Module brief schema pass; `pnpm test:minecraft` build + 66 tests pass.
+- `pnpm test:desktop` production build + 67 tests pass.
+- Không chạy LAN/server Minecraft thật, provider model thật hay deep/soak gate;
+  owner vẫn kiểm tra chất lượng gameplay trong world thật.

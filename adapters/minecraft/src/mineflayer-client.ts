@@ -18,6 +18,27 @@ import type {
 } from "./ports.js";
 import { isHarvestableLogName } from "./goal-registry.js";
 
+const HARVEST_TOOL_PRIORITY = Object.freeze([
+  "netherite_axe",
+  "diamond_axe",
+  "iron_axe",
+  "golden_axe",
+  "stone_axe",
+  "wooden_axe",
+]);
+
+export function selectBestHarvestTool<T extends { name?: string | null }>(
+  slots: readonly (T | null | undefined)[],
+): T | null {
+  for (const toolName of HARVEST_TOOL_PRIORITY) {
+    const item = slots.find((candidate) => candidate?.name === toolName);
+    if (item !== undefined && item !== null) {
+      return item;
+    }
+  }
+  return null;
+}
+
 function finiteNumber(value: unknown, fallback = 0): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
@@ -258,6 +279,21 @@ class MineflayerBotAdapter implements MinecraftBotPort {
       }
     }
     return true;
+  }
+
+  async equipBestHarvestTool(): Promise<void> {
+    const item = selectBestHarvestTool(this.#bot.inventory.slots);
+    if (item !== null) {
+      await this.#bot.equip(item, "hand");
+      if (this.#bot.heldItem?.name !== item.name) {
+        throw new Error("Mineflayer did not confirm the selected harvest tool");
+      }
+      return;
+    }
+    await this.#bot.unequip("hand");
+    if (this.#bot.heldItem !== null) {
+      throw new Error("Mineflayer did not confirm an empty harvest hand");
+    }
   }
 
   isHarvestableLogDiggable(target: MinecraftHarvestTarget): boolean {

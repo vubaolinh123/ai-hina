@@ -109,5 +109,9 @@ pnpm test:desktop
   verified flat/clear segments of at most two blocks before one dig. The page may
   describe that scope, but it never receives a target coordinate, route, movement
   primitive, raw model output or action sequence. Obstacles, jumps, pathfinding,
-  crafting, equipping, retries and autonomous play remain unavailable until a
+  crafting, arbitrary tool selection, retries and autonomous play remain unavailable until a
   separately reviewed deterministic goal adds them.
+- Before that one dig, controller-owned code may inspect Mineflayer's local
+  inventory and equip only a fixed-priority owned axe; when none is present it
+  explicitly uses an empty hand. The page cannot show or choose a tool/slot.
+  Recipe lookup, crafting and any tool retry remain unavailable.

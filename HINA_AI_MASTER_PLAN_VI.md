@@ -1871,6 +1871,15 @@ manual micro-controls. Gate hẹp pass: Minecraft build/61 tests, Desktop build/
 text goal 4 tests, core route 4 tests và contracts pass. Chưa có real LAN/model smoke;
 owner acceptance trong resettable LAN/server vẫn pending.
 
+M09-S10 giữ `harvest.nearby-log.v2` và thêm deterministic tool selection nội bộ thay
+vì cho model/UI chọn tool. Sau approach đã verify, controller quét inventory cục bộ theo
+priority axe cố định (netherite → diamond → iron → golden → stone → wooden), equip đúng
+một item và xác minh `heldItem`; không có axe thì unequip để dùng tay trống. Nó re-check
+cancellation, fresh physics và target diggable trước một dig duy nhất. Không craft,
+recipe lookup, tool fallback/retry, UI tool/slot hay raw inventory/tool persistence.
+Minecraft build/66 tests và Desktop production build/67 tests pass; chưa có real LAN/model
+smoke và owner acceptance vẫn pending.
+
 ### Embodied Gate
 
 Chạy full voice + avatar + memory + Minecraft trong local server, kiểm:

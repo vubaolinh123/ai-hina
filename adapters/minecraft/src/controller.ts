@@ -956,6 +956,23 @@ export class MinecraftController {
         "Targeted allowlisted log is not diggable after the verified approach",
       );
     }
+    await bot.equipBestHarvestTool();
+    if (signal.aborted) {
+      throw signal.reason;
+    }
+    const preDigFreshness = this.#readWorldFreshness(bot);
+    if (preDigFreshness.state !== "fresh") {
+      throw new MinecraftAdapterError(
+        "E_MINECRAFT_GOAL_STALE_STATE",
+        this.#staleWorldStateError(preDigFreshness).message,
+      );
+    }
+    if (!bot.isHarvestableLogDiggable(target)) {
+      throw new MinecraftAdapterError(
+        "E_MINECRAFT_GOAL_PRECONDITION",
+        "Targeted allowlisted log is no longer diggable after tool selection",
+      );
+    }
     await bot.digHarvestableLog(target);
   }
 

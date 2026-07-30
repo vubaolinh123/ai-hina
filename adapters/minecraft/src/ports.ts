@@ -26,6 +26,7 @@ export interface MinecraftBotPort {
     target: MinecraftHarvestTarget,
     destination: { x: number; z: number },
   ): boolean;
+  equipBestHarvestTool(): Promise<void>;
   isHarvestableLogDiggable(target: MinecraftHarvestTarget): boolean;
   digHarvestableLog(target: MinecraftHarvestTarget): Promise<void>;
   isHarvestableLogPresent(target: MinecraftHarvestTarget): boolean;
